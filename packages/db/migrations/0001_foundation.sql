@@ -140,9 +140,19 @@ create policy audit_events_tenant on audit_events for all to app
 -- The audit log is append-only for the runtime role.
 revoke update, delete on audit_events from app;
 
+-- An invitee arrives with a token and no tenant yet. This is the one read that crosses tenants,
+-- narrowed to a single open invitation matched by its token hash.
+create function invitation_by_token(hash text)
+	returns table (id uuid, organisation_id uuid, email text, role text)
+	language sql stable security definer set search_path = public as $$
+		select id, organisation_id, email, role from invitations
+		where token_hash = hash and accepted_at is null and revoked_at is null and expires_at > now()
+	$$;
+revoke all on function invitation_by_token(text) from public;
+
 grant usage on schema public to app;
 grant select, insert, update, delete on organisations, memberships, invitations to app;
 grant select, insert on audit_events to app;
 grant select, insert, update, delete on users, identities, sessions, auth_requests to app;
 grant select, insert on auth_events to app;
-grant execute on function current_organisation_id(), current_user_id() to app;
+grant execute on function current_organisation_id(), current_user_id(), invitation_by_token(text) to app;
