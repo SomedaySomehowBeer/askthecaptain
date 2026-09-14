@@ -1,0 +1,7 @@
+{
+  "name": "@captain/e2e",
+  "private": true,
+  "type": "module",
+  "scripts": { "check": "tsc --noEmit -p tsconfig.json", "e2e": "playwright test" },
+  "devDependencies": { "@playwright/test": "^1.55.0", "@types/node": "^22.0.0", "typescript": "^5.9.0" }
+}
