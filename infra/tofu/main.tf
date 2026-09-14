@@ -17,6 +17,9 @@ terraform {
   required_providers {
     neon         = { source = "kislerdm/neon", version = "~> 0.9" }
     cloudflare   = { source = "cloudflare/cloudflare", version = "~> 5.0" }
+    # Kept for one apply so tofu can destroy the KMS key and IAM user it still holds in state (D16);
+    # remove this line, the aws provider block and the AWS workflow secrets after that apply.
+    aws          = { source = "hashicorp/aws", version = "~> 6.0" }
     betteruptime = { source = "BetterStackHQ/better-uptime", version = "~> 0.21" }
   }
 }
