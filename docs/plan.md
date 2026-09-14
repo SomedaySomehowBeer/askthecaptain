@@ -104,7 +104,7 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 
 **Connections**
 - `connections` — provider, organisation, connected by, scopes, status, error; access and refresh
-  tokens envelope-encrypted with a per-tenant data key under a KMS master key.
+  tokens envelope-encrypted with a per-tenant data key wrapped by the master key (D16).
 - `sync_cursors`, `webhook_events` (deduplicated by provider id), `webhook_attempts`.
 
 **Mail**
