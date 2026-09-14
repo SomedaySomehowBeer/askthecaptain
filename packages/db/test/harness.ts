@@ -12,11 +12,17 @@ export async function freshDatabase(): Promise<Harness> {
 	if (!databaseUrl) throw new Error('DATABASE_URL is required');
 	const admin = postgres(databaseUrl, { max: 1 });
 	const name = `captain_test_${randomBytes(6).toString('hex')}`;
-	await admin.unsafe(`create database ${name}`);
-	const roles = await admin<{ rolname: string }[]>`select rolname from pg_roles where rolname = 'app'`;
-	if (roles.length === 0) await admin.unsafe(`create role app login password 'app'`);
-	else await admin.unsafe(`alter role app with login password 'app'`);
-	await admin.end();
+	try {
+		await admin.unsafe(`create database ${name}`);
+		// Test files run in parallel and the role is cluster-wide: serialise its creation with an
+		// advisory lock so two files cannot both find it missing and both create it.
+		await admin`select pg_advisory_lock(7201)`;
+		try {
+			const roles = await admin<{ rolname: string }[]>`select rolname from pg_roles where rolname = 'app'`;
+			if (roles.length === 0) await admin.unsafe(`create role app login password 'app'`);
+			else await admin.unsafe(`alter role app with login password 'app'`);
+		} finally { await admin`select pg_advisory_unlock(7201)`; }
+	} finally { await admin.end(); }
 	const base = new URL(databaseUrl);
 	const ownerUrl = new URL(base); ownerUrl.pathname = `/${name}`;
 	const appUrl = new URL(ownerUrl); appUrl.username = 'app'; appUrl.password = 'app';
