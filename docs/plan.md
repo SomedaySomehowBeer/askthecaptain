@@ -139,6 +139,13 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   series in the Production project. A one-off task simply has no series.
 - `evidence` — a link from a task to a mail message, a file or a URL, with who attached it.
 
+**Stock** (what nothing else counts)
+- `stock_items` — name, location, unit label (text), current count, counted at, counted by,
+  reorder point, preferred supplier (a company), notes. The count is the truth and a person
+  enters it; Captain never computes stock from movements. Sellable products live in the connected
+  commerce system and are read from there, not duplicated here.
+- `stock_counts` — the history of counts per item: when, by whom, the number.
+
 **Workflows**
 - `workflow_definitions` — code-defined and versioned; the table holds the catalogue the API exposes.
 - `workflow_enablements` — organisation, definition, enabled by, parameters, schedule overrides.
@@ -208,6 +215,10 @@ Settings → Activity only when they fail.
 - **chase-due** (daily): read tasks due within the configured window → each task: await until the
   reminder time → notify owner; after due, escalate; for receivables, infer a courteous chaser →
   write outbox draft.
+- **stocktake** (weekly, or on demand): each stock item at the configured location: notify the
+  counter and await the count → write the count → branch on count below reorder point: write a
+  task in Purchasing, infer a short order email to the preferred supplier, write an outbox draft.
+  For connected commerce stock: read levels → the same branch, without asking anyone to count.
 - **calendar-prep** (evening): read tomorrow's events → read related threads and contacts → infer a
   one-paragraph preparation note per event → write notes.
 
@@ -303,7 +314,8 @@ Phone-first. Five tabs:
 
 - **Today** — the brief, what needs you, a question box.
 - **Inbox** — triaged threads grouped by what they need, and the outbox.
-- **Commitments** — projects with their tasks, and the Obligations deadline book.
+- **Commitments** — projects with their tasks, the Obligations deadline book, and Stock: the
+  counted list with each item's last count and what is below its reorder point.
 - **Calendar** — the week, with preparation notes.
 - **Settings** — organisation, members, connections, workflows, inference key and budget, activity
   (the workflow journal), notifications.
@@ -335,6 +347,9 @@ client in Phase 2 can proceed in parallel.
 
 - A conversational assistant with tools; the question box answers from data, not by acting.
 - Hosted per-user sandboxes or bring-your-own-subscription runtimes.
+- Inventory as a ledger: movements, unit conversions, lots and expiry, costing, bills of materials.
+  Captain keeps a counted stock list (§5) and reads sellable stock from the connected commerce
+  system; a business that needs a ledger connects a system that has one.
 - A configurable domain model: custom entity types (a brewery's "Batch" with gyle number, recipe
   and volume; a pottery's "Firing"), units with conversions (hectolitres, kegs of 50 litres, cases
   of 24), and process definitions (planned → brewing → fermenting → conditioning → packaged, with
@@ -362,6 +377,7 @@ client in Phase 2 can proceed in parallel.
 | D12 | Hosting is Fly.io Sydney, Neon Postgres, Cloudflare, GitHub Actions. |
 | D13 | Attachment bytes are never stored. Metadata always; text extracted on an allow list and size cap, cached briefly, passed to the model as labelled untrusted content. |
 | D14 | The Ask The Captain Design System in Claude Design is the design authority, mirrored into `packages/ui/design/`. |
+| D15 | Inventory is a counted list, not a ledger: sellable stock is read from the connected commerce system; everything else is a stock item whose count a person enters, with a stocktake workflow and reorder tasks. |
 
 ## 14. Open questions
 
