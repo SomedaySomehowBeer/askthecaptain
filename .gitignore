@@ -1,0 +1,12 @@
+node_modules
+dist
+.next
+.expo
+.env
+.env.*
+!.env.example
+.turbo
+.DS_Store
+*.tsbuildinfo
+infra/tofu/.terraform
+infra/tofu/*.tfstate*

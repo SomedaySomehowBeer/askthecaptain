@@ -1,0 +1,30 @@
+name: tofu
+on:
+  pull_request:
+    paths: ['infra/tofu/**']
+  push:
+    branches: [main]
+    paths: ['infra/tofu/**']
+concurrency: tofu
+jobs:
+  plan-apply:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: infra/tofu } }
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ap-southeast-2
+      TF_VAR_cloudflare_zone_id: ${{ secrets.TF_VAR_cloudflare_zone_id }}
+      BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+        with: { tofu_version: 1.10.5 }
+      - run: tofu init -input=false -backend-config="access_key=${{ secrets.TIGRIS_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.TIGRIS_SECRET_KEY }}"
+      - run: tofu fmt -check
+      - run: tofu validate
+      - run: tofu plan -input=false -out=plan.out
+      - if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: tofu apply -input=false plan.out

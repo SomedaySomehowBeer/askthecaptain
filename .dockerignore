@@ -1,0 +1,9 @@
+.git
+**/.terraform
+**/node_modules
+**/dist
+**/.next
+docs
+infra
+apps/e2e
+.github

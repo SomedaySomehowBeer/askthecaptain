@@ -1,0 +1,30 @@
+app = "askthecaptain-api-staging"
+primary_region = "syd"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[deploy]
+  # Migrates the database before the new version takes traffic. MIGRATION_DATABASE_URL is the
+  # owner's connection; DATABASE_URL, used by the running API, is the runtime role's.
+  release_command = "node --import tsx /repo/packages/db/src/migrate.ts"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/readyz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

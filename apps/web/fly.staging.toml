@@ -1,0 +1,22 @@
+app = "askthecaptain-web-staging"
+primary_region = "syd"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  HOSTNAME = "0.0.0.0"
+  PORT = "3000"
+  API_URL = "https://api-staging.askthecaptain.app"
+  APP_URL = "https://app.askthecaptain.app"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

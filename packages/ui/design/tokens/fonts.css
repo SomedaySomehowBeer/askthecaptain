@@ -1,0 +1,5 @@
+/* Ask The Captain webfonts.
+   The repo names Fraunces + Inter in packages/ui/src/index.ts but ships no binaries,
+   so both are loaded from Google Fonts. Fraunces is used with its SOFT and WONK axes
+   turned up — that wobble is the brand's playfulness. */
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..900,0..100,0..1;1,9..144,300..900,0..100,0..1&family=Inter:wght@400;500;600;700;800&display=swap");
