@@ -1,0 +1,15 @@
+:root{
+  --space-xs:4px;
+  --space-sm:8px;
+  --space-md:16px;
+  --space-lg:24px;
+  --space-xl:32px;
+  --space-xxl:48px;
+
+  --screen-padding:var(--space-lg);
+  --stack-gap:var(--space-lg);
+  --card-gap:var(--space-md);
+  --tap-target:52px;   /* Button minHeight */
+  --tap-target-lg:76px;/* camera shutter */
+  --measure:360px;     /* max width of centred help copy */
+}

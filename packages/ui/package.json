@@ -1,0 +1,7 @@
+{
+  "name": "@captain/ui",
+  "private": true,
+  "type": "module",
+  "exports": { "./design/*": "./design/*" },
+  "scripts": { "check": "echo 'tokens and assets only'" }
+}

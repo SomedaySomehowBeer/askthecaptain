@@ -1,0 +1,18 @@
+:root{
+  --radius-card:22px;
+  --radius-button:16px;
+  --radius-chip:12px;
+  --radius-pill:999px;
+  --radius-sm:6px;
+
+  --border-hairline:1px solid var(--line-hairline);
+  --border-control:1px solid var(--line-hairline);
+  --border-focus:2px solid var(--accent-text);
+
+  /* The app is border-first: shadows are reserved for things that float. */
+  --shadow-none:none;
+  --shadow-raised:0 1px 2px rgba(22,21,19,.06),0 8px 24px rgba(22,21,19,.08);
+  --shadow-overlay:0 24px 60px rgba(22,21,19,.18);
+  --scrim-camera:rgba(0,0,0,.3);
+  --scrim-modal:rgba(22,21,19,.44);
+}

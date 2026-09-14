@@ -1,0 +1,81 @@
+:root{
+  /* --- The palette. One set for app and marketing. Forest ink on paper; mint is the mark, sea is the action. --- */
+  --atc-ink-900:#142619;      /* forest deep — dark surfaces, logotype, ink tiles */
+  --atc-ink-800:#1f3a2c;      /* forest — body text, headlines, the octopus fill */
+  --atc-ink-100:#f3ecdf;      /* text on dark = paper */
+  --atc-cream:#f3ecdf;        /* paper — THE light background */
+  --atc-white:#ffffff;
+  --atc-muted:#5f6b62;
+  --atc-line:#d9d0bf;
+  --atc-mint:#90e8a8;         /* the mark, the Captain button, capture */
+  --atc-mint-ink:#10261a;     /* onAccent */
+  --atc-mint-text:#2f8a4a;    /* sea — accent text, CTA, live status */
+  --atc-mint-soft:#c6dcc3;    /* sage — icon discs, record ring, tinted panels */
+  --atc-harbour:#d6e2e9;      /* pale sea-blue — integrations strip, screens in illustrations */
+  --atc-danger:#b74636;
+  --atc-danger-soft:#f6dcd4;  /* blush — danger tint and the one warm highlight per page */
+  --atc-ink-copy:#b9c4ba;     /* secondary copy on dark tiles */
+
+  /* --- Section accents (Work, Money, People). Capture is mint. Account is neutral. --- */
+  --atc-amber:#f5c46b;      --atc-amber-ink:#2e2007;      --atc-amber-text:#8a6212;      --atc-amber-soft:#fbe8c4;
+  --atc-terracotta:#e8896a; --atc-terracotta-ink:#2e1108; --atc-terracotta-text:#b1462a; --atc-terracotta-soft:#f7d5c9;
+  --atc-clay:#e8a3a0;       --atc-clay-ink:#2e1113;       --atc-clay-text:#a94a53;       --atc-clay-soft:#f7dcda;
+
+  /* --- Semantic aliases (use these, not the base names) --- */
+  --surface-page:var(--atc-cream);
+  --surface-card:var(--atc-white);
+  --surface-sunken:#e9dfcd;
+  --surface-harbour:var(--atc-harbour);
+  --surface-highlight:var(--atc-danger-soft);
+  --surface-inverse:var(--atc-ink-900);
+  --surface-inverse-2:var(--atc-ink-800);
+  --text-body:var(--atc-ink-800);
+  --text-heading:var(--atc-ink-900);
+  --text-muted:var(--atc-muted);
+  --text-on-inverse:var(--atc-ink-100);
+  --text-on-inverse-muted:var(--atc-ink-copy);
+  --line-hairline:var(--atc-line);
+  --line-strong:var(--atc-ink-800);
+
+  /* Accent slot — reassigned per section by the .accent-* scopes below */
+  --accent:var(--atc-mint);
+  --accent-ink:var(--atc-mint-ink);
+  --accent-text:var(--atc-mint-text);
+  --accent-soft:var(--atc-mint-soft);
+
+  --status-danger:var(--atc-danger);
+  --status-danger-soft:var(--atc-danger-soft);
+  --status-live:var(--atc-mint-text);
+  --status-pending:var(--atc-amber-text);
+  --status-error:var(--atc-danger);
+  --status-disconnected:var(--atc-muted);
+}
+
+.accent-mint{--accent:var(--atc-mint);--accent-ink:var(--atc-mint-ink);--accent-text:var(--atc-mint-text);--accent-soft:var(--atc-mint-soft)}
+.accent-amber{--accent:var(--atc-amber);--accent-ink:var(--atc-amber-ink);--accent-text:var(--atc-amber-text);--accent-soft:var(--atc-amber-soft)}
+.accent-terracotta{--accent:var(--atc-terracotta);--accent-ink:var(--atc-terracotta-ink);--accent-text:var(--atc-terracotta-text);--accent-soft:var(--atc-terracotta-soft)}
+.accent-clay{--accent:var(--atc-clay);--accent-ink:var(--atc-clay-ink);--accent-text:var(--atc-clay-text);--accent-soft:var(--atc-clay-soft)}
+/* .accent-sea: marketing CTA — solid sea green with white text */
+.accent-sea{--accent:var(--atc-mint-text);--accent-ink:#ffffff;--accent-text:var(--atc-mint-text);--accent-soft:var(--atc-mint-soft)}
+
+[data-theme="dark"]{
+  --surface-page:var(--atc-ink-900);
+  --surface-card:var(--atc-ink-800);
+  --surface-sunken:#0e1a11;
+  --surface-harbour:#243b45;
+  --surface-highlight:#4a2a24;
+  --surface-inverse:var(--atc-cream);
+  --surface-inverse-2:#e9dfcd;
+  --text-body:var(--atc-ink-100);
+  --text-heading:var(--atc-ink-100);
+  --text-muted:#9aa89d;
+  --text-on-inverse:var(--atc-ink-800);
+  --text-on-inverse-muted:#5f6b62;
+  --line-hairline:#2f4a3a;
+  --line-strong:#4a6653;
+  --accent-text:#7fd79a;
+  --atc-mint-text:#7fd79a;
+  --atc-amber-text:#e3b463;
+  --atc-terracotta-text:#e08464;
+  --atc-clay-text:#dd9a97;
+}

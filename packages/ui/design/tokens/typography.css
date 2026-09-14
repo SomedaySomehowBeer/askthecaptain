@@ -1,0 +1,36 @@
+:root{
+  --font-display:"Fraunces",Georgia,"Times New Roman",serif;
+  --font-sans:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  /* Fraunces axes — the house setting. Soft terminals, wonky g/a. */
+  --font-display-settings:"SOFT" 40,"WONK" 1;
+  --font-display-weight:700;
+
+  /* Marketing headline setting — the poster serif. Straighter than the app: no wonk, lighter, with an italic emphasis word. */
+  --font-headline-settings:"SOFT" 20,"WONK" 0;
+  --font-headline-weight:600;
+  --text-headline:72px;   --leading-headline:76px;   /* poster / hero */
+  --text-headline-sm:48px; --leading-headline-sm:52px; /* section */
+  --text-subhead:26px;    --leading-subhead:34px;    /* serif panel titles */
+
+  /* Scale — px values lifted from the mobile app, not re-rounded */
+  --text-timer:64px;      --leading-timer:72px;
+  --text-display:44px;    --leading-display:48px;
+  --text-title:34px;      --leading-title:38px;
+  --text-title-sm:28px;   --leading-title-sm:34px;
+  --text-tile:22px;       --leading-tile:28px;
+  --text-lead:20px;       --leading-lead:28px;
+  --text-intro:18px;      --leading-intro:28px;
+  --text-card-title:18px; --leading-card-title:24px;
+  --text-body:16px;       --leading-body:24px;
+  --text-body-sm:15px;    --leading-body-sm:22px;
+  --text-meta:14px;       --leading-meta:21px;
+  --text-label:13px;      --leading-label:18px;
+
+  --weight-regular:400;
+  --weight-medium:500;
+  --weight-bold:700;
+  --weight-heavy:800;
+  --tracking-eyebrow:1.2px;
+}

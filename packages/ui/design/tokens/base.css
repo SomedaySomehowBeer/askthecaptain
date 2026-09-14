@@ -1,0 +1,11 @@
+.atc-body{background:var(--surface-page);color:var(--text-body);font-family:var(--font-sans);font-size:var(--text-body);line-height:var(--leading-body);-webkit-font-smoothing:antialiased}
+.atc-display{font-family:var(--font-display);font-variation-settings:var(--font-display-settings);font-weight:var(--font-display-weight);letter-spacing:-.01em}
+.atc-eyebrow{font-size:var(--text-label);line-height:var(--leading-label);letter-spacing:var(--tracking-eyebrow);text-transform:uppercase;font-weight:var(--weight-bold);color:var(--accent-text)}
+.atc-headline{font-family:var(--font-display);font-variation-settings:var(--font-headline-settings);font-weight:var(--font-headline-weight);letter-spacing:-.015em;color:var(--text-heading,var(--text-body));text-wrap:balance}
+.atc-headline em{font-style:italic;font-weight:inherit;color:inherit}
+.atc-headline em.sea{color:var(--accent-text)}
+.atc-tagline{font-size:var(--text-label);line-height:var(--leading-label);letter-spacing:.18em;text-transform:uppercase;font-weight:var(--weight-medium);color:var(--text-body)}
+.atc-wave{display:inline-block;width:56px;height:8px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 56 8'%3E%3Cpath d='M0 4c4-4 8-4 12 0s8 4 12 0 8-4 12 0 8 4 12 0 6-3 8-2' fill='none' stroke='%232f8a4a' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat center/contain;vertical-align:middle}
+.atc-disc{width:64px;height:64px;border-radius:999px;background:var(--accent-soft);color:var(--text-body);display:inline-flex;align-items:center;justify-content:center;flex:none}
+a{color:var(--accent-text);text-decoration-thickness:1px;text-underline-offset:2px}
+a:hover{color:var(--text-body)}
