@@ -17,7 +17,6 @@ terraform {
   required_providers {
     neon         = { source = "kislerdm/neon", version = "~> 0.9" }
     cloudflare   = { source = "cloudflare/cloudflare", version = "~> 5.0" }
-    aws          = { source = "hashicorp/aws", version = "~> 6.0" }
     betteruptime = { source = "BetterStackHQ/better-uptime", version = "~> 0.21" }
   }
 }

@@ -78,7 +78,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
 | `packages/model` | the inference client: provider adapter, structured output, budgets, usage |
 | `packages/ui` | design tokens and shared components |
-| `infra` | OpenTofu for Neon, Fly, Cloudflare and GitHub |
+| `infra` | OpenTofu for Neon, Cloudflare and monitoring |
 
 **Hosting.** Fly.io in Sydney for the API and web; Neon Postgres; Cloudflare for DNS and TLS at the
 edge; GitHub Actions for CI and deploy. One production environment and one staging environment.
@@ -303,7 +303,10 @@ fallback for providers without webhooks.
   operator roles are separate from tenant roles.
 - Sign-in with Google for any domain; explicit organisation creation; verified invitations.
   MFA or passkeys for owners and admins before invitations open to strangers.
-- Secrets: KMS master key, per-tenant data keys, envelope encryption for tokens and API keys.
+- Secrets: envelope encryption without a cloud key service. A 32-byte master key lives in the API's
+  secrets; each organisation has a data key wrapped by it; connection tokens and inference keys are
+  encrypted with the data key (AES-256-GCM). Rotation re-wraps data keys. No third-party key service
+  and no extra cloud account.
 - Rate limits per IP, user, organisation and connection. Webhook signature verification.
 - Audit log for every write. Data export and organisation deletion as first-class operations.
 - Backups with a rehearsed restore, terms of service and a privacy notice before the second tenant.
@@ -378,6 +381,7 @@ client in Phase 2 can proceed in parallel.
 | D13 | Attachment bytes are never stored. Metadata always; text extracted on an allow list and size cap, cached briefly, passed to the model as labelled untrusted content. |
 | D14 | The Ask The Captain Design System in Claude Design is the design authority, mirrored into `packages/ui/design/`. |
 | D15 | Inventory is a counted list, not a ledger: sellable stock is read from the connected commerce system; everything else is a stock item whose count a person enters, with a stocktake workflow and reorder tasks. |
+| D16 | Envelope encryption uses a master key held in the API's secrets wrapping per-tenant data keys; no cloud key-management service and no AWS account. |
 
 ## 14. Open questions
 
