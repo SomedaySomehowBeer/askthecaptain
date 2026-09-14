@@ -111,6 +111,10 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 - `mail_threads`, `mail_messages` — synced from Gmail; bodies stored, provider ids kept.
 - `mail_triage` — one row per thread: category, needs-owner flag, summary, extracted facts,
   produced by the triage workflow with the run id that produced it.
+- `mail_attachments` — metadata only: message, filename, media type, size, provider attachment
+  id. Attachment bytes are **not stored**; the provider keeps them and they are fetched on demand.
+- `attachment_text` — extracted text for attachments that triage was allowed to read (§7),
+  capped in length, kept for a bounded period, then dropped.
 - `outbox` — drafts awaiting a person: thread (or none), to, subject, body, created by run,
   state ∈ drafted · sent · discarded, sent by, sent at, provider message id.
 
@@ -125,8 +129,14 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   **Obligations**, flagged so the UI shows it as a deadline book.
 - `tasks` — project, title, body, status ∈ suggested · open · in_progress · done · cancelled,
   owner, due, source (mail thread, series, person, run), completed by, completed at.
-- `task_series` — recurrence rule, due rule, template; the workflow that materialises the next
-  occurrence writes a task pointing back at the series.
+- `task_series` — the rule that generates recurring tasks. A series belongs to a project (by
+  default Obligations), carries a template (title pattern, body, owner, evidence required), a
+  recurrence (monthly, quarterly, yearly, weekdays, custom) and a due rule (for example "due 21 days
+  after the period ends"). Each occurrence is an ordinary task with `series_id`, `period_start` and
+  `period_end`; the system creates the next occurrence at the start of its period. Editing a series
+  changes future occurrences only; completing a task never touches its series. "Excise return" is a
+  monthly series in Obligations whose September task is due on 21 October. "Order cans" is a monthly
+  series in the Production project. A one-off task simply has no series.
 - `evidence` — a link from a task to a mail message, a file or a URL, with who attached it.
 
 **Workflows**
@@ -157,14 +167,35 @@ settles on.
 | `read` | reads from a connector or the database | new threads since cursor, overdue invoices, tasks due this week |
 | `infer` | model call: data in, schema-validated object out; no tools | classify a thread, extract a due date and counterparty, draft a reply body |
 | `write` | a deterministic write, in the name of the enabling person | create task, complete task, create outbox draft, label thread |
-| `timer` | sleep until a time or for a duration | wake three days before due |
-| `await` | wait for a record to reach a state | outbox draft sent, suggested task accepted |
+| `await` | wait for a time, a record state or an external event, with a timeout | until three days before due; until the outbox draft is sent; until a webhook arrives |
 | `notify` | push to a person | morning brief, escalation |
 
 Every step declares its input and output types. `read` and `write` steps are plain functions over
 the connectors and the database. `infer` steps declare an instruction, an output schema and a model
-tier. A definition that names a capability the enabling person lacks fails at enablement, not at
-run time.
+tier. `await` covers timers: waiting for a time is one of its conditions, not a kind of its own. A
+definition that names a capability the enabling person lacks fails at enablement, not at run time.
+
+### Control flow
+
+Control flow is deterministic and bounded, and it is part of the definition rather than a step:
+
+- `when(predicate)` on any step: the step runs only if a pure predicate over earlier outputs holds.
+- `each(list, steps)`: run a sub-sequence once per item of a finite list produced by an earlier step,
+  journaled per item. Triage classifies threads this way.
+- `branch(predicate, thenSteps, elseSteps)`: choose a path by a pure predicate.
+
+Predicates are functions over data, never model calls. There is no unbounded loop; anything that
+repeats does so over a list that already exists or by being triggered again. If the execution engine
+chosen in §4 runs workflows as ordinary code, these are simply the language's `if`, `for` and the
+engine's durable `await`, and the journal records the steps within them.
+
+### Workflows and system routines
+
+Workflows are the owner's: enabled per organisation, visible in Settings, journaled, and always
+doing one of the six jobs. **System routines** are the product's own housekeeping and are not
+workflows: syncing mail and calendars, refreshing tokens, creating the next occurrence of a series,
+rolling the month's budget over, retrying webhooks. They run on a schedule, are logged, and appear in
+Settings → Activity only when they fail.
 
 ### The first workflows
 
@@ -174,9 +205,9 @@ run time.
   reply drafts for threads that need one → write outbox drafts → await send → write labels.
 - **morning-brief** (06:30): read overdue and due-this-week tasks, outbox, today's events, overdue
   receivables → infer a brief from that data → notify.
-- **chase-due** (daily): read tasks due within the configured window → timer per task → notify
-  owner; after due, escalate; for receivables, infer a courteous chaser → write outbox draft.
-- **materialise-series** (daily): read series whose next occurrence is not yet a task → write tasks.
+- **chase-due** (daily): read tasks due within the configured window → each task: await until the
+  reminder time → notify owner; after due, escalate; for receivables, infer a courteous chaser →
+  write outbox draft.
 - **calendar-prep** (evening): read tomorrow's events → read related threads and contacts → infer a
   one-paragraph preparation note per event → write notes.
 
@@ -189,15 +220,20 @@ export const inboxTriage = defineWorkflow({
   parameters: { replyStyle: text(), draftReplies: boolean(true) },
   steps: [
     read('gmail.newThreads', { since: cursor('mail') }),
-    infer('classifyThread', { perItem: true, schema: TriageSchema, tier: 'small' }),
-    write('triage.record'),
-    write('tasks.suggestFromTriage'),
-    write('tasks.completeFromConfirmations'),
-    write('contacts.upsertFromTriage'),
-    infer('draftReply', { when: (t) => t.needsOwner && params.draftReplies, schema: DraftSchema, tier: 'large' }),
-    write('outbox.create'),
-    await('outbox.sent', { timeout: days(7) }),
-    write('gmail.label', { label: 'Captain/Handled' }),
+    each('threads', [
+      read('attachments.extractText', { allow: ['application/pdf', 'text/csv'], maxBytes: mb(5) }),
+      infer('classifyThread', { schema: TriageSchema, tier: 'small' }),
+      write('triage.record'),
+      write('tasks.suggestFromTriage'),
+      write('tasks.completeFromConfirmations'),
+      write('contacts.upsertFromTriage'),
+      branch((t) => t.needsOwner && params.draftReplies, [
+        infer('draftReply', { schema: DraftSchema, tier: 'large' }),
+        write('outbox.create'),
+        await('outbox.sent', { timeout: days(7) }),
+      ]),
+      write('gmail.label', { label: 'Captain/Handled' }),
+    ]),
   ],
 });
 ```
@@ -221,6 +257,18 @@ export const inboxTriage = defineWorkflow({
   without touching steps.
 - **Privacy.** Mail bodies go to the model only inside triage and drafting steps of workflows the
   owner enabled. Usage is recorded per step; content is not logged.
+- **Untrusted content.** Everything a model reads from mail is untrusted: bodies, subjects, sender
+  names, attachment text. The prompt labels it as such and the instruction lives outside it. The
+  structural defence is D2: the only thing an injected instruction can influence is the data the
+  step returns, which a schema validates and deterministic code interprets. Wrong data is possible;
+  an action is not. Facts that matter (amounts, bank details, due dates) are cross-checked against
+  the ledger and known counterparties where a source exists, and anything from an unknown sender
+  is marked needs-owner regardless of what the model said.
+- **Attachments.** Triage may read an attachment only if its media type is on the allow list
+  (PDF, CSV, plain text; images later, with OCR) and it is under the size cap. Text is extracted
+  server-side, truncated, cached briefly (§5) and passed as labelled untrusted content. Files are
+  never sent to the model as files and never stored by Captain; the mail provider remains the
+  system of record for the bytes, and evidence links point at the message and attachment id.
 
 ## 8. Connectors
 
@@ -260,9 +308,15 @@ Phone-first. Five tabs:
 - **Settings** — organisation, members, connections, workflows, inference key and budget, activity
   (the workflow journal), notifications.
 
-Dark and light themes, system fonts, an installable web app until the Expo app exists. The design
-language is warm, plain and confident; states are described in words, counts appear only when they
-change what the person does next.
+**Design system.** The visual language is the **Ask The Captain Design System** maintained in
+Claude Design; that project is the design authority. Its tokens (colour, type, spacing, radii,
+motion), brand assets (the octopus mark, lockups, app icons) and core components are mirrored
+verbatim into `packages/ui/design/` and re-imported when the project changes; `apps/web` consumes the
+tokens directly and adapts the reference components; `packages/ui` carries the same values for the
+native app. Screens for the five tabs are designed in that project first, then built. Paper ground
+in light, forest in dark, mint for the Captain's own actions and focus, semantic colour reserved
+for state; system fonts; states described in words, counts shown only when they change what the
+person does next. Dark and light themes and an installable web app until the Expo app exists.
 
 ## 11. Phases
 
@@ -281,8 +335,12 @@ client in Phase 2 can proceed in parallel.
 
 - A conversational assistant with tools; the question box answers from data, not by acting.
 - Hosted per-user sandboxes or bring-your-own-subscription runtimes.
-- A configurable domain model (custom entity types, units, process definitions); the business's
-  vocabulary is the names of its projects, tasks and series.
+- A configurable domain model: custom entity types (a brewery's "Batch" with gyle number, recipe
+  and volume; a pottery's "Firing"), units with conversions (hectolitres, kegs of 50 litres, cases
+  of 24), and process definitions (planned → brewing → fermenting → conditioning → packaged, with
+  allowed transitions and measurements at each step). That is a production system, and the
+  assistant does not need it: "Package batch 42" is a task. The business's vocabulary is the names
+  of its projects, tasks and series.
 - Marketplace integrations beyond Google, Xero and Shopify.
 - Team chat, documents, or a file store; link to where those already live.
 
@@ -292,7 +350,7 @@ client in Phase 2 can proceed in parallel.
 |---|---|
 | D1 | Captain is an administrative assistant for small businesses, defined by the six jobs in §2. |
 | D2 | Inference is data-only: infer steps take data and return schema-validated data; no tools, no writes, no credentials. |
-| D3 | Workflows are compositions of typed steps in six kinds: read, infer, write, timer, await, notify. |
+| D3 | Workflows are compositions of typed steps in five kinds (read, infer, write, await, notify) with deterministic, bounded control flow (`when`, `each`, `branch`). Housekeeping is a system routine, not a workflow. |
 | D4 | A workflow acts in the name of the person who enabled it and can do nothing they could not. |
 | D5 | Anything sent to a third party waits in the outbox for a person. |
 | D6 | Tenant isolation is forced RLS with a non-bypassing runtime role. |
@@ -302,6 +360,8 @@ client in Phase 2 can proceed in parallel.
 | D10 | The durable execution engine is chosen by a bounded spike in Phase 2 between Restate and pg-boss with a small runner. |
 | D11 | Five tabs: Today, Inbox, Commitments, Calendar, Settings. |
 | D12 | Hosting is Fly.io Sydney, Neon Postgres, Cloudflare, GitHub Actions. |
+| D13 | Attachment bytes are never stored. Metadata always; text extracted on an allow list and size cap, cached briefly, passed to the model as labelled untrusted content. |
+| D14 | The Ask The Captain Design System in Claude Design is the design authority, mirrored into `packages/ui/design/`. |
 
 ## 14. Open questions
 
