@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, foreignKey, jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, foreignKey, index, jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { organisations, connections } from './connections-schema.ts';
 import { mailMessages, mailThreads } from './mail-schema.ts';
 import { workflowRuns } from './workflows-schema.ts';
@@ -23,11 +23,12 @@ export const attachmentText = pgTable('attachment_text', {
 export const outbox = pgTable('outbox', {
  id: uuid('id').primaryKey().default(sql`uuidv7()`), organisationId: org(), threadId: uuid('thread_id'), connectionId: uuid('connection_id').notNull(), accountEmail: text('account_email').notNull(),
  to: text('to').array().notNull(), cc: text('cc').array().notNull().default([]), subject: text('subject').notNull(), body: text('body').notNull(), inReplyTo: text('in_reply_to').notNull().default(''),
- createdBy: uuid('created_by'), createdByPerson: uuid('created_by_person').references(() => users.id, { onDelete: 'set null' }), idempotencyKey: text('idempotency_key').notNull(),
+ invoiceProviderId: text('invoice_provider_id'), createdBy: uuid('created_by'), createdByPerson: uuid('created_by_person').references(() => users.id, { onDelete: 'set null' }), idempotencyKey: text('idempotency_key').notNull(),
  state: text('state', { enum: ['drafted', 'sent', 'discarded'] }).notNull().default('drafted'), sendStartedAt: at('send_started_at'), sentBy: uuid('sent_by').references(() => users.id, { onDelete: 'set null' }),
  sentAt: at('sent_at'), providerMessageId: text('provider_message_id'), discardedBy: uuid('discarded_by').references(() => users.id, { onDelete: 'set null' }), discardedAt: at('discarded_at'),
  createdAt: at('created_at').notNull().defaultNow(), updatedAt: at('updated_at').notNull().defaultNow()
 }, t => [unique().on(t.organisationId, t.id), unique().on(t.organisationId, t.idempotencyKey),
+ index('outbox_invoice_history').on(t.organisationId, t.invoiceProviderId, t.state, t.sentAt).where(sql`${t.invoiceProviderId} is not null`),
  foreignKey({ columns: [t.organisationId, t.threadId], foreignColumns: [mailThreads.organisationId, mailThreads.id] }),
  foreignKey({ columns: [t.organisationId, t.connectionId], foreignColumns: [connections.organisationId, connections.id] }).onDelete('cascade'),
  foreignKey({ columns: [t.organisationId, t.createdBy], foreignColumns: [workflowRuns.organisationId, workflowRuns.id] })]);

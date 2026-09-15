@@ -145,3 +145,15 @@ If a run paused, follow its message, then Resume. If the event changed during th
 why the write was skipped; start a new run to read the new event. An older resumed run cannot overwrite
 a newer run's note. Preparation reads at most ten recent threads' subjects/snippets, so it never proves
 that nothing else is owed. All writes stay in Captain; the workflow makes no Google API call.
+
+### One invoice chaser at a time
+
+Chase version 3 adds **Wait this many days after sending before drafting another chaser**
+(`chaseAgainAfterDays`, default 7, whole days from 1 to 365). Save the workflow's parameters to use
+this version. A pending chaser, including an unconfirmed send, blocks another for that invoice.
+Activity says which invoice already has a draft waiting. After sending, the interval is measured
+from `sent_at` in elapsed 24-hour days. Discarding an unsent draft permits replacement, but does not
+bypass the interval from a recent sent chaser. No workflow sends email.
+
+Migration `0024_outbox_invoice.sql` links existing chasers using their run journals and keeps the
+provider invoice id on new drafts, independent of editable subjects or invoice-cache row ids.
