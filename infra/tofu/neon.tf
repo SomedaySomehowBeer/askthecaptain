@@ -57,3 +57,9 @@ output "neon_owner_database_url" {
   sensitive = true
 }
 
+
+# The role kept its identity when the environment split was removed; only the address changed.
+moved {
+  from = neon_role.app_production
+  to   = neon_role.app
+}
