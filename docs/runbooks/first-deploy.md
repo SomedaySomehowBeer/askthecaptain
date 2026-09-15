@@ -12,7 +12,8 @@ infrastructure applies, secrets and DNS are the owner's.
 4. **Fly secrets** on `askthecaptain-api-staging` (and later `askthecaptain-api`):
    `DATABASE_URL` (the `app` role URL), `MIGRATION_DATABASE_URL` (the owner URL),
    `APP_URL=https://app.askthecaptain.app`, `API_URL=https://api-staging.askthecaptain.app`,
-   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. The web apps need no secrets; their environment is
+   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `MASTER_KEY` (32 random bytes, base64:
+   `openssl rand -base64 32`), one per environment, never reused. The web apps need no secrets; their environment is
    in `fly*.toml`.
 5. **Google OAuth client.** A web client whose authorised redirect URIs are
    `https://api-staging.askthecaptain.app/auth/google/callback` and
