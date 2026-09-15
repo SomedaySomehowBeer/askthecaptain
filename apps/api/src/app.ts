@@ -1,3 +1,5 @@
+import { connectionRoutes } from './connections/routes.ts';
+import type { ConnectionService } from './connections/service.ts';
 import { randomUUID } from 'node:crypto';
 import type { Sql } from '@captain/db';
 import { Hono } from 'hono';
@@ -8,7 +10,7 @@ import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
 import type { OrganisationService } from './organisations/service.ts';
 
-export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService };
+export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -41,6 +43,8 @@ export function createApp(deps: Deps) {
 		return c.json({ token, expiresAt: session.expiresAt, user: session.user, returnTo });
 	});
 	app.get('/auth/providers', (c) => c.json({ google: deps.auth.googleAvailable }));
+
+	app.route('/', connectionRoutes(deps));
 
 	const signedIn = new Hono<Vars>();
 	signedIn.use('*', async (c, next) => {

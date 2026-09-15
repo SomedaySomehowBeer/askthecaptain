@@ -38,8 +38,13 @@ export default async function SettingsPage() {
 				</section>
 			) : null}
 			<section className="card card--inset">
-				<h2>Connections, workflows, inference</h2>
-				<p className="secondary">Google, Xero, the workflows and the inference key arrive in the next releases. This page will grow a section for each.</p>
+				<h2>Connections</h2>
+				<p className="secondary">Connect the accounts Captain uses for your business.</p>
+				<Link className="button button--secondary" href="/settings/connections">Manage connections</Link>
+			</section>
+			<section className="card card--inset">
+				<h2>Workflows and inference</h2>
+				<p className="secondary">Xero, the workflows and the inference key arrive in the next releases. This page will grow a section for each.</p>
 			</section>
 		</Page>
 	);
