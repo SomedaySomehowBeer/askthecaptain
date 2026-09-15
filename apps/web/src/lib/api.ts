@@ -48,3 +48,11 @@ export type Recurrence = 'monthly' | 'quarterly' | 'yearly' | 'weekdays' | 'cust
 export type Series = { id: string; projectId: string; title: string; body: string; ownerId: string | null; evidenceRequired: boolean; recurrence: Recurrence; everyMonths: number | null;
 	anchor: string; dueOffsetDays: number; pausedAt: string | null; nextDue: string | null; createdAt: string; updatedAt: string };
 export type Commitments = { projects: Project[]; tasks: Task[]; series: Series[]; today: string; timezone: string };
+
+// Workflows (D3, D4)
+export type WorkflowParameterSpec = { type: 'text'; description: string; default?: string; required?: boolean; maxLength?: number } | { type: 'boolean'; description: string; default: boolean } | { type: 'number'; description: string; default: number; min?: number; max?: number };
+export type WorkflowTrigger = { kind: 'event'; event: string } | { kind: 'daily'; at: string } | { kind: 'weekly'; day: string; at: string } | { kind: 'manual' };
+export type WorkflowDefinition = { key: string; version: number; name: string; description: string; job: number; triggers: WorkflowTrigger[]; parameters: Record<string, WorkflowParameterSpec>; steps: unknown[] };
+export type WorkflowEnablement = { id: string; enabled: boolean; enabledBy: string | null; enabledByName: string | null; parameters: Record<string, unknown>; updatedAt: string; definitionVersion: number };
+export type OfferedWorkflow = { definition: WorkflowDefinition; requirements: string[]; unmet: { requirement: string; words: string }[]; enablement: WorkflowEnablement | null };
+export type WorkflowRun = { id: string; definitionKey: string; definitionVersion: number; trigger: unknown; state: string; reason: string | null; startedAt: string | null; finishedAt: string | null; createdAt: string };
