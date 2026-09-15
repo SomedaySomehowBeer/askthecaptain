@@ -5,7 +5,6 @@ import { PgBoss } from 'pg-boss';
 import { withTenant } from '@captain/db';
 import type { Harness } from '@captain/db/test';
 import { BossEngine } from '../src/pg-boss.ts';
-import { RestateEngine } from '../src/restate.ts';
 import { fixture, database } from './fixture.ts';
 let db: Harness;
 before(async () => { if (process.env.DATABASE_URL) db = await database(); });
@@ -15,12 +14,10 @@ async function until(check: () => Promise<boolean>, description: string) {
  while (Date.now() < end) { if (await check()) return; await delay(100); }
  throw Error(`Timed out waiting for ${description}`);
 }
-for (const kind of ['pg-boss', 'restate'] as const) {
- const it = !process.env.DATABASE_URL || (kind === 'restate' && !process.env.ENGINE_RESTATE) ? test.skip : test;
+for (const kind of ['pg-boss'] as const) {
+ const it = !process.env.DATABASE_URL ? test.skip : test;
  const queueUrl = () => { const url = new URL(db.databaseUrl); url.username = 'app'; url.password = 'app'; return url.toString(); };
- const make = (f: Awaited<ReturnType<typeof fixture>>, dayMs = 1000) => kind === 'pg-boss'
-  ? new BossEngine(new PgBoss({ connectionString: queueUrl(), schema: 'engine_queue', schedule: false, supervise: false, migrate: false, createSchema: false }), f.journal, f.catalogue, dayMs)
-  : new RestateEngine(f.journal, f.catalogue, dayMs);
+ const make = (f: Awaited<ReturnType<typeof fixture>>, dayMs = 1000) => new BossEngine(new PgBoss({ connectionString: queueUrl(), schema: 'engine_queue', schedule: false, supervise: false, migrate: false, createSchema: false }), f.journal, f.catalogue, dayMs);
  async function finish(f: Awaited<ReturnType<typeof fixture>>, engine: ReturnType<typeof make>, runId: string) {
   await until(async () => {
    const run = await f.journal.run(runId); assert.notEqual(run.state, 'failed', run.reason);
@@ -78,7 +75,7 @@ for (const kind of ['pg-boss', 'restate'] as const) {
   } finally { await engine.close(); }
  });
 }
-test('spike fixtures and both journals isolate tenants under the app role', { skip: !process.env.DATABASE_URL }, async () => {
+test('spike fixtures and journal isolate tenants under the app role', { skip: !process.env.DATABASE_URL }, async () => {
  const a = await fixture(db), b = await fixture(db); const runId = await a.journal.create(a.definition, a.enablement.id, 'fixture', {});
  await assert.rejects(b.journal.run(runId), /Run not found/);
  await assert.rejects(withTenant(db.app, b.journal.tenant, tx => tx`insert into engine_spike.outbox (organisation_id, run_id, thread_id, body) values (${a.enablement.organisationId}, ${runId}, 'x', 'x')`), { code: '42501' });

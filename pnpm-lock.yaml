@@ -140,9 +140,6 @@ importers:
       '@captain/steps':
         specifier: workspace:*
         version: link:../steps
-      '@restatedev/restate-sdk':
-        specifier: 1.17.0
-        version: 1.17.0
       pg-boss:
         specifier: 12.32.0
         version: 12.32.0
@@ -581,12 +578,6 @@ packages:
     resolution: {integrity: sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==}
     engines: {node: '>=20'}
     hasBin: true
-
-  '@restatedev/restate-sdk-core@1.17.0':
-    resolution: {integrity: sha512-439ONo+YDoG4YBZnQ0wXaWkJDdOqDJ0AjqOwUAYZolxoC5JoaHqWzEFWkeRXiSNpsOc1+ODRUUGupDQ7qxcvJg==}
-
-  '@restatedev/restate-sdk@1.17.0':
-    resolution: {integrity: sha512-4b3OrB2M8K0MsG4JA4YBYQgSZpUUdle4gxUrrH7Qs3deOwuAtrdabkKJpRWtR45zvQDdi09gzxwUGee0aCqKmA==}
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
@@ -1247,12 +1238,6 @@ snapshots:
   '@playwright/test@1.63.0':
     dependencies:
       playwright: 1.63.0
-
-  '@restatedev/restate-sdk-core@1.17.0': {}
-
-  '@restatedev/restate-sdk@1.17.0':
-    dependencies:
-      '@restatedev/restate-sdk-core': 1.17.0
 
   '@swc/helpers@0.5.15':
     dependencies:

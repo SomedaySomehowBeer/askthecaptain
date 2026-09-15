@@ -1,0 +1,40 @@
+Durable execution spike: 2026-09-15 UTC
+Comparison source commit: 66b61f8
+Node 22; Postgres 18; pg-boss 12.32.0; Restate server 1.7.10; SDK 1.17.0
+Command: ENGINE_RESTATE=1 DATABASE_URL=<throwaway Postgres> flock /tmp/atc-build.lock pnpm --filter @captain/engine test
+Both queue and business runtime connections used the non-bypassing app role.
+Restate Docker image sha256:1e15417299f1e68e3efb980e42b76153ab92a1161b1bf146f54eeefcc7ef8ee0
+
+# Subtest: pg-boss: triage three threads creates two drafts and labels each once
+ok 1 - pg-boss: triage three threads creates two drafts and labels each once
+# Subtest: pg-boss: crash after committed write resumes without duplicates
+ok 2 - pg-boss: crash after committed write resumes without duplicates
+# Subtest: pg-boss: a later event survives a worker restart and resumes the wait
+ok 3 - pg-boss: a later event survives a worker restart and resumes the wait
+# Subtest: pg-boss: timeoutDays expires with a named step and reason
+ok 4 - pg-boss: timeoutDays expires with a named step and reason
+# pg-boss Activity API: {"state":"failed","reason":"steps.1[0].steps.1 (classifyThread): Fixture classification unavailable","step":"steps.1[0].steps.1"}
+# Subtest: pg-boss: failed journal names the step and reason
+ok 5 - pg-boss: failed journal names the step and reason
+# Subtest: pg-boss: negative control without a destination fence duplicates the committed draft
+ok 6 - pg-boss: negative control without a destination fence duplicates the committed draft
+# Subtest: restate: triage three threads creates two drafts and labels each once
+ok 7 - restate: triage three threads creates two drafts and labels each once
+# Subtest: restate: crash after committed write resumes without duplicates
+ok 8 - restate: crash after committed write resumes without duplicates
+# Subtest: restate: a later event survives a worker restart and resumes the wait
+ok 9 - restate: a later event survives a worker restart and resumes the wait
+# Subtest: restate: timeoutDays expires with a named step and reason
+ok 10 - restate: timeoutDays expires with a named step and reason
+# restate Activity API: {"state":"failed","reason":"steps.1[0].steps.1 (classifyThread): Fixture classification unavailable","step":"steps.1[0].steps.1"}
+# Subtest: restate: failed journal names the step and reason
+ok 11 - restate: failed journal names the step and reason
+# Subtest: restate: negative control without a destination fence duplicates the committed draft
+ok 12 - restate: negative control without a destination fence duplicates the committed draft
+# Subtest: spike fixtures and both journals isolate tenants under the app role
+ok 13 - spike fixtures and both journals isolate tenants under the app role
+# tests 13
+# pass 13
+# fail 0
+# skipped 0
+# duration_ms 21996.993215
