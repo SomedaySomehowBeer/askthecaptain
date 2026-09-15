@@ -1,3 +1,4 @@
+import { CalendarSync, startCalendarSchedule } from './calendar/sync.ts';
 import { MailSync, startMailSchedule } from './mail/sync.ts';
 import { GoogleConnector } from '@captain/connectors';
 import { ConnectionService } from './connections/service.ts';
@@ -22,9 +23,11 @@ const connections = new ConnectionService(db, env.GOOGLE_CLIENT_ID && env.GOOGLE
 	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
 const mailSync = new MailSync(db, connections);
 const stopMailSync = startMailSchedule(mailSync, env.MAIL_SYNC_DISABLED === '1');
-const app = createApp({ db, connections, mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
+const calendarSync = new CalendarSync(db, connections);
+const stopCalendarSync = startCalendarSchedule(calendarSync, env.CALENDAR_SYNC_DISABLED === '1');
+const app = createApp({ db, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
-const shutdown = () => { server.close(); void stopMailSync().then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
+const shutdown = () => { server.close(); void Promise.all([stopMailSync(), stopCalendarSync()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

@@ -1,4 +1,4 @@
-export const googleScopes = ['openid', 'email', 'https://www.googleapis.com/auth/gmail.modify', 'https://www.googleapis.com/auth/calendar.events'];
+export const googleScopes = ['openid', 'email', 'https://www.googleapis.com/auth/gmail.modify', 'https://www.googleapis.com/auth/calendar.events', 'https://www.googleapis.com/auth/calendar.calendarlist.readonly'];
 export type GoogleTokens = { accessToken: string; refreshToken?: string; expiresIn: number; scopes?: string[] };
 export class GoogleError extends Error {
 	readonly code: 'google_failed' | 'grant_revoked';

@@ -10,6 +10,7 @@ const status = { connected: 'Connected', refresh_failed: 'Access could not be re
 const scopeName: Record<string, string> = { openid: 'Google account identity', email: 'Email address',
 	'https://www.googleapis.com/auth/userinfo.email': 'Email address',
 	'https://www.googleapis.com/auth/gmail.modify': 'Gmail: read, label, draft and send',
+	'https://www.googleapis.com/auth/calendar.calendarlist.readonly': 'Calendar: read your calendar list',
 	'https://www.googleapis.com/auth/calendar.events': 'Calendar: read, create and update events' };
 const errors: Record<string, string> = {
 	access_denied: 'Google access was not granted. Connect again when you are ready.',
@@ -36,7 +37,7 @@ async function GoogleConnection({ me, query }: { me: Awaited<ReturnType<typeof r
 		{query.error ? <Notice tone="failed">{errors[query.error] ?? 'Google could not be connected. Try Connect Google again.'}</Notice> : null}
 		{query.connected === 'google' && google?.status === 'connected' ? <p role="status">Google is connected for {google.accountEmail}.</p> : null}
 		<section className="card">
-			<h2>Google</h2><p className="secondary">Connect Gmail and Calendar so Captain can triage the inbox and keep the calendar. Sync has not started yet.</p>
+			<h2>Google</h2><p className="secondary">Connect Gmail and Calendar so Captain can triage the inbox and keep the calendar. Read synced mail in Inbox and events in Calendar.</p>
 			{!result.ok ? <Notice tone="failed" action={{ href: '/settings/connections', label: 'Try again' }}>{result.error.message} Try again to check the connection.</Notice> : <>
 				{google ? <div className="stack">
 					<div className="line"><span>Account</span><span>{google.accountEmail}</span></div>
