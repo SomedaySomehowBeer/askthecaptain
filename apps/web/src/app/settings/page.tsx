@@ -49,6 +49,14 @@ export default async function SettingsPage() {
 				<Link className="button button--secondary" href="/settings/workflows">Workflows</Link>
 				<Link className="button button--secondary" href="/settings/notifications">Notifications</Link>
 			</section>
+			<section className="card">
+				<h2>Your data</h2>
+				<p className="secondary">Everything Captain holds for {me.organisation.organisationName} can be downloaded as newline-delimited JSON, one line per row, without credentials. Deleting the organisation removes all of it for good.</p>
+				<div className="row">
+					{canManage ? <a className="button button--secondary" href="/settings/export">Download everything</a> : <span className="muted">Owners and admins can export.</span>}
+					{me.organisation.role === 'owner' ? <Link className="button button--ghost" href="/settings/delete">Delete this organisation…</Link> : null}
+				</div>
+			</section>
 			<section className="card card--inset">
 				<h2>Inference</h2>
 				<p className="secondary">Use your Claude or Codex subscription for triage, drafts and the brief.</p>

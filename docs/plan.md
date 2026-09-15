@@ -116,6 +116,8 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 - `memberships` — user, organisation, role ∈ owner · admin · member.
 - `audit_events` — actor (person, workflow run or system), action, subject, before/after digest,
   at. Append-only.
+- `organisation_deletions` — platform record of a deleted organisation: name, who deleted it, row
+  counts; everything else cascades away with the organisation (§9 deletion as a first-class operation).
 
 **Connections**
 - `connections` — provider, organisation, connected by, scopes, status, error; access and refresh
@@ -356,7 +358,10 @@ fallback for providers without webhooks.
   encrypted with the data key (AES-256-GCM). Rotation re-wraps data keys. No third-party key service
   and no extra cloud account.
 - Rate limits per IP, user, organisation and connection. Webhook signature verification.
-- Audit log for every write. Data export and organisation deletion as first-class operations.
+- Audit log for every write. Data export and organisation deletion as first-class operations: an
+  owner or admin downloads every tenant table as newline-delimited JSON without credentials; an owner
+  deletes the organisation by typing its name, providers are told to revoke, and the platform keeps a
+  one-line record.
 - Backups with a rehearsed restore, terms of service and a privacy notice before the second tenant.
 
 ## 10. Web and mobile

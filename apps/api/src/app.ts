@@ -23,6 +23,7 @@ import type { AuthService, Session } from './auth/service.ts';
 import { commitmentsRoutes } from './commitments/routes.ts';
 import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
+import type { OrganisationLifecycle } from './organisations/lifecycle.ts';
 import { RateLimiter, policies, rateLimit } from './ratelimit.ts';
 import type { OrganisationService } from './organisations/service.ts';
 import { pushRoutes } from './push/routes.ts';
@@ -30,7 +31,7 @@ import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
 
-export type Deps = { inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter };
+export type Deps = { inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -98,6 +99,23 @@ export function createApp(deps: Deps) {
 	signedIn.patch('/v1/organisations/:id', async (c) => {
 		const input = z.object({ name: z.string().trim().min(1).max(120).optional(), timezone: z.string().min(1).max(64).optional() }).parse(await c.req.json());
 		return c.json(await deps.organisations.update(actor(c), uuid.parse(c.req.param('id')), input));
+	});
+	signedIn.get('/v1/organisations/:id/export', async (c) => {
+		if (!deps.lifecycle) throw new HttpError(503, 'export_unavailable', 'export is not available on this Captain');
+		const lines = deps.lifecycle.export(actor(c), uuid.parse(c.req.param('id')));
+		// The first line is awaited before the response starts, so a refusal is a status, not a broken stream.
+		const first = await lines.next();
+		const encoder = new TextEncoder();
+		const stream = new ReadableStream<Uint8Array>({
+			async start(controller) { if (!first.done) controller.enqueue(encoder.encode(first.value)); },
+			async pull(controller) { const next = await lines.next(); if (next.done) controller.close(); else controller.enqueue(encoder.encode(next.value)); }
+		});
+		return new Response(stream, { status: 200, headers: { 'content-type': 'application/x-ndjson; charset=utf-8', 'cache-control': 'no-store', 'x-request-id': c.get('requestId') } });
+	});
+	signedIn.delete('/v1/organisations/:id', async (c) => {
+		if (!deps.lifecycle) throw new HttpError(503, 'delete_unavailable', 'deletion is not available on this Captain');
+		const input = z.object({ name: z.string().min(1).max(120) }).parse(await c.req.json());
+		return c.json(await deps.lifecycle.delete({ ...actor(c), email: c.get('session').user.email }, uuid.parse(c.req.param('id')), input.name));
 	});
 	signedIn.get('/v1/organisations/:id/members', async (c) => c.json({ members: await deps.organisations.members(actor(c), uuid.parse(c.req.param('id'))) }));
 	signedIn.patch('/v1/organisations/:id/members/:userId', async (c) => {
