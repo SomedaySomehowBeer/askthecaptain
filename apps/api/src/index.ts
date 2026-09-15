@@ -1,6 +1,9 @@
 import { TriageService } from './triage/service.ts';
 import { OutboxService } from './triage/outbox.ts';
 import { startAttachmentExpiry } from './triage/expiry.ts';
+import { ShopifyConnector } from '@captain/connectors/shopify';
+import { ShopifyConnections } from './shopify/connections.ts';
+import { ShopifySync, startShopifySchedule } from './shopify/sync.ts';
 import { XeroConnector } from '@captain/connectors/xero';
 import { XeroConnections } from './xero/connections.ts';
 import { XeroSync, startXeroSchedule } from './xero/sync.ts';
@@ -55,6 +58,9 @@ const commitments = new CommitmentsService(db);
 const stopSeries = startSeriesSchedule(new SeriesRoutine(db, commitments), env.SERIES_DISABLED === '1');
 const calendarSync = new CalendarSync(db, connections);
 const stopCalendarSync = startCalendarSchedule(calendarSync, env.CALENDAR_SYNC_DISABLED === '1');
+const shopifyConnections = new ShopifyConnections(db, env.SHOPIFY_CLIENT_ID && env.SHOPIFY_CLIENT_SECRET ? new ShopifyConnector(env.SHOPIFY_CLIENT_ID, env.SHOPIFY_CLIENT_SECRET, new URL('/connections/shopify/callback', env.API_URL).toString()) : null, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
+const shopifySync = new ShopifySync(shopifyConnections);
+const stopShopifySync = startShopifySchedule(shopifySync, env.SHOPIFY_SYNC_DISABLED === '1' || !shopifyConnections.available);
 const xeroConnections = new XeroConnections(db, env.XERO_CLIENT_ID ? new XeroConnector(env.XERO_CLIENT_ID, new URL('/connections/xero/callback', env.API_URL).toString()) : null, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
 const xeroSync = new XeroSync(xeroConnections);
 const stopXeroSync = startXeroSchedule(xeroSync, env.XERO_SYNC_DISABLED === '1' || !xeroConnections.available);
@@ -66,14 +72,15 @@ const workflows = new WorkflowService(db, push, engine);
 await workflows.sync().catch((error) => console.error('[api] workflow catalogue sync failed', error instanceof Error ? error.message : error));
 // Deletion revokes what it can at providers first, best effort, then the row and its tenant data go.
 const lifecycle = new OrganisationLifecycle(db, [
+ async (actor, organisationId) => { await shopifyConnections.disconnect(actor, organisationId).catch(() => undefined); },
 	async (actor, organisationId) => { const list = await connections.list(actor, organisationId); for (const c of list.connections) if (c.provider === 'google' && c.status !== 'disconnected') await connections.disconnect(actor, organisationId, c.id).catch(() => undefined); },
 	async (actor, organisationId) => { await xeroConnections.disconnect(actor, organisationId).catch(() => undefined); },
 	async (actor, organisationId) => { await inference.remove(actor, organisationId).catch(() => undefined); }
 ]);
 const passkeys = new PasskeyService(db, simpleWebAuthn(env.APP_URL));
-const app = createApp({ outbox, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
+const app = createApp({ shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, outbox, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
-const shutdown = () => { server.close(); void Promise.all([stopAttachmentExpiry(), stopXeroSync(), stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
+const shutdown = () => { server.close(); void Promise.all([stopShopifySync(), stopAttachmentExpiry(), stopXeroSync(), stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

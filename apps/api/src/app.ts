@@ -1,3 +1,7 @@
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
+import { shopifyRoutes } from './shopify/routes.ts';
+import type { ShopifyConnections } from './shopify/connections.ts';
+import type { ShopifySync } from './shopify/sync.ts';
 import { StockService } from './stock/service.ts';
 import { stockRoutes } from './stock/routes.ts';
 import { outboxRoutes } from './triage/routes.ts';
@@ -36,7 +40,7 @@ import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
 
-export type Deps = { outbox?: OutboxService; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
+export type Deps = { shopifyConnections?: ShopifyConnections; shopifySync?: ShopifySync; shopifyScheduleEnabled?: boolean; outbox?: OutboxService; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -90,6 +94,18 @@ export function createApp(deps: Deps) {
 	});
 	app.get('/auth/providers', (c) => c.json({ google: deps.auth.googleAvailable }));
 
+	app.get('/connections/shopify/authorize', async (c) => {
+  if (!deps.shopifyConnections) throw new HttpError(503, 'shopify_unavailable', 'Shopify connections are not configured.');
+  const state = c.req.query('state') ?? ''; const url = await deps.shopifyConnections.authorize(state);
+  setCookie(c, 'captain_shopify_state', state, { httpOnly: true, secure: deps.shopifyConnections.client!.redirectUri.startsWith('https:'), sameSite: 'Lax', path: '/connections/shopify', maxAge: 900 });
+  c.header('Cache-Control', 'no-store'); c.header('Referrer-Policy', 'no-referrer'); return c.redirect(url);
+ });
+ app.get('/connections/shopify/callback', async (c) => {
+  if (!deps.shopifyConnections) throw new HttpError(503, 'shopify_unavailable', 'Shopify connections are not configured.');
+  const cookie = getCookie(c, 'captain_shopify_state'); deleteCookie(c, 'captain_shopify_state', { path: '/connections/shopify' });
+  c.header('Cache-Control', 'no-store'); c.header('Referrer-Policy', 'no-referrer');
+  return c.redirect(await deps.shopifyConnections.finish(new URL(c.req.url).searchParams, cookie, c.get('requestId')));
+ });
 	app.get('/connections/xero/callback', async (c) => {
 		if (!deps.xeroConnections) throw new HttpError(503, 'xero_unavailable', 'Xero connections are not configured.');
 		return c.redirect(await deps.xeroConnections.finish(c.req.query('code') ?? '', c.req.query('state') ?? '', c.req.query('error'), c.get('requestId')));
@@ -167,6 +183,7 @@ export function createApp(deps: Deps) {
 		return c.json(await deps.organisations.accept({ ...actor(c), email: c.get('session').user.email }, input.token));
 	});
 	signedIn.route('/', xeroRoutes(deps));
+	signedIn.route('/', shopifyRoutes(deps));
 	signedIn.route('/', stockRoutes(new StockService(deps.db)));
 	signedIn.route('/', contactsRoutes(new ContactsService(deps.db)));
 	if (deps.outbox) signedIn.route('/', outboxRoutes(deps.outbox));

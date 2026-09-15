@@ -177,6 +177,18 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   commerce system and are read from there, not duplicated here.
 - `stock_counts` — the history of counts per item: when, by whom, the number.
 
+**Shopify commerce cache**
+- `shopify_products` — provider product and variant ids, names, SKU, price, inventory item and
+  tracking status. Shopify owns these records; they are never hand-counted or copied to `stock_items`.
+- `shopify_inventory_levels` — available quantity per inventory item and Shopify location, with
+  provider update time. A complete paged snapshot removes variants and locations no longer present.
+- `shopify_orders` — accessible orders with customer name/email when granted, status, total,
+  currency and provider timestamps. Details sync incrementally by `updated_at`; an id-only sweep
+  removes deleted orders. The standard `read_orders` scope covers 60 days, and summaries say so.
+- `shopify_reorder_points` — the person's threshold per variant, applied separately at each location.
+  It stays separate from provider-owned quantities and survives a same-shop reconnect and sync.
+  Members can change it; edits are audited. A different shop clears the previous shop's cache and thresholds.
+
 **Workflows**
 - `workflow_definitions` — code-defined and versioned; the table holds the catalogue the API exposes.
 - `workflow_enablements` — organisation, definition, enabled by, parameters, schedule overrides.
@@ -357,7 +369,11 @@ lock, a typed client, webhook verification and a sync cursor.
 | Shopify | orders, customers, inventory | 3 |
 
 Webhooks land on the API directly, are deduplicated by provider id, and enqueue work. Polling is the
-fallback for providers without webhooks.
+fallback for providers without webhooks. Shopify initially polls products, inventory levels and
+accessible orders every 15 minutes in the existing API process (`SHOPIFY_SYNC_DISABLED=1` pauses it),
+with a manual sync control. Its standalone custom-distribution app uses a non-expiring offline
+token, callback HMAC and browser nonce verification; provider-requested GraphQL cost delays are
+respected and persisted. Public-app expiring tokens and Shopify webhooks are later slices.
 
 ## 9. Security and tenancy
 
@@ -391,7 +407,9 @@ Phone-first. Five tabs:
 - **Today** — the brief, what needs you, a question box.
 - **Inbox** — triaged threads grouped by what they need, and the outbox.
 - **Commitments** — projects with their tasks, the Obligations deadline book, and Stock: the
-  counted list with each item's last count and what is below its reorder point.
+  counted list with each item's last count and what is below its reorder point. Shopify quantities
+  appear alongside it labelled “from Shopify”, with their location and last sync state; only reorder
+  points are editable. Settings → Connections has the Shopify shop-domain form and sync controls.
 - **Calendar** — the week, with preparation notes.
 - **Settings** — organisation, members, connections, workflows, inference subscription and budget, activity
   (the workflow journal), notifications.
