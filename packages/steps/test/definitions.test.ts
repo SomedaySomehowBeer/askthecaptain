@@ -14,7 +14,7 @@ test('every shipped definition is valid and has a stable digest', () => {
 test('requirements are collected from every step, including nested ones', () => {
 	assert.deepEqual(requirementsOf(definitions[0]!).sort(), ['connection:google', 'inference']);
 	assert.deepEqual(requirementsOf(definitions[1]!).sort(), ['inference', 'push']);
-	assert.deepEqual(requirementsOf(definitions[4]!).sort(), ['connection:shopify', 'inference', 'push']);
+	assert.deepEqual(requirementsOf(definitions[4]!).sort(), ['connection:google', 'inference', 'push']);
 });
 
 test('a definition that names an unknown step, the wrong kind, or an unsaved reference is refused', () => {

@@ -307,6 +307,25 @@ Settings → Activity only when they fail.
 - **calendar-prep** (evening): read tomorrow's events → read related threads and contacts → infer a
   one-paragraph preparation note per event → write notes.
 
+### Stocktake delivery detail (D2, D4, D5, D15)
+
+The enabling person is the stock counter: notify their subscribed devices, then await a count newer
+than the run's start, with a three-day deadline per item. The person's count transaction emits its
+wake-up; the workflow journals that observation without inserting another count. Local step writes
+and journal completion commit together, with run/step/item receipts for observations and reorder tasks.
+A named Purchasing project is created once if absent; duplicate active names require correction.
+Reorder tasks are due seven days later in the organisation's timezone. Supplier drafts use the one
+active contact of the preferred company, when unambiguous; missing email skips inference/outbox with
+a journal note. Usual order quantity is unknown until a later data-model decision, never inferred.
+Google and inference are prerequisites for drafting. Shopify is optional: disconnected or incomplete
+cache data is journaled and skipped; tracked variants with thresholds create tasks without a count.
+Both counted-item and shop-stock loops are capped at 100, with an explicit pause above the bound.
+
+Commitments → Stock has an owner/admin **Start a stocktake** form with the location. It starts the
+existing enabled workflow and opens Activity, with pending, failed and disabled states. The selected
+location is pinned only to this run; its weekly settings and enabling person stay fixed. Activity
+shows step notes for missing supplier addresses, unavailable Shopify data and count notifications.
+
 ### Example: inbox-triage
 
 ```ts

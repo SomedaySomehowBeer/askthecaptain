@@ -10,7 +10,8 @@ export type Result = { error?: string; ok?: boolean };
  *  (plan §3): the workflow acts in this person's name from now on, so the API records who. */
 export async function setWorkflow(_: Result | undefined, form: FormData): Promise<Result> {
 	const me = await current(); if (!me?.organisation) redirect('/sign-in?return_to=/settings/workflows');
-	const key = String(form.get('key') ?? ''); const enabled = String(form.get('enabled') ?? '') === 'true';
+	// Save parameters is distinct from the on/off toggle and keeps the workflow enabled.
+	const key = String(form.get('key') ?? ''); const enabled = form.get('intent') === 'save' || String(form.get('enabled') ?? '') === 'true';
 	let specs: Record<string, WorkflowParameterSpec> = {};
 	try { specs = JSON.parse(String(form.get('specs') ?? '{}')) as Record<string, WorkflowParameterSpec>; } catch { return { error: 'The form was not understood.' }; }
 	const parameters: Record<string, unknown> = {};
@@ -22,7 +23,7 @@ export async function setWorkflow(_: Result | undefined, form: FormData): Promis
 	}
 	try { await api(`/v1/organisations/${me.organisation.organisationId}/workflows/${encodeURIComponent(key)}`, { method: 'PUT', token: me.token, body: { enabled, parameters } }); }
 	catch (error) { return { error: error instanceof ApiError ? error.message : 'That did not work.' }; }
-	revalidatePath('/settings/workflows'); return { ok: true };
+	return { ok: true };
 }
 
 export async function controlRun(_: Result | undefined, form: FormData): Promise<Result> {

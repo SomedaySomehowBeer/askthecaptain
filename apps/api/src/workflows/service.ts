@@ -44,7 +44,7 @@ export class WorkflowService {
 			return Promise.all(definitions.map(async (definition) => {
 				const found = enablements.find((e) => e.definitionKey === definition.key);
 				const personal = new Set(available);
-				if (definition.key === 'morning-brief' && !await this.#push?.available(tx, organisationId, found?.enabled ? found.enabledBy ?? actor.userId : actor.userId)) personal.delete('push');
+				if (['morning-brief', 'stocktake'].includes(definition.key) && !await this.#push?.available(tx, organisationId, found?.enabled ? found.enabledBy ?? actor.userId : actor.userId)) personal.delete('push');
 				const requirements = requirementsOf(definition);
 				const unmet = requirements.filter((r) => !personal.has(r)).map((requirement) => ({ requirement, words: requirementWords[requirement] }));
 				const enablement = found ? { id: found.id, enabled: found.enabled, enabledBy: found.enabledBy, enabledByName: found.enabledByName, parameters: found.parameters, updatedAt: found.updatedAt, definitionVersion: found.definitionVersion } : null;
@@ -67,7 +67,7 @@ export class WorkflowService {
 			if (input.enabled) {
 				if (this.#engine) { const problem = this.#engine.unavailable(definition); if (problem) throw badRequest('runner_unavailable', problem); }
 				const available = await this.#available(tx, organisationId);
-				if (key === 'morning-brief' && !await this.#push?.available(tx, organisationId, actor.userId)) available.delete('push');
+				if (['morning-brief', 'stocktake'].includes(key) && !await this.#push?.available(tx, organisationId, actor.userId)) available.delete('push');
 				const unmet = requirementsOf(definition).filter((r) => !available.has(r));
 				if (unmet.length) throw badRequest('requirements_unmet', `${definition.name} needs ${unmet.map((r) => requirementWords[r]).join(' and ')} before it can run`);
 			}
@@ -84,7 +84,7 @@ export class WorkflowService {
 		});
 	}
 
- async control(actor: Actor, organisationId: string, keyOrId: string, action: 'run' | 'resume' | 'cancel') {
+ async control(actor: Actor, organisationId: string, keyOrId: string, action: 'run' | 'resume' | 'cancel', parameters?: Record<string, unknown>) {
   if (!canManage(await roleOf(this.#db, actor.userId, organisationId))) throw forbidden('Only an owner or admin can run, resume or cancel workflows.');
   if (!this.#engine) throw badRequest('runner_unavailable', 'The workflow runner is stopped. Ask the operator to start it.');
   return withTenant(this.#db, { organisationId, userId: actor.userId }, async tx => {
@@ -92,7 +92,7 @@ export class WorkflowService {
    const [member] = await tx`select role from memberships where user_id = ${actor.userId} and organisation_id = ${organisationId} and status = 'active' for share`;
    if (!member || member.role === 'member') throw forbidden();
    let runId = keyOrId;
-   if (action === 'run') runId = await this.#engine!.start(tx, organisationId, keyOrId);
+   if (action === 'run') runId = await this.#engine!.start(tx, organisationId, keyOrId, { kind: 'manual' }, parameters);
    else { const [run] = await tx`select id from workflow_runs where id = ${keyOrId}`; if (!run) throw notFound(); await this.#engine!.control(tx, organisationId, keyOrId, action); }
    await audit(tx, { organisationId, actor: person(actor), action: `workflow.${action}_requested`, subjectType: 'workflow_run', subjectId: runId, requestId: actor.requestId });
    return { runId };

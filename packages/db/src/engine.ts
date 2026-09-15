@@ -48,3 +48,6 @@ export async function waiting(tx: TransactionSql, key: string, runId: string) { 
  (select 1 from workflow_run_steps s where s.run_id = r.id and s.state = 'waiting' and s.wait_key = ${key}) order by r.id for update`; }
 export async function lastIncomplete(tx: TransactionSql, runId: string) { return (await tx<{ path: string; key: string }[]>`select path, key from workflow_run_steps where run_id = ${runId} and state not in ('succeeded', 'skipped') order by started_at desc limit 1`)[0]; }
 export async function exhaust(tx: TransactionSql, runId: string, reason: string) { await tx`update workflow_run_steps set state = 'failed', error = ${reason}, finished_at = now() where run_id = ${runId} and state = 'running'`; }
+
+/** Lock candidates before checking wait state: a count may race an await being committed. */
+export async function unfinished(tx: TransactionSql) { return tx<{ id: string }[]>`select id from workflow_runs where state in ('queued', 'running', 'waiting') order by id`; }

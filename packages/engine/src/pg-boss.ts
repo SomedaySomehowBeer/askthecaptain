@@ -1,14 +1,18 @@
 import { PgBoss } from 'pg-boss';
 import { type Sql, type TransactionSql } from '@captain/db';
-import { EngineJournal, enabled, timezone, advance, scheduled, waiting, lastIncomplete, exhaust, type Enabled } from '@captain/db/engine';
-import { digestOf, type WorkflowDefinition, type Trigger } from '@captain/steps';
+import { EngineJournal, enabled, timezone, advance, scheduled, waiting, lastIncomplete, exhaust, unfinished, type Enabled } from '@captain/db/engine';
+import { digestOf, resolveParameters, type WorkflowDefinition, type Trigger } from '@captain/steps';
 import { Park, Wait, WorkflowPause, digest, interpret, type Snapshot } from './index.ts';
 import { Registry, type HandlerContext, type WaitResult } from './registry.ts';
-import { adapter, transactionalBoss, queueName, failedQueue, schema } from './queue.ts';
+import { transactionalBoss, queueName, failedQueue, schema } from './queue.ts';
 export { queueName } from './queue.ts';
 export class WorkflowProblem extends Error {}
 const terminal = ['cancelled', 'succeeded', 'failed', 'paused'];
 const pauseWords: Record<string, string> = {
+ stocktake_limit: 'Stocktake is limited to 100 items per location and 100 shop stock rows with reorder points. Reduce the selection, then start a new run.',
+ stocktake_count: 'The recorded count is no longer available. Check Stock and start a new stocktake.',
+ stocktake_project: 'More than one active project has the Purchasing project name. Give them distinct names, then Resume.',
+ stocktake_google: 'Reconnect Google in Settings, then Resume to create the supplier draft.',
  budget_spent: 'The inference allowance is spent. Increase it in Settings or wait for the next month, then Resume.',
  needs_login: 'Inference needs sign-in. Reconnect it in Settings, then Resume.',
  runtime_not_ready: 'Inference is unavailable. Restore the runtime in Settings, then Resume.'
@@ -33,24 +37,32 @@ export class BossEngine {
  unavailable(definition: WorkflowDefinition) { return !this.ready ? 'The workflow runner is stopped. Ask the operator to start it.' : this.registry.missing(definition).length ? 'The steps for this workflow are not installed yet.' : null; }
  private journal(org: string, userId?: string) { return new EngineJournal(this.db, { organisationId: org, ...(userId ? { userId } : {}) }); }
  private async send(tx: TransactionSql, key: string, runId: string, startAfter?: Date) {
-  await this.boss.send(queueName(key), { runId }, { db: adapter(tx), ...(startAfter ? { startAfter } : {}) });
+  await transactionalBoss(tx).send(queueName(key), { runId }, { ...(startAfter ? { startAfter } : {}) });
  }
  private async create(tx: TransactionSql, e: Enabled, definition: WorkflowDefinition, trigger: unknown, scheduleKey: string | null = null) {
   const journal = this.journal(e.organisationId, e.enabledBy);
   const snapshot: Snapshot = { definition, enablement: e, trigger };
   return journal.create(tx, e, definition, digestOf(definition), snapshot, trigger, scheduleKey);
  }
- async start(tx: TransactionSql, organisationId: string, key: string, trigger: unknown = { kind: 'manual' }) {
+ async start(tx: TransactionSql, organisationId: string, key: string, trigger: unknown = { kind: 'manual' }, parameters?: Record<string, unknown>) {
   const definition = this.definitions.find(d => d.key === key); if (!definition) throw new WorkflowProblem('Workflow not found');
   const problem = this.unavailable(definition); if (problem) throw new WorkflowProblem(problem);
   const e = (await enabled(tx, key))[0]; if (!e || e.organisationId !== organisationId) throw new WorkflowProblem('Turn this workflow on first');
   if (e.definitionVersion !== definition.version) throw new WorkflowProblem('This workflow has changed. Save its parameters in Settings before starting a new run.');
-  const runId = await this.create(tx, e, definition, trigger); await this.send(tx, key, runId); return runId;
+  const resolved = resolveParameters(definition.parameters, { ...e.parameters, ...parameters });
+  if (resolved.problems.length) throw new WorkflowProblem(resolved.problems.map(p => `${p.path} ${p.message}`).join('; '));
+  const runId = await this.create(tx, { ...e, parameters: resolved.values }, definition, trigger); await this.send(tx, key, runId); return runId;
  }
- /** Called in the mail sync's final cursor transaction: a rollback loses neither the event nor cursor. */
- async emit(tx: TransactionSql, organisationId: string, event: string, data: unknown) {
+ /** Events and destination wake-ups commit with the source write. waitKey wakes existing runs,
+  * including a wait whose transaction is still committing; early events are read from destination state. */
+ async emit(tx: TransactionSql, organisationId: string, event: string, data: unknown, waitKey?: string) {
+  if (!this.ready && !waitKey) return;
+  if (!this.ready) { const [installed] = await tx`select to_regclass('workflow_queue.job') is not null as ready`; if (!installed!.ready) return; }
+  // Match the worker/control lock order: enablements before runs.
+  const enablements = await enabled(tx);
+  if (waitKey) for (const run of await unfinished(tx)) await this.wake(tx, organisationId, run.id, waitKey);
   if (!this.ready) return;
-  for (const e of await enabled(tx)) {
+  for (const e of enablements) {
    const d = this.definitions.find(d => d.key === e.definitionKey);
    if (d && !this.unavailable(d) && d.triggers.some(t => t.kind === 'event' && t.event === event)) await this.start(tx, organisationId, d.key, { kind: 'event', event, data });
   }

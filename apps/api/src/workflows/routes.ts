@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { badRequest } from '../errors.ts';
 import type { Session } from '../auth/service.ts';
 import type { WorkflowService } from './service.ts';
 
@@ -24,7 +25,12 @@ export function workflowRoutes(workflows: WorkflowService) {
 		return c.json({ runs: await workflows.runs(actor(c), org(c), query) });
 	});
 	routes.get('/v1/organisations/:id/workflows/runs/:runId', async (c) => c.json(await workflows.run(actor(c), org(c), uuid.parse(c.req.param('runId')))));
- routes.post('/v1/organisations/:id/workflows/:key/run', async c => c.json(await workflows.control(actor(c), org(c), key.parse(c.req.param('key')), 'run'), 202));
+ routes.post('/v1/organisations/:id/workflows/:key/run', async c => {
+  const raw = await c.req.text(); let body: unknown = {};
+  try { if (raw) body = JSON.parse(raw); } catch { throw badRequest('body_invalid', 'Send a JSON object with optional workflow parameters.'); }
+  const input = z.object({ parameters: z.record(z.string(), z.unknown()).optional() }).strict().parse(body);
+  return c.json(await workflows.control(actor(c), org(c), key.parse(c.req.param('key')), 'run', input.parameters), 202);
+ });
  for (const action of ['resume', 'cancel'] as const) routes.post(`/v1/organisations/:id/workflows/runs/:runId/${action}`, async c => c.json(await workflows.control(actor(c), org(c), uuid.parse(c.req.param('runId')), action)));
 	return routes;
 }

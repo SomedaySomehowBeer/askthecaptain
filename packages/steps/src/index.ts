@@ -19,3 +19,4 @@ export { classifyThreadInstruction, draftReplyInstruction } from './instructions
 export { morningBriefInstruction } from './instructions/morning-brief.ts';
 
 export { draftChaserInstruction } from './instructions/chase-due.ts';
+export { draftOrderEmailInstruction } from './instructions/stocktake.ts';
