@@ -1,6 +1,7 @@
 import { GmailPush, startGmailPushSchedule } from './mail/push.ts';
 import { GmailWatch } from './mail/watch.ts';
 import { CalendarSync, startCalendarSchedule } from './calendar/sync.ts';
+import { InferenceService } from './inference/service.ts';
 import { MailSync, startMailSchedule } from './mail/sync.ts';
 import { GoogleConnector } from '@captain/connectors';
 import { ConnectionService } from './connections/service.ts';
@@ -31,7 +32,7 @@ const stopGmailPush = startGmailPushSchedule(gmailPush, gmailWatch);
 const stopMailSync = startMailSchedule(mailSync, env.MAIL_SYNC_DISABLED === '1');
 const calendarSync = new CalendarSync(db, connections);
 const stopCalendarSync = startCalendarSchedule(calendarSync, env.CALENDAR_SYNC_DISABLED === '1');
-const app = createApp({ db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
+const app = createApp({ inference: new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null), db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
