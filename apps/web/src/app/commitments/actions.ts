@@ -1,4 +1,5 @@
 'use server';
+import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { api, ApiError } from '../../lib/api.ts';
 import { current } from '../../lib/session.ts';
@@ -9,7 +10,7 @@ const text = (form: FormData, name: string) => String(form.get(name) ?? '').trim
 const optional = (value: string) => value || undefined;
 
 async function who() { const me = await current(); if (!me?.organisation) redirect('/sign-in?return_to=/commitments'); return { token: me.token, org: me.organisation.organisationId }; }
-const done = (): Result => ({ ok: true });
+const done = (): Result => { revalidatePath('/commitments'); revalidatePath('/'); return { ok: true }; };
 
 export async function createTask(_: Result | undefined, form: FormData): Promise<Result> {
 	const { token, org } = await who();

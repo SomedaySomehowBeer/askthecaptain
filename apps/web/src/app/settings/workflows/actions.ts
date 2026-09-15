@@ -23,7 +23,7 @@ export async function setWorkflow(_: Result | undefined, form: FormData): Promis
 	}
 	try { await api(`/v1/organisations/${me.organisation.organisationId}/workflows/${encodeURIComponent(key)}`, { method: 'PUT', token: me.token, body: { enabled, parameters } }); }
 	catch (error) { return { error: error instanceof ApiError ? error.message : 'That did not work.' }; }
-	return { ok: true };
+	revalidatePath('/settings/workflows'); return { ok: true };
 }
 
 export async function controlRun(_: Result | undefined, form: FormData): Promise<Result> {

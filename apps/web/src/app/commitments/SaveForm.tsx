@@ -1,19 +1,28 @@
 'use client';
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { startTransition, useActionState, useEffect, useRef, type FormEvent, type ReactNode } from 'react';
 type SaveResult = { error?: string } | void;
 type Save = (form: FormData) => Promise<SaveResult>;
-// A small action response followed by a fresh document avoids production RSC revalidation
-// leaving a persisted write stuck in a pending transition. Failed forms retain their values.
+// Native submit handling retains entered values on errors. Successful actions revalidate
+// their page; React applies the result and refreshed tree in the same transition.
 export function useSaveForm(save: Save) {
- const [state, setState] = useState<{ error?: string }>(); const [pending, setPending] = useState(false);
- async function submit(event: FormEvent<HTMLFormElement>) {
+ const confirmed = useRef<HTMLFormElement | undefined>(undefined);
+ const [state, dispatch, pending] = useActionState<SaveResult, { data: FormData; element: HTMLFormElement }>(async (_, { data, element }) => {
+  try {
+   const result = await save(data);
+   if (!result?.error) confirmed.current = element;
+   return result;
+  } catch { return { error: 'The save could not be confirmed. Reload the page to check before trying again.' }; }
+ }, undefined);
+ useEffect(() => {
+  if (!pending && confirmed.current) { confirmed.current.reset(); confirmed.current = undefined; }
+ }, [pending]);
+ function submit(event: FormEvent<HTMLFormElement>) {
   event.preventDefault(); if (pending) return;
-  const form = new FormData(event.currentTarget, (event.nativeEvent as SubmitEvent).submitter); setPending(true); setState(undefined);
-  try { const result = await save(form); if (!result?.error) { window.location.reload(); return; } setState(result); }
-  catch { setState({ error: 'The save could not be confirmed. Reload the page to check before trying again.' }); }
-  setPending(false);
+  const element = event.currentTarget;
+  const data = new FormData(element, (event.nativeEvent as SubmitEvent).submitter);
+  startTransition(() => dispatch({ data, element }));
  }
- return [state, submit, pending] as const;
+ return [state || undefined, submit, pending] as const;
 }
 export function SaveForm({ action, children }: { action: Save; children: ReactNode }) {
  const [state, submit, pending] = useSaveForm(action);

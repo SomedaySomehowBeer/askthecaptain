@@ -1,4 +1,5 @@
 'use server';
+import { revalidatePath } from 'next/cache';
 import { requireCurrent } from '../../components/Page.tsx';
 import { api, ApiError } from '../../lib/api.ts';
 export type StockResult = { error?: string; ok?: string };
@@ -16,5 +17,5 @@ export async function saveStock(_: StockResult | undefined, form: FormData): Pro
  } else return { error: 'That stock action was not understood.' };
  try { await api(path, { method, body, token: me.token }); }
  catch (e) { return { error: e instanceof ApiError ? e.message : 'Stock could not be saved. Try again.' }; }
- return { ok };
+ revalidatePath('/commitments'); return { ok };
 }
