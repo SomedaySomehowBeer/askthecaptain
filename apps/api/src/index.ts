@@ -15,7 +15,9 @@ import { serve } from '@hono/node-server';
 import { connect } from '@captain/db';
 import { createApp } from './app.ts';
 import { GoogleIdentityProvider } from './auth/google.ts';
+import { PasskeyService } from './auth/passkeys.ts';
 import { AuthService } from './auth/service.ts';
+import { simpleWebAuthn } from './auth/webauthn.ts';
 import { SeriesRoutine, startSeriesSchedule } from './commitments/routine.ts';
 import { CommitmentsService } from './commitments/service.ts';
 import { readEnv } from './env.ts';
@@ -62,7 +64,8 @@ const lifecycle = new OrganisationLifecycle(db, [
 	async (actor, organisationId) => { await xeroConnections.disconnect(actor, organisationId).catch(() => undefined); },
 	async (actor, organisationId) => { await inference.remove(actor, organisationId).catch(() => undefined); }
 ]);
-const app = createApp({ lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments });
+const passkeys = new PasskeyService(db, simpleWebAuthn(env.APP_URL));
+const app = createApp({ passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));

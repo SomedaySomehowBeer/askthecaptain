@@ -26,6 +26,7 @@ import { commitmentsRoutes } from './commitments/routes.ts';
 import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
 import type { OrganisationLifecycle } from './organisations/lifecycle.ts';
+import type { PasskeyService } from './auth/passkeys.ts';
 import { RateLimiter, policies, rateLimit } from './ratelimit.ts';
 import type { OrganisationService } from './organisations/service.ts';
 import { pushRoutes } from './push/routes.ts';
@@ -33,7 +34,7 @@ import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
 
-export type Deps = { inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle };
+export type Deps = { inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -70,7 +71,19 @@ export function createApp(deps: Deps) {
 	app.get('/auth/google/callback', async (c) => c.redirect((await deps.auth.finishGoogle(c.req.query('code') ?? '', c.req.query('state') ?? '', c.get('requestId'))).toString()));
 	app.post('/auth/session/exchange', async (c) => {
 		const input = z.object({ code: z.string().min(1) }).parse(await c.req.json());
-		const { token, session, returnTo } = await deps.auth.exchange(input.code, c.get('requestId'));
+		const result = await deps.auth.exchange(input.code, c.get('requestId'));
+		if ('stepUp' in result) return c.json({ stepUp: true, token: result.token, returnTo: result.returnTo });
+		return c.json({ token: result.token, expiresAt: result.session.expiresAt, user: result.session.user, returnTo: result.returnTo });
+	});
+	// Passkey step-up between the Google sign-in and the session (plan §9).
+	app.post('/auth/passkey/options', async (c) => {
+		if (!deps.passkeys) throw unauthorised('passkeys are not available');
+		const input = z.object({ token: z.string().min(1) }).parse(await c.req.json());
+		return c.json({ options: await deps.passkeys.stepUpOptions(input.token) });
+	});
+	app.post('/auth/passkey/verify', async (c) => {
+		const input = z.object({ token: z.string().min(1), response: z.unknown() }).parse(await c.req.json());
+		const { token, session, returnTo } = await deps.auth.completeStepUp(input.token, input.response, c.get('requestId'));
 		return c.json({ token, expiresAt: session.expiresAt, user: session.user, returnTo });
 	});
 	app.get('/auth/providers', (c) => c.json({ google: deps.auth.googleAvailable }));
@@ -91,7 +104,19 @@ export function createApp(deps: Deps) {
 	const actor = (c: { get(key: 'session'): Session; get(key: 'requestId'): string }) => ({ userId: c.get('session').userId, requestId: c.get('requestId') });
 
 	signedIn.post('/auth/sign-out', async (c) => { await deps.auth.signOut(bearer(c.req.header('authorization')), c.get('requestId')); return c.json({ ok: true }); });
-	signedIn.get('/v1/me', async (c) => c.json({ user: c.get('session').user, memberships: await deps.organisations.memberships(c.get('session').userId) }));
+	signedIn.get('/v1/me', async (c) => c.json({ user: c.get('session').user, memberships: await deps.organisations.memberships(c.get('session').userId), passkeyVerified: c.get('session').passkeyVerifiedAt !== null }));
+	// A person's passkeys: registered signed in, presented at every later sign-in.
+	signedIn.get('/v1/me/passkeys', async (c) => { if (!deps.passkeys) return c.json({ available: false, passkeys: [] }); return c.json({ available: true, passkeys: await deps.passkeys.list(c.get('session').userId) }); });
+	signedIn.post('/v1/me/passkeys/options', async (c) => { if (!deps.passkeys) throw new HttpError(503, 'passkeys_unavailable', 'passkeys are not available on this Captain'); return c.json(await deps.passkeys.registrationOptions(c.get('session').user)); });
+	signedIn.post('/v1/me/passkeys', async (c) => {
+		if (!deps.passkeys) throw new HttpError(503, 'passkeys_unavailable', 'passkeys are not available on this Captain');
+		const input = z.object({ token: z.string().min(1), name: z.string().max(60).default('Passkey'), response: z.unknown() }).parse(await c.req.json());
+		return c.json(await deps.passkeys.register(c.get('session').userId, input, c.get('requestId')), 201);
+	});
+	signedIn.delete('/v1/me/passkeys/:passkeyId', async (c) => {
+		if (!deps.passkeys) throw new HttpError(503, 'passkeys_unavailable', 'passkeys are not available on this Captain');
+		await deps.passkeys.remove(c.get('session').userId, uuid.parse(c.req.param('passkeyId')), c.get('requestId')); return c.json({ ok: true });
+	});
 
 	signedIn.post('/v1/organisations', async (c) => {
 		const input = z.object({ name: z.string().trim().min(1).max(120), timezone: z.string().min(1).max(64).optional() }).parse(await c.req.json());
