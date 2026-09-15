@@ -4,6 +4,7 @@ import { Notice } from '../components/Notice.tsx';
 import { Page, requireCurrent } from '../components/Page.tsx';
 import { api, load, type Commitments, type Task } from '../lib/api.ts';
 import { describeDue } from '../lib/dates.ts';
+import { SaveForm } from './commitments/SaveForm.tsx';
 import { setTaskStatus } from './commitments/actions.ts';
 import { addDays, localDate, type CalendarWeek, type Event } from './calendar/calendar.ts';
 import type { MailList } from './inbox/mail.ts';
@@ -22,9 +23,9 @@ function TaskRow({ task, today }: { task: Task; today: string }) {
 				<span className="task__meta">{task.status === 'suggested' ? <span className="chip">suggested</span> : <span className={due.urgency ? `due--${due.urgency}` : undefined}>{due.text}</span>}{task.ownerName ? <span>{task.ownerName}</span> : null}</span></div>
 			<span className="task__actions">
 				{task.status === 'suggested' ? (<>
-					<form action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="open" /><button className="button button--secondary button--small" type="submit">Accept</button></form>
-					<form action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="cancelled" /><button className="button button--ghost button--small" type="submit">Dismiss</button></form>
-				</>) : <form action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="done" /><button className="button button--secondary button--small" type="submit" aria-label={`Mark "${task.title}" done`}>Done</button></form>}
+					<SaveForm action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="open" /><button className="button button--secondary button--small" type="submit">Accept</button></SaveForm>
+					<SaveForm action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="cancelled" /><button className="button button--ghost button--small" type="submit">Dismiss</button></SaveForm>
+				</>) : <SaveForm action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="done" /><button className="button button--secondary button--small" type="submit" aria-label={`Mark "${task.title}" done`}>Done</button></SaveForm>}
 			</span>
 		</li>
 	);
