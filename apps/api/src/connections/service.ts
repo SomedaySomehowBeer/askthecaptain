@@ -102,11 +102,12 @@ export class ConnectionService {
 			await this.journal(tx, actor, organisationId, 'connection.disconnected', 'connection', connectionId);
 		});
 	}
-	/** API-only credential seam for future sync routines; no token is exposed by an HTTP route.
+	/** API-only credential seam: pass undefined for a system routine, or an active member for a workflow.
+	 * No token is exposed by an HTTP route; connect/disconnect still require an owner or admin.
 	 * Failed refreshes commit their honest state before the error is raised to the caller. */
-	async accessToken(actor: Actor, organisationId: string, connectionId: string): Promise<string> {
-		const result = await withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
-			await this.role(tx, actor, organisationId);
+	async accessToken(actor: Actor | undefined, organisationId: string, connectionId: string): Promise<string> {
+		const result = await withTenant(this.#db, { organisationId, userId: actor?.userId }, async (tx) => {
+			if (actor) await this.role(tx, actor, organisationId, false);
 			if (!this.available) throw badRequest('google_unavailable', 'Google connections are not configured.');
 			const row = await this.lock(tx, connectionId);
 			if (row.status === 'disconnected' || row.status === 'revoked') throw badRequest('reconnect_required', 'Reconnect Google in Settings.');
@@ -142,7 +143,7 @@ export class ConnectionService {
 		const [row] = await tx<Stored[]>`select * from connections where id = ${id} and provider = 'google' for update`;
 		if (!row) throw notFound(); return row;
 	}
-	private async dataKey(tx: TransactionSql, actor: Actor, organisationId: string, create = false): Promise<Buffer> {
+	private async dataKey(tx: TransactionSql, actor: Actor | undefined, organisationId: string, create = false): Promise<Buffer> {
 		if (!this.#master) throw badRequest('google_unavailable', 'Connection encryption is not configured.');
 		// Creation locks the organisation so simultaneous first grants cannot overwrite its key.
 		const rows = create ? await tx`select data_key_wrapped from organisations where id = ${organisationId} for update`
@@ -156,7 +157,7 @@ export class ConnectionService {
 		return fresh.key;
 	}
 	private expiry(tokens: GoogleTokens) { return new Date(Date.now() + tokens.expiresIn * 1000); }
-	private journal(tx: TransactionSql, actor: Actor, organisationId: string, action: string, subjectType: string, subjectId: string) {
-		return audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId, action, subjectType, subjectId });
+	private journal(tx: TransactionSql, actor: Actor | undefined, organisationId: string, action: string, subjectType: string, subjectId: string) {
+		return audit(tx, { organisationId, actor: actor ? { kind: 'person', id: actor.userId } : { kind: 'system' }, requestId: actor?.requestId, action, subjectType, subjectId });
 	}
 }

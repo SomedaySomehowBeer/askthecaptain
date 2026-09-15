@@ -60,9 +60,7 @@ alter table connections enable row level security;
 alter table connections force row level security;
 create policy connections_tenant on connections for all to app
 	using (organisation_id = current_organisation_id())
-	with check (organisation_id = current_organisation_id() and exists (
-		select 1 from memberships m where m.organisation_id = connections.organisation_id
-		and m.user_id = current_user_id() and m.status = 'active' and m.role in ('owner', 'admin')));
+	with check (organisation_id = current_organisation_id());
 alter table sync_cursors enable row level security;
 alter table sync_cursors force row level security;
 create policy sync_cursors_tenant on sync_cursors for all to app

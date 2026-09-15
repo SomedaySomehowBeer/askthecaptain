@@ -48,11 +48,11 @@ it('webhook events and attempts cannot link across tenants or mismatched connect
 			tx`insert into webhook_attempts (organisation_id, connection_id, webhook_event_id) values (${a.org}, ${connection}, ${b.event})`), { code: '23503' });
 	}
 });
-it('connection updates are role checked by RLS, including a member bypassing the service', async () => {
-	await db.owner`insert into memberships (organisation_id, user_id, role) values (${a.org}, ${b.user}, 'member')`;
-	await assert.rejects(withTenant(db.app, { organisationId: a.org, userId: b.user }, (tx) =>
-		tx`update connections set status = 'disconnected' where id = ${a.connection}`), { code: '42501' });
-	await assert.rejects(withTenant(db.app, { organisationId: a.org, userId: a.user }, (tx) => tx`delete from connections`), { code: '42501' });
+it('system routines can update their tenant connection without a person; physical deletion remains denied', async () => {
+	const rows = await withTenant(db.app, { organisationId: a.org }, (tx) =>
+		tx`update connections set updated_at = now() where id = ${a.connection} returning id`);
+	assert.deepEqual(rows.map((row) => row.id), [a.connection]);
+	await assert.rejects(withTenant(db.app, { organisationId: a.org }, (tx) => tx`delete from connections`), { code: '42501' });
 });
 it('webhook provider event ids are deduplicated', async () => {
 	await assert.rejects(withTenant(db.app, { organisationId: a.org, userId: a.user }, (tx) =>

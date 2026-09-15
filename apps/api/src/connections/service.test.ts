@@ -92,20 +92,39 @@ it('callback rechecks roles and refuses partial scopes and missing offline acces
 	refreshToken = undefined; assert.equal((await finish(await start())).searchParams.get('error'), 'refresh_missing'); refreshToken = 'refresh';
 	assert.equal((await connection()).status, 'connected');
 });
-it('concurrent refreshes rotate once under a row lock, preserving the new refresh token', async () => {
+it('concurrent system refreshes rotate once under a row lock and are audited as system', async () => {
 	const row = await connection(); await db.owner`update connections set access_token_expires_at = now() where id = ${row.id}`;
-	const tokens = await Promise.all([service.accessToken(actor(), org, row.id), service.accessToken(actor(), org, row.id)]);
+	const tokens = await Promise.all([service.accessToken(undefined, org, row.id), service.accessToken(undefined, org, row.id)]);
 	assert.deepEqual(tokens, ['new-access', 'new-access']); assert.equal(refreshCalls, 1);
 	const [organisation] = await db.owner`select data_key_wrapped from organisations where id = ${org}`;
 	const key = open(master, organisation!.dataKeyWrapped, org, 'data_key');
 	assert.equal(open(key, (await connection()).refreshTokenEncrypted, org, 'refresh_token').toString(), 'rotated-refresh');
+	const events = await db.owner`select actor_kind, actor_id from audit_events where action = 'connection.refreshed' and subject_id = ${row.id}`;
+	assert.deepEqual([...events], [{ actorKind: 'system', actorId: null }]);
+});
+it('members cannot connect or disconnect through the API but can refresh for workflows; outsiders cannot', async () => {
+	const row = await connection();
+	assert.equal((await request('POST', `${root()}/google/start`, member)).status, 403);
+	assert.equal((await request('DELETE', `${root()}/${row.id}`, member)).status, 403);
+	await db.owner`update connections set access_token_expires_at = now() where id = ${row.id}`;
+	const memberActor = { userId: (await auth.requireSession(member)).userId, requestId: 'member-refresh' };
+	const strangerActor = { userId: (await auth.requireSession(stranger)).userId, requestId: 'stranger-refresh' };
+	await assert.rejects(service.accessToken(strangerActor, org, row.id), { code: 'not_found' });
+	assert.equal(await service.accessToken(memberActor, org, row.id), 'new-access');
+	const events = await db.owner`select actor_kind, actor_id from audit_events where request_id = 'member-refresh'`;
+	assert.deepEqual([...events], [{ actorKind: 'person', actorId: memberActor.userId }]);
+	await db.owner`update memberships set status = 'removed' where organisation_id = ${org} and user_id = ${memberActor.userId}`;
+	await assert.rejects(service.accessToken(memberActor, org, row.id), { code: 'not_found' });
+	await db.owner`update memberships set status = 'active' where organisation_id = ${org} and user_id = ${memberActor.userId}`;
 });
 it('refresh failures commit an honest state and invalid_grant requires reconnecting', async () => {
 	const row = await connection();
 	for (const [error, status] of [['temporarily_unavailable', 'refresh_failed'], ['invalid_grant', 'revoked']]) {
 		failure = error!; await db.owner`update connections set access_token_expires_at = now() where id = ${row.id}`;
-		await assert.rejects(service.accessToken(actor(), org, row.id), { code: 'reconnect_required' });
+		await assert.rejects(service.accessToken(undefined, org, row.id), { code: 'reconnect_required' });
 		const stored = await connection(); assert.equal(stored.status, status); assert.ok(!stored.error.includes('must not be exposed'));
+		const [event] = await db.owner`select actor_kind, actor_id from audit_events where action = 'connection.refresh_failed' order by created_at desc limit 1`;
+		assert.deepEqual(event, { actorKind: 'system', actorId: null });
 	}
 	failure = '';
 });
