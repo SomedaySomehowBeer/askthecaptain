@@ -7,6 +7,7 @@ const schema = z.object({
 	APP_URL: z.string().url(),
 	/** This API's public origin, used for the Google redirect URI. */
 	API_URL: z.string().url(),
+	CALENDAR_SYNC_DISABLED: z.enum(['0', '1']).default('0'),
 	MAIL_SYNC_DISABLED: z.enum(['0', '1']).default('0'),
 	MASTER_KEY: z.string().regex(/^[A-Za-z0-9+/]{43}=$/).optional(),
 	GOOGLE_CLIENT_ID: z.string().optional(),

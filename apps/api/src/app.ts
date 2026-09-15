@@ -1,3 +1,6 @@
+import { calendarRoutes } from './calendar/routes.ts';
+import { CalendarService } from './calendar/service.ts';
+import type { CalendarSync } from './calendar/sync.ts';
 import { mailRoutes } from './mail/routes.ts';
 import { MailService } from './mail/service.ts';
 import type { MailSync } from './mail/sync.ts';
@@ -13,7 +16,7 @@ import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
 import type { OrganisationService } from './organisations/service.ts';
 
-export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; mailScheduleEnabled?: boolean };
+export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -90,6 +93,7 @@ export function createApp(deps: Deps) {
 	});
 	signedIn.route('/', commitmentsRoutes(deps.commitments));
 	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled)));
+	signedIn.route('/', calendarRoutes(new CalendarService(deps.db, deps.calendarSync, deps.calendarScheduleEnabled)));
 	app.route('/', signedIn);
 
 	app.notFound((c) => c.json({ ok: false, code: 'not_found', error: 'not found' }, 404));
