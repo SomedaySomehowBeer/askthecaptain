@@ -13,7 +13,7 @@ test('every shipped definition is valid and has a stable digest', () => {
 
 test('requirements are collected from every step, including nested ones', () => {
 	assert.deepEqual(requirementsOf(definitions[0]!).sort(), ['connection:google', 'inference']);
-	assert.deepEqual(requirementsOf(definitions[1]!).sort(), ['connection:google', 'connection:xero', 'inference', 'push']);
+	assert.deepEqual(requirementsOf(definitions[1]!).sort(), ['inference', 'push']);
 	assert.deepEqual(requirementsOf(definitions[4]!).sort(), ['connection:shopify', 'inference', 'push']);
 });
 

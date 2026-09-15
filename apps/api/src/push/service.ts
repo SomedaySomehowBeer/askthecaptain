@@ -59,9 +59,9 @@ export class PushService {
 	}
 
 	/** Whether anyone in the organisation can be pushed to: what a notify step needs. */
-	async available(tx: TransactionSql, organisationId: string): Promise<boolean> {
+	async available(tx: TransactionSql, organisationId: string, userId?: string): Promise<boolean> {
 		if (!this.configured) return false;
-		const [row] = await tx`select 1 from push_subscriptions where organisation_id = ${organisationId} and disabled_at is null limit 1`;
+		const [row] = await tx`select 1 from push_subscriptions where organisation_id = ${organisationId} and disabled_at is null and (${userId ?? null}::uuid is null or user_id = ${userId ?? null}::uuid) limit 1`;
 		return Boolean(row);
 	}
 

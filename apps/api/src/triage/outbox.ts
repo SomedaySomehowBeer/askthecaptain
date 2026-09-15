@@ -115,3 +115,10 @@ export class OutboxService {
   return audit(tx, { organisationId: org, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId, action: `outbox.${action}`, subjectType: 'outbox', subjectId: id });
  }
 }
+
+/** Subjects and recipients only: morning inference does not need correspondence bodies. */
+export async function waitingDrafts(tx: TransactionSql) {
+ const rows = await tx`select o.id, o.thread_id, left(coalesce((select m.subject from mail_messages m where m.thread_id = o.thread_id order by m.sent_at desc, m.id desc limit 1), o.subject), 300) as subject, o."to" as recipients
+  from outbox o where o.state = 'drafted' order by o.created_at, o.id limit 101`;
+ return { drafts: rows.slice(0, 100), truncated: rows.length > 100 };
+}

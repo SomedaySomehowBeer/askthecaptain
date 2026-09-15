@@ -1,3 +1,4 @@
+import { BriefService } from './briefs/service.ts';
 import { TriageService } from './triage/service.ts';
 import { OutboxService } from './triage/outbox.ts';
 import { startAttachmentExpiry } from './triage/expiry.ts';
@@ -43,8 +44,12 @@ const connections = new ConnectionService(db, env.GOOGLE_CLIENT_ID && env.GOOGLE
 	? new GoogleConnector(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/connections/google/callback', env.API_URL).toString()) : null,
 	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
 const inference = new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null);
+const pushKeys = env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY && env.WEB_PUSH_SUBJECT ? { publicKey: env.WEB_PUSH_PUBLIC_KEY, privateKey: env.WEB_PUSH_PRIVATE_KEY, subject: env.WEB_PUSH_SUBJECT } : null;
+if (!pushKeys) console.warn('[api] Web Push is not configured (WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY / WEB_PUSH_SUBJECT)');
+const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, pushKeys?.publicKey ?? null);
+const briefs = new BriefService(db);
 const triage = new TriageService(db, connections, inference);
-const engine = new BossEngine(db, env.DATABASE_URL, triage.registry(), definitions);
+const engine = new BossEngine(db, env.DATABASE_URL, briefs.register(triage.registry(), inference, push), definitions);
 const outbox = new OutboxService(db, connections, (tx, org, run, key) => engine.wake(tx, org, run, key));
 const stopAttachmentExpiry = startAttachmentExpiry(db);
 if (env.WORKFLOWS_DISABLED !== '1') await engine.open().catch(async () => { console.error('[api] workflow runner unavailable; follow docs/runbooks/workflow-runner.md'); await engine.close(); });
@@ -64,9 +69,6 @@ const stopShopifySync = startShopifySchedule(shopifySync, env.SHOPIFY_SYNC_DISAB
 const xeroConnections = new XeroConnections(db, env.XERO_CLIENT_ID ? new XeroConnector(env.XERO_CLIENT_ID, new URL('/connections/xero/callback', env.API_URL).toString()) : null, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
 const xeroSync = new XeroSync(xeroConnections);
 const stopXeroSync = startXeroSchedule(xeroSync, env.XERO_SYNC_DISABLED === '1' || !xeroConnections.available);
-const pushKeys = env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY && env.WEB_PUSH_SUBJECT ? { publicKey: env.WEB_PUSH_PUBLIC_KEY, privateKey: env.WEB_PUSH_PRIVATE_KEY, subject: env.WEB_PUSH_SUBJECT } : null;
-if (!pushKeys) console.warn('[api] Web Push is not configured (WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY / WEB_PUSH_SUBJECT)');
-const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, pushKeys?.publicKey ?? null);
 const workflows = new WorkflowService(db, push, engine);
 // The catalogue is code; the table the API exposes follows it (plan §5 workflow_definitions).
 await workflows.sync().catch((error) => console.error('[api] workflow catalogue sync failed', error instanceof Error ? error.message : error));

@@ -29,6 +29,20 @@ export class CommitmentsService {
 	readonly #db: Sql;
 	constructor(db: Sql) { this.#db = db; }
 
+ /** Bounded, read-only snapshot for the morning brief; dates follow the organisation's clock. */
+ async briefTasks(tx: TransactionSql, organisationId: string) {
+  const [clock] = await tx`select timezone, (now() at time zone timezone)::date::text as today,
+   ((now() at time zone timezone)::date + 1)::text as tomorrow,
+   (date_trunc('week', now() at time zone timezone)::date + 7)::text as week_end from organisations where id = ${organisationId}`;
+  const today = clock!.today as string;
+  const rows = await tx<Pick<Task, 'id' | 'title' | 'status' | 'due' | 'ownerId' | 'ownerName'>[]>`select t.id, left(t.title, 300) as title, t.status, t.due::text, t.owner_id, left(u.name, 200) as owner_name
+   from tasks t left join users u on u.id = t.owner_id where t.status = 'suggested'
+   or (t.status in ('open', 'in_progress') and t.due < ${clock!.weekEnd}::date)
+   order by t.due nulls last, t.id limit 101`;
+  const tasks = rows.slice(0, 100).map(t => ({ ...t, period: t.status === 'suggested' ? 'suggested' : t.due && t.due < today ? 'overdue' : t.due === today ? 'today' : 'this_week' }));
+  return { today, tomorrow: clock!.tomorrow as string, timezone: clock!.timezone as string, tasks, truncated: rows.length > 100 };
+ }
+
 	/** Everything the Commitments tab shows. Reading keeps one thing honest: the Obligations project
 	 *  exists. Occurrences of series are created by the materialise-series routine (routine.ts) on its
 	 *  schedule, and when a series is created or edited, never as a side effect of reading. */

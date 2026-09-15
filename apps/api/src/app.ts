@@ -2,6 +2,7 @@ import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { shopifyRoutes } from './shopify/routes.ts';
 import type { ShopifyConnections } from './shopify/connections.ts';
 import type { ShopifySync } from './shopify/sync.ts';
+import { BriefService } from './briefs/service.ts';
 import { StockService } from './stock/service.ts';
 import { stockRoutes } from './stock/routes.ts';
 import { outboxRoutes } from './triage/routes.ts';
@@ -199,6 +200,7 @@ export function createApp(deps: Deps) {
 	});
 	if (deps.workflows) signedIn.route('/', workflowRoutes(deps.workflows));
 	if (deps.push) signedIn.route('/', pushRoutes(deps.push));
+	signedIn.get('/v1/organisations/:id/briefs/latest', async c => c.json(await new BriefService(deps.db).latest({ userId: c.get('session').userId, requestId: c.get('requestId') }, z.uuid().parse(c.req.param('id')), deps.workflows ? deps.workflows.runnerProblem('morning-brief') : 'The workflow runner is stopped. Ask the operator to start it.')));
 	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled, () => deps.workflows?.runnerProblem('inbox-triage') ?? null)));
 	signedIn.route('/', calendarRoutes(new CalendarService(deps.db, deps.calendarSync, deps.calendarScheduleEnabled)));
 	app.route('/', signedIn);

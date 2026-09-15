@@ -11,7 +11,7 @@ Both API Fly configurations run the database migrations and then the idempotent 
 in their release step, before the new version takes traffic. `MIGRATION_DATABASE_URL` is already
 configured on the app; deployments need no separate queue command. The API image includes
 `packages/engine` and its dependencies, and its build checks the installer and engine imports.
-**0013** contains runner support; **0012** is reserved for the subsequent triage/outbox migration.
+**0013** contains runner support; **0012** contains the triage/outbox tables.
 Migrations apply all missing files, including lower numbers delivered later.
 
 For recovery outside the release step, apply the database migrations and run
@@ -66,3 +66,27 @@ recheck active membership under a row lock. Cancellation serializes with local s
 steps; an already issued provider request may finish, and its result is still journaled. Inspect its
 intent/result before starting replacement work. Three retries exhaust to a named failure; raw provider
 errors, mail and prompts never go into the platform queue. Tenant journals retain outputs under RLS.
+
+## Morning brief (job 6)
+
+Migration `0019_briefs.sql` and morning-brief version 2 make the 06:30 brief available. The release
+step applies the migration and installs the queue as above. In Settings, verify the subscription
+inference runtime, set a sufficient token allowance, and subscribe a device **as the person who will
+turn on Morning brief**. Then enable it under Workflows and choose Run now for a first check.
+Google and Xero are optional: disconnected, incomplete and truncated source data is explicitly marked.
+The saved date and calendar window follow the organisation's timezone; push goes to the enabling
+person, with the brief title and `/` (Today), using a stable replacement tag per run/step.
+
+Today displays the latest saved brief first, with its date/time and links to Commitments, Inbox,
+Calendar and Xero connection status. Invoice amounts retain their currency; no mail bodies enter
+this inference. At most 100 items per source enter the brief. Items are selected by validated kind/id,
+and code supplies their link labels/destinations. This is a snapshot: the source records may change.
+A push receipt means the push service accepted it, not that someone read it. At least one accepted
+push is required for notification success; other failed devices remain in the delivery journal.
+
+If inference pauses, fix the runtime/login/budget and Resume in Workflows. If push fails, the brief
+has already been saved and remains in Today. The queue retries only the unfinished push, with the
+same tag; it does not redo successful inference or insert another brief. After retries exhaust,
+check Notifications and use Run now for a new brief (and a new inference charge). An interrupted
+inference response can also incur a second charge. Off, paused, failed and old-date states are shown
+without presenting the last saved brief as today's summary.
