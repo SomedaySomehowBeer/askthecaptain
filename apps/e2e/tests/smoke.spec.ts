@@ -17,7 +17,8 @@ test('signed-out people are sent to sign in, and the page is the real one', asyn
 	const action = page.getByRole('link', { name: 'Continue with Google' });
 	const unconfigured = page.getByText('Sign-in is not set up.');
 	await expect(action.or(unconfigured)).toBeVisible();
-	await expect(page.locator('[role="alert"]')).toHaveCount(0);
+	// Next's route announcer carries role="alert", so the check is for the app's own failed state.
+	await expect(page.locator('.notice--failed')).toHaveCount(0);
 });
 
 test('every area needs a session', async ({ request }) => {
