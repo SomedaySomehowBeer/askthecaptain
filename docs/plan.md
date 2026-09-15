@@ -78,7 +78,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
 | `packages/model` | the inference client: provider adapter, structured output, budgets, usage |
 | `packages/ui` | design tokens and shared components |
-| `infra` | OpenTofu for Neon, Cloudflare and monitoring |
+| `infra` | OpenTofu for Neon, Cloudflare and monitoring; owner-run inference Sprite provisioning |
 
 **Hosting.** Fly.io in Sydney for the API and web; Neon Postgres; Cloudflare for DNS and TLS at the
 edge; GitHub Actions for CI and deploy. One environment: a single Neon branch and compute, and the
@@ -155,9 +155,13 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   step the kind, input digest, output, error.
 
 **Inference**
-- `tenant_keys` — provider, envelope-encrypted API key, added by, status.
-- `model_budgets` — organisation, month, limit, reserved, used.
-- `model_usage` — per infer step: run, step, model, input and output tokens, latency, cost.
+- `inference_runtimes` — one per organisation: Claude or Codex, Sprite id/name and region,
+  provisioning/login/readiness status, non-secret login hint, added by, last verified at and error;
+  Sprite URL and bearer secret envelope-encrypted with the organisation's data key (D16).
+- `model_budgets` — organisation, first-of-month date, token limit and used tokens; a missing month
+  is created lazily from the organisation's configured monthly allowance.
+- `model_usage` — per infer step: optional run, step, tier, provider, model, input and output tokens,
+  latency and timestamp; no content.
 
 **Notifications**
 - `push_subscriptions`, `push_deliveries`.
@@ -203,7 +207,7 @@ engine's durable `await`, and the journal records the steps within them.
 Workflows are the owner's: enabled per organisation, visible in Settings, journaled, and always
 doing one of the six jobs. **System routines** are the product's own housekeeping and are not
 workflows: syncing mail and calendars, refreshing tokens, creating the next occurrence of a series,
-rolling the month's budget over, retrying webhooks. They run on a schedule, are logged, and appear in
+retrying webhooks. They run on a schedule, are logged, and appear in
 Settings → Activity only when they fail.
 
 ### The first workflows
@@ -253,21 +257,29 @@ export const inboxTriage = defineWorkflow({
 
 ## 7. Inference
 
-- **Bring your own key.** Each organisation adds its own Anthropic API key in Settings. The key is
-  envelope-encrypted per tenant and used only by the API process; it never reaches the web, a
-  workflow definition or a log.
+- **Bring your own subscription.** Each organisation brings its own Claude (Claude Code) or Codex
+  subscription. Captain runs the unmodified CLI on a Captain-owned Fly Sprite, one per organisation
+  (D18). In Settings the owner chooses a provider, follows the owner-run provisioning instructions,
+  and opens the Sprite's sign-in URL: Claude uses `claude setup-token`, Codex uses device login.
+  The login credential stays only on that Sprite; it never enters a prompt, workflow or log.
+  The API calls a bearer-authenticated shim whose URL and per-Sprite secret are encrypted with
+  the organisation's data key (D16). Ryan owns the Anthropic hosting-clause consideration and its
+  resolution before operating the Claude runtime.
 - **Structured output only.** Every infer step supplies a JSON schema; the response is validated
   before any step sees it. A response that fails validation is retried once with the error, then the
   step fails and the run records why.
 - **Tiers.** `small` for classification and extraction, `large` for drafting and the brief. The
-  tier is declared by the step, and the models behind the tiers are configuration.
-- **Budgets.** A monthly token budget per organisation, reserved before each infer step and settled
-  after with actual usage. When spent, workflows that need inference pause with a visible reason;
-  deterministic steps keep running.
+  tier is declared by the step; the CLI/provider and model behind each tier are configuration.
+- **Budgets.** Monthly token allowances and per-step usage records, not dollar reservations.
+  Before each call, check used tokens plus estimated input and maximum output against the
+  organisation's allowance; settle with actual usage afterwards. When spent, workflows that need
+  inference pause with a visible reason; deterministic steps keep running. No rollover process
+  is needed: the month's row is created lazily.
 - **Voice.** Drafting steps carry a short style note and up to three example replies from the
   organisation's settings. That is the whole "personality" system.
-- **Provider adapter.** Anthropic first, behind a thin interface so a second provider can be added
-  without touching steps.
+- **Provider adapter.** A thin Sprite provider interface supports Claude and Codex without
+  changing steps. The shim runs the CLI with every model tool and MCP server disabled, takes
+  instruction, labelled input and output schema, and returns structured output and usage only.
 - **Privacy.** Mail bodies go to the model only inside triage and drafting steps of workflows the
   owner enabled. Usage is recorded per step; content is not logged.
 - **Untrusted content.** Everything a model reads from mail is untrusted: bodies, subjects, sender
@@ -282,6 +294,16 @@ export const inboxTriage = defineWorkflow({
   server-side, truncated, cached briefly (§5) and passed as labelled untrusted content. Files are
   never sent to the model as files and never stored by Captain; the mail provider remains the
   system of record for the bytes, and evidence links point at the message and attachment id.
+
+### Later: API keys and cost budgets
+
+A tenant may in future bring an Anthropic API key instead of a subscription. The
+schema and provider interface already leave the seam: provider value `anthropic_api`,
+nullable `cost_micros` on `model_usage`, nullable `cost_limit_micros` on `model_budgets`,
+and a limits object in the budget check. Enabling it would add an `ApiProvider` in
+`packages/model` using the provider SDK, a price table, key storage encrypted with
+the organisation's data key, and verification on entry. API-key execution and cost
+budgets are not implemented today; the Sprite remains the only inference runtime.
 
 ## 8. Connectors
 
@@ -306,7 +328,7 @@ fallback for providers without webhooks.
 - Sign-in with Google for any domain; explicit organisation creation; verified invitations.
   MFA or passkeys for owners and admins before invitations open to strangers.
 - Secrets: envelope encryption without a cloud key service. A 32-byte master key lives in the API's
-  secrets; each organisation has a data key wrapped by it; connection tokens and inference keys are
+  secrets; each organisation has a data key wrapped by it; connection tokens and Sprite connection secrets are
   encrypted with the data key (AES-256-GCM). Rotation re-wraps data keys. No third-party key service
   and no extra cloud account.
 - Rate limits per IP, user, organisation and connection. Webhook signature verification.
@@ -322,8 +344,13 @@ Phone-first. Five tabs:
 - **Commitments** — projects with their tasks, the Obligations deadline book, and Stock: the
   counted list with each item's last count and what is below its reorder point.
 - **Calendar** — the week, with preparation notes.
-- **Settings** — organisation, members, connections, workflows, inference key and budget, activity
+- **Settings** — organisation, members, connections, workflows, inference subscription and budget, activity
   (the workflow journal), notifications.
+
+**Settings → Inference.** A provider selector (Claude or Codex), owner-run provisioning and sign-in
+steps with a login link, runtime status with the next action, a monthly token allowance form and
+usage by tier. Empty, loading, failed and disabled states say what is known and what to do next;
+provisioning and removal of Fly resources remain owner operations.
 
 **Design system.** The visual language is the **Ask The Captain Design System** maintained in
 Claude Design; that project is the design authority. Its tokens (colour, type, spacing, radii,
@@ -351,7 +378,8 @@ client in Phase 2 can proceed in parallel.
 ## 12. Non-goals for version 1
 
 - A conversational assistant with tools; the question box answers from data, not by acting.
-- Hosted per-user sandboxes or bring-your-own-subscription runtimes.
+- General-purpose hosted workspaces or interactive agents: the inference Sprite runs only the
+  subscription CLI with tools disabled; it is not a conversational assistant with tools.
 - Inventory as a ledger: movements, unit conversions, lots and expiry, costing, bills of materials.
   Captain keeps a counted stock list (§5) and reads sellable stock from the connected commerce
   system; a business that needs a ledger connects a system that has one.
@@ -376,7 +404,7 @@ client in Phase 2 can proceed in parallel.
 | D6 | Tenant isolation is forced RLS with a non-bypassing runtime role. |
 | D7 | Captain owns projects and tasks. Recurrence is a series on a task. Obligations are tasks in a flagged system project. |
 | D8 | Connectors are first-party SDKs behind our own OAuth and encryption; no third-party integration platforms. |
-| D9 | Inference uses the tenant's own Anthropic key with a monthly budget; provider behind an adapter. |
+| D9 | Inference uses each organisation's own Claude or Codex subscription through an unmodified CLI, behind a Sprite provider adapter; monthly token allowances and per-step usage, not dollar reservations. |
 | D10 | The durable execution engine is chosen by a bounded spike in Phase 2 between Restate and pg-boss with a small runner. |
 | D11 | Five tabs: Today, Inbox, Commitments, Calendar, Settings. |
 | D12 | Hosting is Fly.io Sydney, Neon Postgres, Cloudflare, GitHub Actions. |
@@ -385,6 +413,7 @@ client in Phase 2 can proceed in parallel.
 | D15 | Inventory is a counted list, not a ledger: sellable stock is read from the connected commerce system; everything else is a stock item whose count a person enters, with a stocktake workflow and reorder tasks. |
 | D16 | Envelope encryption uses a master key held in the API's secrets wrapping per-tenant data keys; no cloud key-management service and no AWS account. |
 | D17 | One environment until the second customer: one Neon branch and compute, one live pair of Fly apps deployed from `main`; production promotion exists but stays dormant. |
+| D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and resource removal are owner-run. The Sprite is the only inference runtime today; the API path is a documented seam, not a second runtime. |
 
 ## 14. Open questions
 
@@ -394,3 +423,4 @@ client in Phase 2 can proceed in parallel.
 - Whether the first customer's printable production records belong in Captain or in its asset
   management system; out of scope until asked.
 - Pricing and the operator's own costs per tenant.
+- When to enable the API-key path and cost-based budgets; pricing for it.
