@@ -204,6 +204,11 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 - `model_usage` — per infer step: optional run, step, tier, provider, model, input and output tokens,
   latency and timestamp; no content.
 
+**Briefs**
+- `briefs` — one saved brief per tenant/run, with the organisation's date, title, short lines,
+  validated source item references and produced-at time. The `briefs.record` write step saves it
+  after inference and before push, atomically with the step journal and an audit event.
+
 **Notifications**
 - `push_subscriptions` — a member's device: endpoint and keys, disabled when the push service says it is gone.
 - `push_deliveries` — every push sent, whether it arrived; journaled like any other write.
@@ -269,7 +274,14 @@ Settings → Activity only when they fail.
   rows, create suggested tasks, complete duties whose confirmation arrived, update contacts → infer
   reply drafts for threads that need one → write outbox drafts → await send → write labels.
 - **morning-brief** (06:30): read overdue and due-this-week tasks, outbox, today's events, overdue
-  receivables → infer a brief from that data → notify.
+  receivables → infer a brief from that data → write `briefs.record` → notify the enabling person.
+  Requires ready inference and that person's subscribed push device. Google calendar and Xero are
+  optional cache reads with explicit connection/completeness state. Bounded snapshots (100 items per
+  source, with a truncation notice) contain no mail bodies or credentials. The output's kind/id pairs
+  must belong to the snapshot; code supplies link labels and destinations. Missing/incomplete-source
+  notices are saved even if the model omits them. Today places this brief first, with title, lines,
+  source links and produced-at time; older dates, workflow-off, loading, unavailable and failed runs
+  are explicit. Push failure leaves the saved brief readable and the run retryable.
 - **chase-due** (daily): read tasks due within the configured window → each task: await until the
   reminder time → notify owner; after due, escalate; for receivables, infer a courteous chaser →
   write outbox draft.

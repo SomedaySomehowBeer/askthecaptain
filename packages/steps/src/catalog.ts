@@ -24,11 +24,11 @@ export const catalog: Record<string, CatalogEntry> = {
 	'tasks.due': { kind: 'read', does: 'reads tasks due within a window, and overdue ones', requires: [] },
 	'tasks.overdueAndThisWeek': { kind: 'read', does: 'reads overdue tasks and tasks due this week', requires: [] },
 	'outbox.waiting': { kind: 'read', does: 'reads drafts waiting in the outbox', requires: [] },
-	'calendar.today': { kind: 'read', does: "reads today's events", requires: ['connection:google'] },
+	'calendar.today': { kind: 'read', does: "reads today's cached events and connection state", requires: [] },
 	'calendar.tomorrow': { kind: 'read', does: "reads tomorrow's events", requires: ['connection:google'] },
 	'mail.relatedThreads': { kind: 'read', does: 'reads recent threads with the people in an event', requires: ['connection:google'] },
 	'contacts.forEvent': { kind: 'read', does: 'reads the contacts attending an event', requires: [] },
-	'xero.overdueReceivables': { kind: 'read', does: 'reads overdue invoices owed to the business', requires: ['connection:xero'] },
+	'xero.overdueReceivables': { kind: 'read', does: 'reads cached overdue invoices and explicit Xero connection state', requires: [] },
 	'stock.items': { kind: 'read', does: 'reads the counted stock list for a location', requires: [] },
 	'shopify.stockLevels': { kind: 'read', does: 'reads sellable stock levels from the shop', requires: ['connection:shopify'] },
 	// infer
@@ -39,6 +39,7 @@ export const catalog: Record<string, CatalogEntry> = {
 	'prepareEventNote': { kind: 'infer', does: 'writes a one-paragraph preparation note for an event', requires: ['inference'], schemas: ['note'] },
 	'draftOrderEmail': { kind: 'infer', does: 'drafts a short order email to the preferred supplier', requires: ['inference'], schemas: ['draft'] },
 	// write
+	'briefs.record': { kind: 'write', does: 'saves the validated morning brief for Today', requires: [] },
 	'triage.record': { kind: 'write', does: 'records the triage result for the thread', requires: [] },
 	'tasks.suggestFromTriage': { kind: 'write', does: 'creates suggested tasks from the facts found', requires: [] },
 	'tasks.completeFromConfirmations': { kind: 'write', does: 'completes duties whose confirmation arrived', requires: [] },

@@ -1,4 +1,4 @@
-import { withTenant, type Sql } from '@captain/db';
+import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { badRequest, forbidden, HttpError } from '../errors.ts';
 import { connection, requireMember } from './store.ts';
 import type { CalendarSync } from './sync.ts';
@@ -9,6 +9,10 @@ export class CalendarService {
  async read(actor: Actor, organisationId: string, range?: { from: string; to: string }) {
   return withTenant(this.db, { organisationId, userId: actor.userId }, async (tx) => {
    await requireMember(tx, actor.userId, organisationId);
+   return this.readIn(tx, organisationId, range);
+  });
+ }
+ async readIn(tx: TransactionSql, organisationId: string, range?: { from: string; to: string }) {
    const conn = await connection(tx); const [org] = await tx`select timezone from organisations where id = ${organisationId}`; const timezone = org!.timezone as string;
    const calendars = !conn || conn.status === 'disconnected' ? [] : await tx`select id, name, provider_id, is_primary, timezone, access_role, selected, synced_from, synced_to, synced_at
     from calendars where connection_id = ${conn.id} and account_email = ${conn.accountEmail} order by is_primary desc, name, id`;
@@ -29,7 +33,6 @@ export class CalendarService {
     and (case when e.all_day then e.end_date::timestamp at time zone ${timezone} else e.ends_at end) > ${lower.toISOString()}::timestamptz
     order by (case when e.all_day then e.start_date::timestamp at time zone ${timezone} else e.starts_at end), e.id`;
    return { ...base, events, covered, from: lower.toISOString(), to: upper.toISOString() };
-  });
  }
  async sync(actor: Actor, organisationId: string) {
   await withTenant(this.db, { organisationId, userId: actor.userId }, async (tx) => {

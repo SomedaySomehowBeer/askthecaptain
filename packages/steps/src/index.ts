@@ -15,3 +15,5 @@ export const definitions: WorkflowDefinition[] = [inboxTriage, morningBrief, cha
 export const definitionByKey = (key: string): WorkflowDefinition | undefined => definitions.find((d) => d.key === key);
 
 export { classifyThreadInstruction, draftReplyInstruction } from './instructions/inbox-triage.ts';
+
+export { morningBriefInstruction } from './instructions/morning-brief.ts';

@@ -41,13 +41,15 @@ export class WorkflowService {
 			const enablements = await tx<(Enablement & { definitionKey: string })[]>`select e.id, e.definition_key, e.definition_version, e.enabled, e.enabled_by, u.name as enabled_by_name, e.parameters, e.updated_at
 				from workflow_enablements e left join users u on u.id = e.enabled_by where e.organisation_id = ${organisationId}`;
 			const available = await this.#available(tx, organisationId);
-			return definitions.map((definition) => {
-				const requirements = requirementsOf(definition);
-				const unmet = requirements.filter((r) => !available.has(r)).map((requirement) => ({ requirement, words: requirementWords[requirement] }));
+			return Promise.all(definitions.map(async (definition) => {
 				const found = enablements.find((e) => e.definitionKey === definition.key);
+				const personal = new Set(available);
+				if (definition.key === 'morning-brief' && !await this.#push?.available(tx, organisationId, found?.enabled ? found.enabledBy ?? actor.userId : actor.userId)) personal.delete('push');
+				const requirements = requirementsOf(definition);
+				const unmet = requirements.filter((r) => !personal.has(r)).map((requirement) => ({ requirement, words: requirementWords[requirement] }));
 				const enablement = found ? { id: found.id, enabled: found.enabled, enabledBy: found.enabledBy, enabledByName: found.enabledByName, parameters: found.parameters, updatedAt: found.updatedAt, definitionVersion: found.definitionVersion } : null;
 				return { definition, requirements, unmet, enablement, runnerProblem: this.#engine?.unavailable(definition) ?? (this.#engine ? null : 'The workflow runner is stopped. Ask the operator to start it.') };
-			});
+			}));
 		});
 	}
 
@@ -65,6 +67,7 @@ export class WorkflowService {
 			if (input.enabled) {
 				if (this.#engine) { const problem = this.#engine.unavailable(definition); if (problem) throw badRequest('runner_unavailable', problem); }
 				const available = await this.#available(tx, organisationId);
+				if (key === 'morning-brief' && !await this.#push?.available(tx, organisationId, actor.userId)) available.delete('push');
 				const unmet = requirementsOf(definition).filter((r) => !available.has(r));
 				if (unmet.length) throw badRequest('requirements_unmet', `${definition.name} needs ${unmet.map((r) => requirementWords[r]).join(' and ')} before it can run`);
 			}

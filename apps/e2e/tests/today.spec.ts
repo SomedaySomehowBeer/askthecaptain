@@ -20,5 +20,8 @@ test.describe('today', () => {
 		const mail = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Mail', exact: true }) });
 		await expect(mail.getByText(/No mailbox is connected|needs attention|not been synced|Nothing new today|arrived today/)).toBeVisible();
 		await expect(page.getByRole('heading', { name: 'The brief' })).toBeVisible();
+		const brief = page.locator('section[aria-labelledby="brief"]');
+		await expect(page.locator('main section').first()).toHaveAttribute('aria-labelledby', 'brief');
+		await expect(brief.locator('time').or(brief.getByText('No morning brief has been produced yet.', { exact: false }))).toBeVisible();
 	});
 });

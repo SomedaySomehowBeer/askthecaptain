@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import { BriefCard } from './BriefCard.tsx';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Notice } from '../components/Notice.tsx';
@@ -53,6 +55,7 @@ export default async function TodayPage() {
 	const events: Event[] = calendar.ok ? calendar.value.events.filter((e) => e.status !== 'cancelled' && (e.allDay ? e.startDate === today : localDate(e.startsAt, timezone) === today)) : [];
 	return (
 		<Page title={`${greeting(timezone)}, ${first}.`} lede={me.organisation.organisationName}>
+			<Suspense fallback={<section className="card" role="status"><h2>The brief</h2><p>Reading your morning brief…</p></section>}><BriefCard me={me} /></Suspense>
 			<section className="card" aria-labelledby="needs-you">
 				<h2 id="needs-you">Waiting on you</h2>
 				{!commitments.ok ? <Notice tone="failed" title="Your commitments could not be read.">{commitments.error.message}</Notice>
@@ -80,10 +83,7 @@ export default async function TodayPage() {
 					: <p className="secondary">{mail.value.threads.length === 0 ? 'Nothing new today.' : mail.value.threads.length === 1 ? 'One thread arrived today.' : `${mail.value.threads.length}${mail.value.hasMore ? '+' : ''} threads arrived today.`} Triage says which need you once it is turned on in Settings → Workflows.</p>}
 				<Link className="button button--ghost" href="/inbox">Inbox</Link>
 			</section>
-			<section className="card card--inset" aria-labelledby="brief">
-				<h2 id="brief">The brief</h2>
-				<p className="secondary">Each morning at 06:30 the brief lands here and on your phone once the morning-brief workflow is turned on. Until then this page is the brief: what is above is everything Captain can say from your data.</p>
-			</section>
+
 		</Page>
 	);
 }
