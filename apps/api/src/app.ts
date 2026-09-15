@@ -1,3 +1,5 @@
+import { inferenceRoutes } from './inference/routes.ts';
+import type { InferenceService } from './inference/service.ts';
 import { mailRoutes } from './mail/routes.ts';
 import { MailService } from './mail/service.ts';
 import type { MailSync } from './mail/sync.ts';
@@ -13,7 +15,7 @@ import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
 import type { OrganisationService } from './organisations/service.ts';
 
-export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; mailScheduleEnabled?: boolean };
+export type Deps = { inference?: InferenceService; db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; mailScheduleEnabled?: boolean };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -88,6 +90,7 @@ export function createApp(deps: Deps) {
 		const input = z.object({ token: z.string().min(1) }).parse(await c.req.json());
 		return c.json(await deps.organisations.accept({ ...actor(c), email: c.get('session').user.email }, input.token));
 	});
+	signedIn.route('/', inferenceRoutes(deps.inference));
 	signedIn.route('/', commitmentsRoutes(deps.commitments));
 	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled)));
 	app.route('/', signedIn);

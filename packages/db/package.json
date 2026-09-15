@@ -5,7 +5,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./migrate": "./src/migrate.ts",
-    "./test": "./test/harness.ts"
+    "./test": "./test/harness.ts",
+    "./inference": "./src/inference.ts"
   },
   "scripts": {
     "migrate": "node --import tsx src/migrate.ts",
