@@ -76,7 +76,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Google (Gmail, Calendar), Xero, Shopify: OAuth, refresh, typed clients, webhooks |
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
-| `packages/engine` | durable workflow execution: pg-boss and a small typed runner; the Phase 2 spike stays unmounted until production hardening |
+| `packages/engine` | durable workflow execution: pg-boss and a small typed runner in the API process |
 | `packages/model` | the inference client: provider adapter, structured output, budgets, usage |
 | `packages/ui` | design tokens and shared components |
 | `infra` | OpenTofu for Neon, Cloudflare and monitoring; owner-run inference Sprite provisioning |
@@ -96,15 +96,29 @@ was recorded; Restate's simpler waits did not justify another service for the fi
 Definitions remain engine-neutral (§6). Runs and steps use Captain's tenant-scoped journal;
 queue jobs carry opaque run identifiers, with no mail, prompts or credentials. Worker business
 access uses the enabling person's tenant context and the non-bypassing runtime role (D4, D6).
-pg-boss owns platform queue metadata; its schema installation/upgrades remain operator-run.
+pg-boss owns platform queue metadata; its idempotent installer runs after database migrations in
+the API release step, using the migration-owner connection. The runbook retains an operator
+fallback; the running API never installs or upgrades the schema.
 Local effects and completion records must be atomic where possible, otherwise destination
 idempotency or reconciliation is required. Queue delivery is not a generic exactly-once
 external-write guarantee. D5 still requires a person to send outbound mail.
 
-`packages/engine` currently contains the unmounted spike and fixture catalogue tests. Production
-inbox triage must close enqueue/event handoff gaps, enforce continuation permissions and pinned
-definition snapshots, and implement budget pauses, cancellation and retry-exhaustion journaling
-before the worker is enabled. No separate engine service is provisioned.
+`packages/engine` is the production runner in the API process (`WORKFLOWS_DISABLED=1` stops it).
+A catalogue registry binds service/connector handlers; uninstalled handlers keep the corresponding
+workflow unavailable. Run snapshots pin definitions, parameters and enabling people. Local writes
+and journal completion share a transaction; provider intent precedes I/O, with idempotency or
+reconciliation in the adapter. Successful mail-sync cursor commits enqueue `mail.synced` runs in
+the same transaction. Await deadlines and event wake-ups are also atomic with journal/destination
+state. Membership checks, actionable inference pauses, Resume, cancellation and named retry
+exhaustion are part of the runner. No separate engine service is provisioned.
+
+Daily/weekly schedules use the organisation's timezone and a persisted next run, replacing it on
+first delivery; each queue payload contains only a run id. A platform failure queue records exhausted
+worker deliveries back into the tenant journal. Settings → Workflows → Activity links to run details:
+ordered steps, loop item, state and reason, with Resume for paused runs and Cancel for unfinished runs
+(owner/admin). Empty, unavailable, failed and saving states use words. The domain triage/outbox
+handlers follow in their own slice. [The runbook](runbooks/workflow-runner.md) covers installation,
+handler contracts and recovery.
 
 ## 5. Data model
 
@@ -443,7 +457,7 @@ client in Phase 2 can proceed in parallel.
 | D16 | Envelope encryption uses a master key held in the API's secrets wrapping per-tenant data keys; no cloud key-management service and no AWS account. |
 | D17 | One environment until the second customer: one Neon branch and compute, one live pair of Fly apps deployed from `main`; production promotion exists but stays dormant. |
 | D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and resource removal are owner-run. The Sprite is the only inference runtime today; the API path is a documented seam, not a second runtime. |
-| D19 | Durable workflows use pg-boss with a small Captain runner in the existing process and Postgres, following the D10 spike. Tenant-scoped run/step journals and destination idempotency remain ours; neither engine guarantees exactly-once remote writes. Production enablement waits for the hardening in §4 and the decision document. No Restate service or SDK is retained. |
+| D19 | Durable workflows use pg-boss with a small Captain runner in the existing process and Postgres, following the D10 spike. Tenant-scoped run/step journals and destination idempotency remain ours; neither engine guarantees exactly-once remote writes. Production execution follows the transaction, continuation and recovery contracts in §4; each workflow waits for its complete handler registry. No Restate service or SDK is retained. |
 
 ## 14. Open questions
 

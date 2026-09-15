@@ -16,7 +16,7 @@ const it = databaseUrl ? test : test.skip;
 let db: Harness; let template: Record<string, any>;
 before(async () => { if (databaseUrl) db = await freshDatabase(); template = JSON.parse(await readFile(new URL('../../../../packages/connectors/test/fixtures/thread.json', import.meta.url), 'utf8')); });
 after(async () => { await db?.close(); });
-async function setup() {
+async function setup(emit?: ConstructorParameters<typeof MailSync>[3]) {
 	const master = randomBytes(32); const auth = new AuthService(db.app, null, { appUrl: 'https://app.test', sessionTtlDays: 1 });
 	const [user, member, stranger] = await db.owner`insert into users (email) values (${`${randomBytes(8).toString('hex')}@test.com`}), (${`${randomBytes(8).toString('hex')}@test.com`}), (${`${randomBytes(8).toString('hex')}@test.com`}) returning id`;
 	const org = await new OrganisationService(db.app).create({ userId: user!.id, requestId: 'test' }, { name: 'Mailbox' });
@@ -52,7 +52,7 @@ async function setup() {
 		return Response.json(thread);
 	});
 	const connections = new ConnectionService(db.app, new GoogleConnector('test', 'test', 'https://api.test/cb'), master, 'https://app.test');
-	const sync = new MailSync(db.app, connections, gmail);
+	const sync = new MailSync(db.app, connections, gmail, emit);
 	const app = createApp({ db: db.app, auth, organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), connections, mailSync: sync });
 	const ownerToken = (await auth.issueSessionFor(user!.id)).token; const memberToken = (await auth.issueSessionFor(member!.id)).token; const strangerToken = (await auth.issueSessionFor(stranger!.id)).token;
 	const request = (path = '', token = ownerToken, method = 'GET') => app.request(`/v1/organisations/${org.id}/mail/${path}`, { method, headers: { authorization: `Bearer ${token}` } });
@@ -176,4 +176,20 @@ test('scheduler is disabled explicitly and guards overlapping interval ticks', a
 	await startMailSchedule(routine, true, 5)(); assert.equal(scans, 0);
 	const stop = startMailSchedule(routine, false, 5); await new Promise((r) => setTimeout(r, 30));
 	assert.equal(scans, 1); assert.equal(runs, 1); release(); await stop();
+});
+
+it('mail.synced handoff commits with the history cursor and retries a failed enqueue', async () => {
+ let fail = true;
+ const s = await setup(async (tx, org, event, data) => {
+  assert.equal(event, 'mail.synced');
+  await tx`insert into audit_events (organisation_id, actor_kind, action, subject_type, subject_id, detail)
+   values (${org}, 'system', 'fixture.workflow_enqueued', 'organisation', ${org}, ${tx.json(data as never)})`;
+  if (fail) throw Error('Queue unavailable');
+ });
+ await assert.rejects(s.sync.run(s.org), { code: 'mail_sync_failed' });
+ assert.equal((await db.owner`select * from sync_cursors where organisation_id = ${s.org} and resource = 'gmail.history'`).length, 0);
+ assert.equal((await db.owner`select * from audit_events where organisation_id = ${s.org} and action = 'fixture.workflow_enqueued'`).length, 0);
+ fail = false; await s.sync.run(s.org);
+ assert.equal((await db.owner`select * from audit_events where organisation_id = ${s.org} and action = 'fixture.workflow_enqueued'`).length, 1);
+ assert.equal((await db.owner`select * from sync_cursors where organisation_id = ${s.org} and resource = 'gmail.history'`).length, 1);
 });

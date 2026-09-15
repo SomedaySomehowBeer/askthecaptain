@@ -24,5 +24,7 @@ export function workflowRoutes(workflows: WorkflowService) {
 		return c.json({ runs: await workflows.runs(actor(c), org(c), query) });
 	});
 	routes.get('/v1/organisations/:id/workflows/runs/:runId', async (c) => c.json(await workflows.run(actor(c), org(c), uuid.parse(c.req.param('runId')))));
+ routes.post('/v1/organisations/:id/workflows/:key/run', async c => c.json(await workflows.control(actor(c), org(c), key.parse(c.req.param('key')), 'run'), 202));
+ for (const action of ['resume', 'cancel'] as const) routes.post(`/v1/organisations/:id/workflows/runs/:runId/${action}`, async c => c.json(await workflows.control(actor(c), org(c), uuid.parse(c.req.param('runId')), action)));
 	return routes;
 }

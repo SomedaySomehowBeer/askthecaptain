@@ -10,7 +10,7 @@ export function WorkflowForm({ offered, canManage }: { offered: OfferedWorkflow;
 	const { definition, enablement, unmet } = offered;
 	const enabled = enablement?.enabled ?? false;
 	const values = enablement?.parameters ?? {};
-	const blocked = unmet.length > 0;
+	const blocked = unmet.length > 0 || Boolean(offered.runnerProblem);
 	return (
 		<form className="form" action={action}>
 			<input type="hidden" name="key" value={definition.key} />

@@ -54,5 +54,7 @@ export type WorkflowParameterSpec = { type: 'text'; description: string; default
 export type WorkflowTrigger = { kind: 'event'; event: string } | { kind: 'daily'; at: string } | { kind: 'weekly'; day: string; at: string } | { kind: 'manual' };
 export type WorkflowDefinition = { key: string; version: number; name: string; description: string; job: number; triggers: WorkflowTrigger[]; parameters: Record<string, WorkflowParameterSpec>; steps: unknown[] };
 export type WorkflowEnablement = { id: string; enabled: boolean; enabledBy: string | null; enabledByName: string | null; parameters: Record<string, unknown>; updatedAt: string; definitionVersion: number };
-export type OfferedWorkflow = { definition: WorkflowDefinition; requirements: string[]; unmet: { requirement: string; words: string }[]; enablement: WorkflowEnablement | null };
+export type OfferedWorkflow = { definition: WorkflowDefinition; requirements: string[]; unmet: { requirement: string; words: string }[]; enablement: WorkflowEnablement | null; runnerProblem?: string | null };
 export type WorkflowRun = { id: string; definitionKey: string; definitionVersion: number; trigger: unknown; state: string; reason: string | null; startedAt: string | null; finishedAt: string | null; createdAt: string };
+
+export type WorkflowRunDetail = WorkflowRun & { steps: { path: string; itemIndex: number | null; key: string; state: string; error: string | null }[] };

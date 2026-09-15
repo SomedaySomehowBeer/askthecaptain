@@ -3,10 +3,13 @@ RUN corepack enable
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
 COPY apps/api/package.json apps/api/
+# Includes engine source; the API dependency closure installs pg-boss and its runtime dependencies.
 COPY packages ./packages
 RUN pnpm install --frozen-lockfile --filter @captain/api...
 COPY apps/api ./apps/api
-RUN pnpm --filter @captain/api build
+RUN pnpm --filter @captain/api build \
+ && test -f /repo/packages/engine/src/install.ts \
+ && pnpm --filter @captain/api exec node --import tsx --input-type=module -e "await import('@captain/engine')"
 
 FROM node:22-alpine
 WORKDIR /repo/apps/api
