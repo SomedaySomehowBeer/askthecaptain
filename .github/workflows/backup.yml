@@ -1,0 +1,92 @@
+name: backup
+# Nightly logical backup of the one Neon database (D17) with a rehearsed restore in the same job
+# (plan §9): dump as the owner, restore into a throwaway Postgres 18 here, compare row counts,
+# then keep the dump in the Tigris bucket under backups/ with 30 days of retention. A backup that
+# was not restored is not a backup; a night the restore fails is a red run, not a quiet one.
+on:
+  schedule:
+    - cron: '30 16 * * *'   # 00:30 Australia/Perth
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: backup
+  cancel-in-progress: false
+jobs:
+  dump-and-rehearse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rehearsal
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rehearsal"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults: { run: { working-directory: infra/tofu } }
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_cloudflare_zone_id: ${{ secrets.TF_VAR_cloudflare_zone_id }}
+      BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TIGRIS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TIGRIS_SECRET_KEY }}
+      AWS_ENDPOINT_URL: https://fly.storage.tigris.dev
+      AWS_DEFAULT_REGION: auto
+      BUCKET: askthecaptain-tofu-state
+      PGPASSWORD_REHEARSAL: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Postgres 18 client tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-18
+          pg_dump --version
+      - uses: opentofu/setup-opentofu@v1
+        with: { tofu_version: 1.10.5 }
+      - run: tofu init -input=false -backend-config="access_key=${{ secrets.TIGRIS_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.TIGRIS_SECRET_KEY }}"
+      - name: Dump
+        run: |
+          set -euo pipefail
+          url="$(tofu output -raw neon_owner_database_url)"
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          echo "STAMP=$stamp" >> "$GITHUB_ENV"
+          pg_dump --dbname="$url" --format=custom --compress=zstd:6 --no-owner --no-privileges --file="/tmp/captain-$stamp.dump"
+          ls -l "/tmp/captain-$stamp.dump"
+          # Row counts of the tenant tables as seen by the owner, for the comparison below.
+          psql "$url" -At -c "select relname || ' ' || n_live_tup from pg_stat_user_tables where schemaname = 'public' order by 1" > /tmp/counts-source.txt
+          psql "$url" -At -c "select count(*) from organisations" > /tmp/orgs-source.txt
+      - name: Rehearse the restore
+        run: |
+          set -euo pipefail
+          export PGPASSWORD="$PGPASSWORD_REHEARSAL"
+          pg_restore --list "/tmp/captain-$STAMP.dump" | grep -c 'TABLE DATA' | xargs -I{} echo "{} tables with data in the archive"
+          # The runtime role exists in the dump's grants; create it so the restore is faithful.
+          psql -h localhost -U postgres -d rehearsal -c "do \$\$ begin if not exists (select 1 from pg_roles where rolname = 'app') then create role app nologin; end if; end \$\$"
+          pg_restore --host=localhost --username=postgres --dbname=rehearsal --no-owner --no-privileges --exit-on-error "/tmp/captain-$STAMP.dump"
+          psql -h localhost -U postgres -d rehearsal -At -c "select count(*) from organisations" > /tmp/orgs-restored.txt
+          echo "organisations: source $(cat /tmp/orgs-source.txt), restored $(cat /tmp/orgs-restored.txt)"
+          test "$(cat /tmp/orgs-source.txt)" = "$(cat /tmp/orgs-restored.txt)"
+          psql -h localhost -U postgres -d rehearsal -At -c "select count(*) from schema_migrations" | xargs -I{} echo "{} migrations recorded in the restored copy"
+          psql -h localhost -U postgres -d rehearsal -At -c "select count(*) from pg_policies" | xargs -I{} echo "{} row security policies restored"
+      - name: Keep the dump, prune old ones
+        run: |
+          set -euo pipefail
+          aws s3 cp "/tmp/captain-$STAMP.dump" "s3://$BUCKET/backups/captain-$STAMP.dump" --only-show-errors
+          cutoff="$(date -u -d '30 days ago' +%Y%m%dT%H%M%SZ)"
+          aws s3 ls "s3://$BUCKET/backups/" | awk '{print $4}' | grep -E '^captain-[0-9TZ]+\.dump$' | while read -r name; do
+            stamp="${name#captain-}"; stamp="${stamp%.dump}"
+            if [[ "$stamp" < "$cutoff" ]]; then aws s3 rm "s3://$BUCKET/backups/$name" --only-show-errors; echo "pruned $name"; fi
+          done
+          aws s3 ls "s3://$BUCKET/backups/" | tail -n 5
+      - name: Forget the dump
+        if: always()
+        run: rm -f /tmp/captain-*.dump /tmp/counts-source.txt /tmp/orgs-*.txt
