@@ -11,6 +11,7 @@ import { connect } from '@captain/db';
 import { createApp } from './app.ts';
 import { GoogleIdentityProvider } from './auth/google.ts';
 import { AuthService } from './auth/service.ts';
+import { SeriesRoutine, startSeriesSchedule } from './commitments/routine.ts';
 import { CommitmentsService } from './commitments/service.ts';
 import { readEnv } from './env.ts';
 import { OrganisationService } from './organisations/service.ts';
@@ -31,14 +32,16 @@ const gmailWatch = new GmailWatch(db, connections, pushConfig);
 const gmailPush = pushConfig ? new GmailPush(db, mailSync, pushConfig) : undefined;
 const stopGmailPush = startGmailPushSchedule(gmailPush, gmailWatch);
 const stopMailSync = startMailSchedule(mailSync, env.MAIL_SYNC_DISABLED === '1');
+const commitments = new CommitmentsService(db);
+const stopSeries = startSeriesSchedule(new SeriesRoutine(db, commitments), env.SERIES_DISABLED === '1');
 const calendarSync = new CalendarSync(db, connections);
 const stopCalendarSync = startCalendarSchedule(calendarSync, env.CALENDAR_SYNC_DISABLED === '1');
 const workflows = new WorkflowService(db);
 // The catalogue is code; the table the API exposes follows it (plan §5 workflow_definitions).
 await workflows.sync().catch((error) => console.error('[api] workflow catalogue sync failed', error instanceof Error ? error.message : error));
-const app = createApp({ workflows, inference: new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null), db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
+const app = createApp({ workflows, inference: new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null), db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
-const shutdown = () => { server.close(); void Promise.all([stopMailSync(), stopCalendarSync(), stopGmailPush()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
+const shutdown = () => { server.close(); void Promise.all([stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

@@ -4,12 +4,13 @@ import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
 import { createApp } from './app.ts';
 import type { IdentityProvider } from './auth/google.ts';
 import { AuthService } from './auth/service.ts';
+import { SeriesRoutine, startSeriesSchedule } from './commitments/routine.ts';
 import { CommitmentsService, type Overview, type Project, type Series, type Task } from './commitments/service.ts';
 import { todayIn } from './commitments/series.ts';
 import { OrganisationService } from './organisations/service.ts';
 
 const it = databaseUrl ? test : test.skip;
-let db: Harness; let app: ReturnType<typeof createApp>;
+let db: Harness; let app: ReturnType<typeof createApp>; let commitments: CommitmentsService;
 const google: IdentityProvider & { next: { subject: string; email: string; name: string } } = {
 	next: { subject: 'g-1', email: 'owner@example.com', name: 'Olive Owner' },
 	authorizationUrl: ({ state }) => `https://google.test/auth?state=${state}`,
@@ -30,7 +31,7 @@ let owner: { token: string; user: { id: string } }; let orgId: string;
 before(async () => {
 	if (!databaseUrl) return;
 	db = await freshDatabase();
-	app = createApp({ db: db.app, auth: new AuthService(db.app, google, { appUrl: 'https://app.example.test', sessionTtlDays: 30 }), organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app) });
+	app = createApp({ db: db.app, auth: new AuthService(db.app, google, { appUrl: 'https://app.example.test', sessionTtlDays: 30 }), organisations: new OrganisationService(db.app), commitments: (commitments = new CommitmentsService(db.app)) });
 	owner = await signIn({ subject: 'g-1', email: 'owner@example.com', name: 'Olive Owner' });
 	orgId = (await body<{ id: string }>(await json('POST', '/v1/organisations', owner.token, { name: 'Harbour Brewing', timezone: 'Australia/Perth' }), 201)).id;
 });
@@ -77,7 +78,7 @@ it('a series materialises its current occurrence once, and editing it changes fu
 	assert.equal(series.nextDue !== null, true);
 	let overview = await body<Overview>(await json('GET', `/v1/organisations/${orgId}/commitments`, owner.token), 200);
 	const occurrences = overview.tasks.filter((t) => t.seriesId === series.id);
-	assert.equal(occurrences.length, 1, 'exactly one occurrence after two materialisations');
+	assert.equal(occurrences.length, 1, 'exactly one occurrence after creation and a read');
 	const [occurrence] = occurrences;
 	assert.equal(occurrence!.sourceKind, 'series'); assert.equal(occurrence!.periodStart, `${today.slice(0, 7)}-01`); assert.match(occurrence!.title, /^Excise return — /);
 	assert.equal(occurrence!.projectId, overview.projects.find((p) => p.systemKind === 'obligations')!.id);
@@ -120,4 +121,24 @@ it('a stranger cannot see or touch another organisation\'s commitments', async (
 	assert.equal((await json('POST', `/v1/organisations/${orgId}/tasks`, stranger.token, { title: 'Mine now' })).status, 404);
 	assert.equal((await json('POST', `/v1/organisations/${orgId}/series`, stranger.token, { title: 'x', recurrence: 'monthly', anchor: '2026-01-01' })).status, 404);
 	assert.equal((await json('GET', `/v1/organisations/${orgId}/commitments`)).status, 401);
+});
+
+it('the materialise-series routine creates the next period once, skips paused series, and the tab does not', async () => {
+	const routine = new SeriesRoutine(db.app, commitments);
+	const series = await body<Series>(await json('POST', `/v1/organisations/${orgId}/series`, owner.token, { title: 'Order cans', recurrence: 'monthly', anchor: '2026-01-01' }), 201);
+	assert.ok((await routine.organisations()).includes(orgId), 'an organisation with an active series is discovered');
+	// A new period opens: the routine creates that period's occurrence, exactly once.
+	const nextMonth = '2099-03-15';
+	assert.equal(await routine.run(orgId, nextMonth), 1);
+	assert.equal(await routine.run(orgId, nextMonth), 0);
+	let overview = await body<Overview>(await json('GET', `/v1/organisations/${orgId}/commitments`, owner.token), 200);
+	const mine = overview.tasks.filter((t) => t.seriesId === series.id).map((t) => t.periodStart).sort();
+	assert.deepEqual(mine, [`${todayIn('Australia/Perth').slice(0, 7)}-01`, '2099-03-01']);
+	// Reading the tab in a later period creates nothing; only the routine does.
+	await body<Series>(await json('PATCH', `/v1/organisations/${orgId}/series/${series.id}`, owner.token, { paused: true }), 200);
+	assert.equal(await routine.run(orgId, '2099-05-15'), 0, 'a paused series produces nothing');
+	overview = await body<Overview>(await json('GET', `/v1/organisations/${orgId}/commitments`, owner.token), 200);
+	assert.equal(overview.tasks.filter((t) => t.seriesId === series.id).length, 2);
+	const stop = startSeriesSchedule({ organisations: async () => [], run: async () => 0 }, true);
+	await stop();
 });

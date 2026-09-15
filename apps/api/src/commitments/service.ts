@@ -29,16 +29,15 @@ export class CommitmentsService {
 	readonly #db: Sql;
 	constructor(db: Sql) { this.#db = db; }
 
-	/** Everything the Commitments tab shows. Reading also keeps the list honest: the Obligations
-	 *  project exists, and every active series has its current occurrence. Until the series routine
-	 *  of Phase 3 runs on a schedule, opening the tab is what materialises the period that began. */
+	/** Everything the Commitments tab shows. Reading keeps one thing honest: the Obligations project
+	 *  exists. Occurrences of series are created by the materialise-series routine (routine.ts) on its
+	 *  schedule, and when a series is created or edited, never as a side effect of reading. */
 	async overview(actor: Actor, organisationId: string): Promise<Overview> {
 		await roleOf(this.#db, actor.userId, organisationId);
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
 			const timezone = await this.#timezone(tx, organisationId);
 			const today = todayIn(timezone);
 			await this.#ensureObligations(tx, organisationId, actor);
-			await this.#materialise(tx, organisationId, today);
 			const projects = await tx<Project[]>`select ${tx.unsafe(projectColumns)} from projects where organisation_id = ${organisationId}
 				order by system_kind is null, archived_at is not null, name`;
 			const tasks = await this.#tasks(tx, organisationId, tx`t.status <> 'cancelled'`);
@@ -194,8 +193,9 @@ export class CommitmentsService {
 		});
 	}
 
-	/** Creates the current occurrence of every active series that lacks one (or of one series). A
-	 *  system routine's work: idempotent, journaled as the system, safe to call as often as wanted. */
+	/** Creates the current occurrence of every active series that lacks one (or of one series). The
+	 *  materialise-series routine's work: idempotent, journaled as the system, safe to call as often as
+	 *  wanted; `today` is the organisation's date unless a caller (a test) says otherwise. */
 	async materialise(organisationId: string, today?: string): Promise<number> {
 		return withTenant(this.#db, { organisationId }, async (tx) => this.#materialise(tx, organisationId, today ?? (await this.#today(tx, organisationId))));
 	}
