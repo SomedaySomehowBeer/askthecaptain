@@ -16,7 +16,10 @@ infrastructure applies, secrets and DNS are the owner's.
    in `fly*.toml`.
 5. **Google OAuth client.** A web client whose authorised redirect URIs are
    `https://api-staging.askthecaptain.app/auth/google/callback` and
-   `https://api.askthecaptain.app/auth/google/callback`.
+   `https://api.askthecaptain.app/auth/google/callback`, plus the connection callbacks
+   `https://api-staging.askthecaptain.app/connections/google/callback` and
+   `https://api.askthecaptain.app/connections/google/callback` (`${API_URL}/connections/google/callback`).
+   Enable the Gmail and Google Calendar APIs and allow the Gmail modify and Calendar events scopes.
 6. **Deploy.** Push to `main` deploys the live apps and runs the smoke gate. The dormant production
    pair is promoted only by running the `deploy` workflow with `promote` ticked.
 7. **First sign-in.** Sign in with Google, name the organisation on the welcome page, invite the

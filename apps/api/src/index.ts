@@ -1,3 +1,6 @@
+import { GoogleConnector } from '@captain/connectors';
+import { ConnectionService } from './connections/service.ts';
+import { masterKey } from './connections/encryption.ts';
 import { serve } from '@hono/node-server';
 import { connect } from '@captain/db';
 import { createApp } from './app.ts';
@@ -13,7 +16,11 @@ const google = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 	? new GoogleIdentityProvider(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/auth/google/callback', env.API_URL).toString())
 	: null;
 if (!google) console.warn('[api] Google sign-in is not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)');
-const app = createApp({ db, auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
+const connections = new ConnectionService(db, env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
+	? new GoogleConnector(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/connections/google/callback', env.API_URL).toString()) : null,
+	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
+const app = createApp({ db, connections, auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
+
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
 const shutdown = () => { server.close(); void db.end({ timeout: 5 }).then(() => process.exit(0)); };
