@@ -11,6 +11,8 @@ const schema = z.object({
 	GMAIL_PUBSUB_TOPIC: z.string().regex(/^projects\/[a-z][a-z0-9-]{4,28}[a-z0-9]\/topics\/[A-Za-z][A-Za-z0-9._~+%-]{2,254}$/).optional(),
 	GMAIL_PUSH_AUDIENCE: z.string().url().optional(),
 	MAIL_SYNC_DISABLED: z.enum(['0', '1']).default('0'),
+	/** Stops the hourly materialise-series routine; set on throwaway servers so tests do not double-run it. */
+	SERIES_DISABLED: z.enum(['0', '1']).default('0'),
 	MASTER_KEY: z.string().regex(/^[A-Za-z0-9+/]{43}=$/).optional(),
 	GOOGLE_CLIENT_ID: z.string().optional(),
 	GOOGLE_CLIENT_SECRET: z.string().optional(),
