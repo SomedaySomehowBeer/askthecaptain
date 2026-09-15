@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { databaseUrl, freshDatabase, type Harness } from './harness.ts';
 
-const platformTables = new Set(['schema_migrations', 'users', 'identities', 'sessions', 'auth_requests', 'auth_events']);
+const platformTables = new Set(['schema_migrations', 'users', 'identities', 'sessions', 'auth_requests', 'auth_events', 'workflow_definitions']);
 const it = databaseUrl ? test : test.skip;
 let db: Harness;
 before(async () => { if (databaseUrl) db = await freshDatabase(); });
