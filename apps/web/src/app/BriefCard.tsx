@@ -6,7 +6,7 @@ type Latest = { today: string; timezone: string; notice: string | null; brief: n
 export async function BriefCard({ me }: { me: Awaited<ReturnType<typeof requireCurrent>> }) {
  const result = await load(() => api<Latest>(`/v1/organisations/${me.organisation.organisationId}/briefs/latest`, { token: me.token }));
  const value = result.ok ? result.value : null, brief = value?.brief;
- return <section className="card card--inset stack" aria-labelledby="brief">
+ return <section className="card card--inset stack morning-brief" aria-labelledby="brief">
   <h2 id="brief">The brief</h2>
   {!result.ok ? <Notice tone="failed" action={{ href: '/', label: 'Try again' }}>Your morning brief could not be read. {result.error.message}</Notice> : null}
   {value?.notice ? <Notice action={{ href: '/settings/workflows', label: 'Workflows' }}>{value.notice}</Notice> : null}
