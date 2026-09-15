@@ -150,7 +150,9 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   state ∈ drafted · sent · discarded, sent by, sent at, provider message id.
 
 **Calendar**
-- `calendars`, `calendar_events` — synced cache; writes go to the provider and are re-read.
+- `calendars`, `calendar_events` — synced cache; event writes go to the provider and are re-read.
+  Preparation is local: `preparation_note`, `prepared_by_run` (tenant-scoped run reference) and
+  `prepared_at` on `calendar_events` (migration 0020); provider revisions clear the note.
 
 **People and companies**
 - `contacts`, `companies` — the business's counterparties, kept current by triage and by hand.
@@ -305,7 +307,19 @@ Settings → Activity only when they fail.
   task in Purchasing, infer a short order email to the preferred supplier, write an outbox draft.
   For connected commerce stock: read levels → the same branch, without asking anyone to count.
 - **calendar-prep** (evening): read tomorrow's events → read related threads and contacts → infer a
-  one-paragraph preparation note per event → write notes.
+  one-paragraph preparation note per event → write notes locally, never to Google. At 18:00 in the
+  organisation’s timezone, it reads events overlapping tomorrow from primary/selected synced calendars,
+  matches attendee email addresses to contacts and companies, and reads at most 10 matching threads
+  from the last 30 days (subjects and snippets only). The large-tier infer receives labelled untrusted
+  data and returns a validated single paragraph: who they are, what was discussed and anything
+  explicitly owed either way. Unmatched contacts and limited correspondence remain explicit.
+  Incomplete calendar/mail sync pauses with instructions to sync and Resume. Candidate mail reads
+  are bounded to 1000 messages with an explicit truncation warning; events/attendees are bounded to
+  100, with an actionable pause if exceeded. The audited write checks the event revision and newer
+  preparation before saving; replay cannot duplicate it. Calendar and Today display the paragraph
+  under its event with “Prepared at” in the organisation’s timezone, a missing-note message, and
+  a linked notice when preparation is off, inference unavailable or the latest run paused/failed.
+  The existing page loading/error states remain. No Google writes or additional background process.
 
 ### Stocktake delivery detail (D2, D4, D5, D15)
 

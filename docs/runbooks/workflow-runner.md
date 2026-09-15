@@ -130,3 +130,18 @@ sequential loops and all pauses/failures still stop. Await output saved `as: 'it
 following predicates. Never mutate the pinned input list. Activity shows next-check times in UTC,
 actionable pause reasons and skipped-action explanations. Resume retries the same pinned run after
 the runtime, budget, connection or device is repaired; Cancel prevents further steps.
+
+## Calendar preparation
+
+Migration `0020_calendar_notes.sql` adds local notes to the synced events. The release step applies it;
+no extra queue, secret or resource is needed. With Google connected, Calendar and Inbox synced, and
+inference verified, turn on **Prepare for tomorrow** in Settings → Workflows. It runs at 18:00 in the
+organisation's timezone, or use **Run now** to prepare tomorrow immediately. Primary and selected
+calendars are included, even when their Google access is read-only.
+
+Calendar and Today show each saved paragraph and its preparation time. They also say when the workflow
+is off or unavailable; existing notes remain dated. A Google event revision clears its old note.
+If a run paused, follow its message, then Resume. If the event changed during the run, Activity explains
+why the write was skipped; start a new run to read the new event. An older resumed run cannot overwrite
+a newer run's note. Preparation reads at most ten recent threads' subjects/snippets, so it never proves
+that nothing else is owed. All writes stay in Captain; the workflow makes no Google API call.

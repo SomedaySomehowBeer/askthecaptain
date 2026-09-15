@@ -1,3 +1,4 @@
+import { workflowRuns } from './workflows-schema.ts';
 import { sql } from 'drizzle-orm';
 import { boolean, date, foreignKey, jsonb, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { connections, organisations } from './connections-schema.ts';
@@ -14,6 +15,7 @@ export const calendarEvents = pgTable('calendar_events', {
  id: id(), organisationId: tenant(), calendarId: uuid('calendar_id').notNull(), providerId: text('provider_id').notNull(), status: text('status').notNull(),
  summary: text('summary').notNull(), description: text('description').notNull(), location: text('location').notNull(), startsAt: at('starts_at').notNull(), endsAt: at('ends_at').notNull(),
  allDay: boolean('all_day').notNull(), startDate: date('start_date'), endDate: date('end_date'), timezone: text('timezone').notNull(), organiser: jsonb('organiser').notNull(),
- attendees: jsonb('attendees').notNull(), attendeesOmitted: boolean('attendees_omitted').notNull().default(false), recurringEventId: text('recurring_event_id'), htmlLink: text('html_link').notNull(), updatedAt: at('updated_at').notNull()
+ attendees: jsonb('attendees').notNull(), attendeesOmitted: boolean('attendees_omitted').notNull().default(false), recurringEventId: text('recurring_event_id'), htmlLink: text('html_link').notNull(), updatedAt: at('updated_at').notNull(), preparationNote: text('preparation_note'), preparedByRun: uuid('prepared_by_run'), preparedAt: at('prepared_at')
 }, (t) => [unique().on(t.organisationId, t.calendarId, t.providerId),
+ foreignKey({ columns: [t.organisationId, t.preparedByRun], foreignColumns: [workflowRuns.organisationId, workflowRuns.id] }),
  foreignKey({ columns: [t.organisationId, t.calendarId], foreignColumns: [calendars.organisationId, calendars.id] }).onDelete('cascade')]);

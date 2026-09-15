@@ -1,3 +1,4 @@
+import { CalendarPrepService } from './calendar-prep/service.ts';
 import { ChaseService } from './chase/service.ts';
 import { BriefService } from './briefs/service.ts';
 import { StocktakeService } from './stock/workflow.ts';
@@ -53,6 +54,7 @@ const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, p
 const briefs = new BriefService(db);
 const triage = new TriageService(db, connections, inference);
 const registry = new StocktakeService(db, inference, push).register(new ChaseService(db).register(briefs.register(triage.registry(), inference, push), inference, push));
+new CalendarPrepService(db).register(registry, inference);
 const engine = new BossEngine(db, env.DATABASE_URL, registry, definitions);
 const stock = new StockService(db, (tx, org, event, data, key) => engine.emit(tx, org, event, data, key));
 const outbox = new OutboxService(db, connections, (tx, org, run, key) => engine.wake(tx, org, run, key));

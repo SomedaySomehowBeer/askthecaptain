@@ -1,3 +1,4 @@
+import { PreparationNote } from './calendar/PreparationNote.tsx';
 import { Suspense } from 'react';
 import { BriefCard } from './BriefCard.tsx';
 import type { Metadata } from 'next';
@@ -8,7 +9,7 @@ import { api, load, type Commitments, type Task } from '../lib/api.ts';
 import { describeDue } from '../lib/dates.ts';
 import { SaveForm } from './commitments/SaveForm.tsx';
 import { setTaskStatus } from './commitments/actions.ts';
-import { addDays, localDate, type CalendarWeek, type Event } from './calendar/calendar.ts';
+import { addDays, localDate, onDay, type CalendarWeek, type Event } from './calendar/calendar.ts';
 import type { MailList } from './inbox/mail.ts';
 
 export const metadata: Metadata = { title: 'Today' };
@@ -52,7 +53,7 @@ export default async function TodayPage() {
 	const dueToday = open.filter((t) => t.due && describeDue(t.due, today).urgency === 'today');
 	const suggested = tasks.filter((t) => t.status === 'suggested');
 	const needsYou = [...overdue, ...dueToday, ...suggested];
-	const events: Event[] = calendar.ok ? calendar.value.events.filter((e) => e.status !== 'cancelled' && (e.allDay ? e.startDate === today : localDate(e.startsAt, timezone) === today)) : [];
+	const events: Event[] = calendar.ok ? calendar.value.events.filter((e) => e.status !== 'cancelled' && onDay(e, today, timezone)) : [];
 	return (
 		<Page title={`${greeting(timezone)}, ${first}.`} lede={me.organisation.organisationName}>
 			<Suspense fallback={<section className="card" role="status"><h2>The brief</h2><p>Reading your morning brief…</p></section>}><BriefCard me={me} /></Suspense>
@@ -65,13 +66,14 @@ export default async function TodayPage() {
 			</section>
 			<section className="card" aria-labelledby="today-calendar">
 				<h2 id="today-calendar">Today</h2>
+				{calendar.ok && calendar.value.preparationNotice ? <Notice action={{ href: '/settings/workflows', label: 'Workflows' }}>{calendar.value.preparationNotice}</Notice> : null}
 				{!calendar.ok ? <Notice tone="failed" title="The calendar could not be read.">{calendar.error.message}</Notice>
 					: !calendar.value.connection ? <Notice title="No calendar is connected.">Connect Google in Settings and today’s events appear here.</Notice>
 					: calendar.value.connection.status !== 'connected' ? <Notice tone="attention" title="The calendar connection needs attention.">Reconnect Google in Settings → Connections.</Notice>
 					: !calendar.value.covered ? <p className="muted">Today has not been synced yet. Sync from the Calendar tab.</p>
 					: events.length === 0 ? <p className="muted">No events today.</p>
 					: <ul className="bare">{events.map((e) => (
-						<li key={e.id} className="line"><span><strong>{e.summary || '(no title)'}</strong><br /><span className="muted">{e.allDay ? 'all day' : `${timeOf(e.startsAt, timezone)} – ${timeOf(e.endsAt, timezone)}`}{e.location ? `, ${e.location}` : ''}{e.attendeeCount > 1 ? `, ${e.attendeeCount} people` : ''}</span></span></li>))}</ul>}
+						<li key={e.id} className="calendar-event stack"><div><strong>{e.summary || '(no title)'}</strong><br /><span className="muted">{e.allDay ? 'all day' : `${timeOf(e.startsAt, timezone)} – ${timeOf(e.endsAt, timezone)}`}{e.location ? `, ${e.location}` : ''}{e.attendeeCount > 1 ? `, ${e.attendeeCount} people` : ''}</span></div><PreparationNote event={e} timezone={timezone} /></li>))}</ul>}
 				<Link className="button button--ghost" href="/calendar">This week</Link>
 			</section>
 			<section className="card" aria-labelledby="today-mail">

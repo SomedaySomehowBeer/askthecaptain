@@ -1,6 +1,6 @@
 export type Event = { id: string; summary: string; status: string; location: string; calendarName: string; startsAt: string; endsAt: string;
- allDay: boolean; startDate: string | null; endDate: string | null; attendeeCount: number; attendeesOmitted: boolean };
-export type CalendarList = { connection: { status: string; accountEmail: string; scopes: string[] } | null; timezone: string; automaticSyncEnabled: boolean;
+ allDay: boolean; startDate: string | null; endDate: string | null; attendeeCount: number; attendeesOmitted: boolean; preparationNote: string | null; preparedAt: string | null };
+export type CalendarList = { connection: { status: string; accountEmail: string; scopes: string[] } | null; timezone: string; automaticSyncEnabled: boolean; preparationNotice: string | null;
  calendars: { id: string; name: string; isPrimary: boolean; selected: boolean; syncedAt: string | null; syncedFrom: string | null; syncedTo: string | null }[];
  lastSync: { at: string; detail: { success: boolean; error?: string } } | null };
 export type CalendarWeek = CalendarList & { events: Event[]; covered: boolean };
