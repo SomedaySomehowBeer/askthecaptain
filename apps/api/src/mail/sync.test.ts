@@ -59,6 +59,8 @@ async function setup() {
 }
 it('initial pagination, idempotent upserts, latest-message reads and attachment metadata', async () => {
 	const s = await setup(); const first = await s.sync.run(s.org); assert.equal(first.threads, 2); assert.equal(first.attachments, 4);
+	const [peopleRun] = await db.owner`select actor_kind, detail from audit_events where organisation_id = ${s.org} and action = 'contacts.synced'`;
+	assert.equal(peopleRun!.actorKind, 'system'); assert.ok(peopleRun!.detail.created > 0);
 	const list = await (await s.request('threads?limit=1', s.memberToken)).json(); assert.equal(list.threads.length, 1); assert.equal(list.hasMore, true);
 	const older = await (await s.request(`threads?limit=1&before=${encodeURIComponent(list.nextBefore)}`)).json();
 	assert.equal(older.threads.length, 1); assert.notEqual(older.threads[0].id, list.threads[0].id); assert.equal(older.hasMore, false);

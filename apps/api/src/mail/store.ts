@@ -13,12 +13,12 @@ export async function saveThread(tx: TransactionSql, organisationId: string, con
 		on conflict (organisation_id, connection_id, provider_id) do update set account_email = excluded.account_email, label_ids = excluded.label_ids,
 		last_message_at = excluded.last_message_at, updated_at = now() returning id`;
 	for (const m of thread.messages) {
-		const [message] = await tx`insert into mail_messages (organisation_id, connection_id, thread_id, provider_id, from_header, to_header, cc_header, subject,
+		const [message] = await tx`insert into mail_messages (organisation_id, connection_id, thread_id, provider_id, from_header, to_header, cc_header, bcc_header, subject,
 			date_header, sent_at, snippet, label_ids, in_reply_to, body, body_unavailable)
-			values (${organisationId}, ${conn.id}, ${stored!.id}, ${m.providerId}, ${m.fromHeader}, ${m.toHeader}, ${m.ccHeader}, ${m.subject},
+			values (${organisationId}, ${conn.id}, ${stored!.id}, ${m.providerId}, ${m.fromHeader}, ${m.toHeader}, ${m.ccHeader}, ${m.bccHeader}, ${m.subject},
 				${m.dateHeader}, ${m.sentAt}, ${m.snippet}, ${tx.array(m.labelIds)}, ${m.inReplyTo}, ${m.body}, ${m.bodyUnavailable})
 			on conflict (organisation_id, connection_id, provider_id) do update set thread_id = excluded.thread_id, from_header = excluded.from_header,
-			to_header = excluded.to_header, cc_header = excluded.cc_header, subject = excluded.subject, date_header = excluded.date_header,
+			to_header = excluded.to_header, cc_header = excluded.cc_header, bcc_header = excluded.bcc_header, subject = excluded.subject, date_header = excluded.date_header,
 			sent_at = excluded.sent_at, snippet = excluded.snippet, label_ids = excluded.label_ids, in_reply_to = excluded.in_reply_to,
 			body = excluded.body, body_unavailable = excluded.body_unavailable returning id`;
 		for (const a of m.attachments) await tx`insert into mail_attachments (organisation_id, message_id, part_id, filename, media_type, size, provider_attachment_id)

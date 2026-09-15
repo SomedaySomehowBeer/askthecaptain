@@ -38,6 +38,11 @@ export default async function SettingsPage() {
 				</section>
 			) : null}
 			<section className="card card--inset">
+				<h2>People and companies</h2>
+				<p className="secondary">Contacts from your mail and the people you add by hand.</p>
+				<Link className="button button--secondary" href="/settings/contacts">Manage people and companies</Link>
+			</section>
+			<section className="card card--inset">
 				<h2>Connections</h2>
 				<p className="secondary">Connect the accounts Captain uses for your business.</p>
 				<Link className="button button--secondary" href="/settings/connections">Manage connections</Link>

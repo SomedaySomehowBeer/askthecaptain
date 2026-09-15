@@ -10,7 +10,7 @@ const strings = (value: unknown) => array(value).map(string);
 const optional = (value: unknown) => value === undefined ? undefined : string(value);
 const id = (value: unknown) => { const result = string(value); if (!result) throw new GmailError(); return result; };
 export type MailAttachment = { partId: string; filename: string; mediaType: string; size: number; providerAttachmentId: string | null };
-export type MailMessage = { providerId: string; fromHeader: string; toHeader: string; ccHeader: string; subject: string; dateHeader: string;
+export type MailMessage = { providerId: string; fromHeader: string; toHeader: string; ccHeader: string; bccHeader: string; subject: string; dateHeader: string;
 	sentAt: string; snippet: string; labelIds: string[]; inReplyTo: string; body: string; bodyUnavailable: boolean; attachments: MailAttachment[] };
 export type MailThread = { providerId: string; messages: MailMessage[] };
 export type HistoryPage = { threadIds: string[]; historyId: string; nextPageToken?: string };
@@ -60,7 +60,7 @@ function parseMessage(value: unknown): MailMessage {
 	const internalDate = string(m.internalDate); if (!/^\d+$/.test(internalDate)) throw new GmailError();
 	const sent = new Date(Number(internalDate)); if (!Number.isFinite(sent.getTime())) throw new GmailError();
 	const text = body(payload, '0', 0);
-	return { providerId: id(m.id), fromHeader: h.from ?? '', toHeader: h.to ?? '', ccHeader: h.cc ?? '', subject: h.subject ?? '', dateHeader: h.date ?? '',
+	return { providerId: id(m.id), fromHeader: h.from ?? '', toHeader: h.to ?? '', ccHeader: h.cc ?? '', bccHeader: h.bcc ?? '', subject: h.subject ?? '', dateHeader: h.date ?? '',
 		sentAt: sent.toISOString(), snippet: optional(m.snippet) ?? '', labelIds: strings(m.labelIds), inReplyTo: h['in-reply-to'] ?? '', body: text, bodyUnavailable: unavailable && !text, attachments };
 }
 

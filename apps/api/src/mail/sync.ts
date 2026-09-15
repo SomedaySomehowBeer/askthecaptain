@@ -1,3 +1,4 @@
+import { upkeepContacts } from '../contacts/upkeep.ts';
 import { GmailClient, GmailError } from '@captain/connectors/gmail';
 import { withTenant, type Sql } from '@captain/db';
 import { z } from 'zod';
@@ -81,6 +82,7 @@ export class MailSync {
 				await tx`insert into sync_cursors (organisation_id, connection_id, resource, cursor) values (${organisationId}, ${conn.id}, 'gmail.history',
 					${JSON.stringify({ accountEmail: conn.accountEmail, historyId, capped })}) on conflict (organisation_id, connection_id, resource)
 					do update set cursor = excluded.cursor, updated_at = now()`;
+				await upkeepContacts(tx, organisationId, conn.accountEmail);
 				await audit(tx, { organisationId, actor: { kind: 'system' }, action: 'mail.synced', subjectType: 'connection', subjectId: conn.id, detail: { ...counts, success: true } });
 				return counts;
 			});
