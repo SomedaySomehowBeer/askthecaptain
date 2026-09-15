@@ -17,6 +17,7 @@ import { AuthService } from './auth/service.ts';
 import { SeriesRoutine, startSeriesSchedule } from './commitments/routine.ts';
 import { CommitmentsService } from './commitments/service.ts';
 import { readEnv } from './env.ts';
+import { OrganisationLifecycle } from './organisations/lifecycle.ts';
 import { OrganisationService } from './organisations/service.ts';
 import { PushService } from './push/service.ts';
 import { webPushTransport } from './push/webpush.ts';
@@ -50,7 +51,14 @@ const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, p
 const workflows = new WorkflowService(db, push);
 // The catalogue is code; the table the API exposes follows it (plan §5 workflow_definitions).
 await workflows.sync().catch((error) => console.error('[api] workflow catalogue sync failed', error instanceof Error ? error.message : error));
-const app = createApp({ xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference: new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null), db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments });
+const inference = new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null);
+// Deletion revokes what it can at providers first, best effort, then the row and its tenant data go.
+const lifecycle = new OrganisationLifecycle(db, [
+	async (actor, organisationId) => { const list = await connections.list(actor, organisationId); for (const c of list.connections) if (c.provider === 'google' && c.status !== 'disconnected') await connections.disconnect(actor, organisationId, c.id).catch(() => undefined); },
+	async (actor, organisationId) => { await xeroConnections.disconnect(actor, organisationId).catch(() => undefined); },
+	async (actor, organisationId) => { await inference.remove(actor, organisationId).catch(() => undefined); }
+]);
+const app = createApp({ lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));

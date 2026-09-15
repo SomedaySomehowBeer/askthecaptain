@@ -22,7 +22,7 @@ test('signed-out people are sent to sign in, and the page is the real one', asyn
 });
 
 test('every area needs a session', async ({ request }) => {
-	for (const path of ['/inbox', '/inbox/x', '/inbox/contacts/x', '/settings/contacts', '/commitments', '/calendar', '/settings', '/settings/members', '/settings/connections', '/settings/inference', '/settings/workflows', '/settings/notifications', '/welcome']) {
+	for (const path of ['/inbox', '/inbox/x', '/inbox/contacts/x', '/settings/contacts', '/commitments', '/calendar', '/settings', '/settings/members', '/settings/connections', '/settings/inference', '/settings/workflows', '/settings/notifications', '/settings/delete', '/settings/export', '/welcome']) {
 		const response = await request.get(`${webUrl()}${path}`, { maxRedirects: 0 });
 		expect(response.status(), path).toBe(307);
 		expect(response.headers()['location'], path).toMatch(/\/sign-in/);
