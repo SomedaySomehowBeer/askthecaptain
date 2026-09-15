@@ -2,11 +2,12 @@ import type { TransactionSql } from '@captain/db';
 import { audit } from '../audit.ts';
 import { addresses, isCounterparty, publicDomains } from './addresses.ts';
 
-/** Backfill all cached headers after each successful sync, in its transaction. Contacts, mail and
- * cursor commit together. Human edits and archives survive resync, deletion and account changes. */
-export async function upkeepContacts(tx: TransactionSql, organisationId: string, accountEmail: string) {
+/** Backfill cached headers, optionally limited to a persisted mail batch. Contacts and their mail
+ * commit together. Human edits and archives survive resync, deletion and account changes. */
+export async function upkeepContacts(tx: TransactionSql, organisationId: string, accountEmail: string, providerIds?: string[]) {
  const messages = await tx`select m.thread_id, m.sent_at, m.from_header, m.to_header, m.cc_header, m.bcc_header from mail_messages m
-  join mail_threads t on t.id = m.thread_id where t.account_email = ${accountEmail} order by m.sent_at, m.id`;
+  join mail_threads t on t.id = m.thread_id where t.account_email = ${accountEmail}
+  and (${providerIds === undefined} or t.provider_id = any(${tx.array(providerIds ?? [])}::text[])) order by m.sent_at, m.id`;
  const seen = new Map<string, { name: string; first: Date; last: Date; thread: string }>();
  for (const m of messages) for (const address of addresses([m.fromHeader, m.toHeader, m.ccHeader, m.bccHeader].join(','))) {
   if (!isCounterparty(address.email, accountEmail)) continue;
@@ -28,7 +29,7 @@ export async function upkeepContacts(tx: TransactionSql, organisationId: string,
    on conflict (organisation_id, email) do nothing returning id`;
   if (added.length) { created++; continue; }
   await tx`update contacts set
-   name = case when source = 'mail' and archived_at is null and ${contact.name} <> '' then ${contact.name} else name end,
+   name = case when source = 'mail' and archived_at is null and ${contact.name} <> '' and ${contact.last} >= last_seen_at then ${contact.name} else name end,
    company_id = case when source = 'mail' and archived_at is null then ${companyId}::uuid else company_id end,
    first_seen_at = least(first_seen_at, ${contact.first}),
    last_thread_id = case when ${contact.last} >= last_seen_at then ${contact.thread}::uuid else last_thread_id end,
