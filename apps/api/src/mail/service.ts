@@ -1,3 +1,4 @@
+import { addresses } from '../contacts/addresses.ts';
 import { withTenant, type Sql } from '@captain/db';
 import { forbidden, HttpError, notFound } from '../errors.ts';
 import { connection, requireMember } from './store.ts';
@@ -33,7 +34,8 @@ export class MailService {
 				from mail_messages where thread_id = ${threadId} order by sent_at, provider_id`;
 			const attachments = await tx`select a.id, a.message_id, a.filename, a.media_type, a.size, a.provider_attachment_id from mail_attachments a
 				join mail_messages m on m.id = a.message_id where m.thread_id = ${threadId} order by a.part_id`;
-			return { ...thread, messages: messages.map((m) => ({ ...m, attachments: attachments.filter((a) => a.messageId === m.id) })) };
+			const senders = new Map((await tx`select id, email, name from contacts where email = any(${tx.array(messages.flatMap((m) => addresses(m.fromHeader).map((a) => a.email)))}::text[])`).map((c) => [c.email, c]));
+			return { ...thread, messages: messages.map((m) => ({ ...m, senderContact: senders.get(addresses(m.fromHeader)[0]?.email) ?? null, attachments: attachments.filter((a) => a.messageId === m.id) })) };
 		});
 	}
 	async sync(actor: Actor, organisationId: string) {

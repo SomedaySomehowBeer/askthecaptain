@@ -14,6 +14,7 @@ test('full threads prefer plain text and retain headers/attachment metadata with
 	assert.equal(message.body, 'Your delivery is on Thursday.'); assert.equal(message.inReplyTo, '<previous@example.test>');
 	assert.equal(message.attachments.length, 2); assert.equal(message.attachments[0]!.providerAttachmentId, 'attachment-1');
 	assert.ok(!JSON.stringify(thread).includes('ATTACHMENT-NEVER-STORE')); assert.ok(!JSON.stringify(thread).includes('data"'));
+	assert.equal(message.bccHeader, 'Private <private@example.test>');
 	assert.equal(message.fromHeader, 'Supplier <supplier@example.test>'); assert.equal(message.ccHeader, 'Crew <crew@example.test>');
 });
 test('HTML-only and external bodies remain honest, with no attachment endpoint calls', async () => {

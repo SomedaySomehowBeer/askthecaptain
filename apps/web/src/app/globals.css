@@ -131,3 +131,6 @@ input[type='date']:focus-visible, input[type='number']:focus-visible, textarea:f
 .calendar-event { padding-block: var(--space-md); border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .calendar-event h4, .calendar-event p { margin: 0; }
 @media (min-width: 64rem) { .calendar-days { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.people-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.people-row { gap: var(--space-md); flex-wrap: wrap; overflow-wrap: anywhere; }

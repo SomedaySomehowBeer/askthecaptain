@@ -37,6 +37,10 @@
           {
             "name": "In-Reply-To",
             "value": "<previous@example.test>"
+          },
+          {
+            "name": "Bcc",
+            "value": "Private <private@example.test>"
           }
         ],
         "body": {

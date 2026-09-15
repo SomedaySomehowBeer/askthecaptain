@@ -1,3 +1,5 @@
+import { contactsRoutes } from './contacts/routes.ts';
+import { ContactsService } from './contacts/service.ts';
 import { calendarRoutes } from './calendar/routes.ts';
 import { CalendarService } from './calendar/service.ts';
 import type { CalendarSync } from './calendar/sync.ts';
@@ -91,6 +93,7 @@ export function createApp(deps: Deps) {
 		const input = z.object({ token: z.string().min(1) }).parse(await c.req.json());
 		return c.json(await deps.organisations.accept({ ...actor(c), email: c.get('session').user.email }, input.token));
 	});
+	signedIn.route('/', contactsRoutes(new ContactsService(deps.db)));
 	signedIn.route('/', commitmentsRoutes(deps.commitments));
 	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled)));
 	signedIn.route('/', calendarRoutes(new CalendarService(deps.db, deps.calendarSync, deps.calendarScheduleEnabled)));
