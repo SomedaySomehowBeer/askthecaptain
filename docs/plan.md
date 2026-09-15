@@ -377,6 +377,9 @@ fallback for providers without webhooks.
   deletes the organisation by typing its name, providers are told to revoke, and the platform keeps a
   one-line record.
 - Backups with a rehearsed restore, terms of service and a privacy notice before the second tenant.
+  The `backup` workflow dumps the database nightly, restores it into a throwaway Postgres in the same
+  job and compares counts, then keeps thirty days of dumps in the Tigris bucket; Neon's own
+  point-in-time history is the first resort (`docs/runbooks/backup-and-restore.md`).
 
 ## 10. Web and mobile
 
