@@ -23,13 +23,14 @@ import type { AuthService, Session } from './auth/service.ts';
 import { commitmentsRoutes } from './commitments/routes.ts';
 import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
+import { RateLimiter, policies, rateLimit } from './ratelimit.ts';
 import type { OrganisationService } from './organisations/service.ts';
 import { pushRoutes } from './push/routes.ts';
 import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
 
-export type Deps = { inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService };
+export type Deps = { inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -47,6 +48,14 @@ export function createApp(deps: Deps) {
 		c.header('x-request-id', c.get('requestId'));
 		c.header('cache-control', 'no-store');
 	});
+
+	// Rate limits (plan §9): per address before sign-in, per person and organisation after, and a
+	// small budget for the triggers that reach a provider. Health checks are never limited.
+	const limiter = deps.rateLimiter ?? new RateLimiter(); const limits = policies();
+	app.use('/auth/*', rateLimit(limiter, limits.auth));
+	app.use('/connections/*', rateLimit(limiter, limits.auth));
+	app.use('/webhooks/*', rateLimit(limiter, limits.webhook));
+	app.use('/v1/*', rateLimit(limiter, limits.ip));
 
 	app.get('/healthz', (c) => c.json({ ok: true }));
 	app.get('/readyz', async (c) => {
@@ -75,6 +84,7 @@ export function createApp(deps: Deps) {
 		const token = bearer(c.req.header('authorization')); if (!token) throw unauthorised();
 		c.set('session', await deps.auth.requireSession(token)); await next();
 	});
+	signedIn.use('*', rateLimit(limiter, limits.user, limits.organisation, limits.trigger));
 	const actor = (c: { get(key: 'session'): Session; get(key: 'requestId'): string }) => ({ userId: c.get('session').userId, requestId: c.get('requestId') });
 
 	signedIn.post('/auth/sign-out', async (c) => { await deps.auth.signOut(bearer(c.req.header('authorization')), c.get('requestId')); return c.json({ ok: true }); });
