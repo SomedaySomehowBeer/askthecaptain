@@ -82,3 +82,12 @@ it('backfill is idempotent, excludes own/no-reply, groups domains, preserves edi
  await db.owner`update connections set status = 'disconnected' where id = ${s.conn}`;
  assert.deepEqual((await (await s.request(`contacts/${ann.id}`)).json()).threads, []);
 });
+
+it('scoped upkeep only reads its batch and older batches cannot overwrite a newer mail display name', async () => {
+ const s = await setup(); await s.mail('old', 'Old Name <ann@acme.test>', 'own@example.test');
+ const latest = await s.mail('new', 'Current Name <ann@acme.test>', 'own@example.test', '2026-09-16T10:00:00Z');
+ for (const id of ['new', 'old']) await withTenant(db.app, { organisationId: s.org }, (tx) => upkeepContacts(tx, s.org, 'own@example.test', [id]));
+ const { contacts } = await (await s.request('contacts')).json(); assert.equal(contacts.length, 1);
+ assert.equal(contacts[0].name, 'Current Name'); assert.equal(contacts[0].lastThreadId, latest);
+ assert.equal(contacts[0].firstSeenAt, '2026-09-15T10:00:00.000Z');
+});

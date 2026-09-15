@@ -8,7 +8,8 @@ references. It also retains Gmail-provided Bcc headers and gives mail threads a 
 Deleting cached mail clears a contact's last-thread link; it does not delete the contact.
 
 Every successful mail sync backfills contacts from all currently cached From, To, Cc and Bcc headers.
-Contacts, mail changes and the Gmail cursor commit together. No extra scheduler or network request is
+Contacts and mail changes commit together in batches of at most 25 threads; the Gmail history
+cursor advances only after the entire run succeeds. No extra scheduler or network request is
 needed. Existing cached messages acquire Bcc only when Gmail returns the thread again.
 
 - The connected account and obvious automated senders are excluded. Parsing, no-reply rules and the
@@ -18,8 +19,8 @@ needed. Existing cached messages acquire Bcc only when Gmail returns the thread 
 - A hand edit sets `source = hand`. Sync preserves hand/import names and company choices, all roles,
   phones and notes, and archived records. It updates first/last seen and the last-thread reference.
 - `contacts.synced` audits the system run with address, created, updated and company-created counts;
-  audit details contain no headers or message bodies. Failed runs roll back and follow the mail sync
-  failure path. Existing hand contacts are enriched on the next successful mail sync.
+  audit details contain no headers or message bodies. Failed batches roll back; earlier committed batches remain available, with mail
+  marked incomplete until a retry succeeds. Existing hand contacts are enriched on the next successful mail sync.
 - Recent threads are up to 20 exact email matches in currently cached mail, excluding disconnected
   accounts and replaced account caches. This is not a complete correspondence history.
 

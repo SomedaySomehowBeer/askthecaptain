@@ -12,7 +12,7 @@ export class MailService {
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
 			await requireMember(tx, actor.userId, organisationId);
 			const conn = await connection(tx); const [org] = await tx`select timezone from organisations where id = ${organisationId}`;
-			const [lastSync] = await tx`select created_at as at, detail from audit_events where action in ('mail.synced', 'mail.sync_failed') order by created_at desc, id desc limit 1`;
+			const [lastSync] = await tx`select created_at as at, detail from audit_events where action in ('mail.synced', 'mail.sync_failed', 'mail.sync_started') order by created_at desc, id desc limit 1`;
 			const threads = !conn || conn.status === 'disconnected' ? [] : await tx`select t.id, m.from_header, m.subject, m.snippet, m.sent_at, t.label_names,
 				(select count(*)::int from mail_attachments a join mail_messages am on am.id = a.message_id where am.thread_id = t.id) as attachment_count
 				from mail_threads t join lateral (select from_header, subject, snippet, sent_at from mail_messages where thread_id = t.id order by sent_at desc, provider_id desc limit 1) m on true
