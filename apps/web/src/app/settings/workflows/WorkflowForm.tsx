@@ -1,18 +1,18 @@
 'use client';
-import { useActionState } from 'react';
+import { useSaveForm } from '../../commitments/SaveForm.tsx';
 import type { OfferedWorkflow } from '../../../lib/api.ts';
-import { setWorkflow, type Result } from './actions.ts';
+import { setWorkflow } from './actions.ts';
 
 /** One workflow's switch and parameters. The person sees what it needs before it can run; the
  *  API refuses to enable it until those are met, and this form says so in the same words. */
 export function WorkflowForm({ offered, canManage }: { offered: OfferedWorkflow; canManage: boolean }) {
-	const [state, action, pending] = useActionState(setWorkflow, undefined);
+	const [state, action, pending] = useSaveForm(form => setWorkflow(undefined, form));
 	const { definition, enablement, unmet } = offered;
 	const enabled = enablement?.enabled ?? false;
 	const values = enablement?.parameters ?? {};
 	const blocked = unmet.length > 0 || Boolean(offered.runnerProblem);
 	return (
-		<form className="form" action={action}>
+		<form className="form" method="post" onSubmit={action}>
 			<input type="hidden" name="key" value={definition.key} />
 			<input type="hidden" name="specs" value={JSON.stringify(definition.parameters)} />
 			<input type="hidden" name="enabled" value={enabled ? 'false' : 'true'} />
@@ -34,13 +34,12 @@ export function WorkflowForm({ offered, canManage }: { offered: OfferedWorkflow;
 				);
 			})}
 			{state?.error ? <p className="form__error" role="alert">{state.error}</p> : null}
-			{state?.ok ? <p className="muted" role="status">Saved.</p> : null}
 			{canManage ? (
 				<div className="row">
 					<button className={`button ${enabled ? 'button--ghost' : 'button--primary'}`} type="submit" disabled={pending || (!enabled && blocked)} aria-busy={pending || undefined}>
 						{pending ? 'Saving…' : enabled ? 'Turn off' : 'Turn on'}
 					</button>
-					{enabled ? <button className="button button--secondary" type="submit" formAction={action} name="enabled" value="true" disabled={pending}>Save parameters</button> : null}
+					{enabled ? <button className="button button--secondary" type="submit" name="intent" value="save" disabled={pending}>Save parameters</button> : null}
 				</div>
 			) : <p className="muted">Owners and admins turn workflows on and off.</p>}
 		</form>

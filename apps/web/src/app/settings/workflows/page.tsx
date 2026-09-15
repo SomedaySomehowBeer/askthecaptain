@@ -22,7 +22,7 @@ function stepNote(step: WorkflowRunDetail['steps'][number]) {
  if (step.state === 'waiting' && 'wakeAt' in output && typeof output.wakeAt === 'string' && Number.isFinite(Date.parse(output.wakeAt)))
   return `Next check: ${new Intl.DateTimeFormat('en-AU', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(output.wakeAt))} UTC.`;
  if (step.state === 'succeeded' && 'skipped' in output && typeof output.skipped === 'string') return `No action: ${output.skipped.slice(0, 500)}`;
- return null;
+ return 'note' in output && typeof output.note === 'string' ? output.note : null;
 }
 
 export default async function WorkflowsPage({ searchParams }: { searchParams: Promise<{ run?: string }> }) {

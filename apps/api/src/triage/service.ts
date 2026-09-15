@@ -8,7 +8,7 @@ import { connection } from '../mail/store.ts';
 import { addresses } from '../contacts/addresses.ts';
 import { upkeepContacts } from '../contacts/upkeep.ts';
 import { suggest, complete } from '../commitments/triage.ts';
-import { createDraft, createInvoiceDraft } from './outbox.ts';
+import { workflowDraft } from './outbox.ts';
 import { draftSchema, triageSchema, journal, type Context, type Thread } from './data.ts';
 
 export class TriageService {
@@ -93,7 +93,7 @@ export class TriageService {
    organisationId: ctx.organisationId, runId: ctx.runId, step: ctx.step.key, tier: 'large', instruction: draftReplyInstruction, schema: draftSchema,
    input: { replyStyle: args.style ?? '', untrustedMail: { subject: (args.thread as Thread).subject, messages: (args.thread as Thread).messages }, untrustedTriage: args.triage }
   }) });
-  registry.registerStep('outbox.create', { kind: 'write', transaction: (ctx, args) => args.thread ? createDraft(ctx, args.thread as Thread, draftSchema.parse(args.draft).body) : createInvoiceDraft(ctx, args.invoice, args.to, draftSchema.parse(args.draft).body) });
+  registry.registerStep('outbox.create', { kind: 'write', transaction: workflowDraft });
   registry.registerStep('outbox.sent', { kind: 'await', transaction: async ({ tx }, args) => {
    const id = (args.draft as { id: string }).id; const [row] = await tx`select state from outbox where id = ${id}`;
    return { ready: row?.state === 'sent' || row?.state === 'discarded', key: `outbox:${id}`, output: { state: row?.state ?? 'missing' } };

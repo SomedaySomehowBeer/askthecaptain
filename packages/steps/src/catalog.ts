@@ -30,7 +30,7 @@ export const catalog: Record<string, CatalogEntry> = {
 	'contacts.forEvent': { kind: 'read', does: 'reads the contacts attending an event', requires: [] },
 	'xero.overdueReceivables': { kind: 'read', does: 'reads cached overdue invoices and explicit Xero connection state', requires: [] },
 	'stock.items': { kind: 'read', does: 'reads the counted stock list for a location', requires: [] },
-	'shopify.stockLevels': { kind: 'read', does: 'reads sellable stock levels from the shop', requires: ['connection:shopify'] },
+	'shopify.stockLevels': { kind: 'read', does: 'reads shop levels or reports that Shopify is disconnected or incomplete', requires: [] },
 	// infer
 	'classifyThread': { kind: 'infer', does: 'classifies a thread: category, needs owner, summary, facts', requires: ['inference'], schemas: ['triage'] },
 	'draftReply': { kind: 'infer', does: 'drafts a reply in the owner’s voice', requires: ['inference'], schemas: ['draft'] },
@@ -44,10 +44,10 @@ export const catalog: Record<string, CatalogEntry> = {
 	'tasks.suggestFromTriage': { kind: 'write', does: 'creates suggested tasks from the facts found', requires: [] },
 	'tasks.completeFromConfirmations': { kind: 'write', does: 'completes duties whose confirmation arrived', requires: [] },
 	'contacts.upsertFromTriage': { kind: 'write', does: 'keeps contacts current from the thread', requires: [] },
-	'outbox.create': { kind: 'write', does: 'puts a draft in the outbox for a person to send (D5)', requires: [] },
+	'outbox.create': { kind: 'write', does: 'puts a draft in the outbox for a person to send (D5)', requires: ['connection:google'] },
 	'gmail.label': { kind: 'write', does: 'labels the thread in Gmail', requires: ['connection:google'] },
 	'tasks.createInProject': { kind: 'write', does: 'creates a task in a named project', requires: [] },
-	'stock.recordCount': { kind: 'write', does: 'records a stock count', requires: [] },
+	'stock.recordCount': { kind: 'write', does: 'journals the person’s recorded stock count without counting twice', requires: [] },
 	'calendar.writeNote': { kind: 'write', does: 'attaches a preparation note to an event', requires: ['connection:google'] },
 	// await
 	'outbox.sent': { kind: 'await', does: 'waits until a person sends or discards the draft', requires: [], until: 'the draft is sent or discarded' },

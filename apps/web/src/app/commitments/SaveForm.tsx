@@ -8,7 +8,7 @@ export function useSaveForm(save: Save) {
  const [state, setState] = useState<{ error?: string }>(); const [pending, setPending] = useState(false);
  async function submit(event: FormEvent<HTMLFormElement>) {
   event.preventDefault(); if (pending) return;
-  const form = new FormData(event.currentTarget); setPending(true); setState(undefined);
+  const form = new FormData(event.currentTarget, (event.nativeEvent as SubmitEvent).submitter); setPending(true); setState(undefined);
   try { const result = await save(form); if (!result?.error) { window.location.reload(); return; } setState(result); }
   catch { setState({ error: 'The save could not be confirmed. Reload the page to check before trying again.' }); }
   setPending(false);

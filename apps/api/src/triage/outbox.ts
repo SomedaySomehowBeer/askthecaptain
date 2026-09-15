@@ -37,6 +37,18 @@ export async function createInvoiceDraft(ctx: Context, invoice: unknown, to: unk
   return { skipped: 'The invoice or recipient changed. The next daily run will use its current details.' };
  return createDraft(ctx, { to: expected.contactEmail, subject: `Invoice ${expected.number} — payment follow-up` }, body);
 }
+/** Shared destination for triage replies, invoice chasers and supplier drafts. */
+export async function workflowDraft(ctx: Context, args: Record<string, unknown>) {
+ if (args.thread) return createDraft(ctx, args.thread as Thread, draftInput.shape.body.parse((args.draft as { body: unknown }).body));
+ if (args.invoice) return createInvoiceDraft(ctx, args.invoice, args.to, draftInput.shape.body.parse((args.draft as { body: unknown }).body));
+ const supplier = z.object({ name: z.string(), email: z.string().nullable() }).nullable().parse(args.supplier ?? null);
+ if (!supplier?.email || !address.safeParse(supplier.email).success) {
+  const note = 'No unambiguous supplier email. Add one active contact to the supplier company in People and companies; the reorder task is ready.';
+  await journal(ctx, 'outbox.skipped', 'workflow_run', ctx.runId, { note, step: ctx.path, itemIndex: ctx.itemIndex }); return { skipped: true, note };
+ }
+ const conn = await connection(ctx.tx); if (!conn || conn.status !== 'connected') throw Object.assign(Error('Google unavailable'), { code: 'stocktake_google' });
+ return createDraft(ctx, { to: supplier.email, subject: `Order enquiry: ${z.string().parse(args.subject)}` }, draftInput.shape.body.parse((args.draft as { body: unknown }).body));
+}
 export class OutboxService {
  readonly db: Sql; readonly connections: Pick<ConnectionService, 'accessToken'>; readonly wake: Wake; readonly gmail: GmailClient;
  constructor(db: Sql, connections: Pick<ConnectionService, 'accessToken'>, wake: Wake, gmail = new GmailClient()) { this.db = db; this.connections = connections; this.wake = wake; this.gmail = gmail; }

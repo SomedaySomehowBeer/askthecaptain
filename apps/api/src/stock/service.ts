@@ -13,7 +13,8 @@ const editSchema = itemSchema.partial().extend({ archived: z.boolean().optional(
 const countSchema = z.object({ count: quantity, note: text(1000).optional() }).strict();
 export class StockService {
  readonly db: Sql;
- constructor(db: Sql) { this.db = db; }
+ readonly emit: (tx: TransactionSql, org: string, event: string, data: unknown, waitKey: string) => Promise<unknown>;
+ constructor(db: Sql, emit: StockService['emit'] = async () => {}) { this.db = db; this.emit = emit; }
  private async tenant<T>(actor: Actor, org: string, work: (tx: TransactionSql) => Promise<T>): Promise<T> {
   try { return await withTenant(this.db, { organisationId: org, userId: actor.userId }, async (tx) => {
    const [member] = await tx`select role from memberships where organisation_id = ${org} and user_id = ${actor.userId} and status = 'active' for share`;
@@ -72,6 +73,7 @@ export class StockService {
    await tx`update stock_items s set current_count = c.count, counted_at = c.counted_at, counted_by = c.counted_by, updated_at = clock_timestamp()
     from stock_counts c where s.id = ${id} and c.id = ${observation!.id} and c.organisation_id = s.organisation_id and c.item_id = s.id`;
    await audit(tx, { organisationId: org, actor: { kind: 'person', id: actor.userId }, action: 'stock.counted', subjectType: 'stock_item', subjectId: id, requestId: actor.requestId, detail: { countId: observation!.id, count: input.count } });
+   await this.emit(tx, org, 'stock.counted', { itemId: id, countId: observation!.id }, `stock:${id}`);
    return observation!;
   });
  }
