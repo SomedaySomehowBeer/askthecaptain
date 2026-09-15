@@ -9,17 +9,17 @@ export type Project = { id: string; name: string; description: string; stages: s
 	archivedAt: Date | null; createdAt: Date; updatedAt: Date };
 export type Task = { id: string; projectId: string; title: string; body: string; status: TaskStatus; ownerId: string | null; ownerName: string | null;
 	due: string | null; sourceKind: 'person' | 'mail' | 'series' | 'run'; sourceId: string | null; seriesId: string | null; periodStart: string | null;
-	periodEnd: string | null; completedBy: string | null; completedAt: Date | null; createdAt: Date; updatedAt: Date; evidence: Evidence[] };
+	periodEnd: string | null; evidenceRequired: boolean; completedBy: string | null; completedAt: Date | null; createdAt: Date; updatedAt: Date; evidence: Evidence[] };
 export type Evidence = { id: string; taskId: string; kind: 'mail' | 'file' | 'url'; reference: string; label: string; attachedBy: string | null; attachedAt: Date };
 export type Series = { id: string; projectId: string; title: string; body: string; ownerId: string | null; evidenceRequired: boolean; recurrence: Recurrence;
 	everyMonths: number | null; anchor: string; dueOffsetDays: number; pausedAt: Date | null; nextDue: string | null; createdAt: Date; updatedAt: Date };
-export type Overview = { projects: Project[]; tasks: Task[]; series: Series[]; today: string };
+export type Overview = { projects: Project[]; tasks: Task[]; series: Series[]; today: string; timezone: string };
 
 const projectColumns = 'id, name, description, stages, owner_id, system_kind, archived_at, created_at, updated_at';
 const seriesColumns = 'id, project_id, title, body, owner_id, evidence_required, recurrence, every_months, anchor::text as anchor, due_offset_days, paused_at, created_at, updated_at';
 const taskSelect = `select t.id, t.project_id, t.title, t.body, t.status, t.owner_id, u.name as owner_name, t.due::text as due, t.source_kind, t.source_id, t.series_id,
-	t.period_start::text as period_start, t.period_end::text as period_end, t.completed_by, t.completed_at, t.created_at, t.updated_at
-	from tasks t left join users u on u.id = t.owner_id`;
+	t.period_start::text as period_start, t.period_end::text as period_end, coalesce(s.evidence_required, false) as evidence_required, t.completed_by, t.completed_at, t.created_at, t.updated_at
+	from tasks t left join users u on u.id = t.owner_id left join task_series s on s.id = t.series_id`;
 const statuses: TaskStatus[] = ['suggested', 'open', 'in_progress', 'done', 'cancelled'];
 const person = (actor: Actor) => ({ kind: 'person' as const, id: actor.userId });
 
@@ -35,14 +35,15 @@ export class CommitmentsService {
 	async overview(actor: Actor, organisationId: string): Promise<Overview> {
 		await roleOf(this.#db, actor.userId, organisationId);
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
-			const today = await this.#today(tx, organisationId);
+			const timezone = await this.#timezone(tx, organisationId);
+			const today = todayIn(timezone);
 			await this.#ensureObligations(tx, organisationId, actor);
 			await this.#materialise(tx, organisationId, today);
 			const projects = await tx<Project[]>`select ${tx.unsafe(projectColumns)} from projects where organisation_id = ${organisationId}
 				order by system_kind is null, archived_at is not null, name`;
 			const tasks = await this.#tasks(tx, organisationId, tx`t.status <> 'cancelled'`);
 			const series = await this.#series(tx, organisationId, today);
-			return { projects, tasks, series, today };
+			return { projects, tasks, series, today, timezone };
 		});
 	}
 
@@ -99,11 +100,13 @@ export class CommitmentsService {
 		await roleOf(this.#db, actor.userId, organisationId);
 		if (input.title !== undefined && !input.title.trim()) throw badRequest('title_required', 'the task needs a title');
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
-			const [current] = await tx<{ status: TaskStatus }[]>`select status from tasks where id = ${taskId} and organisation_id = ${organisationId}`;
+			const [current] = await tx<{ status: TaskStatus; evidenceRequired: boolean; evidenceCount: number }[]>`select t.status, coalesce(s.evidence_required, false) as evidence_required,
+				(select count(*) from evidence e where e.task_id = t.id)::int as evidence_count from tasks t left join task_series s on s.id = t.series_id where t.id = ${taskId} and t.organisation_id = ${organisationId}`;
 			if (!current) throw notFound('that task does not exist');
 			if (input.projectId) await this.#requireProject(tx, organisationId, input.projectId);
 			if (input.ownerId) await this.#requireMember(tx, organisationId, input.ownerId);
 			const completing = input.status === 'done' && current.status !== 'done';
+			if (completing && current.evidenceRequired && current.evidenceCount === 0) throw badRequest('evidence_required', 'this duty needs evidence attached before it counts as done');
 			const reopening = input.status !== undefined && input.status !== 'done' && current.status === 'done';
 			await tx`update tasks set
 				project_id = coalesce(${input.projectId ?? null}::uuid, project_id), title = coalesce(${input.title?.trim() ?? null}, title), body = coalesce(${input.body?.trim() ?? null}, body),
@@ -246,10 +249,12 @@ export class CommitmentsService {
 		return rows.map((row) => ({ ...row, nextDue: row.pausedAt ? null : dueFor(row, nextPeriod(row, today)) }));
 	}
 
-	async #today(tx: TransactionSql, organisationId: string): Promise<string> {
+	/** The organisation's timezone, or UTC when the stored one is not a zone this runtime knows. */
+	async #timezone(tx: TransactionSql, organisationId: string): Promise<string> {
 		const [org] = await tx<{ timezone: string }[]>`select timezone from organisations where id = ${organisationId}`;
-		try { return todayIn(org?.timezone ?? 'UTC'); } catch { return todayIn('UTC'); }
+		try { todayIn(org?.timezone ?? 'UTC'); return org?.timezone ?? 'UTC'; } catch { return 'UTC'; }
 	}
+	async #today(tx: TransactionSql, organisationId: string): Promise<string> { return todayIn(await this.#timezone(tx, organisationId)); }
 
 	async #requireProject(tx: TransactionSql, organisationId: string, projectId: string): Promise<void> {
 		const [row] = await tx`select 1 from projects where id = ${projectId} and organisation_id = ${organisationId} and archived_at is null`;

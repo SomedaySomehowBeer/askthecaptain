@@ -17,8 +17,9 @@ test.describe('commitments', () => {
 		await expect(page.locator('.notice--failed')).toHaveCount(0);
 		await expect(page.getByRole('heading', { name: 'Obligations' })).toBeVisible();
 		const title = `Send price list ${Date.now()}`;
-		const form = page.locator('form').filter({ has: page.getByLabel('Task') }).first();
-		await form.getByLabel('Task').fill(title);
+		// Exact label match: the Done buttons' aria-labels also contain the word "task".
+		const form = page.locator('form').filter({ has: page.getByLabel('Task', { exact: true }) }).first();
+		await form.getByLabel('Task', { exact: true }).fill(title);
 		await form.getByLabel('Due').fill('2099-12-31');
 		await form.getByRole('button', { name: 'Add task' }).click();
 		const line = page.locator('.task').filter({ hasText: title });
@@ -39,7 +40,11 @@ test.describe('commitments', () => {
 		await form.getByLabel('Due, days after the period ends').fill('21');
 		await form.getByRole('button', { name: 'Add recurring duty' }).click();
 		await expect(book.locator('.line').filter({ hasText: duty })).toContainText('monthly');
-		const now = new Date();
-		await expect(page.locator('.task').filter({ hasText: `${duty} — ${months[now.getMonth()]} ${now.getFullYear()}` })).toBeVisible();
+		// The period label is this month in the organisation's timezone, which the runner's clock need
+		// not share at a month boundary: check the occurrence exists and is labelled with a month.
+		const occurrence = page.locator('.task').filter({ hasText: `${duty} — ` });
+		await expect(occurrence).toBeVisible();
+		await expect(occurrence).toContainText(new RegExp(`— (${months.join('|')}) \\d{4}`));
+		await expect(occurrence).toContainText('recurring');
 	});
 });

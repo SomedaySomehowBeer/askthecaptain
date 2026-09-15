@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Notice } from '../../components/Notice.tsx';
 import { Page, requireCurrent } from '../../components/Page.tsx';
 import { api, load, type Commitments, type Project, type Series, type Task } from '../../lib/api.ts';
-import { describeDue, recurrenceWords, shortDate } from '../../lib/dates.ts';
+import { dateIn, describeDue, recurrenceWords, shortDate } from '../../lib/dates.ts';
 import { setProjectArchived, setSeriesPaused, setTaskStatus } from './actions.ts';
 import { ProjectForm, SeriesForm, TaskForm } from './Forms.tsx';
 
@@ -10,9 +10,9 @@ export const metadata: Metadata = { title: 'Commitments' };
 
 const isOpen = (task: Task) => task.status === 'open' || task.status === 'in_progress';
 
-function TaskLine({ task, today, showProject }: { task: Task; today: string; showProject?: Project }) {
+function TaskLine({ task, today, timezone, showProject }: { task: Task; today: string; timezone: string; showProject?: Project }) {
 	const due = describeDue(task.due, today);
-	const doneWhen = task.completedAt ? `done ${shortDate(task.completedAt.slice(0, 10))}` : null;
+	const doneWhen = task.completedAt ? `done ${shortDate(dateIn(task.completedAt, timezone))}` : null;
 	return (
 		<li className={`task${task.status === 'done' ? ' task--done' : ''}`}>
 			<div className="task__body">
@@ -24,6 +24,7 @@ function TaskLine({ task, today, showProject }: { task: Task; today: string; sho
 					{showProject ? <span>{showProject.name}</span> : null}
 					{task.ownerName ? <span>{task.ownerName}</span> : null}
 					{task.sourceKind === 'series' ? <span>recurring</span> : null}
+					{task.evidenceRequired && task.status !== 'done' ? <span>{task.evidence.length > 0 ? 'evidence attached' : 'needs evidence'}</span> : null}
 					{task.evidence.length > 0 ? <span>{task.evidence.length === 1 ? '1 attachment' : `${task.evidence.length} attachments`}</span> : null}
 				</span>
 				{task.body ? <span className="secondary">{task.body}</span> : null}
@@ -52,7 +53,7 @@ function SeriesLine({ series }: { series: Series }) {
 	);
 }
 
-function ProjectCard({ project, tasks, series, projects, today }: { project: Project; tasks: Task[]; series: Series[]; projects: Project[]; today: string }) {
+function ProjectCard({ project, tasks, series, projects, today, timezone }: { project: Project; tasks: Task[]; series: Series[]; projects: Project[]; today: string; timezone: string }) {
 	const open = tasks.filter(isOpen); const suggested = tasks.filter((t) => t.status === 'suggested'); const done = tasks.filter((t) => t.status === 'done');
 	const deadlineBook = project.systemKind === 'obligations';
 	return (
@@ -65,9 +66,9 @@ function ProjectCard({ project, tasks, series, projects, today }: { project: Pro
 				)}
 			</div>
 			{project.description ? <p className="secondary">{project.description}</p> : null}
-			{project.archivedAt ? <p className="muted">Archived {shortDate(project.archivedAt.slice(0, 10))}. Nothing new can be added until it is restored.</p> : null}
-			{suggested.length > 0 ? <ul className="bare">{suggested.map((task) => <TaskLine key={task.id} task={task} today={today} />)}</ul> : null}
-			{open.length > 0 ? <ul className="bare">{open.map((task) => <TaskLine key={task.id} task={task} today={today} />)}</ul>
+			{project.archivedAt ? <p className="muted">Archived {shortDate(dateIn(project.archivedAt, timezone))}. Nothing new can be added until it is restored.</p> : null}
+			{suggested.length > 0 ? <ul className="bare">{suggested.map((task) => <TaskLine key={task.id} task={task} today={today} timezone={timezone} />)}</ul> : null}
+			{open.length > 0 ? <ul className="bare">{open.map((task) => <TaskLine key={task.id} task={task} today={today} timezone={timezone} />)}</ul>
 				: <p className="muted">{deadlineBook ? 'Nothing is due. Add a recurring duty below and its next occurrence appears here.' : 'Nothing open here.'}</p>}
 			{deadlineBook || series.length > 0 ? (
 				<div className="stack">
@@ -77,12 +78,13 @@ function ProjectCard({ project, tasks, series, projects, today }: { project: Pro
 				</div>
 			) : null}
 			{project.archivedAt ? null : <details className="disclosure"><summary>Add a task</summary><TaskForm projects={projects} projectId={project.id} compact /></details>}
-			{done.length > 0 ? <details className="disclosure"><summary>Done ({done.length})</summary><ul className="bare">{done.map((task) => <TaskLine key={task.id} task={task} today={today} />)}</ul></details> : null}
+			{done.length > 0 ? <details className="disclosure"><summary>Done ({done.length})</summary><ul className="bare">{done.map((task) => <TaskLine key={task.id} task={task} today={today} timezone={timezone} />)}</ul></details> : null}
 		</section>
 	);
 }
 
 export default async function CommitmentsPage() {
+	// The layout has already sent a signed-out person to sign in; this is the cached session.
 	const me = await requireCurrent('/commitments');
 	const loaded = await load(() => api<Commitments>(`/v1/organisations/${me.organisation.organisationId}/commitments`, { token: me.token }));
 	if (!loaded.ok) {
@@ -92,7 +94,7 @@ export default async function CommitmentsPage() {
 			</Page>
 		);
 	}
-	const { projects, tasks, series, today } = loaded.value;
+	const { projects, tasks, series, today, timezone } = loaded.value;
 	const live = projects.filter((p) => !p.archivedAt); const archived = projects.filter((p) => p.archivedAt);
 	const attention = tasks.filter((t) => isOpen(t) && t.due && describeDue(t.due, today).urgency !== 'later' && !projects.find((p) => p.id === t.projectId)?.archivedAt);
 	const nothingYet = tasks.length === 0 && series.length === 0;
@@ -104,7 +106,7 @@ export default async function CommitmentsPage() {
 			) : attention.length > 0 ? (
 				<section className="card" aria-labelledby="attention">
 					<h2 id="attention">Due this week</h2>
-					<ul className="bare">{attention.map((task) => <TaskLine key={task.id} task={task} today={today} showProject={projects.find((p) => p.id === task.projectId)} />)}</ul>
+					<ul className="bare">{attention.map((task) => <TaskLine key={task.id} task={task} today={today} timezone={timezone} showProject={projects.find((p) => p.id === task.projectId)} />)}</ul>
 				</section>
 			) : (
 				<Notice title="Nothing is due this week.">Everything open has a later date or none. The full list is below.</Notice>
@@ -113,7 +115,7 @@ export default async function CommitmentsPage() {
 				<h2>Add a task</h2>
 				<TaskForm projects={live} compact />
 			</section>
-			{live.map((project) => <ProjectCard key={project.id} project={project} projects={live} today={today} {...byProject(project.id)} />)}
+			{live.map((project) => <ProjectCard key={project.id} project={project} projects={live} today={today} timezone={timezone} {...byProject(project.id)} />)}
 			<section className="card">
 				<h2>New project</h2>
 				<p className="secondary">A project is a name for a stream of work: Wholesale, Production, the new taproom. Tasks and duties belong to one.</p>
@@ -121,7 +123,7 @@ export default async function CommitmentsPage() {
 			</section>
 			{archived.length > 0 ? (
 				<details className="disclosure"><summary>Archived projects ({archived.length})</summary>
-					<div className="stack">{archived.map((project) => <ProjectCard key={project.id} project={project} projects={live} today={today} {...byProject(project.id)} />)}</div>
+					<div className="stack">{archived.map((project) => <ProjectCard key={project.id} project={project} projects={live} today={today} timezone={timezone} {...byProject(project.id)} />)}</div>
 				</details>
 			) : null}
 		</Page>

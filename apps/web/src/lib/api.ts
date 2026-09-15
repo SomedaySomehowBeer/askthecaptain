@@ -42,9 +42,9 @@ export type TaskStatus = 'suggested' | 'open' | 'in_progress' | 'done' | 'cancel
 export type Project = { id: string; name: string; description: string; stages: string[]; ownerId: string | null; systemKind: 'obligations' | null; archivedAt: string | null; createdAt: string; updatedAt: string };
 export type Evidence = { id: string; taskId: string; kind: 'mail' | 'file' | 'url'; reference: string; label: string; attachedBy: string | null; attachedAt: string };
 export type Task = { id: string; projectId: string; title: string; body: string; status: TaskStatus; ownerId: string | null; ownerName: string | null; due: string | null;
-	sourceKind: 'person' | 'mail' | 'series' | 'run'; sourceId: string | null; seriesId: string | null; periodStart: string | null; periodEnd: string | null;
+	sourceKind: 'person' | 'mail' | 'series' | 'run'; sourceId: string | null; seriesId: string | null; periodStart: string | null; periodEnd: string | null; evidenceRequired: boolean;
 	completedBy: string | null; completedAt: string | null; createdAt: string; updatedAt: string; evidence: Evidence[] };
 export type Recurrence = 'monthly' | 'quarterly' | 'yearly' | 'weekdays' | 'custom';
 export type Series = { id: string; projectId: string; title: string; body: string; ownerId: string | null; evidenceRequired: boolean; recurrence: Recurrence; everyMonths: number | null;
 	anchor: string; dueOffsetDays: number; pausedAt: string | null; nextDue: string | null; createdAt: string; updatedAt: string };
-export type Commitments = { projects: Project[]; tasks: Task[]; series: Series[]; today: string };
+export type Commitments = { projects: Project[]; tasks: Task[]; series: Series[]; today: string; timezone: string };
