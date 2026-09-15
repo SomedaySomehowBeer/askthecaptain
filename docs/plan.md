@@ -96,7 +96,9 @@ was recorded; Restate's simpler waits did not justify another service for the fi
 Definitions remain engine-neutral (§6). Runs and steps use Captain's tenant-scoped journal;
 queue jobs carry opaque run identifiers, with no mail, prompts or credentials. Worker business
 access uses the enabling person's tenant context and the non-bypassing runtime role (D4, D6).
-pg-boss owns platform queue metadata; its schema installation/upgrades remain operator-run.
+pg-boss owns platform queue metadata; its idempotent installer runs after database migrations in
+the API release step, using the migration-owner connection. The runbook retains an operator
+fallback; the running API never installs or upgrades the schema.
 Local effects and completion records must be atomic where possible, otherwise destination
 idempotency or reconciliation is required. Queue delivery is not a generic exactly-once
 external-write guarantee. D5 still requires a person to send outbound mail.

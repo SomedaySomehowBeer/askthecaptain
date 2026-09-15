@@ -8,9 +8,9 @@ primary_region = "syd"
   PORT = "8080"
 
 [deploy]
-  # Migrates the database before the new version takes traffic. MIGRATION_DATABASE_URL is the
+  # Migrates the database and installs queue metadata before traffic. MIGRATION_DATABASE_URL is the
   # owner's connection; DATABASE_URL, used by the running API, is the runtime role's.
-  release_command = "node --import tsx /repo/packages/db/src/migrate.ts"
+  release_command = "sh -c 'node --import tsx /repo/packages/db/src/migrate.ts && node --import tsx /repo/packages/engine/src/install.ts'"
 
 [http_service]
   internal_port = 8080

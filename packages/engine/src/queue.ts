@@ -7,6 +7,7 @@ export const failedQueue = 'workflow_failed';
 export const adapter = (tx: TransactionSql): Db => ({ executeSql: async (text, values) => ({ rows: await tx.unsafe(text, values as never[]) }) });
 /** schedule()/unschedule() use the instance's DB (unlike send's per-call adapter). No start/DDL. */
 export const transactionalBoss = (tx: TransactionSql) => new PgBoss({ db: adapter(tx), schema });
+/** Safe on every release: pg-boss migrations and createQueue preserve existing queues, jobs and schedules; grants are repeatable. */
 export async function installQueues(url: string, definitions: WorkflowDefinition[]) {
  const boss = new PgBoss({ connectionString: url, schema });
  boss.on('error', () => console.error('[workflows] queue setup failed'));

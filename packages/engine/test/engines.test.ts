@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { withTenant } from '@captain/db';
 import { InferenceError } from '@captain/model';
 import type { Harness } from '@captain/db/test';
+import { installQueues } from '../src/queue.ts';
 import { fixture, database } from './fixture.ts';
 let db: Harness; const it = process.env.DATABASE_URL ? test : test.skip;
 before(async () => { if (process.env.DATABASE_URL) db = await database(); }); after(async () => { await db?.close(); });
@@ -133,5 +134,23 @@ it('the failure queue journals a worker lost on its last attempt', async () => {
   });
   await f.engine.boss.send('workflow_failed', { runId: id }); await until(async () => (await f.state(id)).state === 'failed', 'dead letter');
   assert.match(String((await f.state(id)).reason), /gmail.newThreads.*retries exhausted/);
+ } finally { await f.engine.close(); }
+});
+
+it('release installation is repeatable without replacing pending work or schedules', async () => {
+ const f = await fixture(db);
+ try {
+  await f.tx(tx => f.engine.configure(tx, f.organisationId, f.enablementId, f.definition.key));
+  const [run] = await f.tx(tx => tx`select id from workflow_runs where enablement_id = ${f.enablementId}`);
+  const jobId = await f.engine.boss.send('workflow_inbox-triage', { runId: run!.id }, { startAfter: new Date(Date.now() + 86400000) });
+  await f.engine.close();
+  const queues = await db.owner`select name from workflow_queue.queue order by name`;
+  const schedules = await db.owner`select name, key, cron, timezone, data from workflow_queue.schedule where key = ${f.enablementId + '_1'}`;
+  for (let attempt = 0; attempt < 2; attempt++) await installQueues(db.databaseUrl, [f.definition]);
+  assert.deepEqual(await db.owner`select name from workflow_queue.queue order by name`, queues);
+  assert.deepEqual(await db.owner`select name, key, cron, timezone, data from workflow_queue.schedule where key = ${f.enablementId + '_1'}`, schedules);
+  const [job] = await db.owner`select state, data from workflow_queue.job where id = ${jobId}`;
+  assert.equal(job!.state, 'created'); assert.deepEqual(job!.data, { runId: run!.id });
+  await f.engine.open(); // Runtime app-role startup still works after repeated release installs.
  } finally { await f.engine.close(); }
 });

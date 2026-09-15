@@ -26,7 +26,7 @@ import { webPushTransport } from './push/webpush.ts';
 import { WorkflowService } from './workflows/service.ts';
 
 const env = readEnv();
-const db = connect(env.DATABASE_URL, { max: 12 });
+const db = connect(env.DATABASE_URL, { max: 16 });
 const google = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 	? new GoogleIdentityProvider(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/auth/google/callback', env.API_URL).toString())
 	: null;

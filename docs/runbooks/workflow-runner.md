@@ -5,19 +5,26 @@ stop workers and event emission; pending jobs remain durable. This flag is an op
 not a workflow switch. Settings → Workflows says the runner is stopped. Turning a workflow off
 removes its schedules and stops subsequent steps; use Cancel to terminate a particular run.
 
-## Operator installation
+## Release installation and manual fallback
 
-Apply the application migrations with the existing migration command. **0013** contains runner
-support; **0012** is reserved for the subsequent triage/outbox migration. Migrations apply all
-missing files, including lower numbers delivered later. Using the migration-owner connection,
-run `MIGRATION_DATABASE_URL=… pnpm --filter @captain/engine queue:install`. The command installs
-pg-boss **12.32.0** metadata in `workflow_queue`, the workflow queues and a failure queue, then
-grants the non-bypassing `app` role access to that platform schema. Never give the API the owner
-connection. Queue installation/upgrades and production deployment are the operator's actions.
+Both API Fly configurations run the database migrations and then the idempotent queue installer
+in their release step, before the new version takes traffic. `MIGRATION_DATABASE_URL` is already
+configured on the app; deployments need no separate queue command. The API image includes
+`packages/engine` and its dependencies, and its build checks the installer and engine imports.
+**0013** contains runner support; **0012** is reserved for the subsequent triage/outbox migration.
+Migrations apply all missing files, including lower numbers delivered later.
+
+For recovery outside the release step, apply the database migrations and run
+`MIGRATION_DATABASE_URL=… pnpm --filter @captain/engine queue:install` using the migration-owner
+connection. The installer safely reruns pg-boss **12.32.0** migrations, creates missing queues and
+reapplies grants without replacing existing jobs or schedules. It installs metadata in
+`workflow_queue`, workflow queues and a failure queue, and grants the non-bypassing `app` role
+access. The running API uses `DATABASE_URL` with that app role, never the owner connection.
+Production deployment and the manual fallback remain the operator's actions.
 
 The worker refuses schema creation/migration at startup. If startup fails, the API stays available
 and Workflows reports unavailable. Fix the queue installation and restart the API. Use at least
-12 connections in the business-data pool: five workflow workers can each hold one advisory-lock
+12 connections in the business-data pool (the API configures 16): five workflow workers can each hold one advisory-lock
 transaction while a separate short transaction executes a step. Locks are released at waits;
 pg-boss reclaims interrupted jobs and sends exhausted jobs to the failure-journal worker.
 
