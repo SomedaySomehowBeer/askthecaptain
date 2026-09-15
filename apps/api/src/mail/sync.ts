@@ -11,8 +11,7 @@ const cursorSchema = z.object({ accountEmail: z.string(), historyId: z.string().
 export type SyncResult = { threads: number; messages: number; attachments: number; deleted: number; full: boolean; capped: boolean };
 
 /** Housekeeping, never a workflow. Fetch outside transactions, commit mail and contacts in batches,
- * and advance the history cursor only after success. A retry idempotently replays unfinished work.
- * TODO: Gmail Pub/Sub webhook push, verification and history-triggered sync in a later PR. */
+ * and advance the history cursor only after success. A retry idempotently replays unfinished work. */
 export class MailSync {
 	readonly #running = new Set<string>(); readonly #db: Sql; readonly #connections: ConnectionService; readonly #gmail: GmailClient;
 	constructor(db: Sql, connections: ConnectionService, gmail = new GmailClient()) { this.#db = db; this.#connections = connections; this.#gmail = gmail; }
