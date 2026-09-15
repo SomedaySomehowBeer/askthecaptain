@@ -48,8 +48,9 @@ export default async function SettingsPage() {
 				<Link className="button button--secondary" href="/settings/connections">Manage connections</Link>
 			</section>
 			<section className="card card--inset">
-				<h2>Workflows and inference</h2>
-				<p className="secondary">Xero, the workflows and the inference key arrive in the next releases. This page will grow a section for each.</p>
+				<h2>Inference</h2>
+				<p className="secondary">Use your Claude or Codex subscription for triage, drafts and the brief.</p>
+				<Link className="button button--secondary" href="/settings/inference">Manage inference</Link>
 			</section>
 		</Page>
 	);

@@ -5,6 +5,8 @@ import { ContactsService } from './contacts/service.ts';
 import { calendarRoutes } from './calendar/routes.ts';
 import { CalendarService } from './calendar/service.ts';
 import type { CalendarSync } from './calendar/sync.ts';
+import { inferenceRoutes } from './inference/routes.ts';
+import type { InferenceService } from './inference/service.ts';
 import { mailRoutes } from './mail/routes.ts';
 import { MailService } from './mail/service.ts';
 import type { MailSync } from './mail/sync.ts';
@@ -20,7 +22,7 @@ import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
 import type { OrganisationService } from './organisations/service.ts';
 
-export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean };
+export type Deps = { inference?: InferenceService; db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -97,6 +99,7 @@ export function createApp(deps: Deps) {
 		return c.json(await deps.organisations.accept({ ...actor(c), email: c.get('session').user.email }, input.token));
 	});
 	signedIn.route('/', contactsRoutes(new ContactsService(deps.db)));
+	signedIn.route('/', inferenceRoutes(deps.inference));
 	signedIn.route('/', commitmentsRoutes(deps.commitments));
 	signedIn.get('/v1/organisations/:id/mail/watch', async (c) => {
 		if (!deps.gmailWatch) { await deps.organisations.get(actor(c), uuid.parse(c.req.param('id'))); return c.json({ configured: false, polling: Boolean(deps.mailScheduleEnabled), status: 'off', expiresAt: null, error: null }); }
