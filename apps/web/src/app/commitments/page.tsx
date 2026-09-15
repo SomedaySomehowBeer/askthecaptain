@@ -84,6 +84,7 @@ function ProjectCard({ project, tasks, series, projects, today, timezone }: { pr
 }
 
 export default async function CommitmentsPage() {
+	// The layout has already sent a signed-out person to sign in; this is the cached session.
 	const me = await requireCurrent('/commitments');
 	const loaded = await load(() => api<Commitments>(`/v1/organisations/${me.organisation.organisationId}/commitments`, { token: me.token }));
 	if (!loaded.ok) {
