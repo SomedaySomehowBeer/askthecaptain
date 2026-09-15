@@ -15,32 +15,42 @@ export const draftInput = z.object({ threadId: z.uuid().nullable().default(null)
  subject: z.string().max(300).regex(/^[^\r\n]*$/), body: z.string().min(1).max(20000) }).strict();
 const uncertain = () => new HttpError(409, 'send_uncertain', 'Sending has not been confirmed. Check Sent in Gmail, then use Check send again. Captain will not send a second copy.');
 type Wake = (tx: TransactionSql, organisationId: string, runId: string, key: string) => Promise<unknown>;
-export async function createDraft(ctx: Context, destination: Thread | { to: string; subject: string }, body: string) {
+export async function createDraft(ctx: Context, destination: Thread | { to: string; subject: string }, body: string, invoiceProviderId: string | null = null) {
  const thread = 'id' in destination ? destination : null;
  const conn = thread ? { id: thread.connectionId, accountEmail: thread.accountEmail } : await connection(ctx.tx);
  if (!conn || ('status' in conn && conn.status !== 'connected')) throw new WorkflowPause('Reconnect Google in Settings before creating a chaser draft, then Resume.');
  const input = draftInput.parse({ threadId: thread?.id ?? null, to: thread ? thread.sender ? [thread.sender] : [] : [(destination as { to: string }).to],
   subject: destination.subject.replace(/[\r\n]/g, ' ').slice(0, 300), body });
- const [row] = await ctx.tx`insert into outbox (organisation_id, thread_id, connection_id, account_email, "to", cc, subject, body, in_reply_to, created_by, idempotency_key)
-  values (${ctx.organisationId}, ${input.threadId}, ${conn.id}, ${conn.accountEmail}, ${ctx.tx.array(input.to)}, '{}', ${input.subject}, ${body}, ${thread?.rfcMessageId ?? ''}, ${ctx.runId}, ${ctx.idempotencyKey})
+ const [row] = await ctx.tx`insert into outbox (organisation_id, thread_id, connection_id, account_email, "to", cc, subject, body, in_reply_to, created_by, idempotency_key, invoice_provider_id)
+  values (${ctx.organisationId}, ${input.threadId}, ${conn.id}, ${conn.accountEmail}, ${ctx.tx.array(input.to)}, '{}', ${input.subject}, ${body}, ${thread?.rfcMessageId ?? ''}, ${ctx.runId}, ${ctx.idempotencyKey}, ${invoiceProviderId})
   on conflict (organisation_id, idempotency_key) do update set idempotency_key = excluded.idempotency_key returning id`;
  await journal(ctx, 'outbox.created', 'outbox', row!.id); return { id: String(row!.id) };
 }
 /** A changed/paid invoice cannot turn a saved inference response into an obsolete demand. */
-export async function createInvoiceDraft(ctx: Context, invoice: unknown, to: unknown, body: string) {
+export async function createInvoiceDraft(ctx: Context, invoice: unknown, to: unknown, body: string, chaseAgainAfterDays: unknown = 7) {
  const expected = z.object({ id: z.uuid(), number: z.string(), amountDue: z.string(), currency: z.string(), dueDate: z.iso.date(), contactEmail: address }).parse(invoice);
+ const spacing = z.number().int().min(1).max(365).parse(chaseAgainAfterDays);
  if (to !== expected.contactEmail) throw Error('Recipient differs from the invoice snapshot');
  const current = await XeroService.currentReceivable(ctx.tx, ctx.organisationId, expected.id);
  if (!current || current.status !== 'AUTHORISED' || Number(current.amountDue) <= 0) return { skipped: 'The invoice is no longer outstanding.' };
  if (current.connectionStatus !== 'connected') throw new WorkflowPause('Reconnect Xero in Settings, then Resume.');
  if (current.contactEmail !== expected.contactEmail || current.amountDue !== expected.amountDue || current.currency !== expected.currency || current.dueDate !== expected.dueDate || (current.number ?? 'without a number').slice(0, 200) !== expected.number)
   return { skipped: 'The invoice or recipient changed. The next daily run will use its current details.' };
- return createDraft(ctx, { to: expected.contactEmail, subject: `Invoice ${expected.number} — payment follow-up` }, body);
+ // Serialize concurrent runs before checking history and creating the destination row.
+ await ctx.tx`select pg_advisory_xact_lock(hashtextextended(${ctx.organisationId + ':invoice-chaser:' + current.providerId}, 0))`;
+ const [replay] = await ctx.tx`select id from outbox where idempotency_key = ${ctx.idempotencyKey}`;
+ if (replay) return { id: String(replay.id) };
+ const [pending] = await ctx.tx`select id from outbox where invoice_provider_id = ${current.providerId} and state = 'drafted' limit 1`;
+ if (pending) return { skipped: `A chaser for ${expected.number} is already waiting in the outbox.` };
+ const [recent] = await ctx.tx`select sent_at from outbox where invoice_provider_id = ${current.providerId} and state = 'sent'
+  and sent_at + ${spacing} * interval '24 hours' > now() order by sent_at desc limit 1`;
+ if (recent) return { skipped: `A chaser for ${expected.number} was sent recently. Wait ${spacing} days after sending before chasing again.` };
+ return createDraft(ctx, { to: expected.contactEmail, subject: `Invoice ${expected.number} — payment follow-up` }, body, String(current.providerId));
 }
 /** Shared destination for triage replies, invoice chasers and supplier drafts. */
 export async function workflowDraft(ctx: Context, args: Record<string, unknown>) {
  if (args.thread) return createDraft(ctx, args.thread as Thread, draftInput.shape.body.parse((args.draft as { body: unknown }).body));
- if (args.invoice) return createInvoiceDraft(ctx, args.invoice, args.to, draftInput.shape.body.parse((args.draft as { body: unknown }).body));
+ if (args.invoice) return createInvoiceDraft(ctx, args.invoice, args.to, draftInput.shape.body.parse((args.draft as { body: unknown }).body), args.chaseAgainAfterDays);
  const supplier = z.object({ name: z.string(), email: z.string().nullable() }).nullable().parse(args.supplier ?? null);
  if (!supplier?.email || !address.safeParse(supplier.email).success) {
   const note = 'No unambiguous supplier email. Add one active contact to the supplier company in People and companies; the reorder task is ready.';

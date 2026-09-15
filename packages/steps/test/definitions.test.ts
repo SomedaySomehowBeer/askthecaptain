@@ -47,7 +47,7 @@ test('predicates evaluate over saved outputs, the loop item and parameters', () 
 
 test('parameters are checked against their specs and defaults are filled', () => {
 	const specs = definitions[2]!.parameters;
-	assert.deepEqual(resolveParameters(specs, {}), { values: { windowDays: 7, remindDaysBefore: 2, chaseInvoicesAfterDays: 14 }, problems: [] });
+	assert.deepEqual(resolveParameters(specs, {}), { values: { windowDays: 7, remindDaysBefore: 2, chaseInvoicesAfterDays: 14, chaseAgainAfterDays: 7 }, problems: [] });
 	assert.deepEqual(resolveParameters(specs, { windowDays: 1.5 }).problems, [{ path: 'windowDays', message: 'must be a whole number' }]);
 	const bad = resolveParameters(specs, { windowDays: 90, remindDaysBefore: 'two', extra: 1 });
 	assert.deepEqual(bad.problems.map((p) => p.path).sort(), ['extra', 'remindDaysBefore', 'windowDays']);

@@ -284,7 +284,7 @@ Settings → Activity only when they fail.
   notices are saved even if the model omits them. Today places this brief first, with title, lines,
   source links and produced-at time; older dates, workflow-off, loading, unavailable and failed runs
   are explicit. Push failure leaves the saved brief readable and the run retryable.
-- **chase-due** (07:00, version 2): read up to 100 open/in-progress tasks due within the configured
+- **chase-due** (07:00, version 3): read up to 100 open/in-progress tasks due within the configured
   window, including overdue tasks → each task independently: await the reminder date, notify its
   owner (or enabling person if unowned), await the day after due, escalate to the enabling person.
   Await steps re-read the task and save it as the loop item, so completion/cancellation/deletion or
@@ -298,8 +298,10 @@ Settings → Activity only when they fail.
   Missing/incomplete Xero cache or more than 100 candidates pauses with instructions; it does not
   silently claim success. Before writing, recheck the invoice's amount, currency, due date, number
   and recipient; paid/changed records are skipped for the next daily run. Drafts are idempotent per
-  run/step/item. A daily run may draft another chaser for an invoice still overdue; a person decides
-  whether to send or discard it. Activity shows each waiting step’s next check time and why an action
+  run/step/item. The outbox stores the invoice provider id: a pending chaser (including an
+  unconfirmed send) blocks another draft across runs. Sent chasers enforce `chaseAgainAfterDays`
+  (default seven elapsed days); discarding an unsent draft permits a replacement, while any recent
+  sent chaser still enforces that interval. Concurrent runs serialize the history check and write. Activity shows each waiting step’s next check time and why an action
   was skipped. No new tenant table or background process is required.
 
 - **stocktake** (weekly, or on demand): each stock item at the configured location: notify the

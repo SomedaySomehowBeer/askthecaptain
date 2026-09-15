@@ -3,12 +3,13 @@ import { awaitStep, branch, daily, defineWorkflow, each, infer, notify, number, 
 /** Plan §6: daily, read tasks due within the window; for each, wait until the reminder time and
  *  remind the owner, escalate after due; for receivables, draft a courteous chaser into the outbox. */
 export const chaseDue = defineWorkflow({
-	key: 'chase-due', version: 2, name: 'Chase what is due', job: 5,
+	key: 'chase-due', version: 3, name: 'Chase what is due', job: 5,
 	description: 'Reminds owners before something is due, escalates after, and drafts polite chasers for overdue invoices.',
 	triggers: [daily('07:00')],
 	parameters: {
 		windowDays: number('How many days ahead to look.', 7, { min: 1, max: 60, integer: true }),
 		remindDaysBefore: number('Remind this many days before the due date.', 2, { min: 0, max: 30, integer: true }),
+		chaseAgainAfterDays: number('Wait this many days after sending before drafting another chaser.', 7, { min: 1, max: 365, integer: true }),
 		chaseInvoicesAfterDays: number('Draft a chaser once an invoice is this many days overdue.', 14, { min: 1, max: 120, integer: true })
 	},
 	steps: [
@@ -23,7 +24,7 @@ export const chaseDue = defineWorkflow({
 		each('invoices.invoices', [
 			branch({ truthy: 'item.contactEmail' }, [
 				infer('draftChaser', { schema: 'draft', tier: 'large', args: { invoice: { ref: 'item' } }, as: 'draft' }),
-				write('outbox.create', { args: { to: { ref: 'item.contactEmail' }, invoice: { ref: 'item' }, draft: { ref: 'draft' } } })
+				write('outbox.create', { args: { chaseAgainAfterDays: { param: 'chaseAgainAfterDays' }, to: { ref: 'item.contactEmail' }, invoice: { ref: 'item' }, draft: { ref: 'draft' } } })
 			])
 		])
 	]

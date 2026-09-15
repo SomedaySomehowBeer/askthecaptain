@@ -4,7 +4,7 @@ export class XeroService {
  readonly db: Sql;
  constructor(db: Sql) { this.db = db; }
  static async currentReceivable(tx: TransactionSql, org: string, id: string) {
-  return (await tx`select i.number, i.status, i.amount_due::text, i.currency, i.due_date::text, c.email as contact_email, conn.status as connection_status
+  return (await tx`select i.provider_id, i.number, i.status, i.amount_due::text, i.currency, i.due_date::text, c.email as contact_email, conn.status as connection_status
    from xero_invoices i join xero_contacts c on c.organisation_id = i.organisation_id and c.connection_id = i.connection_id and c.provider_id = i.contact_provider_id
    join connections conn on conn.organisation_id = i.organisation_id and conn.id = i.connection_id
    where i.organisation_id = ${org} and i.id = ${id} and i.type = 'ACCREC' for share of i, c, conn`)[0];

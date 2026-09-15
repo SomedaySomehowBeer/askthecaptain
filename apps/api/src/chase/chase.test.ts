@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import { before, after, test } from 'node:test';
 import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
@@ -94,4 +95,52 @@ it('connection gaps and missing push recipients pause honestly; requirements ref
   await f.tx(tx => tx`update connections set status = 'disconnected' where provider = 'xero'`); await f.tx(tx => f.engine.control(tx, f.org, run, 'resume'));
   const unavailable = await until(() => f.workflows.run(f.actor, f.org, run), r => r.state === 'paused'); assert.match(unavailable.reason!, /Xero invoices are unavailable/);
  } finally { await f.engine.close(); }
+});
+it('consecutive and concurrent runs keep one pending chaser, then honour send spacing and discard', async () => {
+ const f = await chaseFixture(db); try {
+  await f.tx(tx => tx`update tasks set status = 'done'`); await f.enable();
+  const run = async () => { f.provider.responses.push(result({ body })); const id = await f.start(); return until(() => f.workflows.run(f.actor, f.org, id), r => r.state === 'succeeded'); };
+  await run(); const [first] = await f.outbox.list(f.actor, f.org);
+  const [invoice] = await f.tx(tx => tx`select provider_id from xero_invoices where id = ${f.invoiceId}`);
+  assert.equal(first!.invoiceProviderId, invoice!.providerId);
+  const skipped = await run(); assert.match(JSON.stringify(skipped.steps.at(-1)!.output), /INV-42 is already waiting in the outbox/);
+  assert.equal((await f.outbox.list(f.actor, f.org)).length, 1);
+  // A lost provider response still leaves a pending draft, so no second chaser can escape it.
+  await f.tx(tx => tx`update outbox set send_started_at = now() where id = ${first!.id}`);
+  assert.match(JSON.stringify((await run()).steps.at(-1)!.output), /already waiting/);
+  await f.tx(tx => tx`update outbox set send_started_at = null where id = ${first!.id}`);
+  await f.outbox.send(f.actor, f.org, String(first!.id));
+  await f.tx(tx => tx`update outbox set sent_at = now() - interval '6 days' where id = ${first!.id}`);
+  assert.match(JSON.stringify((await run()).steps.at(-1)!.output), /Wait 7 days/); assert.equal((await f.outbox.list(f.actor, f.org)).length, 0);
+  await f.workflows.enable(f.actor, f.org, 'chase-due', { enabled: true, parameters: { chaseAgainAfterDays: 5 } });
+  await run(); const [custom] = await f.outbox.list(f.actor, f.org); assert.ok(custom);
+  await f.outbox.change(f.actor, f.org, String(custom!.id), 'discard'); await f.enable();
+  assert.match(JSON.stringify((await run()).steps.at(-1)!.output), /Wait 7 days/);
+  await f.tx(tx => tx`update outbox set sent_at = now() - interval '8 days' where id = ${first!.id}`);
+  await run(); const [second] = await f.outbox.list(f.actor, f.org); assert.notEqual(second!.id, first!.id);
+  await f.outbox.change(f.actor, f.org, String(second!.id), 'discard');
+  f.provider.responses.push(result({ body }), result({ body })); const ids = await Promise.all([f.start(), f.start()]);
+  const runs = await Promise.all(ids.map(id => until(() => f.workflows.run(f.actor, f.org, id), r => r.state === 'succeeded')));
+  assert.equal((await f.outbox.list(f.actor, f.org)).length, 1); assert.ok(runs.some(r => JSON.stringify(r.steps.at(-1)!.output).includes('already waiting')));
+  assert.equal(f.sends(), 1);
+ } finally { await f.engine.close(); }
+});
+it('old chase drafts are backfilled from journal identity and cannot suppress another tenant', async () => {
+ const f = await chaseFixture(db), other = await chaseFixture(db); try {
+  await other.engine.close();
+  await f.tx(tx => tx`update tasks set status = 'done'`); await f.enable(); f.provider.responses.push(result({ body }));
+  const id = await f.start(); await until(() => f.workflows.run(f.actor, f.org, id), r => r.state === 'succeeded');
+  await f.tx(tx => tx`update outbox set invoice_provider_id = null`);
+  const migration = await readFile(new URL('../../../../packages/db/migrations/0024_outbox_invoice.sql', import.meta.url), 'utf8');
+  await db.owner.unsafe(migration.slice(migration.indexOf('update outbox')));
+  const [draft] = await f.outbox.list(f.actor, f.org); assert.ok(draft!.invoiceProviderId);
+  f.provider.responses.push(result({ body })); const next = await f.start();
+  const skipped = await until(() => f.workflows.run(f.actor, f.org, next), r => r.state === 'succeeded'); assert.match(JSON.stringify(skipped.steps.at(-1)!.output), /already waiting/);
+  await f.engine.close(); await other.engine.open();
+  await other.tx(tx => tx`update xero_invoices set provider_id = ${draft!.invoiceProviderId} where id = ${other.invoiceId}`);
+  await other.tx(tx => tx`update tasks set status = 'done'`); await other.enable(); other.provider.responses.push(result({ body }));
+  const own = await other.start(); await until(() => other.workflows.run(other.actor, other.org, own), r => r.state === 'succeeded');
+  const rows = await other.tx(tx => tx`select * from outbox where invoice_provider_id = ${draft!.invoiceProviderId}`);
+  assert.equal(rows.length, 1); assert.equal(rows[0]!.organisationId, other.org);
+ } finally { await f.engine.close(); await other.engine.close(); }
 });
