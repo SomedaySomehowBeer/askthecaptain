@@ -7,6 +7,8 @@ const schema = z.object({
 	APP_URL: z.string().url(),
 	/** This API's public origin, used for the Google redirect URI. */
 	API_URL: z.string().url(),
+	XERO_CLIENT_ID: z.string().min(1).optional(),
+	XERO_SYNC_DISABLED: z.enum(['0', '1']).default('0'),
 	CALENDAR_SYNC_DISABLED: z.enum(['0', '1']).default('0'),
 	GMAIL_PUBSUB_TOPIC: z.string().regex(/^projects\/[a-z][a-z0-9-]{4,28}[a-z0-9]\/topics\/[A-Za-z][A-Za-z0-9._~+%-]{2,254}$/).optional(),
 	GMAIL_PUSH_AUDIENCE: z.string().url().optional(),
