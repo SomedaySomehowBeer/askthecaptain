@@ -2,6 +2,7 @@ import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { definitions, digestOf, requirementWords, requirementsOf, resolveParameters, type Requirement, type WorkflowDefinition } from '@captain/steps';
 import { audit } from '../audit.ts';
 import { badRequest, forbidden, notFound } from '../errors.ts';
+import type { PushService } from '../push/service.ts';
 import { canManage, roleOf, type Actor } from '../tenant.ts';
 
 export type Enablement = { id: string; enabled: boolean; enabledBy: string | null; enabledByName: string | null; parameters: Record<string, unknown>; updatedAt: Date; definitionVersion: number };
@@ -15,8 +16,8 @@ const person = (actor: Actor) => ({ kind: 'person' as const, id: actor.userId })
  *  code; this syncs them into the table the API exposes, checks parameters and requirements at
  *  enablement, and reads the journal. Running them is the engine's job (D10), not this service's. */
 export class WorkflowService {
-	readonly #db: Sql;
-	constructor(db: Sql) { this.#db = db; }
+	readonly #db: Sql; readonly #push: PushService | null;
+	constructor(db: Sql, push: PushService | null = null) { this.#db = db; this.#push = push; }
 
 	/** Upserts the code-defined catalogue. Called at API start; idempotent. */
 	async sync(): Promise<number> {
@@ -91,15 +92,16 @@ export class WorkflowService {
 		});
 	}
 
-	/** What this organisation can offer a workflow today: connected providers and a ready inference
-	 *  runtime. Push arrives in a later release, so it is unmet until then; a workflow that needs it
-	 *  says so instead of pretending to run. */
+	/** What this organisation can offer a workflow today: connected providers, a ready inference
+	 *  runtime, and a device subscribed to push. A workflow that needs something missing says so
+	 *  instead of pretending to run. */
 	async #available(tx: TransactionSql, organisationId: string): Promise<Set<Requirement>> {
 		const available = new Set<Requirement>();
 		const connections = await tx<{ provider: string }[]>`select provider from connections where organisation_id = ${organisationId} and status = 'connected'`;
 		for (const c of connections) if (c.provider === 'google' || c.provider === 'xero' || c.provider === 'shopify') available.add(`connection:${c.provider}` as Requirement);
 		const [runtime] = await tx<{ status: string }[]>`select status from inference_runtimes where organisation_id = ${organisationId}`;
 		if (runtime?.status === 'ready') available.add('inference');
+		if (this.#push && (await this.#push.available(tx, organisationId))) available.add('push');
 		return available;
 	}
 }

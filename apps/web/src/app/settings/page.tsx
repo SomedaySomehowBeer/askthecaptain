@@ -47,6 +47,7 @@ export default async function SettingsPage() {
 				<p className="secondary">Connect the accounts Captain uses for your business.</p>
 				<Link className="button button--secondary" href="/settings/connections">Manage connections</Link>
 				<Link className="button button--secondary" href="/settings/workflows">Workflows</Link>
+				<Link className="button button--secondary" href="/settings/notifications">Notifications</Link>
 			</section>
 			<section className="card card--inset">
 				<h2>Inference</h2>

@@ -15,6 +15,8 @@ import { SeriesRoutine, startSeriesSchedule } from './commitments/routine.ts';
 import { CommitmentsService } from './commitments/service.ts';
 import { readEnv } from './env.ts';
 import { OrganisationService } from './organisations/service.ts';
+import { PushService } from './push/service.ts';
+import { webPushTransport } from './push/webpush.ts';
 import { WorkflowService } from './workflows/service.ts';
 
 const env = readEnv();
@@ -36,10 +38,13 @@ const commitments = new CommitmentsService(db);
 const stopSeries = startSeriesSchedule(new SeriesRoutine(db, commitments), env.SERIES_DISABLED === '1');
 const calendarSync = new CalendarSync(db, connections);
 const stopCalendarSync = startCalendarSchedule(calendarSync, env.CALENDAR_SYNC_DISABLED === '1');
-const workflows = new WorkflowService(db);
+const pushKeys = env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY && env.WEB_PUSH_SUBJECT ? { publicKey: env.WEB_PUSH_PUBLIC_KEY, privateKey: env.WEB_PUSH_PRIVATE_KEY, subject: env.WEB_PUSH_SUBJECT } : null;
+if (!pushKeys) console.warn('[api] Web Push is not configured (WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY / WEB_PUSH_SUBJECT)');
+const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, pushKeys?.publicKey ?? null);
+const workflows = new WorkflowService(db, push);
 // The catalogue is code; the table the API exposes follows it (plan §5 workflow_definitions).
 await workflows.sync().catch((error) => console.error('[api] workflow catalogue sync failed', error instanceof Error ? error.message : error));
-const app = createApp({ workflows, inference: new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null), db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments });
+const app = createApp({ workflows, push, inference: new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null), db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
