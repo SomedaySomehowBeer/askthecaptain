@@ -24,3 +24,13 @@ export async function setWorkflow(_: Result | undefined, form: FormData): Promis
 	catch (error) { return { error: error instanceof ApiError ? error.message : 'That did not work.' }; }
 	revalidatePath('/settings/workflows'); return { ok: true };
 }
+
+export async function controlRun(_: Result | undefined, form: FormData): Promise<Result> {
+ const me = await current(); if (!me?.organisation) redirect('/sign-in?return_to=/settings/workflows');
+ const action = String(form.get('action')); const id = String(form.get('id'));
+ if (!['run', 'resume', 'cancel'].includes(action)) return { error: 'That action was not understood.' };
+ const path = action === 'run' ? `${encodeURIComponent(id)}/run` : `runs/${encodeURIComponent(id)}/${action}`;
+ try { await api(`/v1/organisations/${me.organisation.organisationId}/workflows/${path}`, { method: 'POST', token: me.token }); }
+ catch (error) { return { error: error instanceof ApiError ? error.message : 'That did not work.' }; }
+ revalidatePath('/settings/workflows'); return { ok: true };
+}

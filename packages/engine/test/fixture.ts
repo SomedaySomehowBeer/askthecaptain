@@ -1,66 +1,63 @@
 import { readFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import { z } from 'zod';
-import { PgBoss } from 'pg-boss';
-import { infer, StubProvider } from '@captain/model';
-import { EngineJournal } from '@captain/db/engine';
+import { withTenant } from '@captain/db';
+import { StubProvider, type Result } from '@captain/model';
 import { definitions, digestOf } from '@captain/steps';
 import { freshDatabase, type Harness } from '@captain/db/test';
-import { Crash, type Call, type Catalogue, type Enablement, type Event } from '../src/index.ts';
+import { InferenceService } from '../../../apps/api/src/inference/service.ts';
+import { inferenceStep } from '../../../apps/api/src/workflows/bindings.ts';
+import { BossEngine, Registry } from '../src/index.ts';
+import { installQueues } from '../src/queue.ts';
 export const threads = [{ id: 'one', needsOwner: true }, { id: 'two', needsOwner: false }, { id: 'three', needsOwner: true }];
-type FaultOptions = { crashKey?: string; failKey?: string; fences?: boolean };
-export class FakeCatalogue implements Catalogue {
- readonly journal: EngineJournal; readonly options: FaultOptions;
- constructor(journal: EngineJournal, options: FaultOptions = {}) { this.journal = journal; this.options = options; }
- async call(call: Call): Promise<unknown> {
-  const { step, args, runId, path } = call;
-  if (step.key === this.options.failKey) throw Error('Fixture classification unavailable');
-  if (step.key === 'gmail.newThreads') return threads;
-  if (step.kind === 'infer') {
-   const classification = step.key === 'classifyThread';
-   const output = classification ? { needsOwner: (args.thread as typeof threads[number]).needsOwner } : { body: 'Fixture reply, awaiting its owner.' };
-   return infer<unknown>({ organisationId: this.journal.tenant.organisationId, step: step.key, tier: step.tier!, instruction: 'Read the labelled fixture data and return the schema.', input: args, schema: classification ? z.object({ needsOwner: z.boolean() }) : z.object({ body: z.string() }) }, 'claude', new StubProvider([{ output, usage: { inputTokens: 1, outputTokens: 1 }, model: 'stub', latencyMs: 0 }]), { before: async () => {}, record: async () => {}, failed: async () => {} });
-  }
-  if (!['outbox.create', 'gmail.label'].includes(step.key)) return null; // Other triage services are explicitly fixtures.
-  const output = await this.journal.tx(async tx => {
-   const organisationId = this.journal.tenant.organisationId, key = this.options.fences === false ? null : `${runId}:${path}`;
-   const threadId = (args.thread as { id: string }).id;
-   const [row] = step.key === 'outbox.create'
-    ? await tx`insert into engine_spike.outbox (organisation_id, run_id, thread_id, body, idempotency_key) values (${organisationId}, ${runId}, ${threadId}, ${(args.draft as { body: string }).body}, ${key}) on conflict (organisation_id, idempotency_key) do update set idempotency_key = excluded.idempotency_key returning id`
-    : await tx`insert into engine_spike.labels (organisation_id, run_id, thread_id, idempotency_key) values (${organisationId}, ${runId}, ${threadId}, ${key}) on conflict (organisation_id, idempotency_key) do update set idempotency_key = excluded.idempotency_key returning id`;
-   await this.journal.audit(tx, runId, `spike.${step.key}`, { path }); return { id: String(row!.id) };
-  }); // Side effect committed BEFORE the engine journal; this is the failure boundary under test.
-  if (step.key === this.options.crashKey) {
-   const crashed = await this.journal.tx(tx => tx`insert into engine_spike.faults (organisation_id, run_id, key) values (${this.journal.tenant.organisationId}, ${runId}, ${step.key}) on conflict do nothing returning key`);
-   if (crashed.length) throw new Crash('Simulated process loss after side effect, before journal');
-  }
-  return output;
- }
- async sent(runId: string, event: Event) {
-  if (event.key !== 'outbox.sent') throw Error('Unsupported event');
-  await this.journal.tx(async tx => {
-   const rows = await tx`update engine_spike.outbox set state = 'sent' where id = ${event.draftId} and run_id = ${runId} returning id`;
-   if (!rows.length) throw Error('Draft not found in this run');
-   await this.journal.audit(tx, runId, 'spike.outbox_sent');
-  });
- }
- async wasSent(draftId: string) { return this.journal.tx(async tx => (await tx`select state from engine_spike.outbox where id = ${draftId}`)[0]?.state === 'sent'); }
+const reply = (output: unknown): Result => ({ output, usage: { inputTokens: 1, outputTokens: 1 }, model: 'stub', latencyMs: 0 });
+export async function database() {
+ const db = await freshDatabase();
+ await db.owner.unsafe(await readFile(new URL('./fixture.sql', import.meta.url), 'utf8'));
+ await installQueues(db.databaseUrl, definitions); return db;
 }
-export async function fixture(db: Harness, options: ConstructorParameters<typeof FakeCatalogue>[1] = {}) {
- const [org] = await db.owner`insert into organisations (name) values ('Engine spike') returning id`;
+export async function fixture(db: Harness, fault?: 'database' | 'provider' | 'fail') {
+ const [org] = await db.owner`insert into organisations (name) values ('Runner fixture') returning id`;
  const [user] = await db.owner`insert into users (email) values (${randomUUID() + '@example.test'}) returning id`;
- const tenant = { organisationId: String(org!.id), userId: String(user!.id) };
+ const tenant = { organisationId: String(org!.id), userId: String(user!.id) }, actor = { userId: tenant.userId, requestId: randomUUID() };
  await db.owner`insert into memberships (organisation_id, user_id, role) values (${tenant.organisationId}, ${tenant.userId}, 'owner')`;
  const definition = structuredClone(definitions.find(d => d.key === 'inbox-triage')!);
  await db.owner`insert into workflow_definitions (key, version, name, description, job, triggers, parameters, steps, digest) values (${definition.key}, ${definition.version}, ${definition.name}, ${definition.description}, 1, '[]', '{}', '[]', ${digestOf(definition)}) on conflict do nothing`;
- const [row] = await db.owner`insert into workflow_enablements (organisation_id, definition_key, definition_version, enabled, enabled_by, parameters) values (${tenant.organisationId}, ${definition.key}, ${definition.version}, true, ${tenant.userId}, '{"draftReplies":true}') returning id`;
- const enablement: Enablement = { id: String(row!.id), organisationId: tenant.organisationId, enabledBy: tenant.userId, parameters: { draftReplies: true } };
- // Owner-only queue schema setup is separate from the non-bypassing runtime connection.
- const setup = new PgBoss({ connectionString: db.databaseUrl, schema: 'engine_queue', schedule: false, supervise: false });
- await setup.start(); await setup.createQueue(`spike_${tenant.organisationId.replaceAll('-', '')}`, { retryLimit: 3, retryDelay: 1 }); await setup.stop();
- await db.owner`grant usage on schema engine_queue to app`;
- await db.owner`grant select, insert, update, delete on all tables in schema engine_queue to app`;
- await db.owner`grant usage on all sequences in schema engine_queue to app`;
- const journal = new EngineJournal(db.app, tenant); return { journal, definition, enablement, catalogue: new FakeCatalogue(journal, options) };
+ const [e] = await db.owner`insert into workflow_enablements (organisation_id, definition_key, definition_version, enabled, enabled_by, parameters) values (${tenant.organisationId}, ${definition.key}, ${definition.version}, true, ${tenant.userId}, '{"draftReplies":true}') returning id`;
+ const tx = <T>(fn: Parameters<typeof withTenant<T>>[2]) => withTenant(db.app, tenant, fn);
+ const provider = new StubProvider([reply({})]); const inference = new InferenceService(db.app, randomBytes(32), () => provider);
+ await inference.request(actor, tenant.organisationId, 'claude'); await inference.setBudget(actor, tenant.organisationId, 100000);
+ await inference.configure(actor, tenant.organisationId, { url: 'https://fixture.sprites.app/', secret: 'a'.repeat(64), spriteName: 'fixture', region: 'unknown', loginHint: null, loginUrl: null }); await inference.verify(actor, tenant.organisationId);
+ provider.responses.push(reply({ needsOwner: true }), reply({ body: 'Fixture reply.' }), reply({ needsOwner: false }), reply({ needsOwner: true }), reply({ body: 'Fixture reply.' }));
+ const registry = new Registry(); let failed = false; let writes = 0;
+ registry.registerStep('gmail.newThreads', { kind: 'read', transaction: async () => threads });
+ registry.registerStep('attachments.extractText', { kind: 'read', transaction: async () => [] });
+ registry.registerStep('classifyThread', inferenceStep(inference, 'Classify labelled untrusted mail data.', z.object({ needsOwner: z.boolean() })));
+ registry.registerStep('draftReply', inferenceStep(inference, 'Draft from labelled untrusted data.', z.object({ body: z.string() })));
+ for (const key of ['triage.record', 'tasks.suggestFromTriage', 'tasks.completeFromConfirmations', 'contacts.upsertFromTriage']) registry.registerStep(key, { kind: 'write', transaction: async context => {
+  // The real domain services arrive in PR B; the fixture asserts actor and transaction ownership.
+  { const [row] = await context.tx`select current_setting('app.user_id') as actor`; if (row!.actor !== tenant.userId) throw Error('Wrong actor'); }
+  return null;
+ } });
+ registry.registerStep('outbox.create', { kind: 'write', transaction: async ({ tx, organisationId, runId, idempotencyKey }, args) => {
+  writes++; const [row] = await tx`insert into engine_spike.outbox (organisation_id, run_id, thread_id, body, idempotency_key) values (${organisationId}, ${runId}, ${(args.thread as { id: string }).id}, ${(args.draft as { body: string }).body}, ${idempotencyKey}) returning id`;
+  if (fault === 'database' && !failed) { failed = true; throw Error('Injected crash before journal completion'); }
+  return { id: String(row!.id) };
+ } });
+ registry.registerStep('outbox.sent', { kind: 'await', transaction: async ({ tx }, args) => {
+  const id = (args.draft as { id: string }).id; const [row] = await tx`select state from engine_spike.outbox where id = ${id}`;
+  return { ready: row?.state === 'sent', key: `outbox:${id}`, output: { sent: true } };
+ } });
+ registry.registerStep('gmail.label', { kind: 'write', retrySafe: true, call: async ({ organisationId, runId, idempotencyKey }, args) => {
+  if (fault === 'fail') throw Error('Private provider diagnostic never journaled');
+  // Fake Gmail keeps its own durable state; retry reconciles the same desired label.
+  await tx(async sql => { await sql`insert into engine_spike.labels (organisation_id, run_id, thread_id, idempotency_key) values (${organisationId}, ${runId}, ${(args.thread as { id: string }).id}, ${idempotencyKey}) on conflict do nothing`; });
+  if (fault === 'provider' && !failed) { failed = true; throw Error('Injected lost response after provider commit'); } return { labelled: true };
+ } });
+ const url = new URL(db.databaseUrl); url.username = 'app'; url.password = 'app';
+ const make = (dayMs = 10000) => new BossEngine(db.app, url.toString(), registry, [definition], dayMs);
+ const engine = make(); await engine.open(); await engine.boss.updateQueue('workflow_inbox-triage', { retryDelay: 1, retryLimit: 2, retryBackoff: false });
+ const start = () => tx(sql => engine.start(sql, tenant.organisationId, definition.key));
+ const state = async (runId: string) => (await tx(sql => sql`select * from workflow_runs where id = ${runId}`))[0]!;
+ return { ...tenant, actor, tenant, tx, definition, enablementId: String(e!.id), registry, engine, make, start, state, provider, inference, writes: () => writes };
 }
-export async function database() { const db = await freshDatabase(); await db.owner.unsafe(await readFile(new URL('./fixture.sql', import.meta.url), 'utf8')); return db; }

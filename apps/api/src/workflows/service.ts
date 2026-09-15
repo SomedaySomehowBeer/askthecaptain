@@ -1,12 +1,13 @@
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { definitions, digestOf, requirementWords, requirementsOf, resolveParameters, type Requirement, type WorkflowDefinition } from '@captain/steps';
+import { WorkflowProblem, type BossEngine } from '@captain/engine';
 import { audit } from '../audit.ts';
 import { badRequest, forbidden, notFound } from '../errors.ts';
 import type { PushService } from '../push/service.ts';
 import { canManage, roleOf, type Actor } from '../tenant.ts';
 
 export type Enablement = { id: string; enabled: boolean; enabledBy: string | null; enabledByName: string | null; parameters: Record<string, unknown>; updatedAt: Date; definitionVersion: number };
-export type Offered = { definition: WorkflowDefinition; requirements: Requirement[]; unmet: { requirement: Requirement; words: string }[]; enablement: Enablement | null };
+export type Offered = { definition: WorkflowDefinition; requirements: Requirement[]; unmet: { requirement: Requirement; words: string }[]; enablement: Enablement | null; runnerProblem: string | null };
 export type Run = { id: string; definitionKey: string; definitionVersion: number; trigger: unknown; state: string; reason: string | null; startedAt: Date | null; finishedAt: Date | null; createdAt: Date };
 export type RunStep = { id: string; path: string; itemIndex: number | null; kind: string; key: string; state: string; inputDigest: string | null; output: unknown; error: string | null; startedAt: Date | null; finishedAt: Date | null };
 
@@ -16,8 +17,8 @@ const person = (actor: Actor) => ({ kind: 'person' as const, id: actor.userId })
  *  code; this syncs them into the table the API exposes, checks parameters and requirements at
  *  enablement, and reads the journal. Running them is the engine's job (D10), not this service's. */
 export class WorkflowService {
-	readonly #db: Sql; readonly #push: PushService | null;
-	constructor(db: Sql, push: PushService | null = null) { this.#db = db; this.#push = push; }
+	readonly #db: Sql; readonly #push: PushService | null; readonly #engine: BossEngine | null;
+	constructor(db: Sql, push: PushService | null = null, engine: BossEngine | null = null) { this.#db = db; this.#push = push; this.#engine = engine; }
 
 	/** Upserts the code-defined catalogue. Called at API start; idempotent. */
 	async sync(): Promise<number> {
@@ -43,7 +44,7 @@ export class WorkflowService {
 				const unmet = requirements.filter((r) => !available.has(r)).map((requirement) => ({ requirement, words: requirementWords[requirement] }));
 				const found = enablements.find((e) => e.definitionKey === definition.key);
 				const enablement = found ? { id: found.id, enabled: found.enabled, enabledBy: found.enabledBy, enabledByName: found.enabledByName, parameters: found.parameters, updatedAt: found.updatedAt, definitionVersion: found.definitionVersion } : null;
-				return { definition, requirements, unmet, enablement };
+				return { definition, requirements, unmet, enablement, runnerProblem: this.#engine?.unavailable(definition) ?? (this.#engine ? null : 'The workflow runner is stopped. Ask the operator to start it.') };
 			});
 		});
 	}
@@ -57,7 +58,10 @@ export class WorkflowService {
 		const resolved = resolveParameters(definition.parameters, input.parameters ?? {});
 		if (resolved.problems.length) throw badRequest('parameters_invalid', resolved.problems.map((p) => `${p.path} ${p.message}`).join('; '));
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
+			const [member] = await tx`select role from memberships where user_id = ${actor.userId} and organisation_id = ${organisationId} and status = 'active' for share`;
+			if (!member || member.role === 'member') throw forbidden();
 			if (input.enabled) {
+				if (this.#engine) { const problem = this.#engine.unavailable(definition); if (problem) throw badRequest('runner_unavailable', problem); }
 				const available = await this.#available(tx, organisationId);
 				const unmet = requirementsOf(definition).filter((r) => !available.has(r));
 				if (unmet.length) throw badRequest('requirements_unmet', `${definition.name} needs ${unmet.map((r) => requirementWords[r]).join(' and ')} before it can run`);
@@ -69,10 +73,26 @@ export class WorkflowService {
 					definition_version = excluded.definition_version, updated_at = now()
 				returning id, enabled, enabled_by, parameters, updated_at, definition_version`;
 			await audit(tx, { organisationId, actor: person(actor), action: input.enabled ? 'workflow.enabled' : 'workflow.disabled', subjectType: 'workflow_enablement', subjectId: row!.id, requestId: actor.requestId, detail: { key, parameters: resolved.values } });
+			if (this.#engine) await this.#engine.configure(tx, organisationId, row!.id, key);
 			const [user] = await tx<{ name: string }[]>`select name from users where id = ${actor.userId}`;
 			return { ...row!, enabledByName: user?.name ?? null };
 		});
 	}
+
+ async control(actor: Actor, organisationId: string, keyOrId: string, action: 'run' | 'resume' | 'cancel') {
+  if (!canManage(await roleOf(this.#db, actor.userId, organisationId))) throw forbidden('Only an owner or admin can run, resume or cancel workflows.');
+  if (!this.#engine) throw badRequest('runner_unavailable', 'The workflow runner is stopped. Ask the operator to start it.');
+  return withTenant(this.#db, { organisationId, userId: actor.userId }, async tx => {
+   // Role is checked again in the write transaction, including concurrent membership removal.
+   const [member] = await tx`select role from memberships where user_id = ${actor.userId} and organisation_id = ${organisationId} and status = 'active' for share`;
+   if (!member || member.role === 'member') throw forbidden();
+   let runId = keyOrId;
+   if (action === 'run') runId = await this.#engine!.start(tx, organisationId, keyOrId);
+   else { const [run] = await tx`select id from workflow_runs where id = ${keyOrId}`; if (!run) throw notFound(); await this.#engine!.control(tx, organisationId, keyOrId, action); }
+   await audit(tx, { organisationId, actor: person(actor), action: `workflow.${action}_requested`, subjectType: 'workflow_run', subjectId: runId, requestId: actor.requestId });
+   return { runId };
+  }).catch(error => { if (error instanceof WorkflowProblem) throw badRequest('workflow_unavailable', error.message); throw error; });
+ }
 
 	async runs(actor: Actor, organisationId: string, options: { key?: string; limit?: number } = {}): Promise<Run[]> {
 		await roleOf(this.#db, actor.userId, organisationId);

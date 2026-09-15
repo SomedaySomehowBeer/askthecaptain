@@ -7,7 +7,8 @@
   },
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts",
+    "queue:install": "node --import tsx src/install.ts"
   },
   "dependencies": {
     "@captain/db": "workspace:*",

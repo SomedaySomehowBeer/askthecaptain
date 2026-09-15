@@ -1,6 +1,8 @@
 import { XeroConnector } from '@captain/connectors/xero';
 import { XeroConnections } from './xero/connections.ts';
 import { XeroSync, startXeroSchedule } from './xero/sync.ts';
+import { BossEngine, Registry } from '@captain/engine';
+import { definitions } from '@captain/steps';
 import { GmailPush, startGmailPushSchedule } from './mail/push.ts';
 import { GmailWatch } from './mail/watch.ts';
 import { CalendarSync, startCalendarSchedule } from './calendar/sync.ts';
@@ -24,7 +26,7 @@ import { webPushTransport } from './push/webpush.ts';
 import { WorkflowService } from './workflows/service.ts';
 
 const env = readEnv();
-const db = connect(env.DATABASE_URL);
+const db = connect(env.DATABASE_URL, { max: 12 });
 const google = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 	? new GoogleIdentityProvider(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/auth/google/callback', env.API_URL).toString())
 	: null;
@@ -32,7 +34,9 @@ if (!google) console.warn('[api] Google sign-in is not configured (GOOGLE_CLIENT
 const connections = new ConnectionService(db, env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 	? new GoogleConnector(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/connections/google/callback', env.API_URL).toString()) : null,
 	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
-const mailSync = new MailSync(db, connections);
+const engine = new BossEngine(db, env.DATABASE_URL, new Registry(), definitions);
+if (env.WORKFLOWS_DISABLED !== '1') await engine.open().catch(async () => { console.error('[api] workflow runner unavailable; follow docs/runbooks/workflow-runner.md'); await engine.close(); });
+const mailSync = new MailSync(db, connections, undefined, (tx, org, event, data) => engine.emit(tx, org, event, data));
 const pushConfig = env.GMAIL_PUBSUB_TOPIC && env.GMAIL_PUSH_AUDIENCE ? { topic: env.GMAIL_PUBSUB_TOPIC, audience: env.GMAIL_PUSH_AUDIENCE } : undefined;
 const gmailWatch = new GmailWatch(db, connections, pushConfig);
 const gmailPush = pushConfig ? new GmailPush(db, mailSync, pushConfig) : undefined;
@@ -48,7 +52,7 @@ const stopXeroSync = startXeroSchedule(xeroSync, env.XERO_SYNC_DISABLED === '1' 
 const pushKeys = env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY && env.WEB_PUSH_SUBJECT ? { publicKey: env.WEB_PUSH_PUBLIC_KEY, privateKey: env.WEB_PUSH_PRIVATE_KEY, subject: env.WEB_PUSH_SUBJECT } : null;
 if (!pushKeys) console.warn('[api] Web Push is not configured (WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY / WEB_PUSH_SUBJECT)');
 const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, pushKeys?.publicKey ?? null);
-const workflows = new WorkflowService(db, push);
+const workflows = new WorkflowService(db, push, engine);
 // The catalogue is code; the table the API exposes follows it (plan §5 workflow_definitions).
 await workflows.sync().catch((error) => console.error('[api] workflow catalogue sync failed', error instanceof Error ? error.message : error));
 const inference = new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null);
@@ -62,5 +66,5 @@ const app = createApp({ lifecycle, xeroConnections, xeroSync, xeroScheduleEnable
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
-const shutdown = () => { server.close(); void Promise.all([stopXeroSync(), stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
+const shutdown = () => { server.close(); void Promise.all([stopXeroSync(), stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

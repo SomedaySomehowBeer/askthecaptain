@@ -1,7 +1,7 @@
 import { mailLock, syncBusy } from './lock.ts';
 import { upkeepContacts } from '../contacts/upkeep.ts';
 import { GmailClient, GmailError, type MailThread } from '@captain/connectors/gmail';
-import { withTenant, type Sql } from '@captain/db';
+import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { z } from 'zod';
 import { audit } from '../audit.ts';
 import type { ConnectionService } from '../connections/service.ts';
@@ -13,8 +13,9 @@ export type SyncResult = { threads: number; messages: number; attachments: numbe
 /** Housekeeping, never a workflow. Fetch outside transactions, commit mail and contacts in batches,
  * and advance the history cursor only after success. A retry idempotently replays unfinished work. */
 export class MailSync {
+	readonly #emit: ((tx: TransactionSql, organisationId: string, event: string, data: unknown) => Promise<void>) | undefined;
 	readonly #running = new Set<string>(); readonly #db: Sql; readonly #connections: ConnectionService; readonly #gmail: GmailClient;
-	constructor(db: Sql, connections: ConnectionService, gmail = new GmailClient()) { this.#db = db; this.#connections = connections; this.#gmail = gmail; }
+	constructor(db: Sql, connections: ConnectionService, gmail = new GmailClient(), emit?: (tx: TransactionSql, organisationId: string, event: string, data: unknown) => Promise<void>) { this.#db = db; this.#connections = connections; this.#gmail = gmail; this.#emit = emit; }
 	async organisations(): Promise<string[]> {
 		return (await this.#db<{ organisationId: string }[]>`select organisation_id from gmail_sync_organisations()`).map((row) => row.organisationId);
 	}
@@ -104,6 +105,7 @@ export class MailSync {
 					${JSON.stringify({ accountEmail: conn.accountEmail, historyId, capped })}) on conflict (organisation_id, connection_id, resource)
 					do update set cursor = excluded.cursor, updated_at = now()`;
 				await audit(tx, { organisationId, actor: { kind: 'system' }, action: 'mail.synced', subjectType: 'connection', subjectId: conn.id, detail: { ...counts, deleted: counts.deleted + deleted, success: true } });
+				if (counts.threads > 0) await this.#emit?.(tx, organisationId, 'mail.synced', { historyId });
 				return deleted;
 			});
 			counts.deleted += removed;
