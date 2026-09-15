@@ -76,6 +76,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Google (Gmail, Calendar), Xero, Shopify: OAuth, refresh, typed clients, webhooks |
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
+| `packages/engine` | durable workflow execution: pg-boss and a small typed runner; the Phase 2 spike stays unmounted until production hardening |
 | `packages/model` | the inference client: provider adapter, structured output, budgets, usage |
 | `packages/ui` | design tokens and shared components |
 | `infra` | OpenTofu for Neon, Cloudflare and monitoring; owner-run inference Sprite provisioning |
@@ -85,13 +86,25 @@ edge; GitHub Actions for CI and deploy. One environment: a single Neon branch an
 Fly apps that serve app.askthecaptain.app, deployed from `main` behind the smoke gate. The second
 pair of Fly apps and a second database wait for a second customer (D17).
 
-**Durable execution.** Workflows need exactly-once side effects, retries, timers ("in three days")
-and waits ("until the owner sends it"). Two candidates: **Restate** (a durable execution engine with
-journaled handlers, timers and awakeables; hosted or self-run) and **pg-boss with a small runner of
-our own** in Postgres. The decision is made by a three-day spike in Phase 2 that builds inbox triage
-on Restate and judges it on: exactly-once sends without hand-written fences, timer and await
-ergonomics, how the journal reads during an incident, operational weight, and whether the
-determinism rules are livable. Until then the workflow definition format is engine-neutral (§6).
+**Durable execution (D19).** Use **pg-boss with a small Captain runner** in the existing
+application process and Postgres. The bounded D10 inbox-triage spike ran both pg-boss and
+self-hosted Restate through retries, delayed events, timeouts and incident journals. Both
+needed destination idempotency at the boundary where a write committed before its completion
+was recorded; Restate's simpler waits did not justify another service for the first customer.
+[The decision and evidence](plans/engine-decision-2026-09.md) record the comparison and its limits.
+
+Definitions remain engine-neutral (§6). Runs and steps use Captain's tenant-scoped journal;
+queue jobs carry opaque run identifiers, with no mail, prompts or credentials. Worker business
+access uses the enabling person's tenant context and the non-bypassing runtime role (D4, D6).
+pg-boss owns platform queue metadata; its schema installation/upgrades remain operator-run.
+Local effects and completion records must be atomic where possible, otherwise destination
+idempotency or reconciliation is required. Queue delivery is not a generic exactly-once
+external-write guarantee. D5 still requires a person to send outbound mail.
+
+`packages/engine` currently contains the unmounted spike and fixture catalogue tests. Production
+inbox triage must close enqueue/event handoff gaps, enforce continuation permissions and pinned
+definition snapshots, and implement budget pauses, cancellation and retry-exhaustion journaling
+before the worker is enabled. No separate engine service is provisioned.
 
 ## 5. Data model
 
@@ -370,7 +383,7 @@ person does next. Dark and light themes and an installable web app until the Exp
 |---|---|---|
 | 0 Foundation | 1 | Monorepo, infra, CI and deploy, auth, organisations and memberships, RLS with tests, design tokens and shell |
 | 1 Connect and collect | 1–2 | Google connection, Gmail sync and webhooks, calendar sync, contacts; projects, tasks, series, Obligations project; Commitments and Inbox tabs reading synced data |
-| 2 Think | 2 | Inference client with budgets; the execution-engine spike on inbox triage and the decision; inbox-triage in production for the first customer; outbox |
+| 2 Think | 2 | Inference client with budgets; engine decision recorded by the inbox-triage spike (D19: pg-boss); harden the runner and ship inbox-triage and the outbox for the first customer |
 | 3 Assist | 2 | morning-brief, chase-due, materialise-series, calendar-prep; push; Today tab; Xero connection |
 | 4 Ready for a second customer | 2 | MFA, backups and restore drill, export and deletion, terms and privacy, support runbook; a second business onboarded by hand |
 
@@ -416,12 +429,12 @@ client in Phase 2 can proceed in parallel.
 | D16 | Envelope encryption uses a master key held in the API's secrets wrapping per-tenant data keys; no cloud key-management service and no AWS account. |
 | D17 | One environment until the second customer: one Neon branch and compute, one live pair of Fly apps deployed from `main`; production promotion exists but stays dormant. |
 | D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and resource removal are owner-run. The Sprite is the only inference runtime today; the API path is a documented seam, not a second runtime. |
+| D19 | Durable workflows use pg-boss with a small Captain runner in the existing process and Postgres, following the D10 spike. Tenant-scoped run/step journals and destination idempotency remain ours; neither engine guarantees exactly-once remote writes. Production enablement waits for the hardening in §4 and the decision document. No Restate service or SDK is retained. |
 
 ## 14. Open questions
 
 - Model tiers: which models sit behind `small` and `large` at launch, and whether drafting starts
   on the large tier or is measured first.
-- Restate Cloud or self-hosted for the spike.
 - Whether the first customer's printable production records belong in Captain or in its asset
   management system; out of scope until asked.
 - Pricing and the operator's own costs per tenant.
