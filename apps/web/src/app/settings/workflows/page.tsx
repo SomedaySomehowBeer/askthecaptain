@@ -16,6 +16,15 @@ const triggerWords = (trigger: WorkflowTrigger): string =>
 	trigger.kind === 'daily' ? `every day at ${trigger.at}` : trigger.kind === 'weekly' ? `every ${days[trigger.day] ?? trigger.day} at ${trigger.at}`
 	: trigger.kind === 'event' ? (trigger.event === 'mail.synced' ? 'when mail arrives' : `when ${trigger.event.replace('.', ' ')}`) : 'when you ask';
 
+function stepNote(step: WorkflowRunDetail['steps'][number]) {
+ const output = step.output;
+ if (!output || typeof output !== 'object') return null;
+ if (step.state === 'waiting' && 'wakeAt' in output && typeof output.wakeAt === 'string' && Number.isFinite(Date.parse(output.wakeAt)))
+  return `Next check: ${new Intl.DateTimeFormat('en-AU', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(output.wakeAt))} UTC.`;
+ if (step.state === 'succeeded' && 'skipped' in output && typeof output.skipped === 'string') return `No action: ${output.skipped.slice(0, 500)}`;
+ return null;
+}
+
 export default async function WorkflowsPage({ searchParams }: { searchParams: Promise<{ run?: string }> }) {
 	const me = await requireCurrent('/settings/workflows');
  return <Suspense fallback={<Page title="Workflows"><p role="status">Reading workflows and activity…</p></Page>}><WorkflowContent me={me} searchParams={searchParams} /></Suspense>;
@@ -57,7 +66,7 @@ async function WorkflowContent({ me, searchParams }: { me: Awaited<ReturnType<ty
    {detail ? !detail.ok ? <Notice tone="failed" title="The run could not be read.">{detail.error.message}</Notice> : <section aria-labelledby="run-detail">
      <h3 id="run-detail">{detail.value.definitionKey} · version {detail.value.definitionVersion}</h3>
      <p>{detail.value.state}{detail.value.reason ? `: ${detail.value.reason}` : ''}</p>
-     {detail.value.steps.length ? <ol>{detail.value.steps.map(step => <li key={step.path}><strong>{step.key}</strong>{step.itemIndex === null ? '' : ` · item ${step.itemIndex + 1}`} — {step.state}{step.error ? <p className="form__error">{step.error}</p> : null}</li>)}</ol> : <p className="muted">No steps have started yet.</p>}
+     {detail.value.steps.length ? <ol>{detail.value.steps.map(step => <li key={step.path}><strong>{step.key}</strong>{step.itemIndex === null ? '' : ` · item ${step.itemIndex + 1}`} — {step.state}{step.error ? <p className="form__error">{step.error}</p> : null}{stepNote(step) ? <p className="muted">{stepNote(step)}</p> : null}</li>)}</ol> : <p className="muted">No steps have started yet.</p>}
      {canManage ? <div className="row">{detail.value.state === 'paused' ? <RunControl id={detail.value.id} action="resume" /> : null}{!['succeeded', 'failed', 'cancelled'].includes(detail.value.state) ? <RunControl id={detail.value.id} action="cancel" /> : null}</div> : <p className="muted">Owners and admins resume or cancel runs.</p>}
     </section> : null}
 			</section>

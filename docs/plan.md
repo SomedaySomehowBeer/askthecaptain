@@ -282,9 +282,24 @@ Settings → Activity only when they fail.
   notices are saved even if the model omits them. Today places this brief first, with title, lines,
   source links and produced-at time; older dates, workflow-off, loading, unavailable and failed runs
   are explicit. Push failure leaves the saved brief readable and the run retryable.
-- **chase-due** (daily): read tasks due within the configured window → each task: await until the
-  reminder time → notify owner; after due, escalate; for receivables, infer a courteous chaser →
-  write outbox draft.
+- **chase-due** (07:00, version 2): read up to 100 open/in-progress tasks due within the configured
+  window, including overdue tasks → each task independently: await the reminder date, notify its
+  owner (or enabling person if unowned), await the day after due, escalate to the enabling person.
+  Await steps re-read the task and save it as the loop item, so completion/cancellation/deletion or
+  date changes govern later predicates. Notify checks current state again. Replacement push tags
+  are stable per tenant/task. Independent `each` iterations park separately: another task's wait
+  does not delay invoice drafting. Other workflows retain sequential loops unless opted in.
+  Await handlers may return a wake time separate from their bounded timeout; journalled timers
+  wake at 07:00 in the organisation's timezone and survive restarts, with a 90-day maximum wait.
+  Read cached overdue receivables (configured overdue-days threshold) → infer a courteous chaser →
+  write a standalone outbox draft, never send. Requires Google, Xero, ready inference and push.
+  Missing/incomplete Xero cache or more than 100 candidates pauses with instructions; it does not
+  silently claim success. Before writing, recheck the invoice's amount, currency, due date, number
+  and recipient; paid/changed records are skipped for the next daily run. Drafts are idempotent per
+  run/step/item. A daily run may draft another chaser for an invoice still overdue; a person decides
+  whether to send or discard it. Activity shows each waiting step’s next check time and why an action
+  was skipped. No new tenant table or background process is required.
+
 - **stocktake** (weekly, or on demand): each stock item at the configured location: notify the
   counter and await the count → write the count → branch on count below reorder point: write a
   task in Purchasing, infer a short order email to the preferred supplier, write an outbox draft.

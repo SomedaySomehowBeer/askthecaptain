@@ -4,7 +4,8 @@ export type HandlerContext = {
  organisationId: string; userId: string; runId: string; enablementId: string;
  path: string; itemIndex: number | null; idempotencyKey: string; step: ActionStep;
 };
-export type WaitResult = { ready: boolean; key: string; output?: unknown };
+/** wakeAt schedules a recheck; timeoutDays remains a separate, fixed upper bound. */
+export type WaitResult = { ready: boolean; key: string; output?: unknown; wakeAt?: Date };
 type DatabaseHandler = { kind: 'read' | 'write'; transaction: (context: HandlerContext & { tx: TransactionSql }, args: Record<string, unknown>) => Promise<unknown> };
 type ExternalHandler = { kind: 'read' | 'infer' | 'write' | 'notify';
  /** A provider write MUST implement desired-state/idempotency or reconcile using idempotencyKey. */

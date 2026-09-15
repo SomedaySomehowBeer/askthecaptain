@@ -2,7 +2,7 @@ import { PgBoss } from 'pg-boss';
 import { type Sql, type TransactionSql } from '@captain/db';
 import { EngineJournal, enabled, timezone, advance, scheduled, waiting, lastIncomplete, exhaust, type Enabled } from '@captain/db/engine';
 import { digestOf, type WorkflowDefinition, type Trigger } from '@captain/steps';
-import { Park, digest, interpret, type Snapshot } from './index.ts';
+import { Park, Wait, WorkflowPause, digest, interpret, type Snapshot } from './index.ts';
 import { Registry, type HandlerContext, type WaitResult } from './registry.ts';
 import { adapter, transactionalBoss, queueName, failedQueue, schema } from './queue.ts';
 export { queueName } from './queue.ts';
@@ -140,7 +140,7 @@ export class BossEngine {
    try {
     await interpret(snapshot, async (path, step, args, skipped, itemIndex) => {
      const hash = digest(args); const context: HandlerContext = { organisationId: journal.tenant.organisationId, userId: snapshot.enablement.enabledBy, enablementId: snapshot.enablement.id, runId, path, itemIndex, step, idempotencyKey: JSON.stringify([journal.tenant.organisationId, runId, path, itemIndex]) };
-     let park = false;
+     let park = false, waiting = false;
      try {
       const saved = await journal.tx(async tx => {
        const run = await journal.run(tx, runId); if (terminal.includes(run.state)) { park = true; return {}; }
@@ -155,7 +155,14 @@ export class BossEngine {
         if (handler.kind === 'await' && !(output as WaitResult).ready) {
          const result = output as WaitResult; const deadline = prior?.deadline ?? new Date(Date.now() + step.timeoutDays! * this.dayMs);
          if (Date.now() >= deadline.getTime()) { await journal.record(tx, runId, path, itemIndex, step, 'failed', hash, null, 'The wait timed out.'); await journal.state(tx, runId, 'failed', `${path} (${step.key}): the wait timed out.`); }
-         else { if (!prior?.deadline) await this.send(tx, snapshot.definition.key, runId, deadline); await journal.record(tx, runId, path, itemIndex, step, 'waiting', hash, null, null, { deadline, key: result.key }); await journal.state(tx, runId, 'waiting'); }
+         else {
+          const wakeAt = result.wakeAt ? new Date(Math.min(result.wakeAt.getTime(), deadline.getTime())) : deadline;
+          if (!Number.isFinite(wakeAt.getTime()) || wakeAt.getTime() <= Date.now()) throw Error('An unresolved wait needs a future wake time');
+          const previousWake = (prior?.output as { wakeAt?: string } | null)?.wakeAt;
+          if (!prior?.deadline || previousWake !== wakeAt.toISOString()) await this.send(tx, snapshot.definition.key, runId, wakeAt);
+          await journal.record(tx, runId, path, itemIndex, step, 'waiting', hash, { wakeAt: wakeAt.toISOString() }, null, { deadline, key: result.key });
+          await journal.state(tx, runId, 'waiting'); waiting = true;
+         }
          park = true; return {};
         }
         const value = handler.kind === 'await' ? (output as WaitResult).output ?? null : output ?? null;
@@ -164,7 +171,7 @@ export class BossEngine {
        // Durable intent precedes provider/inference I/O; adapters reconcile repeats using the key.
        await journal.record(tx, runId, path, itemIndex, step, 'running', hash); return { external: handler };
       });
-      if (park) throw new Park();
+      if (park) throw waiting ? new Wait() : new Park();
       if (!saved.external) return saved.output;
       const output = await saved.external.call(context, args) ?? null;
       await journal.tx(async tx => { await journal.run(tx, runId); await journal.record(tx, runId, path, itemIndex, step, 'succeeded', hash, output); });
@@ -172,7 +179,7 @@ export class BossEngine {
      } catch (error) {
       if (error instanceof Park) throw error;
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
-      const pause = pauseWords[code]; const words = pause ?? 'The service did not complete this step. Retry delivery is automatic.';
+      const pause = error instanceof WorkflowPause ? error.message : pauseWords[code]; const words = pause ?? 'The service did not complete this step. Retry delivery is automatic.';
       await journal.tx(async tx => {
        const run = await journal.run(tx, runId); if (terminal.includes(run.state)) return;
        await journal.record(tx, runId, path, itemIndex, step, 'failed', hash, null, words);

@@ -1,3 +1,5 @@
+import { WorkflowPause } from '@captain/engine';
+import { XeroService } from '../xero/service.ts';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
@@ -13,12 +15,27 @@ export const draftInput = z.object({ threadId: z.uuid().nullable().default(null)
  subject: z.string().max(300).regex(/^[^\r\n]*$/), body: z.string().min(1).max(20000) }).strict();
 const uncertain = () => new HttpError(409, 'send_uncertain', 'Sending has not been confirmed. Check Sent in Gmail, then use Check send again. Captain will not send a second copy.');
 type Wake = (tx: TransactionSql, organisationId: string, runId: string, key: string) => Promise<unknown>;
-export async function createDraft(ctx: Context, thread: Thread, body: string) {
- const input = draftInput.parse({ threadId: thread.id, to: thread.sender ? [thread.sender] : [], subject: thread.subject.replace(/[\r\n]/g, ' ').slice(0, 300), body });
+export async function createDraft(ctx: Context, destination: Thread | { to: string; subject: string }, body: string) {
+ const thread = 'id' in destination ? destination : null;
+ const conn = thread ? { id: thread.connectionId, accountEmail: thread.accountEmail } : await connection(ctx.tx);
+ if (!conn || ('status' in conn && conn.status !== 'connected')) throw new WorkflowPause('Reconnect Google in Settings before creating a chaser draft, then Resume.');
+ const input = draftInput.parse({ threadId: thread?.id ?? null, to: thread ? thread.sender ? [thread.sender] : [] : [(destination as { to: string }).to],
+  subject: destination.subject.replace(/[\r\n]/g, ' ').slice(0, 300), body });
  const [row] = await ctx.tx`insert into outbox (organisation_id, thread_id, connection_id, account_email, "to", cc, subject, body, in_reply_to, created_by, idempotency_key)
-  values (${ctx.organisationId}, ${thread.id}, ${thread.connectionId}, ${thread.accountEmail}, ${ctx.tx.array(input.to)}, '{}', ${input.subject}, ${body}, ${thread.rfcMessageId}, ${ctx.runId}, ${ctx.idempotencyKey})
+  values (${ctx.organisationId}, ${input.threadId}, ${conn.id}, ${conn.accountEmail}, ${ctx.tx.array(input.to)}, '{}', ${input.subject}, ${body}, ${thread?.rfcMessageId ?? ''}, ${ctx.runId}, ${ctx.idempotencyKey})
   on conflict (organisation_id, idempotency_key) do update set idempotency_key = excluded.idempotency_key returning id`;
  await journal(ctx, 'outbox.created', 'outbox', row!.id); return { id: String(row!.id) };
+}
+/** A changed/paid invoice cannot turn a saved inference response into an obsolete demand. */
+export async function createInvoiceDraft(ctx: Context, invoice: unknown, to: unknown, body: string) {
+ const expected = z.object({ id: z.uuid(), number: z.string(), amountDue: z.string(), currency: z.string(), dueDate: z.iso.date(), contactEmail: address }).parse(invoice);
+ if (to !== expected.contactEmail) throw Error('Recipient differs from the invoice snapshot');
+ const current = await XeroService.currentReceivable(ctx.tx, ctx.organisationId, expected.id);
+ if (!current || current.status !== 'AUTHORISED' || Number(current.amountDue) <= 0) return { skipped: 'The invoice is no longer outstanding.' };
+ if (current.connectionStatus !== 'connected') throw new WorkflowPause('Reconnect Xero in Settings, then Resume.');
+ if (current.contactEmail !== expected.contactEmail || current.amountDue !== expected.amountDue || current.currency !== expected.currency || current.dueDate !== expected.dueDate || (current.number ?? 'without a number').slice(0, 200) !== expected.number)
+  return { skipped: 'The invoice or recipient changed. The next daily run will use its current details.' };
+ return createDraft(ctx, { to: expected.contactEmail, subject: `Invoice ${expected.number} — payment follow-up` }, body);
 }
 export class OutboxService {
  readonly db: Sql; readonly connections: Pick<ConnectionService, 'accessToken'>; readonly wake: Wake; readonly gmail: GmailClient;

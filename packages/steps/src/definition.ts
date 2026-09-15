@@ -37,7 +37,8 @@ export type ActionStep = {
 	/** Await steps only: give up after this many days. */
 	timeoutDays?: number;
 };
-export type EachStep = { kind: 'each'; list: Path; steps: Step[] };
+/** Independent items may wait separately; only durable waits permit continuation, never failures. */
+export type EachStep = { kind: 'each'; list: Path; steps: Step[]; independent?: boolean };
 export type BranchStep = { kind: 'branch'; when: Predicate; then: Step[]; else?: Step[] };
 export type Step = ActionStep | EachStep | BranchStep;
 
@@ -50,7 +51,7 @@ export type Trigger =
 export type ParameterSpec =
 	| { type: 'text'; description: string; default?: string; required?: boolean; maxLength?: number }
 	| { type: 'boolean'; description: string; default: boolean }
-	| { type: 'number'; description: string; default: number; min?: number; max?: number };
+	| { type: 'number'; description: string; default: number; min?: number; max?: number; integer?: boolean };
 
 export type WorkflowDefinition = {
 	key: string;
@@ -71,7 +72,7 @@ export const write = (key: string, options: Omit<ActionStep, 'kind' | 'key'> = {
 export const notify = (key: string, options: Omit<ActionStep, 'kind' | 'key'> = {}): ActionStep => ({ kind: 'notify', key, ...options });
 export const infer = (key: string, options: Omit<ActionStep, 'kind' | 'key' | 'schema' | 'tier'> & { schema: string; tier: Tier }): ActionStep => ({ kind: 'infer', key, ...options });
 export const awaitStep = (key: string, options: Omit<ActionStep, 'kind' | 'key'> & { timeoutDays: number }): ActionStep => ({ kind: 'await', key, ...options });
-export const each = (list: Path, steps: Step[]): EachStep => ({ kind: 'each', list, steps });
+export const each = (list: Path, steps: Step[], options: { independent?: boolean } = {}): EachStep => ({ kind: 'each', list, steps, ...options });
 export const branch = (when: Predicate, then: Step[], otherwise?: Step[]): BranchStep => otherwise ? { kind: 'branch', when, then, else: otherwise } : { kind: 'branch', when, then };
 export const onEvent = (event: string): Trigger => ({ kind: 'event', event });
 export const daily = (at: string): Trigger => ({ kind: 'daily', at });
@@ -79,7 +80,7 @@ export const weekly = (day: Extract<Trigger, { kind: 'weekly' }>['day'], at: str
 export const manual = (): Trigger => ({ kind: 'manual' });
 export const text = (description: string, options: { default?: string; required?: boolean; maxLength?: number } = {}): ParameterSpec => ({ type: 'text', description, ...options });
 export const boolean = (description: string, defaultValue: boolean): ParameterSpec => ({ type: 'boolean', description, default: defaultValue });
-export const number = (description: string, defaultValue: number, options: { min?: number; max?: number } = {}): ParameterSpec => ({ type: 'number', description, default: defaultValue, ...options });
+export const number = (description: string, defaultValue: number, options: { min?: number; max?: number; integer?: boolean } = {}): ParameterSpec => ({ type: 'number', description, default: defaultValue, ...options });
 export const ref = (path: Path) => ({ ref: path });
 export const param = (name: string) => ({ param: name });
 

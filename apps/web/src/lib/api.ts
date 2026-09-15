@@ -57,4 +57,4 @@ export type WorkflowEnablement = { id: string; enabled: boolean; enabledBy: stri
 export type OfferedWorkflow = { definition: WorkflowDefinition; requirements: string[]; unmet: { requirement: string; words: string }[]; enablement: WorkflowEnablement | null; runnerProblem?: string | null };
 export type WorkflowRun = { id: string; definitionKey: string; definitionVersion: number; trigger: unknown; state: string; reason: string | null; startedAt: string | null; finishedAt: string | null; createdAt: string };
 
-export type WorkflowRunDetail = WorkflowRun & { steps: { path: string; itemIndex: number | null; key: string; state: string; error: string | null }[] };
+export type WorkflowRunDetail = WorkflowRun & { steps: { path: string; itemIndex: number | null; key: string; state: string; error: string | null; output?: unknown }[] };

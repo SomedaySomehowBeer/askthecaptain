@@ -106,6 +106,7 @@ export function resolveParameters(specs: Record<string, ParameterSpec>, given: R
 		} else {
 			const value = raw === undefined ? spec.default : raw;
 			if (typeof value !== 'number' || !Number.isFinite(value)) problems.push({ path: paramName, message: 'must be a number' });
+			else if (spec.integer && !Number.isInteger(value)) problems.push({ path: paramName, message: 'must be a whole number' });
 			else if ((spec.min !== undefined && value < spec.min) || (spec.max !== undefined && value > spec.max)) problems.push({ path: paramName, message: `must be between ${spec.min ?? '-∞'} and ${spec.max ?? '∞'}` });
 			else values[paramName] = value;
 		}
