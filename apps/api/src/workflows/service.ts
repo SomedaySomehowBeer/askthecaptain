@@ -91,12 +91,15 @@ export class WorkflowService {
 		});
 	}
 
-	/** What this organisation can offer a workflow today. Inference and push arrive in later releases,
-	 *  so they are unmet until then; a workflow that needs them says so instead of pretending to run. */
+	/** What this organisation can offer a workflow today: connected providers and a ready inference
+	 *  runtime. Push arrives in a later release, so it is unmet until then; a workflow that needs it
+	 *  says so instead of pretending to run. */
 	async #available(tx: TransactionSql, organisationId: string): Promise<Set<Requirement>> {
 		const available = new Set<Requirement>();
 		const connections = await tx<{ provider: string }[]>`select provider from connections where organisation_id = ${organisationId} and status = 'connected'`;
 		for (const c of connections) if (c.provider === 'google' || c.provider === 'xero' || c.provider === 'shopify') available.add(`connection:${c.provider}` as Requirement);
+		const [runtime] = await tx<{ status: string }[]>`select status from inference_runtimes where organisation_id = ${organisationId}`;
+		if (runtime?.status === 'ready') available.add('inference');
 		return available;
 	}
 }
