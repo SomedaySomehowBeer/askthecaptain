@@ -25,7 +25,7 @@ export async function setTaskStatus(form: FormData): Promise<void> {
 	const status = text(form, 'status'); const id = text(form, 'id');
 	if (!['open', 'in_progress', 'done', 'cancelled'].includes(status) || !id) return;
 	await api(`/v1/organisations/${org}/tasks/${id}`, { method: 'PATCH', token, body: { status } }).catch(() => undefined);
-	revalidatePath('/commitments');
+	revalidatePath('/commitments'); revalidatePath('/');
 }
 
 export async function createProject(_: Result | undefined, form: FormData): Promise<Result> {
