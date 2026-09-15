@@ -13,7 +13,7 @@ export const workflowDefinitions = pgTable('workflow_definitions', {
 export const workflowEnablements = pgTable('workflow_enablements', {
  id: id(), organisationId: org(), definitionKey: text('definition_key').notNull().references(() => workflowDefinitions.key), definitionVersion: integer('definition_version').notNull(),
  enabled: boolean('enabled').notNull().default(false), enabledBy: uuid('enabled_by').references(() => users.id, { onDelete: 'set null' }), parameters: jsonb('parameters').notNull().default({}),
- scheduleOverrides: jsonb('schedule_overrides').notNull().default({}), createdAt: at('created_at').notNull().defaultNow(), updatedAt: at('updated_at').notNull().defaultNow()
+ mailCursor: uuid('mail_cursor'), scheduleOverrides: jsonb('schedule_overrides').notNull().default({}), createdAt: at('created_at').notNull().defaultNow(), updatedAt: at('updated_at').notNull().defaultNow()
 }, t => [unique().on(t.organisationId, t.id), unique().on(t.organisationId, t.definitionKey)]);
 export const workflowRuns = pgTable('workflow_runs', {
  id: id(), organisationId: org(), enablementId: uuid('enablement_id').notNull(), enabledBy: uuid('enabled_by').references(() => users.id, { onDelete: 'set null' }),

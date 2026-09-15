@@ -13,7 +13,7 @@ export const mailMessages = pgTable('mail_messages', {
 	id: id(), organisationId: tenant(), connectionId: uuid('connection_id').notNull(), threadId: uuid('thread_id').notNull(), providerId: text('provider_id').notNull(),
 	fromHeader: text('from_header').notNull(), toHeader: text('to_header').notNull(), ccHeader: text('cc_header').notNull(), bccHeader: text('bcc_header').notNull().default(''), subject: text('subject').notNull(),
 	dateHeader: text('date_header').notNull(), sentAt: at('sent_at'), snippet: text('snippet').notNull(), labelIds: text('label_ids').array().notNull().default([]),
-	inReplyTo: text('in_reply_to').notNull(), body: text('body').notNull(), bodyUnavailable: boolean('body_unavailable').notNull().default(false)
+	rfcMessageId: text('rfc_message_id').notNull().default(''), inReplyTo: text('in_reply_to').notNull(), body: text('body').notNull(), bodyUnavailable: boolean('body_unavailable').notNull().default(false)
 }, (t) => [unique().on(t.organisationId, t.connectionId, t.providerId), unique().on(t.organisationId, t.id),
 	foreignKey({ columns: [t.organisationId, t.connectionId, t.threadId], foreignColumns: [mailThreads.organisationId, mailThreads.connectionId, mailThreads.id] }).onDelete('cascade')]);
 export const mailAttachments = pgTable('mail_attachments', {

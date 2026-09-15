@@ -1,3 +1,5 @@
+import { DraftForm } from '../DraftForm.tsx';
+import { TriageFacts } from '../TriageFacts.tsx';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
@@ -17,6 +19,9 @@ async function Thread({ me, id }: { me: Awaited<ReturnType<typeof requireCurrent
 	if (!result.ok) return <Notice tone="failed" action={{ href: '/inbox', label: 'Return to Inbox' }}>{result.error.message}</Notice>;
 	const thread = result.value;
 	return <>
+        {thread.triageNotice ? <Notice tone="attention" action={{ href: '/settings/workflows', label: 'Review workflows' }}>{thread.triageNotice}</Notice> : null}
+        {thread.triage ? <section className="card"><h2>Triage</h2><TriageFacts triage={thread.triage} /></section> : <Notice>This thread is awaiting triage.</Notice>}
+        {thread.outbox.map(draft => <DraftForm key={draft.id + draft.body + draft.state} draft={draft} connected={thread.connectionStatus === 'connected'} />)}
 		{thread.connectionStatus !== 'connected' ? <Notice tone="attention" action={{ href: '/settings/connections', label: 'Reconnect Google' }}>Google access is unavailable. This is the last saved copy; reconnect to receive updates.</Notice> : null}
 		{thread.messages.map((m) => <article className="card stack mail-message" key={m.id}>
 			<h2>{m.subject || '(No subject)'}</h2><div className="stack secondary"><p><strong>From:</strong> {m.senderContact ? <Link href={`/inbox/contacts/${m.senderContact.id}`}>{m.senderContact.name || m.senderContact.email}</Link> : m.fromHeader || 'Sender unavailable'}</p><p><strong>To:</strong> {m.toHeader || 'Recipients unavailable'}</p>

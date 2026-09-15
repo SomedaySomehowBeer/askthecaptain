@@ -1,7 +1,10 @@
+import { TriageService } from './triage/service.ts';
+import { OutboxService } from './triage/outbox.ts';
+import { startAttachmentExpiry } from './triage/expiry.ts';
 import { XeroConnector } from '@captain/connectors/xero';
 import { XeroConnections } from './xero/connections.ts';
 import { XeroSync, startXeroSchedule } from './xero/sync.ts';
-import { BossEngine, Registry } from '@captain/engine';
+import { BossEngine } from '@captain/engine';
 import { definitions } from '@captain/steps';
 import { GmailPush, startGmailPushSchedule } from './mail/push.ts';
 import { GmailWatch } from './mail/watch.ts';
@@ -36,7 +39,11 @@ if (!google) console.warn('[api] Google sign-in is not configured (GOOGLE_CLIENT
 const connections = new ConnectionService(db, env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 	? new GoogleConnector(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/connections/google/callback', env.API_URL).toString()) : null,
 	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
-const engine = new BossEngine(db, env.DATABASE_URL, new Registry(), definitions);
+const inference = new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null);
+const triage = new TriageService(db, connections, inference);
+const engine = new BossEngine(db, env.DATABASE_URL, triage.registry(), definitions);
+const outbox = new OutboxService(db, connections, (tx, org, run, key) => engine.wake(tx, org, run, key));
+const stopAttachmentExpiry = startAttachmentExpiry(db);
 if (env.WORKFLOWS_DISABLED !== '1') await engine.open().catch(async () => { console.error('[api] workflow runner unavailable; follow docs/runbooks/workflow-runner.md'); await engine.close(); });
 const mailSync = new MailSync(db, connections, undefined, (tx, org, event, data) => engine.emit(tx, org, event, data));
 const pushConfig = env.GMAIL_PUBSUB_TOPIC && env.GMAIL_PUSH_AUDIENCE ? { topic: env.GMAIL_PUBSUB_TOPIC, audience: env.GMAIL_PUSH_AUDIENCE } : undefined;
@@ -57,7 +64,6 @@ const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, p
 const workflows = new WorkflowService(db, push, engine);
 // The catalogue is code; the table the API exposes follows it (plan §5 workflow_definitions).
 await workflows.sync().catch((error) => console.error('[api] workflow catalogue sync failed', error instanceof Error ? error.message : error));
-const inference = new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null);
 // Deletion revokes what it can at providers first, best effort, then the row and its tenant data go.
 const lifecycle = new OrganisationLifecycle(db, [
 	async (actor, organisationId) => { const list = await connections.list(actor, organisationId); for (const c of list.connections) if (c.provider === 'google' && c.status !== 'disconnected') await connections.disconnect(actor, organisationId, c.id).catch(() => undefined); },
@@ -65,9 +71,9 @@ const lifecycle = new OrganisationLifecycle(db, [
 	async (actor, organisationId) => { await inference.remove(actor, organisationId).catch(() => undefined); }
 ]);
 const passkeys = new PasskeyService(db, simpleWebAuthn(env.APP_URL));
-const app = createApp({ passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
+const app = createApp({ outbox, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
-const shutdown = () => { server.close(); void Promise.all([stopXeroSync(), stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
+const shutdown = () => { server.close(); void Promise.all([stopAttachmentExpiry(), stopXeroSync(), stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

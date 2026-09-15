@@ -20,6 +20,8 @@ export class WorkflowService {
 	readonly #db: Sql; readonly #push: PushService | null; readonly #engine: BossEngine | null;
 	constructor(db: Sql, push: PushService | null = null, engine: BossEngine | null = null) { this.#db = db; this.#push = push; this.#engine = engine; }
 
+	runnerProblem(key: string) { const definition = definitions.find(d => d.key === key); return this.#engine && definition ? this.#engine.unavailable(definition) : 'The workflow runner is stopped. Ask the operator to start it.'; }
+
 	/** Upserts the code-defined catalogue. Called at API start; idempotent. */
 	async sync(): Promise<number> {
 		for (const definition of definitions) {

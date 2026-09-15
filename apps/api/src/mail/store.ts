@@ -14,13 +14,13 @@ export async function saveThread(tx: TransactionSql, organisationId: string, con
 		last_message_at = excluded.last_message_at, updated_at = now() returning id`;
 	for (const m of thread.messages) {
 		const [message] = await tx`insert into mail_messages (organisation_id, connection_id, thread_id, provider_id, from_header, to_header, cc_header, bcc_header, subject,
-			date_header, sent_at, snippet, label_ids, in_reply_to, body, body_unavailable)
+			date_header, sent_at, snippet, label_ids, in_reply_to, body, body_unavailable, rfc_message_id)
 			values (${organisationId}, ${conn.id}, ${stored!.id}, ${m.providerId}, ${m.fromHeader}, ${m.toHeader}, ${m.ccHeader}, ${m.bccHeader}, ${m.subject},
-				${m.dateHeader}, ${m.sentAt}, ${m.snippet}, ${tx.array(m.labelIds)}, ${m.inReplyTo}, ${m.body}, ${m.bodyUnavailable})
+				${m.dateHeader}, ${m.sentAt}, ${m.snippet}, ${tx.array(m.labelIds)}, ${m.inReplyTo}, ${m.body}, ${m.bodyUnavailable}, ${m.rfcMessageId ?? ''})
 			on conflict (organisation_id, connection_id, provider_id) do update set thread_id = excluded.thread_id, from_header = excluded.from_header,
 			to_header = excluded.to_header, cc_header = excluded.cc_header, bcc_header = excluded.bcc_header, subject = excluded.subject, date_header = excluded.date_header,
 			sent_at = excluded.sent_at, snippet = excluded.snippet, label_ids = excluded.label_ids, in_reply_to = excluded.in_reply_to,
-			body = excluded.body, body_unavailable = excluded.body_unavailable returning id`;
+			body = excluded.body, body_unavailable = excluded.body_unavailable, rfc_message_id = excluded.rfc_message_id returning id`;
 		for (const a of m.attachments) await tx`insert into mail_attachments (organisation_id, message_id, part_id, filename, media_type, size, provider_attachment_id)
 			values (${organisationId}, ${message!.id}, ${a.partId}, ${a.filename}, ${a.mediaType}, ${a.size}, ${a.providerAttachmentId})
 			on conflict (organisation_id, message_id, part_id) do update set filename = excluded.filename, media_type = excluded.media_type,

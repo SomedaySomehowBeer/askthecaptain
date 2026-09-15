@@ -116,8 +116,7 @@ Daily/weekly schedules use the organisation's timezone and a persisted next run,
 first delivery; each queue payload contains only a run id. A platform failure queue records exhausted
 worker deliveries back into the tenant journal. Settings → Workflows → Activity links to run details:
 ordered steps, loop item, state and reason, with Resume for paused runs and Cancel for unfinished runs
-(owner/admin). Empty, unavailable, failed and saving states use words. The domain triage/outbox
-handlers follow in their own slice. [The runbook](runbooks/workflow-runner.md) covers installation,
+(owner/admin). Empty, unavailable, failed and saving states use words. The triage/outbox handlers bind this runner to mail, inference, commitments and person-sent drafts. [The runbook](runbooks/workflow-runner.md) covers installation,
 handler contracts and recovery.
 
 ## 5. Data model
@@ -474,3 +473,28 @@ client in Phase 2 can proceed in parallel.
   management system; out of scope until asked.
 - Pricing and the operator's own costs per tenant.
 - When to enable the API-key path and cost-based budgets; pricing for it.
+
+### Inbox triage delivery detail (D2, D4, D5, D13)
+
+The first triage handlers read at most 100 newly cached messages per run, using a UUIDv7 insertion
+cursor on the enablement; label-only changes do not reclassify mail. The first run includes cached
+mail. A cancelled run retains its input in Activity but skips its remaining work; run cancellation
+is deliberate, and does not silently replay the cancelled batch. Unknown means no person-maintained
+contact and no prior sent correspondence to the sender. Mail sync's automatic contact creation does
+not establish trust. Unknown senders always need the owner. Confirmation completion requires one
+open task with an exact title and reference (stored in the task body), both quoted in the mail;
+ambiguous matches become suggestions. Confirming mail is attached as evidence before completion.
+
+Extracted plain text and CSV are capped at 5 MB and 20,000 characters each, cached for at most 24
+hours, and deleted by hourly housekeeping. PDFs remain in Gmail with an explicit extraction skip
+in the journal. The journal carries cache references and notes, never extracted attachment text.
+The model sees labelled untrusted mail and attachment data, with fixed instructions in `packages/steps`.
+
+Inbox groups are **Needs you**, **Waiting for a reply you drafted**, **Awaiting triage**, and **Handled**,
+with category, summary and extracted facts. Its Outbox section links to each thread's editable draft;
+standalone drafts have the same controls there. A person saves edits before Send or Discard. Sending
+records an intent and a stable RFC Message-ID before Gmail is called. If the response is lost, **Check
+send** reconciles against Gmail Sent and never sends another copy. An unconfirmed send stays frozen
+with instructions to check Gmail. The outbox pins the Google account, connection and reply header;
+reconnecting a different account cannot send an old account's draft. Sent and discarded states wake
+the workflow; no workflow handler sends mail.
