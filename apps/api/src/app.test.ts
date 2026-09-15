@@ -4,6 +4,7 @@ import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
 import { createApp } from './app.ts';
 import type { IdentityProvider } from './auth/google.ts';
 import { AuthService } from './auth/service.ts';
+import { CommitmentsService } from './commitments/service.ts';
 import { OrganisationService } from './organisations/service.ts';
 
 const it = databaseUrl ? test : test.skip;
@@ -29,7 +30,7 @@ before(async () => {
 	if (!databaseUrl) return;
 	db = await freshDatabase();
 	auth = new AuthService(db.app, google, { appUrl: 'https://app.example.test', sessionTtlDays: 30 });
-	app = createApp({ db: db.app, auth, organisations: new OrganisationService(db.app) });
+	app = createApp({ db: db.app, auth, organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app) });
 });
 after(async () => { await db?.close(); });
 
