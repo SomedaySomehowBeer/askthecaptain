@@ -202,7 +202,7 @@ export function createApp(deps: Deps) {
 	if (deps.push) signedIn.route('/', pushRoutes(deps.push));
 	signedIn.get('/v1/organisations/:id/briefs/latest', async c => c.json(await new BriefService(deps.db).latest({ userId: c.get('session').userId, requestId: c.get('requestId') }, z.uuid().parse(c.req.param('id')), deps.workflows ? deps.workflows.runnerProblem('morning-brief') : 'The workflow runner is stopped. Ask the operator to start it.')));
 	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled, () => deps.workflows?.runnerProblem('inbox-triage') ?? null)));
-	signedIn.route('/', calendarRoutes(new CalendarService(deps.db, deps.calendarSync, deps.calendarScheduleEnabled)));
+	signedIn.route('/', calendarRoutes(new CalendarService(deps.db, deps.calendarSync, deps.calendarScheduleEnabled, () => deps.workflows ? deps.workflows.runnerProblem('calendar-prep') : 'The workflow runner is stopped. Ask the operator to start it.')));
 	app.route('/', signedIn);
 
 	app.notFound((c) => c.json({ ok: false, code: 'not_found', error: 'not found' }, 404));

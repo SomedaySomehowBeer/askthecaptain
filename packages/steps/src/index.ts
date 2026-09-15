@@ -20,3 +20,4 @@ export { morningBriefInstruction } from './instructions/morning-brief.ts';
 
 export { draftChaserInstruction } from './instructions/chase-due.ts';
 export { draftOrderEmailInstruction } from './instructions/stocktake.ts';
+export { calendarPrepInstruction } from './instructions/calendar-prep.ts';

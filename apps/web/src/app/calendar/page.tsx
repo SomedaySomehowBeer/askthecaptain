@@ -1,3 +1,4 @@
+import { PreparationNote } from './PreparationNote.tsx';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
@@ -21,7 +22,7 @@ async function Week({ me, week }: { me: Awaited<ReturnType<typeof requireCurrent
  const start = weekStart(week, calendars.value.timezone); const end = addDays(start, 7);
  const result = await load(() => api<CalendarWeek>(`${prefix}/events?from=${start}&to=${end}`, { token: me.token }));
  if (!result.ok) return <Notice tone="failed" action={{ href: `/calendar?week=${start}`, label: 'Try again' }}>{result.error.message} Try again to read your calendar.</Notice>;
- const { connection, lastSync, events, timezone, covered, automaticSyncEnabled } = result.value;
+ const { connection, lastSync, events, timezone, covered, automaticSyncEnabled, preparationNotice } = result.value;
  const needsAccess = !connection?.scopes.some((s) => ['https://www.googleapis.com/auth/calendar.calendarlist.readonly', 'https://www.googleapis.com/auth/calendar.readonly', 'https://www.googleapis.com/auth/calendar'].includes(s));
  const available = connection?.status === 'connected' && !needsAccess; const canSync = me.organisation.role !== 'member';
  const clean = covered && lastSync?.detail.success && available;
@@ -40,6 +41,7 @@ async function Week({ me, week }: { me: Awaited<ReturnType<typeof requireCurrent
   <h2>{dayLabel(start)} – {dayLabel(addDays(start, 6))}</h2><p className="muted">Times shown in {timezone}. All-day dates stay as marked on the calendar.</p>
   {!covered ? <Notice title="This week is not fully synced">Captain collects 30 days back and 90 days ahead. Use Sync now to collect the current window. Events outside it may be missing.</Notice> : null}
   {events.length === 0 ? <Notice title={clean ? 'No events this week' : 'No synced events to show'}>{clean ? 'The selected calendars have no events in this synced week.' : 'This does not confirm the week is empty. Check the connection and sync status above.'}</Notice> : null}
+  {preparationNotice ? <Notice action={{ href: '/settings/workflows', label: 'Workflows' }}>{preparationNotice}</Notice> : null}
   <div className="calendar-days">{Array.from({ length: 7 }, (_, n) => addDays(start, n)).map((day) => {
    const items = events.filter((e) => onDay(e, day, timezone));
    return <section className="card calendar-day" key={day} aria-label={dayLabel(day)}><h3>{dayLabel(day)}</h3>
@@ -47,7 +49,7 @@ async function Week({ me, week }: { me: Awaited<ReturnType<typeof requireCurrent
      <p className="muted">{eventTime(e, timezone)}{e.status === 'tentative' ? ' · Tentative' : ''}</p>
      <h4>{e.summary || '(No title)'}</h4>{e.location ? <p>{e.location}</p> : null}
      <p className="muted">{e.calendarName} · {e.attendeesOmitted ? 'Attendee count unavailable' : `${e.attendeeCount} ${e.attendeeCount === 1 ? 'attendee' : 'attendees'}`}</p>
-     {/* Phase 3 preparation notes belong inside this event card once backed by real data. */}
+     <PreparationNote event={e} timezone={timezone} />
     </li>)}</ul> : <p className="muted">{clean ? 'No events.' : 'No synced events.'}</p>}
    </section>;
   })}</div>
