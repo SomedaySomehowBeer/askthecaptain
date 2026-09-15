@@ -13,6 +13,10 @@ const schema = z.object({
 	MAIL_SYNC_DISABLED: z.enum(['0', '1']).default('0'),
 	/** Stops the hourly materialise-series routine; set on throwaway servers so tests do not double-run it. */
 	SERIES_DISABLED: z.enum(['0', '1']).default('0'),
+	/** Web Push (plan §5 Notifications): all three or none; generated once, never rotated (docs/runbooks/web-push.md). */
+	WEB_PUSH_PUBLIC_KEY: z.string().min(1).optional(),
+	WEB_PUSH_PRIVATE_KEY: z.string().min(1).optional(),
+	WEB_PUSH_SUBJECT: z.string().regex(/^mailto:.+@.+$/).optional(),
 	MASTER_KEY: z.string().regex(/^[A-Za-z0-9+/]{43}=$/).optional(),
 	GOOGLE_CLIENT_ID: z.string().optional(),
 	GOOGLE_CLIENT_SECRET: z.string().optional(),

@@ -21,10 +21,12 @@ import { commitmentsRoutes } from './commitments/routes.ts';
 import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
 import type { OrganisationService } from './organisations/service.ts';
+import { pushRoutes } from './push/routes.ts';
+import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
 
-export type Deps = { inference?: InferenceService; db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService };
+export type Deps = { inference?: InferenceService; db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -112,6 +114,7 @@ export function createApp(deps: Deps) {
 		return c.json(await deps.gmailWatch.renew(uuid.parse(c.req.param('id')), actor(c)));
 	});
 	if (deps.workflows) signedIn.route('/', workflowRoutes(deps.workflows));
+	if (deps.push) signedIn.route('/', pushRoutes(deps.push));
 	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled)));
 	signedIn.route('/', calendarRoutes(new CalendarService(deps.db, deps.calendarSync, deps.calendarScheduleEnabled)));
 	app.route('/', signedIn);

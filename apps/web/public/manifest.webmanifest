@@ -1,0 +1,13 @@
+{
+	"name": "Ask The Captain",
+	"short_name": "Captain",
+	"description": "An administrative assistant for small businesses.",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"background_color": "#f3ecdf",
+	"theme_color": "#142619",
+	"icons": [
+		{ "src": "/brand/icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+	]
+}

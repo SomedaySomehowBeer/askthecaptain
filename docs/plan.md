@@ -164,7 +164,9 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   latency and timestamp; no content.
 
 **Notifications**
-- `push_subscriptions`, `push_deliveries`.
+- `push_subscriptions` — a member's device: endpoint and keys, disabled when the push service says it is gone.
+- `push_deliveries` — every push sent, whether it arrived; journaled like any other write.
+  Web Push encryption and VAPID signing use the `web-push` library; the private key lives only in the API.
 
 ## 6. Workflows
 
