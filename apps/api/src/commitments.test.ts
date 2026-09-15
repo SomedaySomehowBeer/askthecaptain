@@ -40,7 +40,7 @@ it('a new organisation has its Obligations deadline book and nothing else', asyn
 	const overview = await body<Overview>(await json('GET', `/v1/organisations/${orgId}/commitments`, owner.token), 200);
 	assert.deepEqual(overview.projects.map((p) => [p.name, p.systemKind]), [['Obligations', 'obligations']]);
 	assert.deepEqual(overview.tasks, []); assert.deepEqual(overview.series, []);
-	assert.equal(overview.today, todayIn('Australia/Perth'));
+	assert.equal(overview.today, todayIn('Australia/Perth')); assert.equal(overview.timezone, 'Australia/Perth');
 });
 
 it('tasks land in Obligations by default, are completed with who and when, and are audited', async () => {
@@ -85,6 +85,12 @@ it('a series materialises its current occurrence once, and editing it changes fu
 	assert.equal(renamed.title, 'Excise duty return');
 	overview = await body<Overview>(await json('GET', `/v1/organisations/${orgId}/commitments`, owner.token), 200);
 	assert.equal(overview.tasks.find((t) => t.id === occurrence!.id)!.title, occurrence!.title, 'the existing occurrence keeps its title');
+	// The duty needs evidence: completing without any is refused, with some it goes through.
+	const refused = await json('PATCH', `/v1/organisations/${orgId}/tasks/${occurrence!.id}`, owner.token, { status: 'done' });
+	assert.equal(refused.status, 400); assert.equal(((await refused.json()) as { code: string }).code, 'evidence_required');
+	assert.equal(overview.tasks.find((t) => t.id === occurrence!.id)!.evidenceRequired, true);
+	await body(await json('POST', `/v1/organisations/${orgId}/tasks/${occurrence!.id}/evidence`, owner.token, { kind: 'mail', reference: 'gmail:18f3', label: 'ATO confirmation' }), 201);
+	assert.equal((await body<Task>(await json('PATCH', `/v1/organisations/${orgId}/tasks/${occurrence!.id}`, owner.token, { status: 'done' }), 200)).status, 'done');
 	const paused = await body<Series>(await json('PATCH', `/v1/organisations/${orgId}/series/${series.id}`, owner.token, { paused: true }), 200);
 	assert.ok(paused.pausedAt); assert.equal(paused.nextDue, null);
 	assert.equal((await json('POST', `/v1/organisations/${orgId}/series`, owner.token, { title: 'Odd', recurrence: 'custom', anchor: '2026-01-01' })).status, 400, 'custom needs everyMonths');
