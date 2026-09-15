@@ -1,3 +1,6 @@
+import { mailRoutes } from './mail/routes.ts';
+import { MailService } from './mail/service.ts';
+import type { MailSync } from './mail/sync.ts';
 import { connectionRoutes } from './connections/routes.ts';
 import type { ConnectionService } from './connections/service.ts';
 import { randomUUID } from 'node:crypto';
@@ -10,7 +13,7 @@ import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
 import type { OrganisationService } from './organisations/service.ts';
 
-export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService };
+export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; mailScheduleEnabled?: boolean };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -86,6 +89,7 @@ export function createApp(deps: Deps) {
 		return c.json(await deps.organisations.accept({ ...actor(c), email: c.get('session').user.email }, input.token));
 	});
 	signedIn.route('/', commitmentsRoutes(deps.commitments));
+	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled)));
 	app.route('/', signedIn);
 
 	app.notFound((c) => c.json({ ok: false, code: 'not_found', error: 'not found' }, 404));
