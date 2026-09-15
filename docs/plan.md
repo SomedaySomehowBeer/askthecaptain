@@ -295,6 +295,16 @@ export const inboxTriage = defineWorkflow({
   never sent to the model as files and never stored by Captain; the mail provider remains the
   system of record for the bytes, and evidence links point at the message and attachment id.
 
+### Later: API keys and cost budgets
+
+A tenant may in future bring an Anthropic API key instead of a subscription. The
+schema and provider interface already leave the seam: provider value `anthropic_api`,
+nullable `cost_micros` on `model_usage`, nullable `cost_limit_micros` on `model_budgets`,
+and a limits object in the budget check. Enabling it would add an `ApiProvider` in
+`packages/model` using the provider SDK, a price table, key storage encrypted with
+the organisation's data key, and verification on entry. API-key execution and cost
+budgets are not implemented today; the Sprite remains the only inference runtime.
+
 ## 8. Connectors
 
 First-party SDKs and REST behind `packages/connectors`, each with OAuth, token refresh under a row
@@ -403,7 +413,7 @@ client in Phase 2 can proceed in parallel.
 | D15 | Inventory is a counted list, not a ledger: sellable stock is read from the connected commerce system; everything else is a stock item whose count a person enters, with a stocktake workflow and reorder tasks. |
 | D16 | Envelope encryption uses a master key held in the API's secrets wrapping per-tenant data keys; no cloud key-management service and no AWS account. |
 | D17 | One environment until the second customer: one Neon branch and compute, one live pair of Fly apps deployed from `main`; production promotion exists but stays dormant. |
-| D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and resource removal are owner-run. |
+| D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and resource removal are owner-run. The Sprite is the only inference runtime today; the API path is a documented seam, not a second runtime. |
 
 ## 14. Open questions
 
@@ -413,3 +423,4 @@ client in Phase 2 can proceed in parallel.
 - Whether the first customer's printable production records belong in Captain or in its asset
   management system; out of scope until asked.
 - Pricing and the operator's own costs per tenant.
+- When to enable the API-key path and cost-based budgets; pricing for it.
