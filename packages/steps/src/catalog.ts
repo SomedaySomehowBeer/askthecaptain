@@ -32,6 +32,7 @@ export const catalog: Record<string, CatalogEntry> = {
 	'stock.items': { kind: 'read', does: 'reads the counted stock list for a location', requires: [] },
 	'shopify.stockLevels': { kind: 'read', does: 'reads shop levels or reports that Shopify is disconnected or incomplete', requires: [] },
 	// infer
+	'answer': { kind: 'infer', does: 'answers one question from deterministically retrieved records, with sources', requires: ['inference'], schemas: ['answer'] },
 	'classifyThread': { kind: 'infer', does: 'classifies a thread: category, needs owner, summary, facts', requires: ['inference'], schemas: ['triage'] },
 	'draftReply': { kind: 'infer', does: 'drafts a reply in the owner’s voice', requires: ['inference'], schemas: ['draft'] },
 	'writeBrief': { kind: 'infer', does: 'writes the morning brief from the day’s data', requires: ['inference'], schemas: ['brief'] },

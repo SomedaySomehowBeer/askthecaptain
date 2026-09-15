@@ -1,3 +1,4 @@
+import { QuestionBox } from './QuestionBox.tsx';
 import { PreparationNote } from './calendar/PreparationNote.tsx';
 import { Suspense } from 'react';
 import { BriefCard } from './BriefCard.tsx';
@@ -86,6 +87,7 @@ export default async function TodayPage() {
 				<Link className="button button--ghost" href="/inbox">Inbox</Link>
 			</section>
 
+			<Suspense fallback={<section className="card" role="status"><h2>Ask Captain</h2><p>Reading your recent questions…</p></section>}><QuestionBox me={me} /></Suspense>
 		</Page>
 	);
 }

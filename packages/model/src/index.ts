@@ -24,7 +24,7 @@ export function untrusted(input: unknown): string {
 }
 export type Limits = { tokens: number; costMicros?: number };
 export type Accounting = { before(estimate: Limits): Promise<void>; record(result: Result): Promise<void>; failed(code: ErrorCode): Promise<void> };
-/** Called only from a workflow infer step (or the owner's readiness probe). No tool surface. */
+/** Called only from a workflow or interactive infer step (or the owner's readiness probe). No tool surface. */
 export async function infer<T>(input: InferInput<T>, providerName: ProviderName, provider: Provider, accounting: Accounting): Promise<T> {
  const maxTokens = z.number().int().min(1).max(16384).parse(input.maxTokens ?? 2048);
  const schema = z.toJSONSchema(input.schema) as Record<string, unknown>;

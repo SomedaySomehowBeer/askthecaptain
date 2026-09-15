@@ -211,6 +211,13 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   validated source item references and produced-at time. The `briefs.record` write step saves it
   after inference and before push, atomically with the step journal and an audit event.
 
+**Answers**
+- `answers` (migration 0025) — independent saved exchanges: organisation, asking member, question,
+  validated answer, source references, confidence in words, actual provider-reported model and time.
+  Tenant-qualified membership keys and forced RLS protect append-only writes in the asking person's
+  name. History reads show that person's questions; organisation exports include every exchange.
+  Stored exchanges never become model conversation context.
+
 **Notifications**
 - `push_subscriptions` — a member's device: endpoint and keys, disabled when the push service says it is gone.
 - `push_deliveries` — every push sent, whether it arrived; journaled like any other write.
@@ -490,6 +497,35 @@ native app. Screens for the five tabs are designed in that project first, then b
 in light, forest in dark, mint for the Captain's own actions and focus, semantic colour reserved
 for state; system fonts; states described in words, counts shown only when they change what the
 person does next. Dark and light themes and an installable web app until the Expo app exists.
+
+### The Today question box (job 6)
+
+The bottom card accepts one question, displays its answer, evidence confidence in words, source links
+and time, and folds the previous three questions under a disclosure. Empty, reading, failed,
+unavailable and spent-budget states say what to do, linking Settings → Inference when appropriate.
+Each submission is independent; no action or conversation is inferred from a question.
+
+`POST /v1/organisations/:id/answers` accepts an active member's question (up to 1000 characters),
+limited to 30 attempts/hour per organisation using the existing process rate limiter. `GET` reads
+that person's last few exchanges, with inference availability. Deterministic code selects sources:
+whole name words/exact emails match contacts and companies; task, mail, calendar, money and stock
+words select the corresponding saved records. Today/tomorrow/yesterday, this/last/next week or month,
+and month names (optionally with a year) set civil date ranges in the organisation's timezone.
+Unspecified calendar dates use the next seven days. Task dates are due dates; paid invoices use
+fully-paid dates, overdue invoices due dates, other invoices issue dates unless due dates are asked
+for; “owe today” uses current unpaid balances, not issue dates. Invoices retain currency and are not a cash-flow report. Mail is limited to subjects/snippets
+from the last 60 days. Stock is the current saved observation, never reconstructed historical stock.
+
+Each source is capped at 20 rows; mail candidate matching at 1000 messages. Caps, date scope,
+ambiguous names, missing connections and incomplete syncs are explicit. Each row has a code-owned
+`{ kind, id, label, url }` reference to its existing tab or detail page. One interactive catalogue
+`answer` infer step (large tier) receives the question and labelled untrusted retrieved data, with no
+previous exchanges, tools or credentials. The schema is `{ answer, sources, confidence }`; code drops
+unknown source ids, downgrades unsupported confidence and keeps source gaps in the displayed answer.
+The inference service records normal usage and returns the actual model name; a separate plain,
+audited insert stores the exchange. No workflow enablement or queue is needed for this synchronous
+one-question step. Unavailable inference and spent budgets refuse before any model call. This adds
+no dependency, provider operation, background process or tab (D2, D6, D11).
 
 ## 11. Phases
 

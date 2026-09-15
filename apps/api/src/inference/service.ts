@@ -63,11 +63,15 @@ export class InferenceService {
  async verify(actor: Actor, organisationId: string) {
   await this.owner(actor, organisationId);
   // A minimal output probe: the empty JSON object. Usage is charged to the same monthly allowance.
-  return this.execute(actor, { organisationId, step: 'runtime.verify', tier: 'small', instruction: 'Return only the empty JSON object {}.', input: null, schema: z.object({}).strict(), maxTokens: 1 }, true);
+  return this.execute(actor, { organisationId, step: 'runtime.verify', tier: 'small', instruction: 'Return only the empty JSON object {}.', input: null, schema: z.object({}).strict(), maxTokens: 1 }, true).then(result => result.output);
  }
  /** The runner supplies the person who enabled the workflow; no identity is inferred by the model. */
- async infer<T>(actor: Actor, input: InferInput<T>): Promise<T> { return this.execute(actor, input, false); }
- private async execute<T>(actor: Actor, input: InferInput<T>, verify: boolean): Promise<T> {
+ async infer<T>(actor: Actor, input: InferInput<T>): Promise<T>;
+ async infer<T>(actor: Actor, input: InferInput<T>, options: { withModel: true }): Promise<{ output: T; model: string }>;
+ async infer<T>(actor: Actor, input: InferInput<T>, options?: { withModel: true }): Promise<T | { output: T; model: string }> {
+  const result = await this.execute(actor, input, false); return options?.withModel ? result : result.output;
+ }
+ private async execute<T>(actor: Actor, input: InferInput<T>, verify: boolean): Promise<{ output: T; model: string }> {
   await roleOf(this.db, actor.userId, input.organisationId); this.configured();
   const outcome = await withTenant(this.db, { organisationId: input.organisationId, userId: actor.userId }, async tx => {
    await store.dataKey(tx, input.organisationId);
@@ -79,13 +83,14 @@ export class InferenceService {
     const provider = await this.provider(tx, input.organisationId, runtime);
     if (verify) await provider.health();
     const month = await store.budget(tx, input.organisationId);
+    let model = '';
     const output = await infer(input, runtime.provider, provider, {
      before: async estimate => { if (month.usedTokens + estimate.tokens > month.limitTokens) throw new InferenceError('budget_spent'); },
-     record: async result => { await store.settle(tx, input.organisationId, month.month, { ...input, provider: runtime.provider, model: result.model, ...result.usage, latencyMs: result.latencyMs }); month.usedTokens += result.usage.inputTokens + result.usage.outputTokens; },
+     record: async result => { await store.settle(tx, input.organisationId, month.month, { ...input, provider: runtime.provider, model: result.model, ...result.usage, latencyMs: result.latencyMs }); model = result.model; month.usedTokens += result.usage.inputTokens + result.usage.outputTokens; },
      failed: async () => {}
     });
     if (verify) await store.runtimeState(tx, input.organisationId, 'ready');
-    return { output };
+    return { output, model };
    } catch (error) {
     // Return the error through commit: failed output must not roll back consumed tokens.
     failure = error instanceof InferenceError ? error : new InferenceError('provider_unavailable');
@@ -94,7 +99,7 @@ export class InferenceService {
     return { failure };
    }
   });
-  if ('failure' in outcome) throw outcome.failure; return outcome.output;
+  if ('failure' in outcome) throw outcome.failure; return outcome;
  }
 }
 export function inferenceHttpError(error: unknown): never {
