@@ -7,6 +7,11 @@ export function shortDate(date: string): string {
 	const value = utc(date);
 	return `${days[value.getUTCDay()]} ${value.getUTCDate()} ${months[value.getUTCMonth()]}${value.getUTCFullYear() === new Date().getUTCFullYear() ? '' : ` ${value.getUTCFullYear()}`}`;
 }
+/** The calendar date of an instant in a timezone, as `YYYY-MM-DD`. Timestamps from the API are UTC;
+ *  a person completed something on the day it was for them. */
+export const dateIn = (iso: string, timeZone: string): string => {
+	try { return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)); } catch { return iso.slice(0, 10); }
+};
 export type Urgency = 'overdue' | 'today' | 'soon' | 'later';
 export function describeDue(due: string | null, today: string): { text: string; urgency: Urgency | null } {
 	if (!due) return { text: 'no date', urgency: null };
