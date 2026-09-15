@@ -85,13 +85,14 @@ function ProjectCard({ project, tasks, series, projects, today, timezone }: { pr
 	);
 }
 
-export default async function CommitmentsPage() {
+export default async function CommitmentsPage({ searchParams }: { searchParams: Promise<{ shopifyOffset?: string }> }) {
+ const query = await searchParams; const shopifyOffset = /^\d{1,7}$/.test(query.shopifyOffset ?? "") ? Math.min(1_000_000, Number(query.shopifyOffset)) : 0;
 	// The layout has already sent a signed-out person to sign in; this is the cached session.
 	const me = await requireCurrent('/commitments');
 	// Read the independent sections together; each keeps its own failed state.
 	const [loaded, stock] = await Promise.all([
 		load(() => api<Commitments>(`/v1/organisations/${me.organisation.organisationId}/commitments`, { token: me.token })),
-		StockSection({ me })
+		StockSection({ me, shopifyOffset })
 	]);
 	if (!loaded.ok) {
 		return (

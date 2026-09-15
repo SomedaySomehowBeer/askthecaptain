@@ -1,11 +1,12 @@
+import { ShopifyStock } from './ShopifyStock.tsx';
 import { Notice } from '../../components/Notice.tsx';
 import { requireCurrent } from '../../components/Page.tsx';
 import { api, load } from '../../lib/api.ts';
 import { ArchiveStock, CountForm, StockForm, type StockItem, type Supplier } from './StockForms.tsx';
 type Stock = { items: StockItem[]; locations: string[]; suppliers: Supplier[]; timezone: string };
-export async function StockSection({ me }: { me: Awaited<ReturnType<typeof requireCurrent>> }) {
- const result = await load(() => api<Stock>(`/v1/organisations/${me.organisation.organisationId}/stock?includeArchived=1`, { token: me.token }));
- if (!result.ok) return <section className="card" aria-labelledby="stock-heading"><h2 id="stock-heading">Stock</h2><Notice tone="failed" action={{ href: '/commitments', label: 'Try again' }}>{result.error.message} The stock list could not be read.</Notice></section>;
+export async function StockSection({ me, shopifyOffset = 0 }: { me: Awaited<ReturnType<typeof requireCurrent>>; shopifyOffset?: number }) {
+ const [result, shopify] = await Promise.all([load(() => api<Stock>(`/v1/organisations/${me.organisation.organisationId}/stock?includeArchived=1`, { token: me.token })), ShopifyStock({ me, offset: shopifyOffset })]);
+ if (!result.ok) return <section className="card" aria-labelledby="stock-heading"><h2 id="stock-heading">Stock</h2><Notice tone="failed" action={{ href: '/commitments', label: 'Try again' }}>{result.error.message} The stock list could not be read.</Notice>{shopify}</section>;
  const { items, locations, suppliers, timezone } = result.value;
  const active = items.filter((i) => !i.archivedAt); const archived = items.filter((i) => i.archivedAt);
  const line = (item: StockItem) => <article className="stack" key={item.id} aria-label={item.name} style={{ borderTop: '1px solid var(--line)', paddingTop: '1rem', overflowWrap: 'anywhere' }}>
@@ -23,5 +24,6 @@ export async function StockSection({ me }: { me: Awaited<ReturnType<typeof requi
   {locations.map((location) => <div className="stack" key={location}><h3>{location}</h3>{active.filter((i) => i.location === location).map(line)}</div>)}
   <details className="disclosure"><summary>Add a stock item</summary><StockForm suppliers={suppliers} locations={locations} /></details>
   {archived.length ? <details className="disclosure"><summary>Archived stock ({archived.length})</summary><div className="stack">{archived.map((item) => <div key={item.id}><p className="secondary">{item.location}</p>{line(item)}</div>)}</div></details> : null}
+  {shopify}
  </section>;
 }

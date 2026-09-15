@@ -1,6 +1,21 @@
 {
-  "name": "@captain/connectors", "private": true, "type": "module",
-  "exports": { ".": "./src/google.ts", "./gmail": "./src/gmail.ts", "./calendar": "./src/calendar.ts", "./xero": "./src/xero.ts" },
-  "scripts": { "check": "tsc --noEmit -p tsconfig.json", "test": "node --import tsx --test 'test/**/*.test.ts'" },
-  "devDependencies": { "@types/node": "^22.0.0", "tsx": "^4.23.0", "typescript": "^5.9.0" }
+  "name": "@captain/connectors",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/google.ts",
+    "./gmail": "./src/gmail.ts",
+    "./calendar": "./src/calendar.ts",
+    "./xero": "./src/xero.ts",
+    "./shopify": "./src/shopify.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test 'test/**/*.test.ts'"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.0"
+  }
 }
