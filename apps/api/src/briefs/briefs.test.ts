@@ -83,7 +83,7 @@ it('briefs enforce tenant RLS and composite run keys, and the HTTP reader requir
   const path = `/v1/organisations/${f.org}/briefs/latest`; assert.equal((await app.request(path)).status, 401);
   const stranger = await auth.issueSessionFor(f.stranger.userId), member = await auth.issueSessionFor(f.member.userId);
   assert.equal((await app.request(path, { headers: { authorization: `Bearer ${stranger.token}` } })).status, 404);
-  const response = await app.request(path, { headers: { authorization: `Bearer ${member.token}` } }); assert.equal(response.status, 200); assert.equal((await response.json()).brief.title, f.output.title);
+  const response = await app.request(path, { headers: { authorization: `Bearer ${member.token}` } }); assert.equal(response.status, 200); const body = await response.json(); assert.equal(body.brief.title, f.output.title); assert.equal(body.notice, null);
   await db.owner`update memberships set status = 'removed' where organisation_id = ${f.org} and user_id = ${f.userId}`;
   assert.equal((await f.tx(tx => tx`update briefs set title = 'revoked write' returning *`)).length, 0);
  } finally { await f.engine.close(); }
