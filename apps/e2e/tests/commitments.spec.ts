@@ -12,10 +12,13 @@ test.describe('commitments', () => {
 	test.beforeEach(async ({ context }) => { await context.addCookies([{ name: 'captain_session', value: token!, url: webUrl() }]); });
 
 	test('a task is added, shown with its date, and marked done', async ({ page }) => {
+		let documents = 0;
+		page.on('request', (request) => { if (request.isNavigationRequest() && request.frame() === page.mainFrame()) documents++; });
 		await page.goto(`${webUrl()}/commitments`);
 		await expect(page.getByRole('heading', { name: 'Commitments', level: 1 })).toBeVisible();
 		await expect(page.locator('.notice--failed')).toHaveCount(0);
 		await expect(page.getByRole('heading', { name: 'Obligations' })).toBeVisible();
+		const initialDocuments = documents;
 		const title = `Send price list ${Date.now()}`;
 		// Exact label match: the Done buttons' aria-labels also contain the word "task".
 		const form = page.locator('form').filter({ has: page.getByLabel('Task', { exact: true }) }).first();
@@ -25,8 +28,10 @@ test.describe('commitments', () => {
 		const line = page.locator('.task').filter({ hasText: title });
 		await expect(line).toBeVisible();
 		await expect(line).toContainText('due');
+		await expect(form.getByLabel('Task', { exact: true })).toHaveValue('');
 		await line.getByRole('button', { name: `Mark "${title}" done` }).click();
 		await expect(page.locator('.task--done').filter({ hasText: title })).toBeAttached();
+		expect(documents).toBe(initialDocuments);
 	});
 
 	test('a recurring duty in the deadline book produces this period\'s task', async ({ page }) => {

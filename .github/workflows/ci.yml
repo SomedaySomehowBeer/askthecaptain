@@ -41,3 +41,7 @@ jobs:
           fi
       - run: pnpm check
       - run: pnpm test
+      - name: browser regression for React retries
+        run: |
+          pnpm --filter @captain/e2e exec playwright install --with-deps chromium
+          pnpm --filter @captain/e2e exec playwright test react-retry.spec.ts --project chromium

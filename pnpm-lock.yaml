@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  next@15.5.25:
+    hash: 22f263f7714d6f4553158b2995dd22226dc4709e5d98de35fa3c3e3960c8aff4
+    path: patches/next@15.5.25.patch
+
 importers:
 
   .:
@@ -86,7 +91,7 @@ importers:
         version: 14.0.0
       next:
         specifier: ^15.5.0
-        version: 15.5.25(@playwright/test@1.63.0)(@types/node@22.20.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+        version: 15.5.25(patch_hash=22f263f7714d6f4553158b2995dd22226dc4709e5d98de35fa3c3e3960c8aff4)(@playwright/test@1.63.0)(@types/node@22.20.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       react:
         specifier: ^19.1.0
         version: 19.3.0
@@ -1625,7 +1630,7 @@ snapshots:
 
   nanoid@3.3.19: {}
 
-  next@15.5.25(@playwright/test@1.63.0)(@types/node@22.20.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
+  next@15.5.25(patch_hash=22f263f7714d6f4553158b2995dd22226dc4709e5d98de35fa3c3e3960c8aff4)(@playwright/test@1.63.0)(@types/node@22.20.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:
       '@next/env': 15.5.25
       '@swc/helpers': 0.5.15
