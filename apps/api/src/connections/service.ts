@@ -8,7 +8,7 @@ import { badRequest, forbidden, notFound } from '../errors.ts';
 import { newDataKey, open, seal } from './encryption.ts';
 
 type Actor = { userId: string; requestId: string };
-export type Connection = { id: string; provider: string; connectedBy: string; accountEmail: string; scopes: string[];
+export type Connection = { id: string; provider: string; connectedBy: string; accountEmail: string | null; scopes: string[];
 	status: 'connected' | 'refresh_failed' | 'revoked' | 'disconnected'; error: string | null; updatedAt: Date };
 type Stored = Connection & { accessTokenEncrypted: Buffer | null; refreshTokenEncrypted: Buffer | null; accessTokenExpiresAt: Date | null };
 const statePayload = z.object({ organisationId: z.string().uuid(), verifier: z.string().min(1) });

@@ -181,6 +181,15 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 - `push_deliveries` — every push sent, whether it arrived; journaled like any other write.
   Web Push encryption and VAPID signing use the `web-push` library; the private key lives only in the API.
 
+### Xero accounting cache (D6, D8)
+
+`xero_contacts`, `xero_invoices` and `xero_payments` cache the selected Xero organisation's
+contacts, sales invoices / purchase bills, and invoice payments. All carry tenant-qualified
+connection and provider keys; contacts may link to Captain companies / contacts on an unambiguous
+exact name / email match without changing a person's fields. Company external references record
+that match. Money reads preserve currencies and report incomplete syncs. These are system sync
+records, not a configurable financial model. Products and stock remain Shopify's responsibility.
+
 ## 6. Workflows
 
 A workflow is an ordered composition of steps from a typed catalog, defined in TypeScript in

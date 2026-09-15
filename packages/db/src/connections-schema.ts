@@ -16,7 +16,7 @@ const memberships = pgTable('memberships', {
 const tenant = () => uuid('organisation_id').notNull().references(() => organisations.id, { onDelete: 'cascade' });
 export const connections = pgTable('connections', {
 	id: id(), organisationId: tenant(), provider: text('provider').notNull(), connectedBy: uuid('connected_by').notNull(),
-	accountEmail: text('account_email').notNull(), scopes: text('scopes').array().notNull(),
+	accountEmail: text('account_email'), providerAccountId: text('provider_account_id'), providerAccountName: text('provider_account_name'), scopes: text('scopes').array().notNull(),
 	status: text('status', { enum: ['connected', 'refresh_failed', 'revoked', 'disconnected'] }).notNull(), error: text('error'),
 	accessTokenEncrypted: bytea('access_token_encrypted'), refreshTokenEncrypted: bytea('refresh_token_encrypted'),
 	accessTokenExpiresAt: at('access_token_expires_at'), createdAt: at('created_at').notNull().defaultNow(), updatedAt: at('updated_at').notNull().defaultNow()

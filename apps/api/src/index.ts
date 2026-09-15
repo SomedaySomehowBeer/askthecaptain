@@ -1,3 +1,6 @@
+import { XeroConnector } from '@captain/connectors/xero';
+import { XeroConnections } from './xero/connections.ts';
+import { XeroSync, startXeroSchedule } from './xero/sync.ts';
 import { GmailPush, startGmailPushSchedule } from './mail/push.ts';
 import { GmailWatch } from './mail/watch.ts';
 import { CalendarSync, startCalendarSchedule } from './calendar/sync.ts';
@@ -38,15 +41,18 @@ const commitments = new CommitmentsService(db);
 const stopSeries = startSeriesSchedule(new SeriesRoutine(db, commitments), env.SERIES_DISABLED === '1');
 const calendarSync = new CalendarSync(db, connections);
 const stopCalendarSync = startCalendarSchedule(calendarSync, env.CALENDAR_SYNC_DISABLED === '1');
+const xeroConnections = new XeroConnections(db, env.XERO_CLIENT_ID ? new XeroConnector(env.XERO_CLIENT_ID, new URL('/connections/xero/callback', env.API_URL).toString()) : null, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
+const xeroSync = new XeroSync(xeroConnections);
+const stopXeroSync = startXeroSchedule(xeroSync, env.XERO_SYNC_DISABLED === '1' || !xeroConnections.available);
 const pushKeys = env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY && env.WEB_PUSH_SUBJECT ? { publicKey: env.WEB_PUSH_PUBLIC_KEY, privateKey: env.WEB_PUSH_PRIVATE_KEY, subject: env.WEB_PUSH_SUBJECT } : null;
 if (!pushKeys) console.warn('[api] Web Push is not configured (WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY / WEB_PUSH_SUBJECT)');
 const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, pushKeys?.publicKey ?? null);
 const workflows = new WorkflowService(db, push);
 // The catalogue is code; the table the API exposes follows it (plan §5 workflow_definitions).
 await workflows.sync().catch((error) => console.error('[api] workflow catalogue sync failed', error instanceof Error ? error.message : error));
-const app = createApp({ workflows, push, inference: new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null), db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments });
+const app = createApp({ xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference: new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null), db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
-const shutdown = () => { server.close(); void Promise.all([stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
+const shutdown = () => { server.close(); void Promise.all([stopXeroSync(), stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

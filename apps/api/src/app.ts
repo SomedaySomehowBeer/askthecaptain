@@ -1,3 +1,6 @@
+import { xeroRoutes } from './xero/routes.ts';
+import type { XeroConnections } from './xero/connections.ts';
+import type { XeroSync } from './xero/sync.ts';
 import { gmailPushRoutes, type GmailPush } from './mail/push.ts';
 import type { GmailWatch } from './mail/watch.ts';
 import { contactsRoutes } from './contacts/routes.ts';
@@ -26,7 +29,7 @@ import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
 
-export type Deps = { inference?: InferenceService; db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService };
+export type Deps = { inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -60,6 +63,10 @@ export function createApp(deps: Deps) {
 	});
 	app.get('/auth/providers', (c) => c.json({ google: deps.auth.googleAvailable }));
 
+	app.get('/connections/xero/callback', async (c) => {
+		if (!deps.xeroConnections) throw new HttpError(503, 'xero_unavailable', 'Xero connections are not configured.');
+		return c.redirect(await deps.xeroConnections.finish(c.req.query('code') ?? '', c.req.query('state') ?? '', c.req.query('error'), c.get('requestId')));
+	});
 	app.route('/', connectionRoutes(deps));
 	app.route('/', gmailPushRoutes(deps.gmailPush));
 
@@ -102,6 +109,7 @@ export function createApp(deps: Deps) {
 		const input = z.object({ token: z.string().min(1) }).parse(await c.req.json());
 		return c.json(await deps.organisations.accept({ ...actor(c), email: c.get('session').user.email }, input.token));
 	});
+	signedIn.route('/', xeroRoutes(deps));
 	signedIn.route('/', contactsRoutes(new ContactsService(deps.db)));
 	signedIn.route('/', inferenceRoutes(deps.inference));
 	signedIn.route('/', commitmentsRoutes(deps.commitments));

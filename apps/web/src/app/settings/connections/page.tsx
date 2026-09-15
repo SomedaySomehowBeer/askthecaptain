@@ -1,3 +1,4 @@
+import { XeroCard } from './XeroCard.tsx';
 import { WatchButton } from './WatchButton.tsx';
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
@@ -22,12 +23,13 @@ const errors: Record<string, string> = {
 	forbidden: 'Only an owner or admin can connect Google. Your role may have changed.',
 	not_found: 'You no longer have access to the organisation that started this connection.'
 };
-export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ error?: string; connected?: string }> }) {
+export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<{ error?: string; connected?: string; xero?: string }> }) {
 	const me = await requireCurrent('/settings/connections'); const query = await searchParams;
 	return <Page title="Connections" lede={me.organisation.organisationName}>
 		<Suspense fallback={<div role="status"><Notice>Checking your connections…</Notice></div>}>
 			<GoogleConnection me={me} query={query} />
 		</Suspense>
+		<Suspense fallback={<div role="status"><Notice>Checking Xero…</Notice></div>}><XeroCard me={me} outcome={query.xero} /></Suspense>
 	</Page>;
 }
 async function GoogleConnection({ me, query }: { me: Awaited<ReturnType<typeof requireCurrent>>; query: { error?: string; connected?: string } }) {
