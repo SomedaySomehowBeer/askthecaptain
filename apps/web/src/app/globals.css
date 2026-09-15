@@ -112,3 +112,13 @@ input[type='date']:focus-visible, input[type='number']:focus-visible, textarea:f
 .skeleton { height: 14px; border-radius: 6px; background: var(--panel-2); animation: pulse 1.2s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.5; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* Inbox: mail content is always text, including converted HTML. */
+.mail-row { border-top: 1px solid var(--line); }
+.mail-row:first-child { border-top: 0; }
+.mail-link { display: flex; flex-direction: column; gap: 8px; padding: 16px 0; text-decoration: none; overflow-wrap: anywhere; }
+.mail-link .line { flex-wrap: wrap; gap: 6px 16px; }
+.mail-link time { font-size: 13px; color: var(--muted); }
+.mail-link h3, .mail-link p, .mail-message p { margin: 0; }
+.mail-message { overflow-wrap: anywhere; }
+.mail-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; }

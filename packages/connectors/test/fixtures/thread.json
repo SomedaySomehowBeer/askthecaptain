@@ -1,0 +1,99 @@
+{
+  "id": "thread-1",
+  "messages": [
+    {
+      "id": "message-1",
+      "threadId": "thread-1",
+      "internalDate": "1789459200000",
+      "labelIds": [
+        "INBOX",
+        "Label_supplier"
+      ],
+      "snippet": "Delivery on Thursday",
+      "payload": {
+        "partId": "",
+        "mimeType": "multipart/mixed",
+        "headers": [
+          {
+            "name": "From",
+            "value": "Supplier <supplier@example.test>"
+          },
+          {
+            "name": "To",
+            "value": "Business <business@example.test>"
+          },
+          {
+            "name": "Cc",
+            "value": "Crew <crew@example.test>"
+          },
+          {
+            "name": "Subject",
+            "value": "Delivery on Thursday"
+          },
+          {
+            "name": "Date",
+            "value": "Tue, 15 Sep 2026 08:00:00 +0800"
+          },
+          {
+            "name": "In-Reply-To",
+            "value": "<previous@example.test>"
+          }
+        ],
+        "body": {
+          "size": 0
+        },
+        "parts": [
+          {
+            "partId": "0",
+            "mimeType": "multipart/alternative",
+            "body": {
+              "size": 0
+            },
+            "parts": [
+              {
+                "partId": "0.0",
+                "mimeType": "text/plain",
+                "body": {
+                  "size": 29,
+                  "data": "WW91ciBkZWxpdmVyeSBpcyBvbiBUaHVyc2RheS4"
+                }
+              },
+              {
+                "partId": "0.1",
+                "mimeType": "text/html",
+                "body": {
+                  "size": 40,
+                  "data": "PHA-WW91ciBkZWxpdmVyeSBpcyBvbiA8Yj5UaHVyc2RheTwvYj4uPC9wPg"
+                }
+              }
+            ]
+          },
+          {
+            "partId": "1",
+            "mimeType": "application/pdf",
+            "filename": "delivery.pdf",
+            "body": {
+              "size": 12345,
+              "attachmentId": "attachment-1"
+            }
+          },
+          {
+            "partId": "2",
+            "mimeType": "text/plain",
+            "filename": "notes.txt",
+            "headers": [
+              {
+                "name": "Content-Disposition",
+                "value": "attachment; filename=\"notes.txt\""
+              }
+            ],
+            "body": {
+              "size": 20,
+              "data": "QVRUQUNITUVOVC1ORVZFUi1TVE9SRQ"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
