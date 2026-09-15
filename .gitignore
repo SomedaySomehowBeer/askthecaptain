@@ -10,3 +10,7 @@ dist
 *.tsbuildinfo
 infra/tofu/.terraform
 infra/tofu/*.tfstate*
+
+# Playwright output
+apps/e2e/test-results/
+apps/e2e/playwright-report/

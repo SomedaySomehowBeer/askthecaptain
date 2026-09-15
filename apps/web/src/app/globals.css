@@ -88,3 +88,27 @@ input:focus-visible, select:focus-visible, .button:focus-visible, a:focus-visibl
 .form { display: flex; flex-direction: column; gap: 14px; }
 .form__error { color: var(--danger); font-size: 13px; }
 .codeblock { margin: 0; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-control); overflow-x: auto; font-size: 12px; line-height: 1.5; word-break: break-all; white-space: pre-wrap; }
+
+/* Commitments */
+.task { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.task:first-child { border-top: 0; }
+.task__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.task__title { font-weight: 500; overflow-wrap: anywhere; }
+.task--done .task__title { color: var(--muted); text-decoration: line-through; }
+.task__meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; color: var(--muted); }
+.due--overdue { color: var(--danger); font-weight: 600; }
+.due--today { color: var(--warn); font-weight: 600; }
+.task__actions { display: flex; gap: 4px; flex: none; }
+.button--small { min-height: 34px; padding: 0 12px; font-size: 13px; }
+.disclosure > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-2); list-style: none; padding: 6px 0; }
+.disclosure > summary::-webkit-details-marker { display: none; }
+.disclosure > summary::before { content: '▸ '; }
+.disclosure[open] > summary::before { content: '▾ '; }
+.disclosure > .form, .disclosure > .bare { margin-top: 8px; }
+input[type='date'], input[type='number'], textarea { font: inherit; font-size: 15px; min-height: 44px; padding: 0 12px; border: var(--border-control); border-radius: var(--radius-control); background: var(--panel); color: var(--ink); }
+textarea { padding: 10px 12px; min-height: 88px; resize: vertical; }
+input[type='date']:focus-visible, input[type='number']:focus-visible, textarea:focus-visible { outline: var(--border-focus); outline-offset: 2px; }
+.card--archived { opacity: var(--disabled-opacity); }
+.skeleton { height: 14px; border-radius: 6px; background: var(--panel-2); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }

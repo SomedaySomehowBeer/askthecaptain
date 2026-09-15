@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { withTenant, withUser, type Sql } from '@captain/db';
 import { audit } from '../audit.ts';
 import { badRequest, forbidden, notFound } from '../errors.ts';
+import { roleOf } from '../tenant.ts';
 
 export type Role = 'owner' | 'admin' | 'member';
 export type Organisation = { id: string; name: string; timezone: string; locale: string; createdAt: Date };
@@ -29,6 +30,9 @@ export class OrganisationService {
 			const [org] = await tx<Organisation[]>`insert into organisations (id, name, timezone) values (${id}, ${name}, ${input.timezone ?? 'Australia/Perth'})
 				returning id, name, timezone, locale, created_at`;
 			await tx`insert into memberships (organisation_id, user_id, role) values (${org!.id}, ${actor.userId}, 'owner')`;
+			// Every organisation has its deadline book from the start (D7).
+			await tx`insert into projects (organisation_id, name, description, system_kind, created_by)
+				values (${org!.id}, 'Obligations', 'Returns, renewals and payments the business owes on a date.', 'obligations', ${actor.userId})`;
 			await audit(tx, { organisationId: org!.id, actor: { kind: 'person', id: actor.userId }, action: 'organisation.created', subjectType: 'organisation', subjectId: org!.id, requestId: actor.requestId, detail: { name } });
 			return org!;
 		}) as Promise<Organisation>;
@@ -146,11 +150,7 @@ export class OrganisationService {
 		});
 	}
 
-	async #roleOf(userId: string, organisationId: string): Promise<Role> {
-		const [row] = await withUser(this.#db, { userId }, (tx) => tx<{ role: Role }[]>`select role from memberships where organisation_id = ${organisationId} and user_id = ${userId} and status = 'active'`);
-		if (!row) throw notFound();
-		return row.role;
-	}
+	#roleOf(userId: string, organisationId: string): Promise<Role> { return roleOf(this.#db, userId, organisationId); }
 
 	async #requireAnotherOwner(tx: Parameters<Parameters<typeof withTenant>[2]>[0], organisationId: string, exceptUserId: string) {
 		const [row] = await tx<{ count: number }[]>`select count(*)::int as count from memberships where organisation_id = ${organisationId} and role = 'owner' and status = 'active' and user_id <> ${exceptUserId}`;

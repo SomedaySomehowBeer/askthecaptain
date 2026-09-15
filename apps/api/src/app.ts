@@ -3,10 +3,12 @@ import type { Sql } from '@captain/db';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AuthService, Session } from './auth/service.ts';
+import { commitmentsRoutes } from './commitments/routes.ts';
+import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
 import type { OrganisationService } from './organisations/service.ts';
 
-export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService };
+export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -79,6 +81,7 @@ export function createApp(deps: Deps) {
 		const input = z.object({ token: z.string().min(1) }).parse(await c.req.json());
 		return c.json(await deps.organisations.accept({ ...actor(c), email: c.get('session').user.email }, input.token));
 	});
+	signedIn.route('/', commitmentsRoutes(deps.commitments));
 	app.route('/', signedIn);
 
 	app.notFound((c) => c.json({ ok: false, code: 'not_found', error: 'not found' }, 404));
