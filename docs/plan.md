@@ -81,7 +81,9 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `infra` | OpenTofu for Neon, Cloudflare and monitoring |
 
 **Hosting.** Fly.io in Sydney for the API and web; Neon Postgres; Cloudflare for DNS and TLS at the
-edge; GitHub Actions for CI and deploy. One production environment and one staging environment.
+edge; GitHub Actions for CI and deploy. One environment: a single Neon branch and compute, and the
+Fly apps that serve app.askthecaptain.app, deployed from `main` behind the smoke gate. The second
+pair of Fly apps and a second database wait for a second customer (D17).
 
 **Durable execution.** Workflows need exactly-once side effects, retries, timers ("in three days")
 and waits ("until the owner sends it"). Two candidates: **Restate** (a durable execution engine with
@@ -382,6 +384,7 @@ client in Phase 2 can proceed in parallel.
 | D14 | The Ask The Captain Design System in Claude Design is the design authority, mirrored into `packages/ui/design/`. |
 | D15 | Inventory is a counted list, not a ledger: sellable stock is read from the connected commerce system; everything else is a stock item whose count a person enters, with a stocktake workflow and reorder tasks. |
 | D16 | Envelope encryption uses a master key held in the API's secrets wrapping per-tenant data keys; no cloud key-management service and no AWS account. |
+| D17 | One environment until the second customer: one Neon branch and compute, one live pair of Fly apps deployed from `main`; production promotion exists but stays dormant. |
 
 ## 14. Open questions
 

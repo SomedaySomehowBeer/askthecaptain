@@ -1,6 +1,11 @@
 name: deploy
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      promote:
+        description: 'Also deploy production after the staging gate passes'
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths: ['apps/**', 'packages/**', 'package.json', 'pnpm-lock.yaml', '.dockerignore', '.github/workflows/deploy.yml']
@@ -39,8 +44,8 @@ jobs:
       - run: pnpm --filter @captain/e2e exec playwright install --with-deps chromium
       - run: pnpm --filter @captain/e2e e2e
   production:
-    # Production is promoted by hand from a green staging: run this workflow from the Actions tab.
-    if: github.event_name == 'workflow_dispatch'
+    # Production stays dormant until launch (D17). Promote by hand: run this workflow with promote=true.
+    if: github.event_name == 'workflow_dispatch' && inputs.promote
     needs: [e2e-gate]
     runs-on: ubuntu-latest
     environment: production

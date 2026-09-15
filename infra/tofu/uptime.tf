@@ -17,15 +17,3 @@ resource "betteruptime_monitor" "api_staging_readyz" {
   push             = true
 }
 
-# Production is dormant (Path A) — the monitor exists so waking prod is one attribute flip
-# rather than a remembered checklist item, but paused so a sleeping API is not a nightly page.
-resource "betteruptime_monitor" "api_production_readyz" {
-  url              = "https://api.askthecaptain.app/readyz"
-  monitor_type     = "keyword"
-  required_keyword = "\"ok\":true"
-  check_frequency  = 300
-  regions          = ["au"]
-  email            = true
-  push             = true
-  paused           = true
-}
