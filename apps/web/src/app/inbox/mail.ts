@@ -1,7 +1,9 @@
-export type ThreadSummary = { id: string; fromHeader: string; subject: string; snippet: string; sentAt: string; labelNames: string[]; attachmentCount: number };
-export type MailList = { nextBefore: string | null; automaticSyncEnabled: boolean; timezone: string; connection: { status: string; accountEmail: string; error: string | null } | null;
+export type Triage = { category: string; needsOwner: boolean; summary: string; facts: { counterparty: string | null; amounts: string[]; dates: string[]; references: string[] } };
+export type Draft = { id: string; threadId: string | null; subject: string; body: string; to: string[]; cc: string[]; state: 'drafted' | 'sent' | 'discarded'; sendStartedAt: string | null };
+export type ThreadSummary = { triage: Triage | null; hasDraft: boolean; id: string; fromHeader: string; subject: string; snippet: string; sentAt: string; labelNames: string[]; attachmentCount: number };
+export type MailList = { triageNotice: string | null; outbox: Draft[]; nextBefore: string | null; automaticSyncEnabled: boolean; timezone: string; connection: { status: string; accountEmail: string; error: string | null } | null;
 	lastSync: { at: string; detail: { success: boolean; capped?: boolean; error?: string } } | null; threads: ThreadSummary[]; hasMore: boolean };
-export type ThreadDetail = { id: string; labelNames: string[]; timezone: string; connectionStatus: string; messages: {
+export type ThreadDetail = { triageNotice: string | null; triage: Triage | null; outbox: Draft[]; id: string; labelNames: string[]; timezone: string; connectionStatus: string; messages: {
 	id: string; senderContact: { id: string; name: string; email: string } | null; fromHeader: string; toHeader: string; ccHeader: string; subject: string; sentAt: string; body: string; bodyUnavailable: boolean;
 	attachments: { id: string; filename: string; mediaType: string; size: number }[] }[] };
 export const mailTime = (date: string, timeZone: string) => new Intl.DateTimeFormat('en-AU', { timeZone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(date));

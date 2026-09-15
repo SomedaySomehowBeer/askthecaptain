@@ -11,7 +11,7 @@ const optional = (value: unknown) => value === undefined ? undefined : string(va
 const id = (value: unknown) => { const result = string(value); if (!result) throw new GmailError(); return result; };
 export type MailAttachment = { partId: string; filename: string; mediaType: string; size: number; providerAttachmentId: string | null };
 export type MailMessage = { providerId: string; fromHeader: string; toHeader: string; ccHeader: string; bccHeader: string; subject: string; dateHeader: string;
-	sentAt: string; snippet: string; labelIds: string[]; inReplyTo: string; body: string; bodyUnavailable: boolean; attachments: MailAttachment[] };
+	rfcMessageId?: string; sentAt: string; snippet: string; labelIds: string[]; inReplyTo: string; body: string; bodyUnavailable: boolean; attachments: MailAttachment[] };
 export type MailThread = { providerId: string; messages: MailMessage[] };
 export type HistoryPage = { threadIds: string[]; historyId: string; nextPageToken?: string };
 
@@ -61,7 +61,7 @@ function parseMessage(value: unknown): MailMessage {
 	const sent = new Date(Number(internalDate)); if (!Number.isFinite(sent.getTime())) throw new GmailError();
 	const text = body(payload, '0', 0);
 	return { providerId: id(m.id), fromHeader: h.from ?? '', toHeader: h.to ?? '', ccHeader: h.cc ?? '', bccHeader: h.bcc ?? '', subject: h.subject ?? '', dateHeader: h.date ?? '',
-		sentAt: sent.toISOString(), snippet: optional(m.snippet) ?? '', labelIds: strings(m.labelIds), inReplyTo: h['in-reply-to'] ?? '', body: text, bodyUnavailable: unavailable && !text, attachments };
+		rfcMessageId: h['message-id'] ?? '', sentAt: sent.toISOString(), snippet: optional(m.snippet) ?? '', labelIds: strings(m.labelIds), inReplyTo: h['in-reply-to'] ?? '', body: text, bodyUnavailable: unavailable && !text, attachments };
 }
 
 /** First-party Gmail REST client. Responses are validated and errors never contain provider bodies. */
@@ -97,6 +97,29 @@ export class GmailClient {
 		const data = await this.post('watch', token, { topicName });
 		const expiration = Number(id(data.expiration)); if (!Number.isSafeInteger(expiration) || expiration <= 0) throw new GmailError();
 		return { historyId: id(data.historyId), expiration };
+	}
+	async attachment(token: string, messageId: string, attachmentId: string, maxBytes = 5_000_000): Promise<string> {
+		const data = await this.get(`messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`, token);
+		const encoded = string(data.data);
+		if (typeof data.size !== 'number' || data.size > maxBytes || encoded.length > Math.ceil(maxBytes / 3) * 4 || !/^[\w-]*={0,2}$/.test(encoded)) throw new GmailError();
+		const bytes = Buffer.from(encoded, 'base64url'); if (bytes.length > maxBytes) throw new GmailError();
+		return new TextDecoder('utf-8', { fatal: true }).decode(bytes).replaceAll('\u0000', '').slice(0, 20000);
+	}
+	async label(token: string, threadId: string, name: string): Promise<void> {
+		let labels = await this.labels(token); let labelId = Object.keys(labels).find(key => labels[key] === name);
+		if (!labelId) {
+			try { labelId = id((await this.post('labels', token, { name })).id); }
+			catch (error) { labels = await this.labels(token); labelId = Object.keys(labels).find(key => labels[key] === name); if (!labelId) throw error; }
+		}
+		await this.post(`threads/${encodeURIComponent(threadId)}/modify`, token, { addLabelIds: [labelId] });
+	}
+	async send(token: string, raw: string, threadId?: string): Promise<string> {
+		return id((await this.post('messages/send', token, { raw, ...(threadId ? { threadId } : {}) })).id);
+	}
+	async sentMessage(token: string, messageId: string): Promise<string | null> {
+		const data = await this.get('messages', token, { q: `in:sent rfc822msgid:${messageId}`, maxResults: '2' });
+		const rows = array(data.messages); if (rows.length > 1) throw new GmailError();
+		return rows.length ? id(object(rows[0]).id) : null;
 	}
 	async stop(token: string): Promise<void> { await this.post('stop', token); }
 	private async post(path: string, token: string, body?: object): Promise<ObjectValue> {

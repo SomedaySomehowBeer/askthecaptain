@@ -1,5 +1,7 @@
 import { StockService } from './stock/service.ts';
 import { stockRoutes } from './stock/routes.ts';
+import { outboxRoutes } from './triage/routes.ts';
+import type { OutboxService } from './triage/outbox.ts';
 import { xeroRoutes } from './xero/routes.ts';
 import type { XeroConnections } from './xero/connections.ts';
 import type { XeroSync } from './xero/sync.ts';
@@ -34,7 +36,7 @@ import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
 
-export type Deps = { inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
+export type Deps = { outbox?: OutboxService; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -167,6 +169,7 @@ export function createApp(deps: Deps) {
 	signedIn.route('/', xeroRoutes(deps));
 	signedIn.route('/', stockRoutes(new StockService(deps.db)));
 	signedIn.route('/', contactsRoutes(new ContactsService(deps.db)));
+	if (deps.outbox) signedIn.route('/', outboxRoutes(deps.outbox));
 	signedIn.route('/', inferenceRoutes(deps.inference));
 	signedIn.route('/', commitmentsRoutes(deps.commitments));
 	signedIn.get('/v1/organisations/:id/mail/watch', async (c) => {
@@ -179,7 +182,7 @@ export function createApp(deps: Deps) {
 	});
 	if (deps.workflows) signedIn.route('/', workflowRoutes(deps.workflows));
 	if (deps.push) signedIn.route('/', pushRoutes(deps.push));
-	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled)));
+	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled, () => deps.workflows?.runnerProblem('inbox-triage') ?? null)));
 	signedIn.route('/', calendarRoutes(new CalendarService(deps.db, deps.calendarSync, deps.calendarScheduleEnabled)));
 	app.route('/', signedIn);
 

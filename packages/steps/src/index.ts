@@ -13,3 +13,5 @@ export { digestOf, requirementsOf, resolveParameters, validateDefinition, type P
  *  Settings page lists them. Versioned with the code; the API syncs it into `workflow_definitions`. */
 export const definitions: WorkflowDefinition[] = [inboxTriage, morningBrief, chaseDue, calendarPrep, stocktake];
 export const definitionByKey = (key: string): WorkflowDefinition | undefined => definitions.find((d) => d.key === key);
+
+export { classifyThreadInstruction, draftReplyInstruction } from './instructions/inbox-triage.ts';

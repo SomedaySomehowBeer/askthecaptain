@@ -6,7 +6,7 @@ export type HandlerContext = {
 };
 export type WaitResult = { ready: boolean; key: string; output?: unknown };
 type DatabaseHandler = { kind: 'read' | 'write'; transaction: (context: HandlerContext & { tx: TransactionSql }, args: Record<string, unknown>) => Promise<unknown> };
-type ExternalHandler = { kind: 'infer' | 'write' | 'notify';
+type ExternalHandler = { kind: 'read' | 'infer' | 'write' | 'notify';
  /** A provider write MUST implement desired-state/idempotency or reconcile using idempotencyKey. */
  retrySafe: true; call: (context: HandlerContext, args: Record<string, unknown>) => Promise<unknown> };
 type AwaitHandler = { kind: 'await'; transaction: (context: HandlerContext & { tx: TransactionSql }, args: Record<string, unknown>) => Promise<WaitResult> };

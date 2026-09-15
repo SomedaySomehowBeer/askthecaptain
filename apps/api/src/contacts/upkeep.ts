@@ -1,10 +1,10 @@
 import type { TransactionSql } from '@captain/db';
-import { audit } from '../audit.ts';
+import { audit, type AuditActor } from '../audit.ts';
 import { addresses, isCounterparty, publicDomains } from './addresses.ts';
 
 /** Backfill cached headers, optionally limited to a persisted mail batch. Contacts and their mail
  * commit together. Human edits and archives survive resync, deletion and account changes. */
-export async function upkeepContacts(tx: TransactionSql, organisationId: string, accountEmail: string, providerIds?: string[]) {
+export async function upkeepContacts(tx: TransactionSql, organisationId: string, accountEmail: string, providerIds?: string[], actor: AuditActor = { kind: 'system' }) {
  const messages = await tx`select m.thread_id, m.sent_at, m.from_header, m.to_header, m.cc_header, m.bcc_header from mail_messages m
   join mail_threads t on t.id = m.thread_id where t.account_email = ${accountEmail}
   and (${providerIds === undefined} or t.provider_id = any(${tx.array(providerIds ?? [])}::text[])) order by m.sent_at, m.id`;
@@ -36,6 +36,6 @@ export async function upkeepContacts(tx: TransactionSql, organisationId: string,
    last_seen_at = greatest(last_seen_at, ${contact.last}) where email = ${email}`;
   updated++;
  }
- await audit(tx, { organisationId, actor: { kind: 'system' }, action: 'contacts.synced', subjectType: 'organisation', subjectId: organisationId,
+ await audit(tx, { organisationId, actor, action: 'contacts.synced', subjectType: 'organisation', subjectId: organisationId,
   detail: { addresses: seen.size, created, updated, companiesCreated } });
 }

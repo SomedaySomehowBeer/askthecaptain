@@ -3,7 +3,9 @@ import { evaluate, lookup, type ActionStep, type Step, type WorkflowDefinition }
 export type Enablement = { id: string; organisationId: string; enabledBy: string; parameters: Record<string, unknown> };
 export type Snapshot = { definition: WorkflowDefinition; enablement: Enablement; trigger: unknown };
 export class Park extends Error {}
-export const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+// Postgres jsonb reorders object keys. Hash data canonically so a resumed step has the same input.
+export const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value, (_key, item: unknown) =>
+ item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : item)).digest('hex');
 /** Bounded data interpreter for production workflows. No clock, I/O or model calls here. */
 export async function interpret(snapshot: Snapshot, action: (path: string, step: ActionStep, args: Record<string, unknown>, skipped: boolean, itemIndex: number | null) => Promise<unknown>) {
  const walk = async (steps: Step[], scope: Record<string, unknown>, parent: string, itemIndex: number | null = null): Promise<void> => {
