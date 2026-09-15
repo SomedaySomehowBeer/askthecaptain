@@ -1,5 +1,5 @@
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
-import type { HandlerContext, Registry } from '@captain/engine';
+import { WorkflowPause, type HandlerContext, type Registry } from '@captain/engine';
 import { morningBriefInstruction } from '@captain/steps';
 import { z } from 'zod';
 import { audit } from '../audit.ts';
@@ -54,7 +54,9 @@ export class BriefService {
   } });
   registry.registerStep('xero.overdueReceivables', { kind: 'read', transaction: async (ctx, args) => {
    const value = await xero.readIn(ctx.tx, ctx.organisationId, z.number().int().min(0).max(365).parse(args.overdueDays ?? 0), 0, z.iso.date().optional().parse(args.today));
+   if (args.requireComplete && (!value.connected || !value.complete)) throw new WorkflowPause('Xero invoices are unavailable or incompletely synced. Connect Xero and complete a sync in Settings, then Resume.');
    const invoices = 'invoices' in value ? value.invoices : [];
+   if (args.requireComplete && invoices.length > 100) throw new WorkflowPause('More than 100 invoices need chasing. Increase the overdue-days threshold or review old invoices in Xero, then start a new run.');
    return { connected: value.connected, complete: value.complete, lastSyncedAt: value.lastSyncedAt, truncated: invoices.length > 100 || ('nextOffset' in value && value.nextOffset !== null),
     invoices: invoices.slice(0, 100).map(i => ({ id: i.id, number: (i.number ?? 'without a number').slice(0, 200), dueDate: i.dueDate, daysOverdue: i.daysOverdue, currency: i.currency, amountDue: i.amountDue, contactName: i.contactName.slice(0, 200), contactEmail: i.contactEmail })) };
   } });

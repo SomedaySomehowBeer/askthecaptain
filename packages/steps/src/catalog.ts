@@ -35,7 +35,7 @@ export const catalog: Record<string, CatalogEntry> = {
 	'classifyThread': { kind: 'infer', does: 'classifies a thread: category, needs owner, summary, facts', requires: ['inference'], schemas: ['triage'] },
 	'draftReply': { kind: 'infer', does: 'drafts a reply in the owner’s voice', requires: ['inference'], schemas: ['draft'] },
 	'writeBrief': { kind: 'infer', does: 'writes the morning brief from the day’s data', requires: ['inference'], schemas: ['brief'] },
-	'draftChaser': { kind: 'infer', does: 'drafts a courteous chaser for an overdue invoice', requires: ['inference'], schemas: ['draft'] },
+	'draftChaser': { kind: 'infer', does: 'drafts a courteous chaser from Xero for the connected mailbox', requires: ['inference', 'connection:xero', 'connection:google'], schemas: ['draft'] },
 	'prepareEventNote': { kind: 'infer', does: 'writes a one-paragraph preparation note for an event', requires: ['inference'], schemas: ['note'] },
 	'draftOrderEmail': { kind: 'infer', does: 'drafts a short order email to the preferred supplier', requires: ['inference'], schemas: ['draft'] },
 	// write

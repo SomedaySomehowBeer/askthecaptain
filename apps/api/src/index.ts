@@ -1,3 +1,4 @@
+import { ChaseService } from './chase/service.ts';
 import { BriefService } from './briefs/service.ts';
 import { TriageService } from './triage/service.ts';
 import { OutboxService } from './triage/outbox.ts';
@@ -49,7 +50,7 @@ if (!pushKeys) console.warn('[api] Web Push is not configured (WEB_PUSH_PUBLIC_K
 const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, pushKeys?.publicKey ?? null);
 const briefs = new BriefService(db);
 const triage = new TriageService(db, connections, inference);
-const engine = new BossEngine(db, env.DATABASE_URL, briefs.register(triage.registry(), inference, push), definitions);
+const engine = new BossEngine(db, env.DATABASE_URL, new ChaseService(db).register(briefs.register(triage.registry(), inference, push), inference, push), definitions);
 const outbox = new OutboxService(db, connections, (tx, org, run, key) => engine.wake(tx, org, run, key));
 const stopAttachmentExpiry = startAttachmentExpiry(db);
 if (env.WORKFLOWS_DISABLED !== '1') await engine.open().catch(async () => { console.error('[api] workflow runner unavailable; follow docs/runbooks/workflow-runner.md'); await engine.close(); });

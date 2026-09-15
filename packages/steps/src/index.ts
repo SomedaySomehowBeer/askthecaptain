@@ -17,3 +17,5 @@ export const definitionByKey = (key: string): WorkflowDefinition | undefined => 
 export { classifyThreadInstruction, draftReplyInstruction } from './instructions/inbox-triage.ts';
 
 export { morningBriefInstruction } from './instructions/morning-brief.ts';
+
+export { draftChaserInstruction } from './instructions/chase-due.ts';

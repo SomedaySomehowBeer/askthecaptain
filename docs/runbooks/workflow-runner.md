@@ -90,3 +90,43 @@ same tag; it does not redo successful inference or insert another brief. After r
 check Notifications and use Run now for a new brief (and a new inference charge). An interrupted
 inference response can also incur a second charge. Off, paused, failed and old-date states are shown
 without presenting the last saved brief as today's summary.
+
+## Chase what is due (job 5)
+
+Chase-due version 2 runs daily at 07:00 in the organisation's timezone. It requires a connected
+Google mailbox, connected Xero organisation, ready inference and a push device. Enable it in Settings
+→ Workflows; Run now is a real run and can push reminders and create drafts. No migration or new
+process is needed. The existing release installer registers its queue.
+
+The task read includes open/in-progress tasks due in the look-ahead window and older overdue tasks,
+with a maximum of 100. Suggested, done, cancelled and undated tasks are excluded. Each task waits
+independently, so a future task does not hold up another reminder or the invoice drafts. Reminder
+readiness is the local date reaching `due − remindDaysBefore`; otherwise its timer is that date's
+07:00. Escalation is ready on the day after due, with its future timer also at 07:00. Both waits
+re-read current status/owner/due date, and notify checks again before pushing. Completion, deletion,
+cancellation or removing a due date releases the wait without a notification. Moving a due date can
+reschedule it, within the original 90-day timeout. A late notification whose due date moved is
+skipped; the next daily run uses the new date. The reminder goes to the owner or, for an unowned task,
+the enabling person; escalation goes to the enabling person. A removed owner requires reassignment.
+Push uses a stable tenant/task tag, so repeated runs replace the visible notification; delivery
+receipts can repeat. Notification failure pauses with instructions to check the recipient's device.
+
+The shared Xero cache read applies `chaseInvoicesAfterDays`. A missing/incomplete sync or more than
+100 candidates pauses with an explanation; fix the source or narrow the window and start a new run.
+Invoices with no contact email are skipped. Inference receives only labelled invoice data (number,
+amount/currency, date, days overdue and contact), never credentials or tools. The outbox write checks
+the current cached invoice and recipient again. Paid or changed invoices skip the write; the next
+daily run reads them afresh. A saved cache is not live Xero: a person reviews the draft before Send.
+
+Drafts use the existing outbox's tenant/run/step/item idempotency key, pin the connected mailbox,
+and have no thread/reply headers. Open Inbox → Outbox to edit, save, send or discard. A workflow never
+sends mail. Daily runs may make another draft for an invoice still overdue; discard unwanted drafts.
+An interrupted inference can cost another call, but replay of a completed write reuses the draft.
+
+For handler authors: `WaitResult.wakeAt` is a recheck time, distinct from the persisted timeout.
+The queue timer and journalled next-check time commit in one transaction; identical rechecks do not
+create duplicate timers. Only `each(..., { independent: true })` continues other items after a wait;
+sequential loops and all pauses/failures still stop. Await output saved `as: 'item'` refreshes data for
+following predicates. Never mutate the pinned input list. Activity shows next-check times in UTC,
+actionable pause reasons and skipped-action explanations. Resume retries the same pinned run after
+the runtime, budget, connection or device is repaired; Cancel prevents further steps.
