@@ -1,3 +1,4 @@
+import { InferenceService } from './inference/service.ts';
 import { MailSync, startMailSchedule } from './mail/sync.ts';
 import { GoogleConnector } from '@captain/connectors';
 import { ConnectionService } from './connections/service.ts';
@@ -22,7 +23,7 @@ const connections = new ConnectionService(db, env.GOOGLE_CLIENT_ID && env.GOOGLE
 	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
 const mailSync = new MailSync(db, connections);
 const stopMailSync = startMailSchedule(mailSync, env.MAIL_SYNC_DISABLED === '1');
-const app = createApp({ db, connections, mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
+const app = createApp({ inference: new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null), db, connections, mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));

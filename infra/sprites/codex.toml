@@ -1,0 +1,31 @@
+# Pinned to Codex 0.154.0. Re-run the no-tools probe before upgrading.
+web_search = "disabled"
+approval_policy = "never"
+sandbox_mode = "read-only"
+[tools.update_plan]
+enabled = false
+[tools.experimental_request_user_input]
+enabled = false
+[agents]
+enabled = false
+[features]
+shell_tool = false
+view_image = false
+apps = false
+plugins = false
+remote_plugin = false
+hooks = false
+memories = false
+multi_agent = false
+multi_agent_v2 = false
+goals = false
+image_generation = false
+browser_use = false
+computer_use = false
+in_app_browser = false
+sleep_tool = false
+skill_search = false
+skill_mcp_dependency_install = false
+workspace_dependencies = false
+tool_suggest = false
+enable_request_compression = false
