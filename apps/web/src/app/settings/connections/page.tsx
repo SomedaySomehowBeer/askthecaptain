@@ -1,3 +1,4 @@
+import { WatchButton } from './WatchButton.tsx';
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { Notice } from '../../../components/Notice.tsx';
@@ -33,6 +34,7 @@ async function GoogleConnection({ me, query }: { me: Awaited<ReturnType<typeof r
 	const result = await load(() => api<{ connections: Connection[]; googleAvailable: boolean }>(`/v1/organisations/${me.organisation.organisationId}/connections`, { token: me.token }));
 	const google = result.ok ? result.value.connections.find((c) => c.provider === 'google') : undefined;
 	const canManage = me.organisation.role !== 'member';
+	const watch = await load(() => api<{ configured: boolean; polling: boolean; status: string; expiresAt: string | null; error: string | null }>(`/v1/organisations/${me.organisation.organisationId}/mail/watch`, { token: me.token }));
 	return <>
 		{query.error ? <Notice tone="failed">{errors[query.error] ?? 'Google could not be connected. Try Connect Google again.'}</Notice> : null}
 		{query.connected === 'google' && google?.status === 'connected' ? <p role="status">Google is connected for {google.accountEmail}.</p> : null}
@@ -50,6 +52,18 @@ async function GoogleConnection({ me, query }: { me: Awaited<ReturnType<typeof r
 				{!result.value.googleAvailable ? <Notice>Google connections are not configured. Ask the owner to finish setup.</Notice> : null}
 				{!canManage ? <Notice>You can see connections. Only owners and admins can connect or disconnect accounts.</Notice> : null}
 				<ConnectionActions disabled={!canManage} unavailable={!result.value.googleAvailable} connectionId={google && google.status !== 'disconnected' ? google.id : undefined} reconnect={Boolean(google && google.status !== 'disconnected')} />
+			</>}
+		</section>
+		<section className="card stack"><h2>Mail updates</h2>
+			{!watch.ok ? <Notice tone="failed" action={{ href: '/settings/connections', label: 'Try again' }}>{watch.error.message} Mail update status could not be checked.</Notice> : <>
+				<p>{watch.value.polling ? 'Mail is checked every five minutes.' : 'Automatic mail checks are paused.'}</p>
+				{watch.value.status === 'active' ? <p>Live mail updates are active. The five-minute check remains a fallback when enabled.</p>
+					: watch.value.status === 'off' ? <Notice>Live mail updates are not configured. An owner can finish setup.</Notice>
+					: watch.value.status === 'disconnected' ? <Notice>Connect or reconnect Google to receive live mail updates.</Notice>
+					: watch.value.status === 'failed' ? <Notice tone="failed">{watch.value.error}</Notice>
+					: <Notice>{watch.value.status === 'expired' ? 'Live mail updates have expired.' : 'Live mail updates have not started yet.'} An owner or admin can start them here.</Notice>}
+				{watch.value.configured && !canManage ? <p className="muted">Only an owner or admin can start live mail updates.</p> : null}
+				{watch.value.configured ? <WatchButton disabled={!canManage || google?.status !== 'connected'} /> : null}
 			</>}
 		</section>
 	</>;

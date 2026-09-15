@@ -38,7 +38,8 @@ mail content or credentials while diagnosing a failure.
   as the last saved copy while access is unavailable; a disconnected/replaced account's cache is not
   exposed as the current account's mail.
 
-Gmail Pub/Sub push, attachment text extraction, triage and outbox are later slices.
+Gmail Pub/Sub push and daily watch renewal are documented in [gmail-push.md](gmail-push.md).
+Attachment text extraction, triage and outbox remain later slices.
 
 Provider contracts: [Gmail synchronization](https://developers.google.com/workspace/gmail/api/guides/sync),
 [history.list](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.history/list),

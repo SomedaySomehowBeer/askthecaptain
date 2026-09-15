@@ -1,3 +1,5 @@
+import { gmailPushRoutes, type GmailPush } from './mail/push.ts';
+import type { GmailWatch } from './mail/watch.ts';
 import { contactsRoutes } from './contacts/routes.ts';
 import { ContactsService } from './contacts/service.ts';
 import { calendarRoutes } from './calendar/routes.ts';
@@ -18,7 +20,7 @@ import type { CommitmentsService } from './commitments/service.ts';
 import { HttpError, unauthorised } from './errors.ts';
 import type { OrganisationService } from './organisations/service.ts';
 
-export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean };
+export type Deps = { db: Sql; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -53,6 +55,7 @@ export function createApp(deps: Deps) {
 	app.get('/auth/providers', (c) => c.json({ google: deps.auth.googleAvailable }));
 
 	app.route('/', connectionRoutes(deps));
+	app.route('/', gmailPushRoutes(deps.gmailPush));
 
 	const signedIn = new Hono<Vars>();
 	signedIn.use('*', async (c, next) => {
@@ -95,6 +98,14 @@ export function createApp(deps: Deps) {
 	});
 	signedIn.route('/', contactsRoutes(new ContactsService(deps.db)));
 	signedIn.route('/', commitmentsRoutes(deps.commitments));
+	signedIn.get('/v1/organisations/:id/mail/watch', async (c) => {
+		if (!deps.gmailWatch) { await deps.organisations.get(actor(c), uuid.parse(c.req.param('id'))); return c.json({ configured: false, polling: Boolean(deps.mailScheduleEnabled), status: 'off', expiresAt: null, error: null }); }
+		return c.json(await deps.gmailWatch.status(actor(c), uuid.parse(c.req.param('id')), Boolean(deps.mailScheduleEnabled)));
+	});
+	signedIn.post('/v1/organisations/:id/mail/watch', async (c) => {
+		if (!deps.gmailWatch) throw new HttpError(503, 'push_unavailable', 'Live mail updates are not configured.');
+		return c.json(await deps.gmailWatch.renew(uuid.parse(c.req.param('id')), actor(c)));
+	});
 	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled)));
 	signedIn.route('/', calendarRoutes(new CalendarService(deps.db, deps.calendarSync, deps.calendarScheduleEnabled)));
 	app.route('/', signedIn);

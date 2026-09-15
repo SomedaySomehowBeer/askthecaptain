@@ -93,6 +93,20 @@ export class GmailClient {
 		}
 		return { threadIds: [...ids], historyId: id(data.historyId), nextPageToken: optional(data.nextPageToken) };
 	}
+	async watch(token: string, topicName: string): Promise<{ historyId: string; expiration: number }> {
+		const data = await this.post('watch', token, { topicName });
+		const expiration = Number(id(data.expiration)); if (!Number.isSafeInteger(expiration) || expiration <= 0) throw new GmailError();
+		return { historyId: id(data.historyId), expiration };
+	}
+	async stop(token: string): Promise<void> { await this.post('stop', token); }
+	private async post(path: string, token: string, body?: object): Promise<ObjectValue> {
+		try {
+			const response = await this.#fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { method: 'POST',
+				headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}), signal: AbortSignal.timeout(15_000) });
+			if (!response.ok) throw new GmailError(response.status); return path === 'stop' ? {} : object(await response.json());
+		} catch (error) { throw error instanceof GmailError ? error : new GmailError(); }
+	}
+
 	private async get(path: string, token: string, params: Record<string, string> = {}): Promise<ObjectValue> {
 		try {
 			const url = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`); url.search = new URLSearchParams(params).toString();

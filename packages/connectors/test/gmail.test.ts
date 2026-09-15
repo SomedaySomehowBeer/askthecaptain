@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
-import { GmailClient, htmlToText } from '../src/gmail.ts';
+import { GmailClient, GmailError, htmlToText } from '../src/gmail.ts';
 // Checked-in Gmail response fixtures use synthetic mailbox content; no customer's mail was captured.
 const fixture = async (name: string) => JSON.parse(await readFile(new URL(`./fixtures/${name}.json`, import.meta.url), 'utf8'));
 test('full threads prefer plain text and retain headers/attachment metadata without attachment data', async () => {
@@ -46,4 +46,15 @@ test('profile, labels, recent-thread pagination, malformed responses and history
 	assert.deepEqual(await client.threads('x', 123, 'next'), { ids: ['thread-1'], nextPageToken: 'last' });
 	await assert.rejects(new GmailClient(async () => Response.json({ historyId: 123 })).history('x', '100'), { status: 0 });
 	await assert.rejects(new GmailClient(async () => new Response('sensitive', { status: 404 })).history('x', '100'), { status: 404, message: 'Gmail could not be read' });
+});
+
+test('watch and stop use Gmail POST endpoints and validate the returned expiry', async () => {
+ const calls: { url: string; method?: string; body: unknown }[] = [];
+ const client = new GmailClient(async (input, init) => {
+  calls.push({ url: String(input), method: init?.method, body: JSON.parse(String(init?.body)) });
+  return String(input).endsWith('/stop') ? new Response(null, { status: 204 }) : Response.json({ historyId: '987', expiration: '1800000000000' });
+ });
+ assert.deepEqual(await client.watch('token', 'projects/project-test/topics/mail'), { historyId: '987', expiration: 1800000000000 });
+ await client.stop('token'); assert.equal(calls[0]!.method, 'POST'); assert.deepEqual(calls[0]!.body, { topicName: 'projects/project-test/topics/mail' }); assert.match(calls[1]!.url, /\/users\/me\/stop$/);
+ await assert.rejects(new GmailClient(async () => Response.json({ historyId: '1', expiration: 'bad' })).watch('token', 'topic'), GmailError);
 });

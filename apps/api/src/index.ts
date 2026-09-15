@@ -1,3 +1,5 @@
+import { GmailPush, startGmailPushSchedule } from './mail/push.ts';
+import { GmailWatch } from './mail/watch.ts';
 import { CalendarSync, startCalendarSchedule } from './calendar/sync.ts';
 import { MailSync, startMailSchedule } from './mail/sync.ts';
 import { GoogleConnector } from '@captain/connectors';
@@ -22,12 +24,16 @@ const connections = new ConnectionService(db, env.GOOGLE_CLIENT_ID && env.GOOGLE
 	? new GoogleConnector(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/connections/google/callback', env.API_URL).toString()) : null,
 	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
 const mailSync = new MailSync(db, connections);
+const pushConfig = env.GMAIL_PUBSUB_TOPIC && env.GMAIL_PUSH_AUDIENCE ? { topic: env.GMAIL_PUBSUB_TOPIC, audience: env.GMAIL_PUSH_AUDIENCE } : undefined;
+const gmailWatch = new GmailWatch(db, connections, pushConfig);
+const gmailPush = pushConfig ? new GmailPush(db, mailSync, pushConfig) : undefined;
+const stopGmailPush = startGmailPushSchedule(gmailPush, gmailWatch);
 const stopMailSync = startMailSchedule(mailSync, env.MAIL_SYNC_DISABLED === '1');
 const calendarSync = new CalendarSync(db, connections);
 const stopCalendarSync = startCalendarSchedule(calendarSync, env.CALENDAR_SYNC_DISABLED === '1');
-const app = createApp({ db, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
+const app = createApp({ db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS }), organisations: new OrganisationService(db), commitments: new CommitmentsService(db) });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
-const shutdown = () => { server.close(); void Promise.all([stopMailSync(), stopCalendarSync()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
+const shutdown = () => { server.close(); void Promise.all([stopMailSync(), stopCalendarSync(), stopGmailPush()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
