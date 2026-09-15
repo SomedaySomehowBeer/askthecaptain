@@ -47,4 +47,30 @@ test.describe('commitments', () => {
 		await expect(occurrence).toContainText(new RegExp(`— (${months.join('|')}) \\d{4}`));
 		await expect(occurrence).toContainText('recurring');
 	});
+	test('stock is counted by location, warns below reorder point, and archives without losing its count', async ({ page }) => {
+		await page.goto(`${webUrl()}/commitments`);
+		const stock = page.getByRole('region', { name: 'Stock', exact: true });
+		await expect(stock).toBeVisible();
+		await stock.locator('summary', { hasText: 'Add a stock item' }).click();
+		const form = stock.locator('form').filter({ has: page.locator('#stock-new-name') });
+		const name = `Malt bags ${Date.now()}`;
+		await form.getByLabel('Item name', { exact: true }).fill(name);
+		await form.getByLabel('Location', { exact: true }).fill('Store room');
+		await form.getByLabel('Unit label', { exact: true }).fill('bags');
+		await form.getByLabel('Reorder point (optional)', { exact: true }).fill('5');
+		await form.getByRole('button', { name: 'Add stock item', exact: true }).click();
+		const item = stock.getByRole('article', { name, exact: true });
+		await expect(item).toContainText('Not counted yet.');
+		await item.getByLabel(`Count for ${name}`, { exact: true }).fill('2.5');
+		await item.getByRole('button', { name: 'Save count', exact: true }).click();
+		await expect(item).toContainText('2.5 bags');
+		await expect(item).toContainText('Counted');
+		await expect(item).toContainText('Below reorder point.');
+		await item.getByRole('button', { name: 'Archive item', exact: true }).click();
+		await expect(item).toBeHidden();
+		await stock.locator('summary', { hasText: 'Archived stock' }).click();
+		await expect(item).toContainText('2.5 bags');
+		await expect(item.getByRole('button', { name: 'Save count', exact: true })).toBeDisabled();
+	});
+
 });

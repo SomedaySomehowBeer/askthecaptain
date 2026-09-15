@@ -1,3 +1,5 @@
+import { SaveForm } from './SaveForm.tsx';
+import { StockSection } from './Stock.tsx';
 import type { Metadata } from 'next';
 import { Notice } from '../../components/Notice.tsx';
 import { Page, requireCurrent } from '../../components/Page.tsx';
@@ -31,12 +33,12 @@ function TaskLine({ task, today, timezone, showProject }: { task: Task; today: s
 			</div>
 			<span className="task__actions">
 				{task.status === 'suggested' ? (<>
-					<form action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="open" /><button className="button button--secondary button--small" type="submit">Accept</button></form>
-					<form action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="cancelled" /><button className="button button--ghost button--small" type="submit">Dismiss</button></form>
+					<SaveForm action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="open" /><button className="button button--secondary button--small" type="submit">Accept</button></SaveForm>
+					<SaveForm action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="cancelled" /><button className="button button--ghost button--small" type="submit">Dismiss</button></SaveForm>
 				</>) : task.status === 'done' ? (
-					<form action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="open" /><button className="button button--ghost button--small" type="submit">Reopen</button></form>
+					<SaveForm action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="open" /><button className="button button--ghost button--small" type="submit">Reopen</button></SaveForm>
 				) : (
-					<form action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="done" /><button className="button button--secondary button--small" type="submit" aria-label={`Mark "${task.title}" done`}>Done</button></form>
+					<SaveForm action={setTaskStatus}><input type="hidden" name="id" value={task.id} /><input type="hidden" name="status" value="done" /><button className="button button--secondary button--small" type="submit" aria-label={`Mark "${task.title}" done`}>Done</button></SaveForm>
 				)}
 			</span>
 		</li>
@@ -47,8 +49,8 @@ function SeriesLine({ series }: { series: Series }) {
 	return (
 		<li className="line">
 			<span><strong>{series.title}</strong><br /><span className="muted">{recurrenceWords(series.recurrence, series.everyMonths)}{series.pausedAt ? ', paused' : series.nextDue ? `, next due ${shortDate(series.nextDue)}` : ''}{series.evidenceRequired ? ', needs evidence' : ''}</span></span>
-			<form action={setSeriesPaused}><input type="hidden" name="id" value={series.id} /><input type="hidden" name="paused" value={series.pausedAt ? 'false' : 'true'} />
-				<button className="button button--ghost button--small" type="submit">{series.pausedAt ? 'Resume' : 'Pause'}</button></form>
+			<SaveForm action={setSeriesPaused}><input type="hidden" name="id" value={series.id} /><input type="hidden" name="paused" value={series.pausedAt ? 'false' : 'true'} />
+				<button className="button button--ghost button--small" type="submit">{series.pausedAt ? 'Resume' : 'Pause'}</button></SaveForm>
 		</li>
 	);
 }
@@ -61,8 +63,8 @@ function ProjectCard({ project, tasks, series, projects, today, timezone }: { pr
 			<div className="row row--between">
 				<h2 id={`project-${project.id}`}>{project.name}</h2>
 				{deadlineBook ? <span className="chip">deadline book</span> : (
-					<form action={setProjectArchived}><input type="hidden" name="id" value={project.id} /><input type="hidden" name="archived" value={project.archivedAt ? 'false' : 'true'} />
-						<button className="button button--ghost button--small" type="submit">{project.archivedAt ? 'Restore' : 'Archive'}</button></form>
+					<SaveForm action={setProjectArchived}><input type="hidden" name="id" value={project.id} /><input type="hidden" name="archived" value={project.archivedAt ? 'false' : 'true'} />
+						<button className="button button--ghost button--small" type="submit">{project.archivedAt ? 'Restore' : 'Archive'}</button></SaveForm>
 				)}
 			</div>
 			{project.description ? <p className="secondary">{project.description}</p> : null}
@@ -86,11 +88,16 @@ function ProjectCard({ project, tasks, series, projects, today, timezone }: { pr
 export default async function CommitmentsPage() {
 	// The layout has already sent a signed-out person to sign in; this is the cached session.
 	const me = await requireCurrent('/commitments');
-	const loaded = await load(() => api<Commitments>(`/v1/organisations/${me.organisation.organisationId}/commitments`, { token: me.token }));
+	// Read the independent sections together; each keeps its own failed state.
+	const [loaded, stock] = await Promise.all([
+		load(() => api<Commitments>(`/v1/organisations/${me.organisation.organisationId}/commitments`, { token: me.token })),
+		StockSection({ me })
+	]);
 	if (!loaded.ok) {
 		return (
 			<Page title="Commitments" lede={me.organisation.organisationName}>
 				<Notice tone="failed" title="The list could not be read.">{loaded.error.message}{loaded.error.offline ? ' Try again in a moment.' : ''}</Notice>
+				{stock}
 			</Page>
 		);
 	}
@@ -126,6 +133,7 @@ export default async function CommitmentsPage() {
 					<div className="stack">{archived.map((project) => <ProjectCard key={project.id} project={project} projects={live} today={today} timezone={timezone} {...byProject(project.id)} />)}</div>
 				</details>
 			) : null}
+			{stock}
 		</Page>
 	);
 }

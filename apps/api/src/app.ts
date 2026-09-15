@@ -1,3 +1,5 @@
+import { StockService } from './stock/service.ts';
+import { stockRoutes } from './stock/routes.ts';
 import { xeroRoutes } from './xero/routes.ts';
 import type { XeroConnections } from './xero/connections.ts';
 import type { XeroSync } from './xero/sync.ts';
@@ -138,6 +140,7 @@ export function createApp(deps: Deps) {
 		return c.json(await deps.organisations.accept({ ...actor(c), email: c.get('session').user.email }, input.token));
 	});
 	signedIn.route('/', xeroRoutes(deps));
+	signedIn.route('/', stockRoutes(new StockService(deps.db)));
 	signedIn.route('/', contactsRoutes(new ContactsService(deps.db)));
 	signedIn.route('/', inferenceRoutes(deps.inference));
 	signedIn.route('/', commitmentsRoutes(deps.commitments));

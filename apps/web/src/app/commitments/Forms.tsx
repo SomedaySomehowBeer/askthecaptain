@@ -1,5 +1,6 @@
 'use client';
-import { useActionState, useState } from 'react';
+import { useState } from 'react';
+import { useSaveForm } from './SaveForm.tsx';
 import type { Project } from '../../lib/api.ts';
 import { createProject, createSeries, createTask, type Result } from './actions.ts';
 
@@ -11,10 +12,10 @@ const ProjectSelect = ({ id, projects, defaultValue }: { id: string; projects: P
 
 /** A task in words: what, where, by when. Everything else is edited later. */
 export function TaskForm({ projects, projectId, compact }: { projects: Project[]; projectId?: string; compact?: boolean }) {
-	const [state, action, pending] = useActionState(createTask, undefined);
+	const [state, action, pending] = useSaveForm((form) => createTask(undefined, form));
 	const id = `task-${projectId ?? 'any'}`;
 	return (
-		<form className="form" action={action}>
+		<form className="form" onSubmit={action} method="post">
 			<div className="row">
 				<div className="field" style={{ flex: '1 1 220px' }}><label htmlFor={`${id}-title`}>Task</label><input id={`${id}-title`} name="title" type="text" required maxLength={200} placeholder="Send updated price list" /></div>
 				{projectId ? <input type="hidden" name="projectId" value={projectId} /> : <ProjectSelect id={`${id}-project`} projects={projects} />}
@@ -28,9 +29,9 @@ export function TaskForm({ projects, projectId, compact }: { projects: Project[]
 }
 
 export function ProjectForm() {
-	const [state, action, pending] = useActionState(createProject, undefined);
+	const [state, action, pending] = useSaveForm((form) => createProject(undefined, form));
 	return (
-		<form className="form" action={action}>
+		<form className="form" onSubmit={action} method="post">
 			<div className="row">
 				<div className="field" style={{ flex: '1 1 220px' }}><label htmlFor="project-name">Name</label><input id="project-name" name="name" type="text" required maxLength={120} placeholder="Wholesale" /></div>
 				<div className="field" style={{ flex: '1 1 220px' }}><label htmlFor="project-stages">Stages, comma-separated (optional)</label><input id="project-stages" name="stages" type="text" maxLength={400} placeholder="Planned, Brewing, Packaged" /></div>
@@ -44,10 +45,10 @@ export function ProjectForm() {
 
 /** A recurring duty: the rule that makes a task for every period. */
 export function SeriesForm({ projects, projectId }: { projects: Project[]; projectId?: string }) {
-	const [state, action, pending] = useActionState(createSeries, undefined);
+	const [state, action, pending] = useSaveForm((form) => createSeries(undefined, form));
 	const [recurrence, setRecurrence] = useState('monthly');
 	return (
-		<form className="form" action={action}>
+		<form className="form" onSubmit={action} method="post">
 			<div className="row">
 				<div className="field" style={{ flex: '1 1 220px' }}><label htmlFor="series-title">Duty</label><input id="series-title" name="title" type="text" required maxLength={200} placeholder="Excise return" /></div>
 				{projectId ? <input type="hidden" name="projectId" value={projectId} /> : <ProjectSelect id="series-project" projects={projects} />}

@@ -10,7 +10,7 @@ export const organisations = pgTable('organisations', {
 	locale: text('locale').notNull().default('en-AU'), settings: jsonb('settings').notNull().default({}),
 	createdAt: at('created_at').notNull().defaultNow(), dataKeyWrapped: bytea('data_key_wrapped')
 });
-const memberships = pgTable('memberships', {
+export const memberships = pgTable('memberships', {
 	organisationId: uuid('organisation_id').notNull(), userId: uuid('user_id').notNull(),
 }, (t) => [primaryKey({ columns: [t.organisationId, t.userId] })]);
 const tenant = () => uuid('organisation_id').notNull().references(() => organisations.id, { onDelete: 'cascade' });
