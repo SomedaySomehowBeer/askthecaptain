@@ -5,9 +5,26 @@ on:
   push:
     branches: [main]
     paths: ['infra/tofu/**']
+  workflow_dispatch:
+    inputs:
+      state_rm:
+        description: 'Resource addresses to forget from state without destroying (space-separated)'
+        required: true
+        type: string
 concurrency: tofu
 jobs:
+  state-rm:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: infra/tofu } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: opentofu/setup-opentofu@v1
+        with: { tofu_version: 1.10.5 }
+      - run: tofu init -input=false -backend-config="access_key=${{ secrets.TIGRIS_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.TIGRIS_SECRET_KEY }}"
+      - run: tofu state rm ${{ inputs.state_rm }}
   plan-apply:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults: { run: { working-directory: infra/tofu } }
     env:
