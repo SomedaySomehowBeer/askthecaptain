@@ -7,7 +7,7 @@ export class ApiError extends Error {
 	get unauthorised() { return this.status === 401; }
 }
 
-export type Me = { user: { id: string; email: string; name: string }; memberships: Membership[] };
+export type Me = { user: { id: string; email: string; name: string }; memberships: Membership[]; passkeyVerified?: boolean };
 export type Membership = { organisationId: string; organisationName: string; role: Role; status: string };
 export type Role = 'owner' | 'admin' | 'member';
 export type Organisation = { id: string; name: string; timezone: string; locale: string; createdAt: string; role: Role };

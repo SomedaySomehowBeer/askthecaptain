@@ -18,7 +18,7 @@ export default async function SettingsPage() {
 				<h2>You</h2>
 				<div className="line"><span>{me.me.user.name || me.me.user.email}</span><span className="chip">{me.organisation.role}</span></div>
 				<p className="muted">{me.me.user.email}</p>
-				<form action="/auth/sign-out" method="post" className="row"><button className="button button--ghost" type="submit">Sign out</button></form>
+				<div className="row"><Link className="button button--secondary" href="/settings/passkeys">Passkeys</Link><form action="/auth/sign-out" method="post"><button className="button button--ghost" type="submit">Sign out</button></form></div>
 			</section>
 			<section className="card">
 				<h2>Organisation</h2>

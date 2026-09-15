@@ -126,7 +126,8 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 
 **Identity and access**
 - `organisations` — name, timezone, locale, settings.
-- `users`, `identities` (Google OIDC subject, email), `sessions`.
+- `users`, `identities` (Google OIDC subject, email), `sessions` (with whether a passkey was presented),
+  `passkeys` — a person's WebAuthn credentials: id, public key, counter, transports, a name.
 - `memberships` — user, organisation, role ∈ owner · admin · member.
 - `audit_events` — actor (person, workflow run or system), action, subject, before/after digest,
   at. Append-only.
@@ -366,7 +367,10 @@ fallback for providers without webhooks.
 - Roles: owner (billing, keys, members), admin (connections, workflows), member (use). Platform
   operator roles are separate from tenant roles.
 - Sign-in with Google for any domain; explicit organisation creation; verified invitations.
-  MFA or passkeys for owners and admins before invitations open to strangers.
+  Passkeys (WebAuthn, `@simplewebauthn/server` in the API and `@simplewebauthn/browser` in the web,
+  the web app's origin as the relying party) are the second factor: a person who has registered one
+  must present it at every sign-in, between Google and the session; owners and admins are asked to
+  add one in Settings before invitations open to strangers.
 - Secrets: envelope encryption without a cloud key service. A 32-byte master key lives in the API's
   secrets; each organisation has a data key wrapped by it; connection tokens and Sprite connection secrets are
   encrypted with the data key (AES-256-GCM). Rotation re-wraps data keys. No third-party key service

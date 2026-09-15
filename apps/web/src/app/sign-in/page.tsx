@@ -11,7 +11,8 @@ export const metadata: Metadata = { title: 'Sign in' };
 const said: Record<string, string> = {
 	request_invalid: 'That sign-in link had expired. Start again.',
 	google_failed: 'Google did not complete the sign-in. Try again.',
-	exchange_failed: 'The sign-in could not be finished. Try again.'
+	exchange_failed: 'The sign-in could not be finished. Try again.',
+	passkey_failed: 'The passkey could not be checked. Try again.'
 };
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ return_to?: string; error?: string }> }) {

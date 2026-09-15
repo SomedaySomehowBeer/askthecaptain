@@ -3,12 +3,14 @@ import type { Sql } from '@captain/db';
 import { z } from 'zod';
 import { badRequest, unauthorised } from '../errors.ts';
 import type { IdentityProvider } from './google.ts';
+import type { PasskeyService } from './passkeys.ts';
 
 export const hashSecret = (secret: string) => createHash('sha256').update(secret).digest('hex');
 const secret = (prefix: string) => `${prefix}${randomBytes(32).toString('base64url')}`;
 
 export type SessionUser = { id: string; email: string; name: string };
-export type Session = { id: string; userId: string; expiresAt: Date; user: SessionUser };
+export type Session = { id: string; userId: string; expiresAt: Date; user: SessionUser; passkeyVerifiedAt: Date | null };
+export type Exchanged = { token: string; session: Session; returnTo: string } | { stepUp: true; token: string; returnTo: string };
 
 const minutes = (n: number) => n * 60_000;
 
@@ -17,9 +19,9 @@ const minutes = (n: number) => n * 60_000;
  *  starts and finishes on this API and hands the web a one-time exchange code, so the session token
  *  never travels in a redirect URL. */
 export class AuthService {
-	readonly #db: Sql; readonly #google: IdentityProvider | null; readonly #appUrl: URL; readonly #sessionTtlMs: number;
-	constructor(db: Sql, google: IdentityProvider | null, options: { appUrl: string; sessionTtlDays: number }) {
-		this.#db = db; this.#google = google; this.#appUrl = new URL(options.appUrl); this.#sessionTtlMs = options.sessionTtlDays * 24 * 60 * 60_000;
+	readonly #db: Sql; readonly #google: IdentityProvider | null; readonly #appUrl: URL; readonly #sessionTtlMs: number; readonly #passkeys: PasskeyService | null;
+	constructor(db: Sql, google: IdentityProvider | null, options: { appUrl: string; sessionTtlDays: number; passkeys?: PasskeyService }) {
+		this.#db = db; this.#google = google; this.#appUrl = new URL(options.appUrl); this.#sessionTtlMs = options.sessionTtlDays * 24 * 60 * 60_000; this.#passkeys = options.passkeys ?? null;
 	}
 
 	get googleAvailable() { return this.#google !== null; }
@@ -57,21 +59,38 @@ export class AuthService {
 		return target;
 	}
 
-	async exchange(code: string, requestId: string): Promise<{ token: string; session: Session; returnTo: string }> {
+	/** Spends the one-time code. A person with a passkey gets a step-up token instead of a session;
+	 *  the session is issued only after `completeStepUp` (plan §9). */
+	async exchange(code: string, requestId: string): Promise<Exchanged> {
 		const request = await this.#consume('session_exchange', code);
 		if (!request?.userId) { await this.#event('auth.session.exchange', false, requestId); throw unauthorised('sign-in link is invalid or expired'); }
 		const returnTo = z.object({ returnTo: z.string() }).parse(request.payload).returnTo;
+		if (this.#passkeys && (await this.#passkeys.required(request.userId))) {
+			const token = await this.#passkeys.beginStepUp(request.userId, returnTo);
+			await this.#event('auth.session.step_up_required', true, requestId, request.userId);
+			return { stepUp: true, token, returnTo };
+		}
 		const issued = await this.#issueSession(request.userId);
 		await this.#event('auth.session.exchange', true, requestId, request.userId);
 		return { ...issued, returnTo };
 	}
 
+	/** Finishes a stepped-up sign-in: the assertion is verified by the passkey service, then the
+	 *  session is issued and marked as passkey-verified. */
+	async completeStepUp(token: string, response: unknown, requestId: string): Promise<{ token: string; session: Session; returnTo: string }> {
+		if (!this.#passkeys) throw unauthorised('passkeys are not available');
+		const done = await this.#passkeys.completeStepUp(token, response, requestId);
+		const issued = await this.#issueSession(done.userId, true);
+		await this.#event('auth.session.exchange', true, requestId, done.userId, { passkey: true });
+		return { ...issued, returnTo: done.returnTo };
+	}
+
 	async requireSession(token: string | undefined): Promise<Session> {
 		if (!token || !token.startsWith('sess_')) throw unauthorised();
-		const [row] = await this.#db<{ id: string; userId: string; expiresAt: Date; revokedAt: Date | null; email: string; name: string }[]>`
-			select s.id, s.user_id, s.expires_at, s.revoked_at, u.email, u.name from sessions s join users u on u.id = s.user_id where s.token_hash = ${hashSecret(token)}`;
+		const [row] = await this.#db<{ id: string; userId: string; expiresAt: Date; revokedAt: Date | null; passkeyVerifiedAt: Date | null; email: string; name: string }[]>`
+			select s.id, s.user_id, s.expires_at, s.revoked_at, s.passkey_verified_at, u.email, u.name from sessions s join users u on u.id = s.user_id where s.token_hash = ${hashSecret(token)}`;
 		if (!row || row.revokedAt || row.expiresAt <= new Date()) throw unauthorised();
-		return { id: row.id, userId: row.userId, expiresAt: row.expiresAt, user: { id: row.userId, email: row.email, name: row.name } };
+		return { id: row.id, userId: row.userId, expiresAt: row.expiresAt, passkeyVerifiedAt: row.passkeyVerifiedAt, user: { id: row.userId, email: row.email, name: row.name } };
 	}
 
 	async signOut(token: string | undefined, requestId: string): Promise<void> {
@@ -83,12 +102,12 @@ export class AuthService {
 	/** Test and development seam: a session for a known user without Google. */
 	async issueSessionFor(userId: string) { return this.#issueSession(userId); }
 
-	async #issueSession(userId: string): Promise<{ token: string; session: Session }> {
-		const token = secret('sess_'); const expiresAt = new Date(Date.now() + this.#sessionTtlMs);
+	async #issueSession(userId: string, passkeyVerified = false): Promise<{ token: string; session: Session }> {
+		const token = secret('sess_'); const expiresAt = new Date(Date.now() + this.#sessionTtlMs); const verifiedAt = passkeyVerified ? new Date() : null;
 		const [row] = await this.#db<{ id: string; email: string; name: string }[]>`
-			with s as (insert into sessions (user_id, token_hash, expires_at) values (${userId}, ${hashSecret(token)}, ${expiresAt}) returning id, user_id)
+			with s as (insert into sessions (user_id, token_hash, expires_at, passkey_verified_at) values (${userId}, ${hashSecret(token)}, ${expiresAt}, ${verifiedAt}) returning id, user_id)
 			select s.id, u.email, u.name from s join users u on u.id = s.user_id`;
-		return { token, session: { id: row!.id, userId, expiresAt, user: { id: userId, email: row!.email, name: row!.name } } };
+		return { token, session: { id: row!.id, userId, expiresAt, passkeyVerifiedAt: verifiedAt, user: { id: userId, email: row!.email, name: row!.name } } };
 	}
 
 	async #findOrCreateUser(provider: string, identity: { subject: string; email: string; name: string }): Promise<SessionUser> {
