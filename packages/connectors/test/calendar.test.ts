@@ -24,6 +24,9 @@ test('get/insert/patch encode ids and require an explicit notification choice; e
  await assert.rejects(new CalendarClient(async () => Response.json({ error: { status: 'PERMISSION_DENIED', errors: [{ reason: 'accessNotConfigured', message: 'private' }] } }, { status: 403 })).calendars('t'),
   (e: unknown) => e instanceof CalendarError && e.status === 403 && e.reason === 'accessNotConfigured' && !/private/.test(JSON.stringify(e)));
  await assert.rejects(new CalendarClient(async () => { throw new DOMException('slow', 'TimeoutError'); }).calendars('t'), { status: 502, reason: 'timeout' });
+ const sleeps: number[] = []; let n = 0;
+ const listed = await new CalendarClient(async () => ++n === 1 ? Response.json({ error: { errors: [{ reason: 'userRateLimitExceeded' }] } }, { status: 403 }) : Response.json({ items: [] }), { sleep: async (ms) => { sleeps.push(ms); } }).calendars('t');
+ assert.deepEqual(listed.items, []); assert.equal(sleeps.length, 1);
  assert.throws(() => parseEvent({ ...fixture.items[0], start: { date: '2026-02-30' } }), CalendarError);
  assert.throws(() => parseEvent({ ...fixture.items[0], attendees: 'invalid' }), CalendarError);
 });

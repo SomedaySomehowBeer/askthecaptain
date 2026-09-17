@@ -19,6 +19,14 @@ mail content or credentials while diagnosing a failure.
   A content-free `mail.sync_failed` audit records committed counts; retry replays idempotently from
   the prior history cursor (or recent-mail listing for an unfinished first sync). Full-recovery
   removal of absent threads waits until the run succeeds. Retry with **Sync now**.
+- Gmail answers a burst of thread reads with `403 rateLimitExceeded` (a moving average, not a daily
+  quota). Since #66 every Gmail read backs off and retries up to four times (1, 2, 4, 8 s plus jitter)
+  on `429`, `403 userRateLimitExceeded`/`rateLimitExceeded` and, for reads only, a Google 5xx; a send
+  is never repeated after an unknown outcome. A full pass (first sync or history recovery) also
+  records `gmail.partial` in `sync_cursors` with the history baseline of its first attempt; a retry
+  keeps that baseline, skips threads saved since the attempt started (`resumed` in the result and in
+  `mail.synced`), and still emits `mail.synced` for them. The marker is removed when the pass
+  finishes, so a limited mailbox finishes over a few runs instead of refetching everything each time.
 - `mail.synced` records system counts and whether the pass was full or capped. Each organisation has an
   in-process overlap guard plus a two-minute, renewable `gmail.sync-lock` lease in `sync_cursors`,
   matching Calendar's transaction-pool-safe pattern. Each short transaction retakes the advisory

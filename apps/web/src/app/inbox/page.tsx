@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { Notice } from '../../components/Notice.tsx';
+import { withReference } from '../../components/Reference.tsx';
 import { Page, requireCurrent } from '../../components/Page.tsx';
 import { api, load } from '../../lib/api.ts';
 import { attachmentsInWords, mailTime, type MailList, type ThreadSummary } from './mail.ts';
@@ -29,7 +30,7 @@ async function Inbox({ me, before }: { me: Awaited<ReturnType<typeof requireCurr
 			<h2>{connection.accountEmail}</h2>
 			<p className="muted">{lastSync ? `Last sync attempt: ${mailTime(lastSync.at, timezone)}.` : 'Mail has not been synced yet.'}</p>
 			{!available ? <Notice tone="attention" action={{ href: '/settings/connections', label: 'Reconnect Google' }}>{connection.status === 'revoked' ? 'Google access was revoked.' : 'Google access could not be refreshed.'} Reconnect in Settings to resume mail sync. Any mail below is the last saved copy.</Notice> : null}
-			{lastSync && !lastSync.detail.success ? <Notice tone="failed">{lastSync.detail.error ?? 'The last mail sync failed. Try Sync now again.'}</Notice> : null}
+			{lastSync && !lastSync.detail.success ? <Notice tone="failed">{lastSync.detail.error ? withReference(lastSync.detail.error) : 'The last mail sync failed. Try Sync now again.'}</Notice> : null}
 			{lastSync?.detail.capped ? <Notice>The initial sync reached its 500-thread limit. Older mail may be missing; new changes continue to sync.</Notice> : null}
 			<SyncButton disabled={!canSync || !available} />
 			{!canSync ? <p className="muted">Only an owner or admin can sync now.</p> : null}

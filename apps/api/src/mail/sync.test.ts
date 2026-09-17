@@ -24,11 +24,11 @@ async function setup(emit?: ConstructorParameters<typeof MailSync>[3]) {
 	const data = newDataKey(master, org.id); await db.owner`update organisations set data_key_wrapped = ${data.wrapped} where id = ${org.id}`;
 	const [conn] = await db.owner`insert into connections (organisation_id, provider, connected_by, account_email, scopes, status, access_token_encrypted, access_token_expires_at)
 		values (${org.id}, 'google', ${user!.id}, 'business@example.test', '{}', 'connected', ${seal(data.key, Buffer.from('test-access'), org.id, 'access_token')}, now() + interval '1 hour') returning id`;
-	let mode = 'initial'; let failThread = ''; let failResponse: (() => Response) | undefined; let historyExpired = false; let renamed = false; let held: Promise<void> | undefined; let heldThread = ''; let threadHold: Promise<void> | undefined;
+	let mode = 'initial'; let failThread = ''; let failResponse: (() => Response) | undefined; let historyExpired = false; let profileHistory = '100'; let renamed = false; let held: Promise<void> | undefined; let heldThread = ''; let threadHold: Promise<void> | undefined;
 	const calls: URL[] = [];
 	const gmail = new GmailClient(async (input) => {
 		const url = new URL(String(input)); calls.push(url); const path = url.pathname;
-		if (path.endsWith('/profile')) { if (held) await held; return Response.json({ emailAddress: 'business@example.test', historyId: '100' }); }
+		if (path.endsWith('/profile')) { if (held) await held; return Response.json({ emailAddress: 'business@example.test', historyId: profileHistory }); }
 		if (path.endsWith('/labels')) return Response.json({ labels: [{ id: 'INBOX', name: 'Inbox' }, { id: 'Label_supplier', name: renamed ? 'Partners' : 'Suppliers' }] });
 		if (path.endsWith('/history')) {
 			if (historyExpired) return new Response('', { status: 404 });
@@ -57,7 +57,7 @@ async function setup(emit?: ConstructorParameters<typeof MailSync>[3]) {
 	const ownerToken = (await auth.issueSessionFor(user!.id)).token; const memberToken = (await auth.issueSessionFor(member!.id)).token; const strangerToken = (await auth.issueSessionFor(stranger!.id)).token;
 	const request = (path = '', token = ownerToken, method = 'GET') => app.request(`/v1/organisations/${org.id}/mail/${path}`, { method, headers: { authorization: `Bearer ${token}` } });
 	return { org: org.id, conn: conn!.id, sync, anotherSync: () => new MailSync(db.app, connections, gmail), request, ownerToken, memberToken, strangerToken, calls,
-		mode: (value: string) => { mode = value; }, fail: (id: string, response?: () => Response) => { failThread = id; failResponse = response; }, expire: () => { historyExpired = true; }, rename: () => { renamed = true; }, hold: (promise: Promise<void>) => { held = promise; }, holdThread: (id: string, promise: Promise<void>) => { heldThread = id; threadHold = promise; } };
+		mode: (value: string) => { mode = value; }, fail: (id: string, response?: () => Response) => { failThread = id; failResponse = response; }, expire: () => { historyExpired = true; }, historyAt: (value: string) => { profileHistory = value; }, rename: () => { renamed = true; }, hold: (promise: Promise<void>) => { held = promise; }, holdThread: (id: string, promise: Promise<void>) => { heldThread = id; threadHold = promise; } };
 }
 it('initial pagination, idempotent upserts, latest-message reads and attachment metadata', async () => {
 	const s = await setup(); const first = await s.sync.run(s.org); assert.equal(first.threads, 2); assert.equal(first.attachments, 4);
@@ -87,7 +87,7 @@ it('a failed first batch leaves mail and cursor untouched; history 404 performs 
 	const s = await setup(); s.fail('thread-2');
 	await assert.rejects(s.sync.run(s.org), { code: 'mail_sync_failed' });
 	assert.equal((await db.owner`select id from mail_threads where organisation_id = ${s.org}`).length, 0);
-	assert.equal((await db.owner`select id from sync_cursors where organisation_id = ${s.org}`).length, 0);
+	assert.equal((await db.owner`select id from sync_cursors where organisation_id = ${s.org} and resource = 'gmail.history'`).length, 0);
 	const failed = await (await s.request('threads')).json(); assert.equal(failed.lastSync.detail.success, false); assert.ok(!JSON.stringify(failed).includes('private provider'));
 	s.fail(''); await s.sync.run(s.org); s.expire(); assert.equal((await s.sync.run(s.org)).full, true);
 });
@@ -138,7 +138,7 @@ it('a third-batch failure preserves two batches and contacts, leaves history unc
   const pages = await db.owner`select detail from audit_events where organisation_id = ${s.org} and action = 'mail.batch_synced'`;
   assert.deepEqual(pages.map((p) => p.detail.threads), [25, 25]);
   assert.equal((await (await s.request('threads')).json()).lastSync.detail.success, false);
-  s.fail(''); assert.equal((await s.sync.run(s.org)).threads, 75);
+  s.fail(''); const resumed = await s.sync.run(s.org); assert.equal(resumed.threads, 25); assert.equal(resumed.resumed, 50, 'the retry skips the two committed batches');
   const final = await db.owner`select id from mail_threads where organisation_id = ${s.org} order by id`;
   assert.equal(final.length, 75); assert.deepEqual(final.slice(0, 50), [...first]);
   assert.equal((await db.owner`select id from contacts where organisation_id = ${s.org} and email like '%@supplier.test'`).length, 75);
@@ -157,7 +157,22 @@ it('a waiting provider holds no transaction or connection row lock; another runn
   await db.owner.begin(async (tx) => { await tx`set local lock_timeout = '1s'`; await tx`update connections set status = 'disconnected' where id = ${s.conn}`; });
  } finally { release(); await rejected; }
  assert.equal((await db.owner`select id from mail_threads where organisation_id = ${s.org}`).length, 50);
- assert.equal((await db.owner`select id from sync_cursors where organisation_id = ${s.org}`).length, 0);
+ assert.equal((await db.owner`select id from sync_cursors where organisation_id = ${s.org} and resource <> 'gmail.partial'`).length, 0);
+});
+it('a retried initial pass keeps its first baseline, skips saved threads, and clears the partial marker when it finishes', async () => {
+ const s = await setup(); s.mode('bulk'); s.fail('bulk-51', () => Response.json({ error: { errors: [{ reason: 'rateLimitExceeded' }] } }, { status: 403 }));
+ await assert.rejects(s.sync.run(s.org), { message: /rate limiting.*Reference: fetch · google · 403 · rateLimitExceeded\./ });
+ const [partial] = await db.owner`select cursor from sync_cursors where organisation_id = ${s.org} and resource = 'gmail.partial'`;
+ assert.equal(JSON.parse(partial!.cursor).historyId, '100');
+ const before = s.calls.filter((u) => /\/threads\/bulk-/.test(u.pathname)).length;
+ s.fail(''); s.historyAt('150'); const result = await s.sync.run(s.org);
+ assert.equal(result.resumed, 50); assert.equal(result.threads, 25); assert.equal(result.full, true);
+ assert.equal(s.calls.filter((u) => /\/threads\/bulk-/.test(u.pathname)).length - before, 25, 'only the unsaved threads are fetched again');
+ assert.equal((await db.owner`select id from mail_threads where organisation_id = ${s.org}`).length, 75);
+ const [cursor] = await db.owner`select cursor from sync_cursors where organisation_id = ${s.org} and resource = 'gmail.history'`;
+ assert.equal(JSON.parse(cursor!.cursor).historyId, '100', 'history replays from the first attempt so nothing changed in between is lost');
+ assert.equal((await db.owner`select id from sync_cursors where organisation_id = ${s.org} and resource = 'gmail.partial'`).length, 0);
+ s.mode('initial'); s.historyAt('200'); assert.equal((await s.sync.run(s.org)).resumed, 0, 'a fresh full pass after a finished one starts clean');
 });
 it('a replaced lease or changed history cursor fences the old runner before it can persist a batch', async () => {
  for (const changed of ['lease', 'history']) {
@@ -170,7 +185,7 @@ it('a replaced lease or changed history cursor fences the old runner before it c
    else await db.owner`insert into sync_cursors (organisation_id, connection_id, resource, cursor) values (${s.org}, ${s.conn}, 'gmail.history', 'changed')`;
   } finally { release(); await rejected; }
   assert.equal((await db.owner`select id from mail_threads where organisation_id = ${s.org}`).length, 0);
-  assert.equal((await db.owner`select cursor from sync_cursors where organisation_id = ${s.org}`)[0]!.cursor, changed === 'lease' ? 'replacement' : 'changed');
+  assert.equal((await db.owner`select cursor from sync_cursors where organisation_id = ${s.org} and resource <> 'gmail.partial'`)[0]!.cursor, changed === 'lease' ? 'replacement' : 'changed');
  }
 });
 it('an expired lease from a stopped process can be reclaimed', async () => {

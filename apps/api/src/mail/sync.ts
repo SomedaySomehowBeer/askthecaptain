@@ -9,7 +9,11 @@ import { badRequest, HttpError } from '../errors.ts';
 import { connection, saveThread } from './store.ts';
 import { describeFailure, explainFailure } from '../sync-failure.ts';
 const cursorSchema = z.object({ accountEmail: z.string(), historyId: z.string().min(1), capped: z.boolean() });
-export type SyncResult = { threads: number; messages: number; attachments: number; deleted: number; full: boolean; capped: boolean };
+/** An unfinished full pass keeps its first history baseline so a retry can skip the threads it already
+ * saved: the history replay from that baseline still covers whatever changed since. Without this a
+ * mailbox that hits Gmail's rate limit part-way would refetch everything and never finish. */
+const partialSchema = z.object({ accountEmail: z.string(), historyId: z.string().min(1), startedAt: z.string().datetime() });
+export type SyncResult = { threads: number; messages: number; attachments: number; deleted: number; full: boolean; capped: boolean; resumed: number };
 
 /** Housekeeping, never a workflow. Fetch outside transactions, commit mail and contacts in batches,
  * and advance the history cursor only after success. A retry idempotently replays unfinished work. */
@@ -24,7 +28,7 @@ export class MailSync {
 		if (this.#running.has(organisationId)) throw syncBusy();
 		this.#running.add(organisationId);
 		let lock: Awaited<ReturnType<typeof mailLock>> | undefined;
-		const counts: SyncResult = { threads: 0, messages: 0, attachments: 0, deleted: 0, full: false, capped: false };
+		const counts: SyncResult = { threads: 0, messages: 0, attachments: 0, deleted: 0, full: false, capped: false, resumed: 0 };
 		let stage = 'start'; // Named in the failure reference; never carries content.
 		try {
 			const conn = await withTenant(this.#db, { organisationId }, connection);
@@ -39,7 +43,7 @@ export class MailSync {
 			stage = 'labels'; const labels = await this.#gmail.labels(token); await heartbeat();
 			const previous = lock.previous ? cursorSchema.parse(JSON.parse(lock.previous)) : null;
 			let full = !previous || previous.accountEmail !== profile.emailAddress; let historyId = profile.historyId;
-			let capped = previous?.capped ?? false; const ids = new Set<string>();
+			let capped = previous?.capped ?? false; const ids = new Set<string>(); let resumeFrom: string | null = null;
 			if (!full) {
 				stage = 'history';
 				try {
@@ -58,6 +62,16 @@ export class MailSync {
 			}
 			if (full) {
 				stage = 'recent'; capped = false; let pageToken: string | undefined; const pages = new Set<string>();
+				const partial = await batch(async (tx) => {
+					const [row] = await tx`select cursor from sync_cursors where connection_id = ${conn.id} and resource = 'gmail.partial'`;
+					const parsed = row ? partialSchema.safeParse(JSON.parse(row.cursor)) : null;
+					if (parsed?.success && parsed.data.accountEmail === profile.emailAddress) return parsed.data;
+					const fresh = { accountEmail: profile.emailAddress, historyId, startedAt: new Date().toISOString() };
+					await tx`insert into sync_cursors (organisation_id, connection_id, resource, cursor) values (${organisationId}, ${conn.id}, 'gmail.partial', ${JSON.stringify(fresh)})
+						on conflict (organisation_id, connection_id, resource) do update set cursor = excluded.cursor, updated_at = now()`;
+					return null;
+				});
+				if (partial) { historyId = partial.historyId; resumeFrom = partial.startedAt; }
 				const after = Math.floor((Date.now() - 30 * 86_400_000) / 1000);
 				do {
 					const page = await this.#gmail.threads(token, after, pageToken); await heartbeat();
@@ -70,9 +84,12 @@ export class MailSync {
 			}
 			counts.full = full; counts.capped = capped;
 			const ordered = [...ids];
-			for (let offset = 0; offset < ordered.length; offset += 25) {
+			const saved = resumeFrom ? new Set((await batch((tx) => tx`select provider_id from mail_threads where connection_id = ${conn.id} and account_email = ${conn.accountEmail}
+				and updated_at >= ${resumeFrom} and provider_id = any(${tx.array(ordered)}::text[])`)).map((row) => row.providerId as string)) : new Set<string>();
+			const pending = ordered.filter((id) => !saved.has(id)); counts.resumed = saved.size;
+			for (let offset = 0; offset < pending.length; offset += 25) {
 				const fetched: { id: string; thread: MailThread | null }[] = []; stage = 'fetch';
-				for (const id of ordered.slice(offset, offset + 25)) {
+				for (const id of pending.slice(offset, offset + 25)) {
 					try { fetched.push({ id, thread: await this.#gmail.thread(token, id) }); }
 					catch (error) { if (!(error instanceof GmailError && error.status === 404)) throw error; fetched.push({ id, thread: null }); }
 					await heartbeat();
@@ -107,8 +124,10 @@ export class MailSync {
 				await tx`insert into sync_cursors (organisation_id, connection_id, resource, cursor) values (${organisationId}, ${conn.id}, 'gmail.history',
 					${JSON.stringify({ accountEmail: conn.accountEmail, historyId, capped })}) on conflict (organisation_id, connection_id, resource)
 					do update set cursor = excluded.cursor, updated_at = now()`;
+				await tx`delete from sync_cursors where connection_id = ${conn.id} and resource = 'gmail.partial'`;
 				await audit(tx, { organisationId, actor: { kind: 'system' }, action: 'mail.synced', subjectType: 'connection', subjectId: conn.id, detail: { ...counts, deleted: counts.deleted + deleted, success: true } });
-				if (counts.threads > 0) await this.#emit?.(tx, organisationId, 'mail.synced', { historyId });
+				// Threads saved by an unfinished earlier attempt were never handed off, so a resumed pass emits too.
+				if (counts.threads > 0 || counts.resumed > 0) await this.#emit?.(tx, organisationId, 'mail.synced', { historyId });
 				return deleted;
 			});
 			counts.deleted += removed;
