@@ -39,7 +39,8 @@ runner can recover an expired lease, while the old runner cannot commit or remov
 works through transaction pooling without session advisory locks or an open transaction across HTTP.
 The local scheduler also guards overlapping ticks and waits for active work before database shutdown.
 
-Provider calls time out after 15 seconds. Calendar lists stop at 1,000 entries/100 pages; event reads
+Provider calls time out after 15 seconds; rate limits (`429`, `403 rateLimitExceeded`) and, for reads,
+Google 5xx answers back off and retry up to four times. Calendar lists stop at 1,000 entries/100 pages; event reads
 stop after 101 pages of at most 250 events. Hitting a bound is a visible failure, never silent truncation.
 No API route calls the exposed event insert/patch client methods. Nothing sends an invitation here.
 Preparation notes have an insertion point in each event card, with no fabricated content.

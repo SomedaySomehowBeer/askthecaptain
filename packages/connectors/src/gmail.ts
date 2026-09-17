@@ -18,6 +18,13 @@ export function fetchReason(error: unknown): string {
 	const name = error instanceof Error ? error.name : '';
 	return name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : name === 'TypeError' ? 'network' : 'unreadable';
 }
+/** Google's documented answer to `403 rateLimitExceeded` / `429` is exponential backoff. A limited
+ * request was not executed, so retrying it is safe even for a send. */
+export const retryableReasons = new Set(['userRateLimitExceeded', 'rateLimitExceeded', 'RESOURCE_EXHAUSTED']);
+export type GoogleClientOptions = { sleep?: (ms: number) => Promise<void>; retries?: number };
+export const backoffMs = (attempt: number) => Math.min(1000 * 2 ** attempt, 8000) + Math.floor(Math.random() * 250);
+export const shouldRetry = (status: number, reason: string, method: 'GET' | 'POST') =>
+	status === 429 || (status === 403 && retryableReasons.has(reason)) || (method === 'GET' && status >= 500 && status < 600 && reason !== 'unreadable' && reason !== 'timeout' && reason !== 'network');
 export class GmailError extends Error {
 	readonly status: number; readonly reason: string;
 	/** `status` 0 means Gmail never answered usably; `reason` is a Google reason or Captain's own short word. */
@@ -90,8 +97,10 @@ function parseMessage(value: unknown): MailMessage {
 
 /** First-party Gmail REST client. Responses are validated and errors never contain provider bodies. */
 export class GmailClient {
-	readonly #fetch: typeof fetch;
-	constructor(fetcher: typeof fetch = fetch) { this.#fetch = fetcher; }
+	readonly #fetch: typeof fetch; readonly #sleep: (ms: number) => Promise<void>; readonly #retries: number;
+	constructor(fetcher: typeof fetch = fetch, options: GoogleClientOptions = {}) {
+		this.#fetch = fetcher; this.#sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))); this.#retries = options.retries ?? 4;
+	}
 	async profile(token: string): Promise<{ emailAddress: string; historyId: string }> {
 		const data = await this.get('profile', token); return { emailAddress: id(data.emailAddress).toLowerCase(), historyId: id(data.historyId) };
 	}
@@ -147,18 +156,28 @@ export class GmailClient {
 	}
 	async stop(token: string): Promise<void> { await this.post('stop', token); }
 	private async post(path: string, token: string, body?: object): Promise<ObjectValue> {
-		try {
+		return this.attempt('POST', async () => {
 			const response = await this.#fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { method: 'POST',
 				headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}), signal: AbortSignal.timeout(15_000) });
 			if (!response.ok) throw new GmailError(response.status, await googleReason(response)); return path === 'stop' ? {} : object(await response.json());
-		} catch (error) { throw error instanceof GmailError ? error : new GmailError(0, fetchReason(error)); }
+		});
 	}
 
 	private async get(path: string, token: string, params: Record<string, string> = {}, timeoutMs = 15_000): Promise<ObjectValue> {
-		try {
+		return this.attempt('GET', async () => {
 			const url = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`); url.search = new URLSearchParams(params).toString();
 			const response = await this.#fetch(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(timeoutMs) });
 			if (!response.ok) throw new GmailError(response.status, await googleReason(response)); return object(await response.json());
-		} catch (error) { throw error instanceof GmailError ? error : new GmailError(0, fetchReason(error)); }
+		});
+	}
+	private async attempt(method: 'GET' | 'POST', request: () => Promise<ObjectValue>): Promise<ObjectValue> {
+		for (let n = 0; ; n++) {
+			try { return await request(); }
+			catch (error) {
+				const failure = error instanceof GmailError ? error : new GmailError(0, fetchReason(error));
+				if (n >= this.#retries || !shouldRetry(failure.status, failure.reason, method)) throw failure;
+				await this.#sleep(backoffMs(n));
+			}
+		}
 	}
 }

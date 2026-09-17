@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { Notice } from '../../components/Notice.tsx';
+import { withReference } from '../../components/Reference.tsx';
 import { Page, requireCurrent } from '../../components/Page.tsx';
 import { api, load } from '../../lib/api.ts';
 import { addDays, dayLabel, eventTime, onDay, weekStart, type CalendarWeek, type CalendarList } from './calendar.ts';
@@ -32,7 +33,7 @@ async function Week({ me, week }: { me: Awaited<ReturnType<typeof requireCurrent
    <p className="muted">{lastSync ? `Last sync attempt: ${new Intl.DateTimeFormat('en-AU', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(lastSync.at))}.` : 'Calendars have not been synced yet.'}</p>
    {needsAccess && connection?.status === 'connected' ? <Notice tone="attention" action={{ href: '/settings/connections', label: 'Reconnect Google' }}>Calendar list access is needed. An owner or admin must reconnect Google and allow the calendar permissions.</Notice> : null}
    {connection?.status !== 'connected' ? <Notice tone="attention" action={{ href: '/settings/connections', label: 'Reconnect Google' }}>{connection?.status === 'revoked' ? 'Google access was revoked.' : 'Google access could not be refreshed.'} Reconnect in Settings to resume calendar sync. Any events below are the last saved copy.</Notice> : null}
-   {lastSync && !lastSync.detail.success ? <Notice tone="failed">{lastSync.detail.error ?? 'The last calendar sync failed. Try Sync now again.'}</Notice> : null}
+   {lastSync && !lastSync.detail.success ? <Notice tone="failed">{lastSync.detail.error ? withReference(lastSync.detail.error) : 'The last calendar sync failed. Try Sync now again.'}</Notice> : null}
    <SyncButton disabled={!canSync || !available} />
    {!canSync ? <p className="muted">Only an owner or admin can sync now.</p> : null}
    <p className="muted">{automaticSyncEnabled ? 'Connected calendars are checked automatically every five minutes.' : 'Automatic calendar checks are paused.'}</p>

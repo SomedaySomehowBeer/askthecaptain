@@ -77,3 +77,15 @@ test('one message with an unknown charset or NUL bytes does not stop the mailbox
 	assert.equal(thread.messages[0]!.body, 'Plain enough text'); assert.equal(thread.messages[0]!.snippet, 'Snippet');
 	assert.ok(!JSON.stringify(thread).includes(nul));
 });
+
+test('rate limits and Google 5xx reads back off and retry; permission errors and write failures do not', async () => {
+	const sleeps: number[] = []; const sleep = async (ms: number) => { sleeps.push(ms); };
+	let answers = [429, 403, 200]; const rateLimited = () => { const status = answers.shift()!; return status === 200 ? Response.json({ emailAddress: 'a@b.test', historyId: '1' }) : Response.json({ error: { errors: [{ reason: 'rateLimitExceeded' }] } }, { status }); };
+	assert.equal((await new GmailClient(async () => rateLimited(), { sleep, retries: 4 }).profile('t')).historyId, '1'); assert.equal(sleeps.length, 2);
+	assert.ok(sleeps[0]! >= 1000 && sleeps[0]! < 1250 && sleeps[1]! >= 2000 && sleeps[1]! < 2250, 'exponential with jitter');
+	sleeps.length = 0; answers = [429, 429, 429];
+	await assert.rejects(new GmailClient(async () => rateLimited(), { sleep, retries: 2 }).profile('t'), { status: 429 }); assert.equal(sleeps.length, 2);
+	sleeps.length = 0; await assert.rejects(new GmailClient(async () => Response.json({ error: { errors: [{ reason: 'accessNotConfigured' }] } }, { status: 403 }), { sleep }).profile('t'), { status: 403 }); assert.equal(sleeps.length, 0);
+	sleeps.length = 0; let reads = 0; assert.equal((await new GmailClient(async () => ++reads === 1 ? new Response('down', { status: 503 }) : Response.json({ emailAddress: 'a@b.test', historyId: '2' }), { sleep }).profile('t')).historyId, '2'); assert.equal(sleeps.length, 1);
+	sleeps.length = 0; let sends = 0; await assert.rejects(new GmailClient(async () => { sends++; return new Response('down', { status: 500 }); }, { sleep }).send('t', 'raw'), { status: 500 }); assert.equal(sends, 1, 'a send is never repeated after an unknown outcome'); assert.equal(sleeps.length, 0);
+});

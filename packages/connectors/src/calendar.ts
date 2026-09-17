@@ -1,5 +1,5 @@
 /** First-party Calendar REST client. Provider content and credentials never enter an error. */
-import { fetchReason, googleReason } from './gmail.ts';
+import { backoffMs, fetchReason, googleReason, shouldRetry, type GoogleClientOptions } from './gmail.ts';
 export class CalendarError extends Error {
  readonly status: number; readonly reason: string;
  /** `status` 502 with reason `unreadable` is Captain's own verdict on an answer it could not parse. */
@@ -38,8 +38,10 @@ export function parseEvent(value: unknown): CalendarEvent {
   attendeesOmitted: bool(v.attendeesOmitted), recurringEventId: text(v.recurringEventId) || null, htmlLink: text(v.htmlLink), updatedAt };
 }
 export class CalendarClient {
- readonly fetcher: typeof fetch;
- constructor(fetcher: typeof fetch = fetch) { this.fetcher = fetcher; }
+ readonly fetcher: typeof fetch; readonly #sleep: (ms: number) => Promise<void>; readonly #retries: number;
+ constructor(fetcher: typeof fetch = fetch, options: GoogleClientOptions = {}) {
+  this.fetcher = fetcher; this.#sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))); this.#retries = options.retries ?? 4;
+ }
  async calendars(token: string, pageToken?: string) {
   const data = await this.request('users/me/calendarList', token, { showHidden: 'true', maxResults: '250', ...(pageToken ? { pageToken } : {}) });
   return { items: array(data.items).map((value): CalendarInfo => { const c = obj(value); const timezone = id(c.timeZone);
@@ -64,11 +66,18 @@ export class CalendarClient {
   return parseEvent(await this.request(`calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`, token, { sendUpdates }, 'PATCH', event));
  }
  private async request(path: string, token: string, params: Record<string, string> = {}, method = 'GET', body?: Partial<EventWrite>): Promise<Obj> {
-  try {
-   const url = new URL(`https://www.googleapis.com/calendar/v3/${path}`); url.search = new URLSearchParams(params).toString();
-   const response = await this.fetcher(url, { method, headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) },
-    ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15_000) });
-   if (!response.ok) throw new CalendarError(response.status, await googleReason(response)); return obj(await response.json());
-  } catch (error) { throw error instanceof CalendarError ? error : new CalendarError(502, fetchReason(error)); }
+  for (let n = 0; ; n++) {
+   try {
+    const url = new URL(`https://www.googleapis.com/calendar/v3/${path}`); url.search = new URLSearchParams(params).toString();
+    const response = await this.fetcher(url, { method, headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) },
+     ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) throw new CalendarError(response.status, await googleReason(response)); return obj(await response.json());
+   } catch (error) {
+    const failure = error instanceof CalendarError ? error : new CalendarError(502, fetchReason(error));
+    // Only rate limits are retried on writes; a GET may also retry a Google 5xx (502 is Captain's own unreadable verdict).
+    if (n >= this.#retries || !shouldRetry(failure.status, failure.reason, method === 'GET' ? 'GET' : 'POST')) throw failure;
+    await this.#sleep(backoffMs(n));
+   }
+  }
  }
 }

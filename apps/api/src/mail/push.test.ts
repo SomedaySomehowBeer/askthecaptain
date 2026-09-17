@@ -33,7 +33,7 @@ async function setup() {
  await db.owner`insert into connections (organisation_id, provider, connected_by, account_email, scopes, status) values (${b.id}, 'google', ${outsider!.id}, ${emailB}, '{}', 'connected')`;
  const calls: string[] = []; let held: Promise<void> | undefined; let failure = false; let busy = false; let watches = 0; let watchFailure = false; let time = Date.now();
  const sync = { async organisations() { return (await db.app`select organisation_id from gmail_sync_organisations()`).map((r) => r.organisationId as string); },
-  async run(org: string) { calls.push(org); if (held) await held; if (busy) throw new HttpError(409, 'sync_running', 'busy'); if (failure) throw new Error('provider-private-body'); return { threads: 0, messages: 0, attachments: 0, deleted: 0, full: false, capped: false }; } };
+  async run(org: string) { calls.push(org); if (held) await held; if (busy) throw new HttpError(409, 'sync_running', 'busy'); if (failure) throw new Error('provider-private-body'); return { threads: 0, messages: 0, attachments: 0, deleted: 0, full: false, capped: false, resumed: 0 }; } };
  const verifier = new GooglePushVerifier(config.audience, 'gmail-pubsub@project-test.iam.gserviceaccount.com', async () => Response.json({ test: key.publicKey.export({ type: 'spki', format: 'pem' }) }, { headers: { 'cache-control': 'max-age=3600' } }));
  const push = new GmailPush(db.app, sync, config, verifier);
  const client = new GmailClient(async (url) => {
