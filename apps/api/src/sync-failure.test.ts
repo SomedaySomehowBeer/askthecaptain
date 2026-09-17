@@ -14,4 +14,6 @@ test('failures are described by stage and kind only; database errors keep their 
 	assert.match(explainFailure('Google Calendar', { stage: 'access', kind: 'google', status: 401 }), /Reconnect Google/);
 	assert.match(explainFailure('Gmail', { stage: 'fetch', kind: 'google', status: 403, reason: 'domainPolicy' }), /Workspace administrator/);
 	assert.match(explainFailure('Gmail', { stage: 'fetch', kind: 'google', status: 0, reason: 'account_changed' }), /account changed/);
+	assert.match(explainFailure('Google Calendar', { stage: 'calendars', kind: 'google', status: 502, reason: 'too_many_pages' }), /more pages/);
+	assert.match(explainFailure('Google Calendar', { stage: 'start', kind: 'google', status: 502, reason: 'not_connected' }), /not connected/);
 });

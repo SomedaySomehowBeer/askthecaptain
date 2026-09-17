@@ -26,6 +26,8 @@ export function explainFailure(provider: 'Gmail' | 'Google Calendar', failure: S
 	else if (failure.reason === 'timeout') cause = `${provider} was slow to answer. Try Sync now again.`;
 	else if (failure.reason === 'network') cause = `${provider} could not be reached. Try Sync now again.`;
 	else if (failure.reason === 'account_changed') cause = 'The connected Google account changed during the sync. Try Sync now again.';
+	else if (failure.reason === 'not_connected') cause = 'Google is not connected. Connect Google in Settings.';
+	else if (failure.reason === 'too_many_pages') cause = `${provider} returned more pages than Captain reads in one run. Try Sync now again.`;
 	else if ((failure.status ?? 0) >= 500) cause = `${provider} had a problem answering. Try Sync now again shortly.`;
 	else cause = `${provider} answered in a way Captain could not read. Try Sync now again; if it keeps failing, contact support with the reference.`;
 	return `${cause} ${reference}`;
