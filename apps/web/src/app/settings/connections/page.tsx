@@ -12,6 +12,7 @@ type Connection = { id: string; provider: string; accountEmail: string; scopes: 
 const status = { connected: 'Connected', refresh_failed: 'Access could not be refreshed', revoked: 'Google access revoked', disconnected: 'Disconnected' };
 const scopeName: Record<string, string> = { openid: 'Google account identity', email: 'Email address',
 	'https://www.googleapis.com/auth/userinfo.email': 'Email address',
+	'https://www.googleapis.com/auth/userinfo.profile': 'Name and profile picture',
 	'https://www.googleapis.com/auth/gmail.modify': 'Gmail: read, label, draft and send',
 	'https://www.googleapis.com/auth/calendar.calendarlist.readonly': 'Calendar: read your calendar list',
 	'https://www.googleapis.com/auth/calendar.events': 'Calendar: read, create and update events' };

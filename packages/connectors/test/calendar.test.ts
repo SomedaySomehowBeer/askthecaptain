@@ -21,6 +21,9 @@ test('get/insert/patch encode ids and require an explicit notification choice; e
  await client.patch('test', 'a/b', 'x/y', { location: 'Changed' }, 'none');
  assert.match(calls[0]!.url.pathname, /x%2Fy$/); assert.equal(calls[1]!.init!.method, 'POST'); assert.equal(calls[1]!.url.searchParams.get('sendUpdates'), 'all'); assert.equal(calls[2]!.init!.method, 'PATCH');
  for (const status of [410, 403, 500]) await assert.rejects(new CalendarClient(async () => new Response('private-body', { status })).events('secret-token', 'primary', {}), (e: unknown) => e instanceof CalendarError && e.status === status && !/private|secret/.test(e.message));
+ await assert.rejects(new CalendarClient(async () => Response.json({ error: { status: 'PERMISSION_DENIED', errors: [{ reason: 'accessNotConfigured', message: 'private' }] } }, { status: 403 })).calendars('t'),
+  (e: unknown) => e instanceof CalendarError && e.status === 403 && e.reason === 'accessNotConfigured' && !/private/.test(JSON.stringify(e)));
+ await assert.rejects(new CalendarClient(async () => { throw new DOMException('slow', 'TimeoutError'); }).calendars('t'), { status: 502, reason: 'timeout' });
  assert.throws(() => parseEvent({ ...fixture.items[0], start: { date: '2026-02-30' } }), CalendarError);
  assert.throws(() => parseEvent({ ...fixture.items[0], attendees: 'invalid' }), CalendarError);
 });

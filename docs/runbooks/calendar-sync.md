@@ -44,6 +44,17 @@ stop after 101 pages of at most 250 events. Hitting a bound is a visible failure
 No API route calls the exposed event insert/patch client methods. Nothing sends an invitation here.
 Preparation notes have an insertion point in each event card, with no fabricated content.
 
+## Diagnosing a failed sync
+
+The Calendar card (and `audit_events` action `calendar.sync_failed`, field `detail.failure`) ends a
+failure with a reference such as `Reference: calendars · google · 403 · accessNotConfigured.`. Stages
+are `access` (token refresh), `calendars` (calendar list), `events` (one page of one calendar), `save`
+and `finish`. Kinds, statuses, reasons and database codes read as in
+[mail-sync.md](mail-sync.md#diagnosing-a-failed-sync). The two 403s an owner meets: `accessNotConfigured`
+means the Google Calendar API is not enabled in the Google Cloud project that owns the OAuth client
+(enable it, then Sync now; no reconnect needed); a bare 403 or `insufficientPermissions` means the
+grant lacks the calendar scopes and the owner must reconnect Google.
+
 ## Validation and references
 
 Run `DATABASE_URL=postgres://postgres@127.0.0.1:32783/postgres flock /tmp/atc-build.lock pnpm test` and

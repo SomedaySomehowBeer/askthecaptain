@@ -27,7 +27,7 @@ export async function mailLock(db: Sql, organisationId: string, conn: MailConnec
     and cursor = ${runId} and updated_at > clock_timestamp() - interval '2 minutes' returning id`;
    if (!lock.length) throw syncBusy();
    const [current] = await tx`select account_email, status from connections where id = ${conn.id} for share`;
-   if (current?.status !== 'connected' || current.accountEmail !== conn.accountEmail) throw new GmailError();
+   if (current?.status !== 'connected' || current.accountEmail !== conn.accountEmail) throw new GmailError(0, 'account_changed');
    const [stored] = await tx`select cursor from sync_cursors where connection_id = ${conn.id} and resource = 'gmail.history'`;
    if ((stored?.cursor ?? null) !== previous) throw syncBusy();
    return work(tx);

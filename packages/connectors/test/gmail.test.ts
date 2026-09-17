@@ -58,3 +58,22 @@ test('watch and stop use Gmail POST endpoints and validate the returned expiry',
  await client.stop('token'); assert.equal(calls[0]!.method, 'POST'); assert.deepEqual(calls[0]!.body, { topicName: 'projects/project-test/topics/mail' }); assert.match(calls[1]!.url, /\/users\/me\/stop$/);
  await assert.rejects(new GmailClient(async () => Response.json({ historyId: '1', expiration: 'bad' })).watch('token', 'topic'), GmailError);
 });
+
+test('errors name Google\'s reason and the fetch outcome, but never provider text', async () => {
+	const forbidden = () => Response.json({ error: { code: 403, message: 'Gmail API has not been used in project 123 before', status: 'PERMISSION_DENIED', errors: [{ reason: 'accessNotConfigured', domain: 'usageLimits', message: 'secret detail' }] } }, { status: 403 });
+	await assert.rejects(new GmailClient(async () => forbidden()).profile('t'), (e: unknown) => e instanceof GmailError && e.status === 403 && e.reason === 'accessNotConfigured' && !/project|secret/.test(JSON.stringify(e)));
+	const unknown = () => Response.json({ error: { code: 403, status: 'MADE_UP', errors: [{ reason: 'privateReasonText' }] } }, { status: 403 });
+	await assert.rejects(new GmailClient(async () => unknown()).profile('t'), (e: unknown) => e instanceof GmailError && e.status === 403 && e.reason === '');
+	await assert.rejects(new GmailClient(async () => new Response('<html>sensitive</html>', { status: 502 })).profile('t'), { status: 502, reason: '' });
+	await assert.rejects(new GmailClient(async () => { throw new DOMException('aborted', 'TimeoutError'); }).profile('t'), { status: 0, reason: 'timeout' });
+	await assert.rejects(new GmailClient(async () => { throw new TypeError('fetch failed'); }).profile('t'), { status: 0, reason: 'network' });
+	await assert.rejects(new GmailClient(async () => Response.json({ historyId: 123 })).history('x', '100'), { status: 0, reason: 'unreadable' });
+});
+test('one message with an unknown charset or NUL bytes does not stop the mailbox', async () => {
+	const raw = await fixture('thread'); const message = raw.messages[0]; const part = message.payload.parts[0].parts[0]; const nul = String.fromCharCode(0);
+	part.headers = [{ name: 'Content-Type', value: 'text/plain; charset=x-not-a-charset' }]; part.body.data = Buffer.from(`Plain enough${nul} text`).toString('base64url');
+	message.snippet = `Snip${nul}pet`; message.payload.headers.push({ name: 'Subject', value: `Odd${nul} subject` });
+	const thread = await new GmailClient(async () => Response.json(raw)).thread('x', 'thread-1');
+	assert.equal(thread.messages[0]!.body, 'Plain enough text'); assert.equal(thread.messages[0]!.snippet, 'Snippet');
+	assert.ok(!JSON.stringify(thread).includes(nul));
+});
