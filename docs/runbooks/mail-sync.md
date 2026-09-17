@@ -38,6 +38,31 @@ mail content or credentials while diagnosing a failure.
   as the last saved copy while access is unavailable; a disconnected/replaced account's cache is not
   exposed as the current account's mail.
 
+## Diagnosing a failed sync
+
+The API never logs mail, provider bodies or credentials, so a failed run is read from the Inbox card
+(or `audit_events` action `mail.sync_failed`, field `detail.failure`), not from Fly logs. The card ends
+with a reference such as `Reference: fetch · google · 403 · accessNotConfigured.`:
+
+- **stage**: `access` (token refresh), `profile`, `labels`, `history`, `recent` (30-day listing),
+  `fetch` (one thread), `save` (a 25-thread batch), `contacts` (contact upkeep inside that batch) or
+  `finish` (cursor advance and reconciliation). Committed batches survive whatever the stage.
+- **kind** `google` with the HTTP status and, when Google gives one, its documented reason:
+  `accessNotConfigured` means the Gmail API is not enabled in the Google Cloud project that owns the
+  OAuth client (first-deploy step 5); `insufficientPermissions` or a bare `403` means the grant lacks
+  `gmail.modify` and the owner must reconnect; `domainPolicy` is a Workspace admin block;
+  `userRateLimitExceeded`, `rateLimitExceeded`, `dailyLimitExceeded` or `429` wait for the next check;
+  `401` or `authError` needs a reconnect; `5xx` is Google's; status `0` with `timeout` (15 s, 30 s for a
+  whole thread), `network` or `unreadable` (a response Captain could not parse) is worth one retry.
+  `account_changed` and `too_many_pages` are Captain's own guards.
+- **kind** `database` with the SQLSTATE only, for example `22021` (an unrepresentable byte), `23505`
+  (a duplicate key), `40001` (serialisation) or `57014` (statement timeout). Retry once; if it repeats
+  on the same stage, open an issue with the reference and the organisation id, never the mail.
+- **kind** `other` with the JavaScript error name, for a bug in Captain.
+
+Since #65 one message with a charset the runtime does not know is read as UTF-8 and NUL bytes are
+stripped before saving, so a single odd message no longer stops the whole mailbox.
+
 Gmail Pub/Sub push and daily watch renewal are documented in [gmail-push.md](gmail-push.md).
 Attachment text extraction, triage and outbox remain later slices.
 

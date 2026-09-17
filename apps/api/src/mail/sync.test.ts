@@ -24,7 +24,7 @@ async function setup(emit?: ConstructorParameters<typeof MailSync>[3]) {
 	const data = newDataKey(master, org.id); await db.owner`update organisations set data_key_wrapped = ${data.wrapped} where id = ${org.id}`;
 	const [conn] = await db.owner`insert into connections (organisation_id, provider, connected_by, account_email, scopes, status, access_token_encrypted, access_token_expires_at)
 		values (${org.id}, 'google', ${user!.id}, 'business@example.test', '{}', 'connected', ${seal(data.key, Buffer.from('test-access'), org.id, 'access_token')}, now() + interval '1 hour') returning id`;
-	let mode = 'initial'; let failThread = ''; let historyExpired = false; let renamed = false; let held: Promise<void> | undefined; let heldThread = ''; let threadHold: Promise<void> | undefined;
+	let mode = 'initial'; let failThread = ''; let failResponse: (() => Response) | undefined; let historyExpired = false; let renamed = false; let held: Promise<void> | undefined; let heldThread = ''; let threadHold: Promise<void> | undefined;
 	const calls: URL[] = [];
 	const gmail = new GmailClient(async (input) => {
 		const url = new URL(String(input)); calls.push(url); const path = url.pathname;
@@ -43,7 +43,7 @@ async function setup(emit?: ConstructorParameters<typeof MailSync>[3]) {
 			return Response.json(url.searchParams.has('pageToken') ? { threads: [{ id: 'thread-2' }] } : { threads: [{ id: 'thread-1' }], nextPageToken: 'next' });
 		}
 		const id = path.split('/').at(-1)!; if (id === heldThread) await threadHold;
-		if (id === failThread) return new Response('private provider error', { status: 500 });
+		if (id === failThread) return failResponse ? failResponse() : new Response('private provider error', { status: 500 });
 		if ((mode === 'incremental' && id === 'thread-2') || mode === 'cap') return new Response('', { status: 404 });
 		const thread = structuredClone(template); thread.id = id; thread.messages[0].id = `${id}-message`; thread.messages[0].threadId = id;
 		if (id === 'thread-2') thread.messages[0].internalDate = String(Number(thread.messages[0].internalDate) + 1000);
@@ -57,7 +57,7 @@ async function setup(emit?: ConstructorParameters<typeof MailSync>[3]) {
 	const ownerToken = (await auth.issueSessionFor(user!.id)).token; const memberToken = (await auth.issueSessionFor(member!.id)).token; const strangerToken = (await auth.issueSessionFor(stranger!.id)).token;
 	const request = (path = '', token = ownerToken, method = 'GET') => app.request(`/v1/organisations/${org.id}/mail/${path}`, { method, headers: { authorization: `Bearer ${token}` } });
 	return { org: org.id, conn: conn!.id, sync, anotherSync: () => new MailSync(db.app, connections, gmail), request, ownerToken, memberToken, strangerToken, calls,
-		mode: (value: string) => { mode = value; }, fail: (id: string) => { failThread = id; }, expire: () => { historyExpired = true; }, rename: () => { renamed = true; }, hold: (promise: Promise<void>) => { held = promise; }, holdThread: (id: string, promise: Promise<void>) => { heldThread = id; threadHold = promise; } };
+		mode: (value: string) => { mode = value; }, fail: (id: string, response?: () => Response) => { failThread = id; failResponse = response; }, expire: () => { historyExpired = true; }, rename: () => { renamed = true; }, hold: (promise: Promise<void>) => { held = promise; }, holdThread: (id: string, promise: Promise<void>) => { heldThread = id; threadHold = promise; } };
 }
 it('initial pagination, idempotent upserts, latest-message reads and attachment metadata', async () => {
 	const s = await setup(); const first = await s.sync.run(s.org); assert.equal(first.threads, 2); assert.equal(first.attachments, 4);
@@ -90,6 +90,16 @@ it('a failed first batch leaves mail and cursor untouched; history 404 performs 
 	assert.equal((await db.owner`select id from sync_cursors where organisation_id = ${s.org}`).length, 0);
 	const failed = await (await s.request('threads')).json(); assert.equal(failed.lastSync.detail.success, false); assert.ok(!JSON.stringify(failed).includes('private provider'));
 	s.fail(''); await s.sync.run(s.org); s.expire(); assert.equal((await s.sync.run(s.org)).full, true);
+});
+it('a failed sync names its stage and Google\'s reason in the card without any provider text', async () => {
+	const s = await setup(); s.fail('thread-1', () => Response.json({ error: { code: 403, message: 'Gmail API has not been used in project 123', errors: [{ reason: 'accessNotConfigured', message: 'private detail' }] } }, { status: 403 }));
+	await assert.rejects(s.sync.run(s.org), { code: 'mail_sync_failed', message: /Gmail API is not enabled[\s\S]*Reference: fetch · google · 403 · accessNotConfigured\./ });
+	const failed = await (await s.request('threads')).json(); const detail = failed.lastSync.detail;
+	assert.deepEqual(detail.failure, { stage: 'fetch', kind: 'google', status: 403, reason: 'accessNotConfigured' }); assert.match(detail.error, /incomplete/);
+	assert.ok(!/project 123|private detail/.test(JSON.stringify(failed)));
+	s.fail('thread-1', () => { throw new DOMException('slow', 'TimeoutError'); });
+	await assert.rejects(s.sync.run(s.org), { message: /Gmail was slow to answer.*Reference: fetch · google · 0 · timeout\./ });
+	s.fail(''); await s.sync.run(s.org);
 });
 it('manual sync is owner/admin only, members read, outsiders cannot read, and revoked connections refuse sync', async () => {
 	const s = await setup(); assert.equal((await s.request('sync', s.memberToken, 'POST')).status, 403);

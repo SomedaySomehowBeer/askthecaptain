@@ -1,7 +1,29 @@
-export class GmailError extends Error {
-	readonly status: number;
-	constructor(status = 0) { super('Gmail could not be read'); this.status = status; }
+/** Google's documented error reasons; anything else is dropped so provider text never travels. */
+export const googleReasons = new Set(['accessNotConfigured', 'insufficientPermissions', 'forbidden', 'domainPolicy', 'dailyLimitExceeded',
+	'userRateLimitExceeded', 'rateLimitExceeded', 'quotaExceeded', 'notFound', 'failedPrecondition', 'invalidArgument', 'backendError', 'authError',
+	'PERMISSION_DENIED', 'UNAUTHENTICATED', 'RESOURCE_EXHAUSTED', 'NOT_FOUND', 'FAILED_PRECONDITION', 'INVALID_ARGUMENT', 'UNAVAILABLE', 'INTERNAL']);
+/** Read the reason from a Google error body without keeping any of its text. */
+export async function googleReason(response: Response): Promise<string> {
+	try {
+		const body = await response.json(); const error = body && typeof body === 'object' ? (body as Record<string, unknown>).error : undefined;
+		if (!error || typeof error !== 'object') return '';
+		const details = error as { errors?: unknown; status?: unknown }; const first: unknown = Array.isArray(details.errors) ? details.errors[0] : undefined;
+		const reason = first && typeof first === 'object' ? (first as { reason?: unknown }).reason : undefined;
+		for (const candidate of [reason, details.status]) if (typeof candidate === 'string' && googleReasons.has(candidate)) return candidate;
+		return '';
+	} catch { return ''; }
 }
+/** Names a failed fetch without its content: `timeout`, `network`, or `unreadable` for a response Captain could not parse. */
+export function fetchReason(error: unknown): string {
+	const name = error instanceof Error ? error.name : '';
+	return name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : name === 'TypeError' ? 'network' : 'unreadable';
+}
+export class GmailError extends Error {
+	readonly status: number; readonly reason: string;
+	/** `status` 0 means Gmail never answered usably; `reason` is a Google reason or Captain's own short word. */
+	constructor(status = 0, reason = status ? '' : 'unreadable') { super('Gmail could not be read'); this.status = status; this.reason = reason; }
+}
+const strip = (value: string) => value.replaceAll('\u0000', ''); // Postgres text cannot hold NUL; mail occasionally does.
 type ObjectValue = Record<string, unknown>;
 const object = (value: unknown): ObjectValue => { if (!value || typeof value !== 'object' || Array.isArray(value)) throw new GmailError(); return value as ObjectValue; };
 const string = (value: unknown): string => { if (typeof value !== 'string') throw new GmailError(); return value; };
@@ -28,7 +50,7 @@ export function htmlToText(html: string): string {
 }
 function headers(part: ObjectValue): Record<string, string> {
 	const result: Record<string, string> = Object.create(null);
-	for (const value of array(part.headers)) { const h = object(value); const name = string(h.name).toLowerCase(); result[name] = [result[name], string(h.value)].filter(Boolean).join(', '); }
+	for (const value of array(part.headers)) { const h = object(value); const name = string(h.name).toLowerCase(); result[name] = [result[name], strip(string(h.value))].filter(Boolean).join(', '); }
 	return result;
 }
 function parseMessage(value: unknown): MailMessage {
@@ -54,14 +76,16 @@ function parseMessage(value: unknown): MailMessage {
 		if (bytes.attachmentId && !bytes.data) { unavailable = true; return ''; }
 		const data = optional(bytes.data) ?? ''; if (!/^[\w-]*={0,2}$/.test(data)) throw new GmailError();
 		const charset = /charset\s*=\s*["']?([^\s;"']+)/i.exec(ph['content-type'] ?? '')?.[1] ?? 'utf-8';
-		let decoded: string; try { decoded = new TextDecoder(charset).decode(Buffer.from(data, 'base64url')); } catch { throw new GmailError(); }
+		// A charset this runtime does not know must not stop the whole mailbox: read the part as UTF-8 instead.
+		let decoder: TextDecoder; try { decoder = new TextDecoder(charset); } catch { decoder = new TextDecoder('utf-8'); }
+		const decoded = strip(decoder.decode(Buffer.from(data, 'base64url')));
 		return mime === 'text/html' ? htmlToText(decoded) : decoded;
 	}
 	const internalDate = string(m.internalDate); if (!/^\d+$/.test(internalDate)) throw new GmailError();
 	const sent = new Date(Number(internalDate)); if (!Number.isFinite(sent.getTime())) throw new GmailError();
 	const text = body(payload, '0', 0);
 	return { providerId: id(m.id), fromHeader: h.from ?? '', toHeader: h.to ?? '', ccHeader: h.cc ?? '', bccHeader: h.bcc ?? '', subject: h.subject ?? '', dateHeader: h.date ?? '',
-		rfcMessageId: h['message-id'] ?? '', sentAt: sent.toISOString(), snippet: optional(m.snippet) ?? '', labelIds: strings(m.labelIds), inReplyTo: h['in-reply-to'] ?? '', body: text, bodyUnavailable: unavailable && !text, attachments };
+		rfcMessageId: h['message-id'] ?? '', sentAt: sent.toISOString(), snippet: strip(optional(m.snippet) ?? ''), labelIds: strings(m.labelIds), inReplyTo: h['in-reply-to'] ?? '', body: text, bodyUnavailable: unavailable && !text, attachments };
 }
 
 /** First-party Gmail REST client. Responses are validated and errors never contain provider bodies. */
@@ -79,7 +103,7 @@ export class GmailClient {
 		return { ids: array(data.threads).map((v) => id(object(v).id)), nextPageToken: optional(data.nextPageToken) };
 	}
 	async thread(token: string, threadId: string): Promise<MailThread> {
-		const data = await this.get(`threads/${encodeURIComponent(threadId)}`, token, { format: 'full' });
+		const data = await this.get(`threads/${encodeURIComponent(threadId)}`, token, { format: 'full' }, 30_000); // Long threads arrive whole.
 		const messages = array(data.messages).map(parseMessage).sort((a, b) => a.sentAt.localeCompare(b.sentAt) || a.providerId.localeCompare(b.providerId));
 		if (id(data.id) !== threadId || !messages.length || new Set(messages.map((m) => m.providerId)).size !== messages.length) throw new GmailError();
 		return { providerId: threadId, messages };
@@ -126,15 +150,15 @@ export class GmailClient {
 		try {
 			const response = await this.#fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { method: 'POST',
 				headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}), signal: AbortSignal.timeout(15_000) });
-			if (!response.ok) throw new GmailError(response.status); return path === 'stop' ? {} : object(await response.json());
-		} catch (error) { throw error instanceof GmailError ? error : new GmailError(); }
+			if (!response.ok) throw new GmailError(response.status, await googleReason(response)); return path === 'stop' ? {} : object(await response.json());
+		} catch (error) { throw error instanceof GmailError ? error : new GmailError(0, fetchReason(error)); }
 	}
 
-	private async get(path: string, token: string, params: Record<string, string> = {}): Promise<ObjectValue> {
+	private async get(path: string, token: string, params: Record<string, string> = {}, timeoutMs = 15_000): Promise<ObjectValue> {
 		try {
 			const url = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`); url.search = new URLSearchParams(params).toString();
-			const response = await this.#fetch(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
-			if (!response.ok) throw new GmailError(response.status); return object(await response.json());
-		} catch (error) { throw error instanceof GmailError ? error : new GmailError(); }
+			const response = await this.#fetch(url, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(timeoutMs) });
+			if (!response.ok) throw new GmailError(response.status, await googleReason(response)); return object(await response.json());
+		} catch (error) { throw error instanceof GmailError ? error : new GmailError(0, fetchReason(error)); }
 	}
 }

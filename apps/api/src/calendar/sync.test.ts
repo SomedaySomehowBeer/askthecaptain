@@ -23,11 +23,12 @@ async function setup() {
  const data = newDataKey(master, org.id); await db.owner`update organisations set data_key_wrapped = ${data.wrapped} where id = ${org.id}`;
  const [conn] = await db.owner`insert into connections (organisation_id, provider, connected_by, account_email, scopes, status, access_token_encrypted, access_token_expires_at)
   values (${org.id}, 'google', ${user!.id}, 'business@example.test', '{}', 'connected', ${seal(data.key, Buffer.from('test-access'), org.id, 'access_token')}, now() + interval '1 hour') returning id`;
- let mode = 'initial'; let failure = false; let hold: (() => Promise<void>) | undefined; let instant = Date.parse('2026-09-15T00:00:00Z'); let includeShared = true;
+ let mode = 'initial'; let failure = false; let refuseList: (() => Response) | undefined; let hold: (() => Promise<void>) | undefined; let instant = Date.parse('2026-09-15T00:00:00Z'); let includeShared = true;
  const calls: URL[] = [];
  const client = new CalendarClient(async (input, init) => {
   assert.equal(init!.method, 'GET', 'sync never writes to Google');
   const url = new URL(String(input)); calls.push(url);
+  if (url.pathname.endsWith('/calendarList') && refuseList) return refuseList();
   if (url.pathname.endsWith('/calendarList')) return Response.json(url.searchParams.has('pageToken')
    ? { items: includeShared ? [{ id: 'shared', summary: 'Shared', timeZone: 'America/New_York', accessRole: 'reader', selected: true }, { id: 'ignored', summary: 'Ignored', timeZone: 'UTC', accessRole: 'reader' }] : [] }
    : { items: [{ id: 'primary', summary: mode === 'changed' ? 'Work renamed' : 'Work', timeZone: 'Australia/Perth', accessRole: 'owner', primary: true }], nextPageToken: 'cal-next' });
@@ -49,7 +50,7 @@ async function setup() {
  const ownerToken = (await auth.issueSessionFor(user!.id)).token; const memberToken = (await auth.issueSessionFor(member!.id)).token; const strangerToken = (await auth.issueSessionFor(stranger!.id)).token;
  const request = (path: string, token = ownerToken, method = 'GET') => app.request(`/v1/organisations/${org.id}/calendar/${path}`, { method, headers: { authorization: `Bearer ${token}` } });
  return { org: org.id, conn: conn!.id, sync, request, connections, client, ownerToken, memberToken, strangerToken, calls,
-  mode: (v: string) => { mode = v; }, fail: (v: boolean) => { failure = v; }, hold: (fn: () => Promise<void>) => { hold = fn; }, advance: () => { instant += 86400000; }, removeShared: () => { includeShared = false; } };
+  mode: (v: string) => { mode = v; }, fail: (v: boolean) => { failure = v; }, refuse: (r?: () => Response) => { refuseList = r; }, hold: (fn: () => Promise<void>) => { hold = fn; }, advance: () => { instant += 86400000; }, removeShared: () => { includeShared = false; } };
 }
 it('primary and selected calendars paginate, persist recurrence/all-day dates, and member reads overlap the organisation week', async () => {
  const s = await setup(); const result = await s.sync.run(s.org); assert.equal(result.calendars, 2); assert.equal(result.full, 2);
@@ -88,6 +89,14 @@ it('page failure commits completed pages but never advances cursor; retry is ide
  const [cursor] = await db.owner`select cursor from sync_cursors where organisation_id = ${s.org} and resource like 'calendar.events:%' order by resource limit 1`;
  assert.equal(JSON.parse(cursor!.cursor).syncToken, 'sync-1');
  s.fail(false); await s.sync.run(s.org); list = await (await s.request('events?from=2026-09-14&to=2026-09-21')).json(); assert.equal(list.events.length, 2);
+});
+it('a refused calendar list names the reason so the owner can tell a disabled API from a missing grant', async () => {
+ const s = await setup(); s.refuse(() => Response.json({ error: { code: 403, status: 'PERMISSION_DENIED', errors: [{ reason: 'accessNotConfigured', message: 'private detail' }] } }, { status: 403 }));
+ await assert.rejects(s.sync.run(s.org), { code: 'calendar_sync_failed', message: /Google Calendar API is not enabled.*Reference: calendars · google · 403 · accessNotConfigured\./ });
+ let list = await (await s.request('events?from=2026-09-14&to=2026-09-21')).json();
+ assert.deepEqual(list.lastSync.detail.failure, { stage: 'calendars', kind: 'google', status: 403, reason: 'accessNotConfigured' }); assert.ok(!/private detail/.test(JSON.stringify(list)));
+ s.refuse(() => new Response('private', { status: 403 })); await assert.rejects(s.sync.run(s.org), { message: /Google Calendar refused access\. Reconnect Google.*Reference: calendars · google · 403\./ });
+ s.refuse(undefined); await s.sync.run(s.org); list = await (await s.request('events?from=2026-09-14&to=2026-09-21')).json(); assert.equal(list.lastSync.detail.success, true);
 });
 it('API permissions and invalid ranges; disconnected or replaced accounts hide old events', async () => {
  const s = await setup(); assert.equal((await s.request('sync', s.memberToken, 'POST')).status, 403);

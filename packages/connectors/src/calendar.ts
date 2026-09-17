@@ -1,7 +1,9 @@
 /** First-party Calendar REST client. Provider content and credentials never enter an error. */
+import { fetchReason, googleReason } from './gmail.ts';
 export class CalendarError extends Error {
- readonly status: number;
- constructor(status = 502) { super('Google Calendar could not be read. Try syncing again.'); this.status = status; }
+ readonly status: number; readonly reason: string;
+ /** `status` 502 with reason `unreadable` is Captain's own verdict on an answer it could not parse. */
+ constructor(status = 502, reason = status === 502 ? 'unreadable' : '') { super('Google Calendar could not be read. Try syncing again.'); this.status = status; this.reason = reason; }
 }
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj => { if (!v || typeof v !== 'object' || Array.isArray(v)) throw new CalendarError(); return v as Obj; };
@@ -66,7 +68,7 @@ export class CalendarClient {
    const url = new URL(`https://www.googleapis.com/calendar/v3/${path}`); url.search = new URLSearchParams(params).toString();
    const response = await this.fetcher(url, { method, headers: { authorization: `Bearer ${token}`, ...(body ? { 'content-type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(15_000) });
-   if (!response.ok) throw new CalendarError(response.status); return obj(await response.json());
-  } catch (error) { throw error instanceof CalendarError ? error : new CalendarError(); }
+   if (!response.ok) throw new CalendarError(response.status, await googleReason(response)); return obj(await response.json());
+  } catch (error) { throw error instanceof CalendarError ? error : new CalendarError(502, fetchReason(error)); }
  }
 }

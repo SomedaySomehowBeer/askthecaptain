@@ -7,6 +7,7 @@ import { audit } from '../audit.ts';
 import type { ConnectionService } from '../connections/service.ts';
 import { badRequest, HttpError } from '../errors.ts';
 import { connection, saveThread } from './store.ts';
+import { describeFailure, explainFailure } from '../sync-failure.ts';
 const cursorSchema = z.object({ accountEmail: z.string(), historyId: z.string().min(1), capped: z.boolean() });
 export type SyncResult = { threads: number; messages: number; attachments: number; deleted: number; full: boolean; capped: boolean };
 
@@ -24,6 +25,7 @@ export class MailSync {
 		this.#running.add(organisationId);
 		let lock: Awaited<ReturnType<typeof mailLock>> | undefined;
 		const counts: SyncResult = { threads: 0, messages: 0, attachments: 0, deleted: 0, full: false, capped: false };
+		let stage = 'start'; // Named in the failure reference; never carries content.
 		try {
 			const conn = await withTenant(this.#db, { organisationId }, connection);
 			if (!conn || conn.status !== 'connected') throw badRequest('connection_unavailable', 'Connect or reconnect Google in Settings before syncing mail.');
@@ -31,21 +33,22 @@ export class MailSync {
 			const batch = lock.batch;
 			await batch((tx) => audit(tx, { organisationId, actor: { kind: 'system' }, action: 'mail.sync_started', subjectType: 'connection', subjectId: conn.id,
 				detail: { success: false, error: 'Mail sync has not finished. Saved mail may be incomplete; check again shortly.' } }));
-			const token = await this.#connections.accessToken(undefined, organisationId, conn.id);
+			stage = 'access'; const token = await this.#connections.accessToken(undefined, organisationId, conn.id);
 			const heartbeat = () => batch(async () => {});
-			const profile = await this.#gmail.profile(token); await heartbeat(); if (profile.emailAddress !== conn.accountEmail) throw new GmailError();
-			const labels = await this.#gmail.labels(token); await heartbeat();
+			stage = 'profile'; const profile = await this.#gmail.profile(token); await heartbeat(); if (profile.emailAddress !== conn.accountEmail) throw new GmailError(0, 'account_changed');
+			stage = 'labels'; const labels = await this.#gmail.labels(token); await heartbeat();
 			const previous = lock.previous ? cursorSchema.parse(JSON.parse(lock.previous)) : null;
 			let full = !previous || previous.accountEmail !== profile.emailAddress; let historyId = profile.historyId;
 			let capped = previous?.capped ?? false; const ids = new Set<string>();
 			if (!full) {
+				stage = 'history';
 				try {
 					let pageToken: string | undefined; const pages = new Set<string>();
 					do {
 						const page = await this.#gmail.history(token, previous!.historyId, pageToken); await heartbeat();
 						for (const id of page.threadIds) ids.add(id);
 						historyId = page.historyId; pageToken = page.nextPageToken;
-						if (ids.size > 5000 || (pageToken && (pages.has(pageToken) || pages.size >= 100))) throw new GmailError();
+						if (ids.size > 5000 || (pageToken && (pages.has(pageToken) || pages.size >= 100))) throw new GmailError(0, 'too_many_pages');
 						if (pageToken) pages.add(pageToken);
 					} while (pageToken);
 				} catch (error) {
@@ -54,27 +57,27 @@ export class MailSync {
 				}
 			}
 			if (full) {
-				capped = false; let pageToken: string | undefined; const pages = new Set<string>();
+				stage = 'recent'; capped = false; let pageToken: string | undefined; const pages = new Set<string>();
 				const after = Math.floor((Date.now() - 30 * 86_400_000) / 1000);
 				do {
 					const page = await this.#gmail.threads(token, after, pageToken); await heartbeat();
 					for (const id of page.ids) { if (ids.size >= 500 && !ids.has(id)) { capped = true; break; } ids.add(id); }
 					pageToken = page.nextPageToken;
 					if (ids.size >= 500) { capped ||= Boolean(pageToken); break; }
-					if (pageToken && (pages.has(pageToken) || pages.size >= 100)) throw new GmailError();
+					if (pageToken && (pages.has(pageToken) || pages.size >= 100)) throw new GmailError(0, 'too_many_pages');
 					if (pageToken) pages.add(pageToken);
 				} while (pageToken);
 			}
 			counts.full = full; counts.capped = capped;
 			const ordered = [...ids];
 			for (let offset = 0; offset < ordered.length; offset += 25) {
-				const fetched: { id: string; thread: MailThread | null }[] = [];
+				const fetched: { id: string; thread: MailThread | null }[] = []; stage = 'fetch';
 				for (const id of ordered.slice(offset, offset + 25)) {
 					try { fetched.push({ id, thread: await this.#gmail.thread(token, id) }); }
 					catch (error) { if (!(error instanceof GmailError && error.status === 404)) throw error; fetched.push({ id, thread: null }); }
 					await heartbeat();
 				}
-				const saved = await batch(async (tx) => {
+				stage = 'save'; const saved = await batch(async (tx) => {
 					const page = { threads: 0, messages: 0, attachments: 0, deleted: 0 };
 					for (const { id, thread } of fetched) {
 						if (!thread) { page.deleted += (await tx`delete from mail_threads where connection_id = ${conn.id} and provider_id = ${id} returning id`).length; continue; }
@@ -84,18 +87,18 @@ export class MailSync {
 					const pageIds = fetched.map((t) => t.id);
 					await tx`update mail_threads set label_names = array(select coalesce(${tx.json(labels)}::jsonb ->> label, label) from unnest(label_ids) label)
 						where connection_id = ${conn.id} and provider_id = any(${tx.array(pageIds)}::text[])`;
-					await upkeepContacts(tx, organisationId, conn.accountEmail, pageIds);
+					stage = 'contacts'; await upkeepContacts(tx, organisationId, conn.accountEmail, pageIds); stage = 'save';
 					await audit(tx, { organisationId, actor: { kind: 'system' }, action: 'mail.batch_synced', subjectType: 'connection', subjectId: conn.id, detail: { ...page } });
 					return page;
 				});
 				counts.threads += saved.threads; counts.messages += saved.messages; counts.attachments += saved.attachments; counts.deleted += saved.deleted;
 			}
 			// Backfill unchanged cached contacts, also in bounded batches, including a quiet history run.
-			const unchanged = full ? [] : await batch((tx) => tx`select provider_id from mail_threads where connection_id = ${conn.id}
+			stage = 'contacts'; const unchanged = full ? [] : await batch((tx) => tx`select provider_id from mail_threads where connection_id = ${conn.id}
 				and account_email = ${conn.accountEmail} and not (provider_id = any(${tx.array(ordered)}::text[]))`);
 			if (!full) for (let offset = 0; offset < unchanged.length; offset += 25)
 				await batch((tx) => upkeepContacts(tx, organisationId, conn.accountEmail, unchanged.slice(offset, offset + 25).map((t) => t.providerId)));
-			const removed = await batch(async (tx) => {
+			stage = 'finish'; const removed = await batch(async (tx) => {
 				// Reconcile absent threads only after all fetches succeed; failures retain the prior cache.
 				const deleted = full ? (await tx`delete from mail_threads where connection_id = ${conn.id}
 					and (account_email <> ${conn.accountEmail} or not (provider_id = any(${tx.array(ordered)}::text[]))) returning id`).length : 0;
@@ -112,9 +115,10 @@ export class MailSync {
 			return counts;
 		} catch (error) {
 			if (error instanceof HttpError && error.code === 'sync_running') throw error;
-			const message = error instanceof HttpError ? error.message : 'Mail sync did not finish. Saved mail may be incomplete. Try Sync now again; reconnect Google if access has expired.';
+			const failure = describeFailure(error, stage);
+			const message = error instanceof HttpError ? error.message : `Mail sync did not finish. Saved mail may be incomplete. ${explainFailure('Gmail', failure)}`;
 			await withTenant(this.#db, { organisationId }, (tx) => audit(tx, { organisationId, actor: { kind: 'system' }, action: 'mail.sync_failed',
-				subjectType: 'organisation', subjectId: organisationId, detail: { ...counts, success: false, error: message } }));
+				subjectType: 'organisation', subjectId: organisationId, detail: { ...counts, success: false, error: message, failure } }));
 			throw new HttpError(503, 'mail_sync_failed', message); // Never log mail or provider errors.
 		} finally { try { await lock?.release(); } finally { this.#running.delete(organisationId); } }
 	}

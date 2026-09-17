@@ -20,6 +20,8 @@ infrastructure applies, secrets and DNS are the owner's.
    `https://api-staging.askthecaptain.app/connections/google/callback` and
    `https://api.askthecaptain.app/connections/google/callback` (`${API_URL}/connections/google/callback`).
    Enable the Gmail and Google Calendar APIs and allow the Gmail modify and Calendar events scopes.
+   Each API is enabled separately (APIs & Services → Library); a connection with every scope granted
+   but a sync card reading `403 · accessNotConfigured` means that API is still off in the project.
 6. **Deploy.** Push to `main` deploys the live apps and runs the smoke gate. The dormant production
    pair is promoted only by running the `deploy` workflow with `promote` ticked.
 7. **First sign-in.** Sign in with Google, name the organisation on the welcome page, invite the
