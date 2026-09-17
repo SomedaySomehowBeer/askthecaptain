@@ -60,7 +60,7 @@ with a reference such as `Reference: fetch · google · 403 · accessNotConfigur
   on the same stage, open an issue with the reference and the organisation id, never the mail.
 - **kind** `other` with the JavaScript error name, for a bug in Captain.
 
-Since #64 one message with a charset the runtime does not know is read as UTF-8 and NUL bytes are
+Since #65 one message with a charset the runtime does not know is read as UTF-8 and NUL bytes are
 stripped before saving, so a single odd message no longer stops the whole mailbox.
 
 Gmail Pub/Sub push and daily watch renewal are documented in [gmail-push.md](gmail-push.md).
