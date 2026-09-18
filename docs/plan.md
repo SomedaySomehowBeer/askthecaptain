@@ -155,7 +155,8 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   replies and stars by a person, draft outcomes (sent, edited then sent, discarded, not needed,
   requested), last seen. The learned priors the triage gate and the draft score read (§6); any
   reply or star from a person resets the sender to "always classify".
-- `content_vectors` — the retrieval index: source ∈ mail_message · note, source id, chunk index,
+- `content_vectors` — the retrieval index: source ∈ mail_message · note (a later source, such as
+  the extracted text of an enrolled file version, adds a value, not a table), source id, chunk index,
   encoder name and version, vector (pgvector). Derived from content and treated as that content:
   same policy, cascades with its source, never logged or exported on its own. The thread vector is
   recomputed from these rows and kept on `mail_threads` with its encoder version; a note's vector
@@ -167,7 +168,8 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   calendar event, a contact, a company, a project and a task; archived at. Not a document store
   (§12): no formatting, files or comments. A note is content like a mail thread: triaged, indexed
   and citable as evidence, and its author is the person, so it never needs the owner and is
-  never drafted a reply.
+  never drafted a reply. A review note on a file version (the files proposal, §14) is this same
+  record with a file-version anchor, not a separate table.
 - `note_triage` — one row per note, the same shape as `mail_triage` less the needs-owner flag:
   summary, facts, produced by run, model.
 
@@ -666,6 +668,11 @@ client in Phase 2 can proceed in parallel.
 - Encoder choice for the retrieval index (MiniLM or bge-small class), and whether the embedding
   service is a Sprite or a plain Fly machine; an owner operation either way.
 - Whether Gmail's Updates category is gated by sender knowledge, as §14 says, or always classified.
+- Files in place: `docs/proposals/2026-09-16-files-in-place-and-workspace.md` is merged for
+  discussion, not adopted. Its slice B plan amendment must reconcile with D23 (file annotations are
+  notes with a file-version anchor), add its version-qualified file kind to `evidence` alongside
+  `note`, add one sentence to the §12 documents non-goal rather than rewriting it, and may add a
+  source value to `content_vectors`. Its sequencing against Phase 5 is the owner's call.
 - Proposing first steps for an idea-stage project: an infer step over the brief that suggests tasks
   for a person to accept. A later phase, after proposals have been accepted and discarded for a
   while and the brief format has settled.
