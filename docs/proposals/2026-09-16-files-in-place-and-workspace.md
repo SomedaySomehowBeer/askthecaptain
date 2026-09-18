@@ -26,7 +26,7 @@ This direction supports Captain's existing jobs: inbox triage, correspondence, c
 
 The review used the live `SomedaySomehowBeer/askthecaptain` repository at **`702ce6fd96e3c7ea8088ede33b47ab3e184057f4`**, including its [product plan][captain-plan], [repository instructions][captain-agents], connector code, outbox, stocktake workflow and inference runbook. That is the current main revision inspected on 16 September. The plan still labels itself “draft for approval”; the implemented code is separately identified below.
 
-The user's local Captain checkout is from an earlier architecture. Its older split planning documents are not the baseline for this proposal. This document is deliberately standalone; it does not rewrite those stale plans or reconcile the checkout as a side effect.
+Earlier split planning documents from the previous architecture are not the baseline for this proposal. This document is deliberately standalone.
 
 | Area | Current plan / inspected implementation | Consequence for this proposal |
 |---|---|---|
@@ -184,7 +184,7 @@ Renaming a file does not change its bytes. Re-saving an Illustrator document can
 
 Identical content can recur in multiple revisions or files. Do not automatically attach the sender's email to one supposedly unique source, overwrite a file, or infer a trustworthy author from a checksum. Matching must not expose the existence of files outside the actor's authorised scope, including other tenants.
 
-This deterministic service should be separate from text extraction. It can fingerprint an `.ai` without interpreting Illustrator's file format or sending it to a model. Metadata and hashes can be retained; bytes should be processed transiently under bounded memory, size, concurrency and time limits.
+This deterministic service should be separate from text extraction. It can fingerprint an `.ai` without interpreting Illustrator's file format or sending it to a model. Metadata and hashes can be retained; bytes should be processed transiently under bounded memory, size, concurrency and time limits. Hashing and MIME assembly run on the API's 1 GB machine, so both must stream rather than buffer, and the size cap and concurrency limit are slice C acceptance items.
 
 ## 7. Exact-version attachments and correspondence
 
@@ -312,7 +312,7 @@ This workbook automation belongs to the brewery's external kit. It is not a gene
 
 ### What the supplied notes imply for the template
 
-The four photographs show a brew-day sheet with ingredients and planned steps, recorded times/temperatures/volumes, fermentation readings continuing onto another page, and a separate blending note. They also contain ticks, cross-outs, overwritten quantities, ditto marks and marginal observations. A template must preserve room for those realities.
+The review looked at four photographs of the brewery's current paper records, which are not in this repository: a brew-day sheet with ingredients and planned steps, recorded times/temperatures/volumes, fermentation readings continuing onto another page, and a separate blending note. They contain ticks, cross-outs, overwritten quantities, ditto marks and marginal observations. A template must preserve room for those realities; slice F assembles a test set from real pages, so the photographs need not be committed here.
 
 Use a family of pages rather than one densely compressed universal form:
 
@@ -397,7 +397,7 @@ File-aware answers should be a later extension of the existing bounded answer-so
 
 ### OAuth and discovery
 
-Start with explicit file selection and `drive.file` where it satisfies the workflow. It grants technically writable per-file access, so enforce read-only behaviour in application code until a preservation action is requested. Existing Google login/Gmail consent does not automatically grant Drive access.
+Start with explicit file selection and `drive.file` where it satisfies the workflow. It grants technically writable per-file access, so enforce read-only behaviour in application code until a preservation action is requested. Existing Google login/Gmail consent does not automatically grant Drive access: adding it is incremental consent on the organisation's existing Google connection, so the `connections.scopes` record and the reconnect flow change, rather than a second connection being created.
 
 Automatic discovery across an existing folder tree may require broader scopes, such as restricted Drive read access. Selecting a folder is not assumed to recursively grant `drive.file` access to every existing child. Prove that behaviour and decide separately whether the convenience warrants broader consent and verification obligations. Enforce application-level folder boundaries even when the OAuth token is broader. [Drive scope guide][drive-scopes]
 
