@@ -170,16 +170,21 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 
 **Commitments**
 - `projects` — name, description, stages, owner, state ∈ proposed · active · archived, proposed
-  by run. One system project per organisation, **Obligations**, flagged so the UI shows it as a
-  deadline book. A proposed project is visible on Commitments and becomes active only when a
-  person accepts it.
+  by run, and a brief: what this is, where it stands, who is involved, open questions, each line
+  citing an evidence thread; written by discovery, editable by a person, and the whole of an
+  idea-stage project that has no tasks yet. One system project per organisation, **Obligations**,
+  flagged so the UI shows it as a deadline book. A proposed project is visible on Commitments and
+  becomes active only when a person accepts it.
 - `project_threads` — project, mail thread, linked by ∈ rule · model · person with the run or
   person that made the link. A thread may belong to more than one project.
 - `project_candidates` — a proposed project name the triage model returned for a thread that fits
   no existing project: normalised name, the threads that proposed it, first and last seen. Promoted
   to a discovery seed by the threshold rule in §6, never directly to a project.
 - `tasks` — project, title, body, status ∈ suggested · open · in_progress · done · cancelled,
-  owner, due, source (mail thread, series, person, run), completed by, completed at.
+  owner, due, source (mail thread, series, person, run), completed by, completed at, and parent:
+  a sub-task is a task whose parent is another task in the same project, one level deep, with no
+  series and no sub-tasks of its own. A parent is completed by a person; completing its last
+  sub-task suggests that, never does it.
 - `task_series` — the rule that generates recurring tasks. A series belongs to a project (by
   default Obligations), carries a template (title pattern, body, owner, evidence required), a
   recurrence (monthly, quarterly, yearly, weekdays, custom) and a due rule (for example "due 21 days
@@ -299,8 +304,9 @@ Settings → Activity only when they fail.
 - **inbox-triage** (on mail arrival, and 06:00): read new threads → gate each thread with
   deterministic rules and sender priors, no model (bulk and automated mail is filed as information
   with the rule named in the journal) → infer classification per thread that passes the gate
-  (category, needs owner, summary, facts: counterparty, amounts, dates, references, and a project:
-  an existing one, none, or a proposed name) → write triage rows, the project link, the sender
+  (category, needs owner, summary, facts: counterparty, amounts, dates, references, suggested tasks
+  each with optional steps that become sub-tasks, and a project: an existing one, none, or a
+  proposed name with its stage, idea or underway) → write triage rows, the project link, the sender
   verdict, suggested tasks in the linked project or Obligations, complete duties whose
   confirmation arrived, update contacts → infer reply drafts for threads whose draft score crosses the
   organisation's threshold (§14), at most twenty per run → write outbox drafts → await send →
@@ -309,9 +315,11 @@ Settings → Activity only when they fail.
   candidate has crossed its threshold; rerunnable): read the seeds (a thread a person chose, a
   candidate name, or on the first run the clusters of the synced backlog) → read the retrieval
   index for each seed's neighbours and widen deterministically → infer, once per seed, which
-  candidates belong, whether this is a project, a relationship or noise, a name, description, stage
-  and tasks each with its evidence thread → write a proposed project with thread links, suggested
-  tasks and evidence, or a company link for a relationship → notify the enabling person. Nothing
+  candidates belong and what they amount to: a project (with a brief, a stage and any tasks, each
+  with steps and its evidence thread), a single task with or without steps, a relationship, or
+  nothing → write a proposed project with its brief, thread links, suggested tasks and evidence;
+  or one suggested task in the linked project or Obligations; or a company link → notify the
+  enabling person. Nothing
   is active until a person accepts it. Delivery detail in §14.
 - **morning-brief** (06:30): read overdue and due-this-week tasks, outbox, today's events, overdue
   receivables → infer a brief from that data → write `briefs.record` → notify the enabling person.
@@ -574,7 +582,7 @@ no dependency, provider operation, background process or tab (D2, D6, D11).
 | 2 Think | 2 | Inference client with budgets; engine decision recorded by the inbox-triage spike (D19: pg-boss); harden the runner and ship inbox-triage and the outbox for the first customer |
 | 3 Assist | 2 | morning-brief, chase-due, materialise-series, calendar-prep; push; Today tab; Xero connection |
 | 4 Ready for a second customer | 2 | MFA, backups and restore drill, export and deletion, terms and privacy, support runbook; a second business onboarded by hand |
-| 5 Projects from mail | 2 | In order: the triage gate, sender priors and trimmed model input; the retrieval index filled by mail sync; project association in triage; discover-projects and proposed projects on Commitments |
+| 5 Projects from mail | 2 | In order: the triage gate, sender priors, weighted drafting and trimmed model input; sub-tasks and the project brief; the retrieval index filled by mail sync; project association in triage; discover-projects and proposed projects on Commitments |
 
 Each phase ships to production behind feature flags to the first customer. Phase 1 and the inference
 client in Phase 2 can proceed in parallel.
@@ -606,7 +614,7 @@ client in Phase 2 can proceed in parallel.
 | D4 | A workflow acts in the name of the person who enabled it and can do nothing they could not. |
 | D5 | Anything sent to a third party waits in the outbox for a person. |
 | D6 | Tenant isolation is forced RLS with a non-bypassing runtime role. |
-| D7 | Captain owns projects and tasks. Recurrence is a series on a task. Obligations are tasks in a flagged system project. |
+| D7 | Captain owns projects and tasks. One project holds many tasks; a task may hold sub-tasks one level deep as its checklist; projects do not nest. Recurrence is a series on a task, never on a sub-task. Obligations are tasks in a flagged system project. |
 | D8 | Connectors are first-party SDKs behind our own OAuth and encryption; no third-party integration platforms. |
 | D9 | Inference uses each organisation's own Claude or Codex subscription through an unmodified CLI, behind a Sprite provider adapter; monthly token allowances and per-step usage, not dollar reservations. |
 | D10 | The durable execution engine is chosen by a bounded spike in Phase 2 between Restate and pg-boss with a small runner. |
@@ -621,7 +629,7 @@ client in Phase 2 can proceed in parallel.
 | D19 | Durable workflows use pg-boss with a small Captain runner in the existing process and Postgres, following the D10 spike. Tenant-scoped run/step journals and destination idempotency remain ours; neither engine guarantees exactly-once remote writes. Production execution follows the transaction, continuation and recovery contracts in §4; each workflow waits for its complete handler registry. No Restate service or SDK is retained. |
 | D20 | Deterministic code decides before any model call: a rules gate on Gmail categories, list headers, sender shape and reply state, plus per-sender priors learned from earlier verdicts and a person's replies, files bulk and automated mail without inference. The model classifies only what passes. |
 | D21 | The retrieval index is a pgvector column in the tenant's own Postgres rows, filled by a small sentence encoder in one Captain-run, stateless embedding service shared by all organisations (a Fly machine or Sprite that holds no data). No separate vector store and no third-party embeddings service; vectors are mail-derived data under the same policy as mail. |
-| D22 | Captain proposes projects from evidence and a person makes them real. The triage model may name a project per thread; deterministic thresholds decide when that evidence is worth a discovery call; the discovery call judges the assembled evidence against the criteria in §14; a person accepts. A project is never created from a single mail, and a proposed project is inert until accepted. |
+| D22 | Captain proposes projects from evidence and a person makes them real. The triage model may name a project per thread; deterministic thresholds decide when that evidence is worth a discovery call; the discovery call judges the assembled evidence against the criteria in §14 and answers project, task, relationship or nothing; a person accepts. A project is never created from a single mail, and a proposed project is inert until accepted. |
 
 ## 14. Open questions
 
@@ -634,6 +642,9 @@ client in Phase 2 can proceed in parallel.
 - Encoder choice for the retrieval index (MiniLM or bge-small class), and whether the embedding
   service is a Sprite or a plain Fly machine; an owner operation either way.
 - Whether Gmail's Updates category is gated by sender knowledge, as §14 says, or always classified.
+- Proposing first steps for an idea-stage project: an infer step over the brief that suggests tasks
+  for a person to accept. A later phase, after proposals have been accepted and discarded for a
+  while and the brief format has settled.
 
 ### Inbox triage delivery detail (D2, D4, D5, D13)
 
@@ -712,18 +723,34 @@ On a needs-you thread without a draft the split button is **Draft a reply** with
 Remind me later in its menu. A draft untouched for seven days expires with a neutral outcome. D5
 is unchanged: only Send sends, and only a person presses it.
 
-**What makes a project.** Three signals, and none alone is enough. First, the classify step names
-a project per thread, cheaply, inside the call it already makes; its instruction defines one as a
-piece of work with an outcome that takes more than one action or more than one exchange, such as
-onboarding a can supplier or producing this year's wholesale price list, as distinct from a single
-ask, which is a task, and from ongoing correspondence with a counterparty and no shared outcome,
-which is a relationship. Second, deterministic thresholds decide when that evidence is worth a
-discovery call: a candidate name proposed by at least three threads across at least fourteen days;
-or two or more suggested tasks in Obligations that share a counterparty and a reference, which is
-the concrete symptom of a missing project; or a person choosing a thread and pressing Make this a
-project; or, on the first run, a cluster of the backlog. Third, the discovery call judges the
-assembled evidence against the same definition and returns project, relationship or noise. Last, a
-person accepts. The thresholds are constants until a second tenant shows they should be settings.
+**What it becomes.** The determination is four-way, and it is made twice: cheaply per thread inside
+the classify call, and properly over assembled evidence inside the discovery call. The definitions
+are the same in both instructions:
+
+- **A project** is work with an outcome that takes more than one exchange or more than one action,
+  or an intention still being discussed. It need not have tasks yet. Onboarding a can supplier,
+  this year's wholesale price list, or two mails weighing whether to open a taproom are projects;
+  the last is an idea-stage project whose whole substance is its brief.
+- **A task** is one concrete action with an owner. When it has a checklist of steps that are all
+  ours to do and finish together, such as update the prices, export the sheet and send it, the
+  steps are sub-tasks and the task is still one task. Sub-tasks never make a project.
+- **A relationship** is ongoing correspondence with a counterparty and no shared outcome. It links
+  the company and creates nothing.
+- **Nothing** is everything else.
+
+The classify step names a project per thread, with a stage of idea or underway, and returns tasks
+each with optional steps. Deterministic thresholds decide when a candidate is worth a discovery
+call: for a candidate marked underway, at least three threads across at least fourteen days; for a
+candidate marked idea, two threads, or one thread in which both parties wrote, because ideation is
+the moment a person most wants the project written down; or two or more suggested tasks in
+Obligations that share a counterparty and a reference, the concrete symptom of a missing project; or
+a person choosing a thread and pressing Make this a project; or, on the first run, a cluster of the
+backlog. The discovery call then judges the assembled evidence and answers project, task,
+relationship or nothing. A project proposal carries its brief and any tasks, an idea-stage one
+carries the brief alone, and a task answer becomes one suggested task with its steps in the linked
+project or Obligations. Last, a person accepts. Proposing first steps for an idea-stage project is a
+later phase (§14 open questions); Phase 5 writes the project down and stops. The thresholds are
+constants until a second tenant shows they should be settings.
 
 **Retrieval.** A seed is embedded with the same unit rules. Candidates are threads in the
 organisation scored by thread similarity plus the best single message similarity, then widened
