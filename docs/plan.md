@@ -78,7 +78,8 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
 | `packages/engine` | durable workflow execution: pg-boss and a small typed runner in the API process |
 | `packages/model` | the inference client: provider adapter, structured output, budgets, usage |
-| `packages/retrieval` | the local sentence encoder, embedding units, thread vectors and hybrid search over the mail index (§5, §7) |
+| `packages/retrieval` | embedding units, the client for the embedding service, thread vectors and hybrid search over the mail index (§5, §7) |
+| `infra/embed` | the stateless embedding service: one small sentence encoder behind a bearer secret, shared by all organisations, holding no data (D21) |
 | `packages/ui` | design tokens and shared components |
 | `infra` | OpenTofu for Neon, Cloudflare and monitoring; owner-run inference Sprite provisioning |
 
@@ -148,9 +149,11 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 - `attachment_text` — extracted text for attachments that triage was allowed to read (§7),
   capped in length, kept for a bounded period, then dropped.
 - `outbox` — drafts awaiting a person: thread (or none), to, subject, body, created by run,
-  state ∈ drafted · sent · discarded, sent by, sent at, provider message id.
+  state ∈ drafted · sent · discarded, sent by, sent at, provider message id; outcome ∈ sent ·
+  edited · discarded · not_needed · expired, and remind-at for a draft a person deferred.
 - `mail_senders` — per sender address: threads seen, verdicts by category, needs-owner count,
-  replies and stars by a person, last seen. The learned priors the triage gate reads (§6); any
+  replies and stars by a person, draft outcomes (sent, edited then sent, discarded, not needed,
+  requested), last seen. The learned priors the triage gate and the draft score read (§6); any
   reply or star from a person resets the sender to "always classify".
 - `mail_vectors` — the retrieval index: message, chunk index, encoder name and version, vector
   (pgvector). Derived from mail and treated as mail: same policy, cascades with the message,
@@ -299,8 +302,9 @@ Settings → Activity only when they fail.
   (category, needs owner, summary, facts: counterparty, amounts, dates, references, and a project:
   an existing one, none, or a proposed name) → write triage rows, the project link, the sender
   verdict, suggested tasks in the linked project or Obligations, complete duties whose
-  confirmation arrived, update contacts → infer reply drafts for threads that need one, when
-  drafting is on (off by default at enablement) → write outbox drafts → await send → write labels.
+  confirmation arrived, update contacts → infer reply drafts for threads whose draft score crosses the
+  organisation's threshold (§14), at most twenty per run → write outbox drafts → await send →
+  write labels.
 - **discover-projects** (on demand from Commitments by an owner or admin, and at 06:00 when a
   candidate has crossed its threshold; rerunnable): read the seeds (a thread a person chose, a
   candidate name, or on the first run the clusters of the synced backlog) → read the retrieval
@@ -437,11 +441,13 @@ export const inboxTriage = defineWorkflow({
   an action is not. Facts that matter (amounts, bank details, due dates) are cross-checked against
   the ledger and known counterparties where a source exists, and anything from an unknown sender
   is marked needs-owner regardless of what the model said.
-- **Retrieval is not inference.** A small sentence encoder (ONNX, CPU, no network) runs inside
-  the API to embed mail into the retrieval index (§5 `mail_vectors`). It takes no instruction and
-  returns numbers, not text, so it is a `read` step and D2 does not apply to it; it is not a
-  model tier and never sees a schema. Mail content does not leave the API to be embedded: there
-  is no hosted embeddings service (D21).
+- **Retrieval is not inference.** A small sentence encoder (ONNX, CPU) runs in one Captain-run
+  embedding service (`infra/embed`, D21) to embed mail into the retrieval index (§5
+  `mail_vectors`). It takes no instruction and returns numbers, not text, so it is a `read` step
+  and D2 does not apply to it; it is not a model tier and never sees a schema. The service is
+  stateless and shared by all organisations: mail text reaches it over TLS with a bearer secret,
+  is embedded in memory and never written to disk. It is not the inference Sprite (D18), which
+  keeps hosting nothing but the CLI. There is no third-party embeddings service.
 - **Attachments.** Triage may read an attachment only if its media type is on the allow list
   (PDF, CSV, plain text; images later, with OCR) and it is under the size cap. Text is extracted
   server-side, truncated, cached briefly (§5) and passed as labelled untrusted content. Files are
@@ -614,8 +620,8 @@ client in Phase 2 can proceed in parallel.
 | D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and resource removal are owner-run. The Sprite is the only inference runtime today; the API path is a documented seam, not a second runtime. |
 | D19 | Durable workflows use pg-boss with a small Captain runner in the existing process and Postgres, following the D10 spike. Tenant-scoped run/step journals and destination idempotency remain ours; neither engine guarantees exactly-once remote writes. Production execution follows the transaction, continuation and recovery contracts in §4; each workflow waits for its complete handler registry. No Restate service or SDK is retained. |
 | D20 | Deterministic code decides before any model call: a rules gate on Gmail categories, list headers, sender shape and reply state, plus per-sender priors learned from earlier verdicts and a person's replies, files bulk and automated mail without inference. The model classifies only what passes. |
-| D21 | The retrieval index is a pgvector column in the tenant's own Postgres rows, filled by a small sentence encoder running inside the API. No separate vector store and no hosted embeddings service; vectors are mail-derived data under the same policy as mail. |
-| D22 | Captain proposes projects from evidence and a person makes them real. A project is proposed only by the discover-projects workflow from a seed (a person's choice, a candidate name that at least three threads across at least two weeks proposed, or a backlog cluster), never from a single mail; a proposed project is inert until accepted. |
+| D21 | The retrieval index is a pgvector column in the tenant's own Postgres rows, filled by a small sentence encoder in one Captain-run, stateless embedding service shared by all organisations (a Fly machine or Sprite that holds no data). No separate vector store and no third-party embeddings service; vectors are mail-derived data under the same policy as mail. |
+| D22 | Captain proposes projects from evidence and a person makes them real. The triage model may name a project per thread; deterministic thresholds decide when that evidence is worth a discovery call; the discovery call judges the assembled evidence against the criteria in §14; a person accepts. A project is never created from a single mail, and a proposed project is inert until accepted. |
 
 ## 14. Open questions
 
@@ -625,8 +631,8 @@ client in Phase 2 can proceed in parallel.
   management system; out of scope until asked.
 - Pricing and the operator's own costs per tenant.
 - When to enable the API-key path and cost-based budgets; pricing for it.
-- Encoder choice for the retrieval index (MiniLM or bge-small class) and whether it fits the 1 GB
-  API machine when loaded lazily; the fallback named in §14 is a second Fly machine for embedding.
+- Encoder choice for the retrieval index (MiniLM or bge-small class), and whether the embedding
+  service is a Sprite or a plain Fly machine; an owner operation either way.
 - Whether Gmail's Updates category is gated by sender knowledge, as §14 says, or always classified.
 
 ### Inbox triage delivery detail (D2, D4, D5, D13)
@@ -685,9 +691,39 @@ the parent plus a yes or a no, which the model reads at discovery time, not the 
 are chunked at about 256 tokens; the message vector is the mean of its chunks. The thread vector is
 the mean of its message vectors weighted by min(1, tokens ÷ 300), recomputed when a message arrives,
 so an acknowledgement barely moves it. Each row stores the encoder name and version; a changed
-encoder re-embeds by housekeeping (a system routine, D3), never inline. The encoder loads lazily and
-unloads when idle; measuring its resident memory on the API machine is the first task of the phase,
-and the fallback if it does not fit is one additional Fly machine that only embeds.
+encoder re-embeds by housekeeping (a system routine, D3), never inline. Embedding happens in the
+embedding service (§7), one shared stateless machine that scales to zero; the sync batches units
+per request and tolerates a cold start, and a service that is down leaves rows unembedded for
+housekeeping to fill later, never a failed sync.
+
+**Weighted drafting.** A draft is prepared when a thread's draft score crosses the organisation's
+threshold, not for every thread that needs the owner. The score is deterministic and explainable:
+the model's needs-owner verdict and a request category count for it; a known sender, a sender the
+person has replied to before, and a linked project or open task count for it; the sender's draft
+outcomes weigh most, sent or edited-then-sent up, discarded or not-needed down, and a draft the
+person asked for on a thread we did not draft is the strongest up signal. The initial rule before
+any outcomes exist is: needs owner and (known sender or request). At most twenty drafts per run
+on the large tier, so a burst cannot spend the allowance. Every draft records its outcome in
+`outbox` and the counts roll into `mail_senders`. On a thread with a draft the control is a split
+button: **Send** as the action, and in its menu Edit, Remind me later (tomorrow morning or next
+week, which sets remind-at and keeps the draft), Not needed (no reply wanted; a down signal for the
+sender on both drafting and needs-owner) and Discard (wrong draft; a down signal on drafting only).
+On a needs-you thread without a draft the split button is **Draft a reply** with Not needed and
+Remind me later in its menu. A draft untouched for seven days expires with a neutral outcome. D5
+is unchanged: only Send sends, and only a person presses it.
+
+**What makes a project.** Three signals, and none alone is enough. First, the classify step names
+a project per thread, cheaply, inside the call it already makes; its instruction defines one as a
+piece of work with an outcome that takes more than one action or more than one exchange, such as
+onboarding a can supplier or producing this year's wholesale price list, as distinct from a single
+ask, which is a task, and from ongoing correspondence with a counterparty and no shared outcome,
+which is a relationship. Second, deterministic thresholds decide when that evidence is worth a
+discovery call: a candidate name proposed by at least three threads across at least fourteen days;
+or two or more suggested tasks in Obligations that share a counterparty and a reference, which is
+the concrete symptom of a missing project; or a person choosing a thread and pressing Make this a
+project; or, on the first run, a cluster of the backlog. Third, the discovery call judges the
+assembled evidence against the same definition and returns project, relationship or noise. Last, a
+person accepts. The thresholds are constants until a second tenant shows they should be settings.
 
 **Retrieval.** A seed is embedded with the same unit rules. Candidates are threads in the
 organisation scored by thread similarity plus the best single message similarity, then widened
