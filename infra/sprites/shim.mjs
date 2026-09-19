@@ -71,7 +71,8 @@ export async function invoke(request) {
 /** Sign-in driven from Settings (plan §7, D18 as amended): runs login.py, which runs the provider's own
  *  CLI login, and exposes only the allowlisted sign-in URL, a device code and the outcome. A Claude
  *  authorisation code arrives once from the API and goes straight to the CLI's stdin. */
-const loginUrl = /https:\/\/(?:claude\.ai|platform\.claude\.com|auth\.openai\.com)\/[^\s<>"']+/;
+// The hosts the two CLIs sign in through today (claude.com/cai/oauth/… since Claude Code 2.1.27x).
+const loginUrl = /https:\/\/(?:claude\.ai|claude\.com|platform\.claude\.com|console\.anthropic\.com|auth\.openai\.com)\/[^\s<>"'\x1b]+/;
 export function loginManager(provider, spawnLogin = () => spawn('python3', [`${root}/login.py`, provider], { cwd: root, env: { PATH: binPath, HOME: '/home/sprite', LANG: 'C.UTF-8', CAPTAIN_ROOT: root }, stdio: ['pipe', 'pipe', 'pipe'] })) {
  let child = null, timer = null;
  const state = { state: 'idle', url: null, code: null, needsCode: provider === 'claude' };

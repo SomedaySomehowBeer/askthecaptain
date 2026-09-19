@@ -4,7 +4,7 @@ import type { Session } from '../auth/service.ts';
 import { badRequest, HttpError } from '../errors.ts';
 import { inferenceHttpError, type InferenceService } from './service.ts';
 const uuid = z.string().uuid();
-const loginUrl = z.string().url().refine(value => { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && !u.port && ['claude.ai', 'platform.claude.com', 'auth.openai.com'].includes(u.hostname); });
+const loginUrl = z.string().url().refine(value => { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && !u.port && ['claude.ai', 'claude.com', 'platform.claude.com', 'console.anthropic.com', 'auth.openai.com'].includes(u.hostname); });
 export function inferenceRoutes(service?: InferenceService) {
  const routes = new Hono<{ Variables: { session: Session; requestId: string } }>();
  routes.onError((error, c) => {

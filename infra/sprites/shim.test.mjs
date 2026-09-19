@@ -33,10 +33,10 @@ const fakeLogin = (lines, doneOn) => () => spawn(process.execPath, ['-e', `
 `], { stdio: ['pipe', 'pipe', 'pipe'] });
 const settle = () => new Promise(resolve => setTimeout(resolve, 150));
 test('login exposes only the allowlisted URL and device code, forwards one code to the CLI, and reports the outcome', async () => {
- const login = loginManager('claude', fakeLogin(['noise https://evil.test/steal?x=1', 'Open https://claude.ai/oauth/authorize?client_id=abc&state=xyz now', 'Device code: ABCD-1234', 'secret token sk-ant-oat01-NEVER'], 'good#code'));
+ const login = loginManager('claude', fakeLogin(['noise https://evil.test/steal?x=1', '\x1b]8;id=1;https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz\x1b\\link\x1b]8;;\x1b\\', 'Device code: ABCD-1234', 'secret token sk-ant-oat01-NEVER'], 'good#code'));
  assert.deepEqual(login.status(), { state: 'idle', url: null, code: null, needsCode: true });
  assert.equal(login.start().state, 'waiting'); await settle();
- const waiting = login.status(); assert.equal(waiting.url, 'https://claude.ai/oauth/authorize?client_id=abc&state=xyz'); assert.equal(waiting.code, 'ABCD-1234');
+ const waiting = login.status(); assert.equal(waiting.url, 'https://claude.com/cai/oauth/authorize?code=true&client_id=abc&state=xyz'); assert.equal(waiting.code, 'ABCD-1234');
  assert.ok(!JSON.stringify(waiting).includes('evil') && !JSON.stringify(waiting).includes('sk-ant'));
  login.code('good#code'); await settle(); assert.equal(login.status().state, 'done');
  assert.throws(() => login.code('again'), { code: 'invalid_request' });
