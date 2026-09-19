@@ -18,8 +18,8 @@ export async function createRuntime(tx: TransactionSql, organisationId: string, 
  where inference_runtimes.status = 'removed' returning *`;
  if (row) await inferenceAudit(tx, organisationId, 'inference.runtime_requested', { provider }); return row;
 }
-export async function configureRuntime(tx: TransactionSql, organisationId: string, input: { encrypted: Buffer; spriteName: string; region: string; loginHint: string | null; loginUrl: string | null }) {
- await tx`update inference_runtimes set connection_encrypted = ${input.encrypted}, sprite_name = ${input.spriteName}, region = ${input.region}, login_hint = ${input.loginHint}, login_url = ${input.loginUrl}, status = 'needs_login', updated_at = now() where organisation_id = ${organisationId}`;
+export async function configureRuntime(tx: TransactionSql, organisationId: string, input: { encrypted: Buffer; spriteName: string; region: string; loginHint: string | null; loginUrl: string | null; status?: 'provisioning' | 'needs_login' }) {
+ await tx`update inference_runtimes set connection_encrypted = ${input.encrypted}, sprite_name = ${input.spriteName}, region = ${input.region}, login_hint = ${input.loginHint}, login_url = ${input.loginUrl}, status = ${input.status ?? 'needs_login'}, updated_at = now() where organisation_id = ${organisationId}`;
  await inferenceAudit(tx, organisationId, 'inference.runtime_configured');
 }
 export async function runtimeState(tx: TransactionSql, organisationId: string, status: Runtime['status'], error: string | null = null) {
