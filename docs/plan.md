@@ -81,7 +81,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `packages/retrieval` | embedding units, the client for the embedding service, thread vectors and hybrid search over the mail index (§5, §7) |
 | `infra/embed` | the stateless embedding service: one small sentence encoder behind a bearer secret, shared by all organisations, holding no data (D21) |
 | `packages/ui` | design tokens and shared components |
-| `infra` | OpenTofu for Neon, Cloudflare and monitoring; owner-run inference Sprite provisioning |
+| `infra` | OpenTofu for Neon, Cloudflare and monitoring; the inference Sprite's bootstrap files, which the API uploads when an owner sets up a subscription |
 
 **Hosting.** Fly.io in Sydney for the API and web; Neon Postgres; Cloudflare for DNS and TLS at the
 edge; GitHub Actions for CI and deploy. One environment: a single Neon branch and compute, and the
@@ -435,9 +435,18 @@ export const inboxTriage = defineWorkflow({
 
 - **Bring your own subscription.** Each organisation brings its own Claude (Claude Code) or Codex
   subscription. Captain runs the unmodified CLI on a Captain-owned Fly Sprite, one per organisation
-  (D18). In Settings the owner chooses a provider, follows the owner-run provisioning instructions,
-  and opens the Sprite's sign-in URL: Claude uses `claude setup-token`, Codex uses device login.
-  The login credential stays only on that Sprite; it never enters a prompt, workflow or log.
+  (D18). Setup completes from a phone. In Settings the owner chooses a provider and presses
+  Set up subscription: the API creates the Sprite through the Sprites HTTP API with a platform
+  token scoped to a Sprites organisation that holds nothing but Captain runtimes, uploads the
+  shim and its bootstrap, generates the per-Sprite secret, starts the service and records the
+  Sprite's URL; the shim installs the pinned CLIs on first start and reports readiness on
+  `/health`. Sign-in runs on the Sprite but is driven from Settings: the shim runs the
+  provider's own login (`claude setup-token` or Codex device login) as a child process and
+  exposes the sign-in URL and device code; the owner opens the link on the phone; Codex
+  completes on its own, and for Claude the owner pastes the returned one-time code into
+  Settings, which the API forwards once, in memory, never stored or logged. The login credential
+  stays only on that Sprite; it never enters a prompt, workflow or log. Disconnect destroys the
+  Sprite through the same API. No laptop, script or terminal is part of the flow.
   The API calls a bearer-authenticated shim whose URL and per-Sprite secret are encrypted with
   the organisation's data key (D16). Ryan owns the Anthropic hosting-clause consideration and its
   resolution before operating the Claude runtime.
@@ -552,10 +561,13 @@ Notify) with the values it uses and saves as named chips and its settings as chi
 authorises before they do. A run's detail lays the journal over the same steps, saying how far each
 got and for how many items, with the flat journal beneath it.
 
-**Settings → Inference.** A provider selector (Claude or Codex), owner-run provisioning and sign-in
-steps with a login link, runtime status with the next action, a monthly token allowance form and
-usage by tier. Empty, loading, failed and disabled states say what is known and what to do next;
-provisioning and removal of Fly resources remain owner operations.
+**Settings → Inference.** A provider selector (Claude or Codex) and one Set up subscription
+button that creates the runtime; a status line that moves through Setting up → Needs sign-in →
+Ready, with the next action beside it; a Sign in button that opens the provider's link, a device
+code shown in large type for Codex, and a code field for Claude's returned code; Verify and
+Disconnect; a monthly token allowance form and usage by tier. Empty, loading, failed and disabled
+states say what is known and what to do next, including when the platform has no Sprites token
+configured. Every step works on a phone; nothing requires a terminal.
 
 **Design system.** The visual language is the **Ask The Captain Design System** maintained in
 Claude Design; that project is the design authority. Its tokens (colour, type, spacing, radii,
@@ -657,7 +669,7 @@ client in Phase 2 can proceed in parallel.
 | D15 | Inventory is a counted list, not a ledger: sellable stock is read from the connected commerce system; everything else is a stock item whose count a person enters, with a stocktake workflow and reorder tasks. |
 | D16 | Envelope encryption uses a master key held in the API's secrets wrapping per-tenant data keys; no cloud key-management service and no AWS account. |
 | D17 | One environment until the second customer: one Neon branch and compute, one live pair of Fly apps deployed from `main`; production promotion exists but stays dormant. |
-| D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and resource removal are owner-run. The Sprite is the only inference runtime today; the API path is a documented seam, not a second runtime. |
+| D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and removal are self-service from Settings (amended 2026-09-19: the API creates and destroys the Sprite through the Sprites HTTP API with a platform token scoped to a dedicated Sprites organisation, and drives the CLI sign-in through the shim; the owner never needs a terminal, and the one-time login code is forwarded once in memory). The Sprite is the only inference runtime today; the API path is a documented seam, not a second runtime. |
 | D19 | Durable workflows use pg-boss with a small Captain runner in the existing process and Postgres, following the D10 spike. Tenant-scoped run/step journals and destination idempotency remain ours; neither engine guarantees exactly-once remote writes. Production execution follows the transaction, continuation and recovery contracts in §4; each workflow waits for its complete handler registry. No Restate service or SDK is retained. |
 | D20 | Deterministic code decides before any model call: a rules gate on Gmail categories, list headers, sender shape and reply state, plus per-sender priors learned from earlier verdicts and a person's replies, files bulk and automated mail without inference. The model classifies only what passes. |
 | D21 | The retrieval index is a pgvector column in the tenant's own Postgres rows, filled by a small sentence encoder in one Captain-run, stateless embedding service shared by all organisations (a Fly machine or Sprite that holds no data). No separate vector store and no third-party embeddings service; vectors are mail-derived data under the same policy as mail. |
@@ -673,7 +685,7 @@ client in Phase 2 can proceed in parallel.
 - Pricing and the operator's own costs per tenant.
 - When to enable the API-key path and cost-based budgets; pricing for it.
 - Encoder choice for the retrieval index (MiniLM or bge-small class), and whether the embedding
-  service is a Sprite or a plain Fly machine; an owner operation either way.
+  service is a Sprite or a plain Fly machine; if a Sprite, the API provisions it the same way as an inference runtime.
 - Whether Gmail's Updates category is gated by sender knowledge, as §14 says, or always classified.
 - Files in place: `docs/proposals/2026-09-16-files-in-place-and-workspace.md` is merged for
   discussion, not adopted. Its slice B plan amendment must reconcile with D23 (file annotations are
