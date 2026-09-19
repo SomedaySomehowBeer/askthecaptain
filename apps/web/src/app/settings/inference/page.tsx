@@ -6,7 +6,7 @@ import { api, load } from '../../../lib/api.ts';
 import { InferenceForm } from './InferenceForm.tsx';
 export const metadata: Metadata = { title: 'Inference' };
 type Login = { state: 'idle' | 'waiting' | 'done' | 'failed'; url: string | null; code: string | null; needsCode: boolean };
-type State = { role: 'owner' | 'admin' | 'member'; disabled: boolean; spritesConfigured?: boolean; login?: Login | null; runtime: { provider: 'claude' | 'codex' | 'anthropic_api'; status: 'provisioning' | 'needs_login' | 'ready' | 'failed' | 'removed'; loginHint: string | null; loginUrl: string | null } | null; budget: { month: string; limitTokens: number; usedTokens: number }; usage: { tier: string; inputTokens: number; outputTokens: number; calls: number }[] };
+type State = { role: 'owner' | 'admin' | 'member'; disabled: boolean; spritesConfigured?: boolean; login?: Login | null; runtime: { provider: 'claude' | 'codex' | 'anthropic_api'; status: 'provisioning' | 'needs_login' | 'ready' | 'failed' | 'removed'; loginHint: string | null; loginUrl: string | null; error?: string | null; spriteName?: string | null } | null; budget: { month: string; limitTokens: number; usedTokens: number }; usage: { tier: string; inputTokens: number; outputTokens: number; calls: number }[] };
 const states = { provisioning: 'Setting up', needs_login: 'Needs sign-in', ready: 'Ready', failed: 'Failed', removed: 'Disconnected' };
 export default async function InferencePage() {
  const me = await requireCurrent('/settings/inference');
@@ -24,8 +24,9 @@ async function Details({ me }: { me: Awaited<ReturnType<typeof requireCurrent>> 
   <section className="card"><h2>Subscription</h2>
    {present ? <><p>{{ claude: 'Claude', codex: 'Codex', anthropic_api: 'Anthropic API (not available)' }[runtime.provider]} · {states[runtime.status]}</p>{runtime.loginHint ? <p>{runtime.loginHint}</p> : null}
     {runtime.status === 'provisioning' ? <Notice>Captain is creating your runtime and installing the sign-in tools. This takes a few minutes the first time; refresh to check. Set the token allowance below while you wait.</Notice> : null}
-    {runtime.status === 'failed' ? <Notice tone="attention" title="Setup or verification failed.">Start sign-in again, or disconnect the runtime and set it up again. If it keeps failing, ask the operator.</Notice> : null}
-    {['needs_login', 'failed'].includes(runtime.status) && owner ? <SignIn login={login} provider={runtime.provider} fallbackUrl={runtime.loginUrl} /> : null}
+    {runtime.status === 'failed' ? <Notice tone="attention" title={runtime.error?.startsWith('sprites_') || runtime.error === 'provisioning_failed' ? 'Setup failed.' : 'Verification failed.'}>{runtime.error ? <>Recorded reason: <span className="mono">{runtime.error}</span>. </> : null}{runtime.error?.startsWith('sprites_') || runtime.error === 'provisioning_failed' ? 'Press Set up subscription to try again; the same runtime is reused. If it keeps failing, tell the operator the reason above.' : 'Sign in again, then verify. If it keeps failing, disconnect the runtime and set it up again.'}</Notice> : null}
+    {runtime.status === 'failed' && owner && (runtime.error?.startsWith('sprites_') || runtime.error === 'provisioning_failed') ? <InferenceForm action="create" disabled={disabled || !spritesConfigured} label="Set up subscription again"><input type="hidden" name="provider" value={runtime.provider} /></InferenceForm> : null}
+    {(runtime.status === 'needs_login' || (runtime.status === 'failed' && runtime.spriteName && !(runtime.error?.startsWith('sprites_') || runtime.error === 'provisioning_failed'))) && owner ? <SignIn login={login} provider={runtime.provider} fallbackUrl={runtime.loginUrl} /> : null}
     {runtime.status === 'needs_login' && !owner ? <Notice>The owner signs in to the subscription from this page.</Notice> : null}
     <InferenceForm action="verify" disabled={!owner || disabled || runtime.provider === 'anthropic_api'} label="Verify sign-in" />
     <InferenceForm action="remove" disabled={!owner} label="Disconnect runtime" />
