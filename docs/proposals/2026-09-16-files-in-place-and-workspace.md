@@ -4,7 +4,7 @@
 
 **Date:** 16 September 2026.
 
-**Recommended direction:** keep working files in Google Drive, bring selected Embrace viewing and review interactions into Captain, and add a Captain sidebar inside Google Docs and Sheets. Keep brewery-specific stocktake and production records in business-owned spreadsheets and printable documents.
+**Recommended direction:** keep working files in Google Drive, bring selected Embrace viewing and review interactions into Captain, and add a Captain sidebar inside Google Docs and Sheets. Keep each business's own operational records (counts, production logs, inspections, job sheets) in business-owned spreadsheets and printable documents assembled from a small set of generic parts. The brewery is the worked example throughout, not the design.
 
 ## 1. Recommendation
 
@@ -16,9 +16,9 @@ The Embrace experience should become a file detail and review surface within Cap
 
 For native Google documents, people should continue editing in Google's applications. A **Captain sidebar inside Docs and Sheets** should expose linked tasks, evidence and correspondence actions. Embedding Google's editor inside Captain is not part of this proposal.
 
-For brewery operations, start with **Google Sheets + Docs/PDF templates + Drive scans**. Add a reviewable paper-to-record pipeline only after the file and evidence foundation works. Captain can remind people, link records and surface unfinished review; it should not become a brewing system, inventory ledger or configurable database builder.
+For a business's own operational records, start with **Google Sheets + Docs/PDF templates + Drive scans**: a record kit made of generic parts that any business assembles for its own domain (§11). Add a reviewable paper-to-record pipeline only after the file and evidence foundation works. Captain can remind people, link records and surface unfinished review; it should not become a production system, inventory ledger or configurable database builder for any domain. The brewery is the first business to assemble the kit and is used as the worked example.
 
-This direction supports Captain's existing jobs: inbox triage, correspondence, commitments, chasing, and answering with sources. It does not introduce a seventh product job called “run production.”
+This direction supports Captain's existing jobs: inbox triage, correspondence, commitments, chasing, and answering with sources. It does not introduce a seventh product job called “run operations.”
 
 ## 2. What was checked, and what has changed
 
@@ -37,8 +37,8 @@ Earlier split planning documents from the previous architecture are not the base
 | Mail | Attachment metadata, short-lived allowlisted text extraction | No revision fingerprint index or asset matching is implemented. |
 | Outbox | Person-sent, text-only drafts with uncertain-send reconciliation | Exact-version attachments require an explicit extension of the draft and send contract. |
 | Evidence | Tasks can link mail, files or URLs | Extend evidence with precise version references and preservation state. |
-| Stock | Counted items and count history; Shopify read-only quantities; stocktake/reorder workflow | Keep this limited feature distinct from the proposed external brewery ledger. |
-| Production | Custom batches, process models, movements and costing excluded | Brewery schemas and templates remain outside Captain's core model. |
+| Stock | Counted items and count history; Shopify read-only quantities; stocktake/reorder workflow | Keep this limited feature distinct from the proposed external operational ledger. |
+| Production | Custom batches, process models, movements and costing excluded | Domain schemas and templates (a brewery's batches, a workshop's jobs) remain outside Captain's core model. |
 | Files | “Link to where those already live”; no file store | A metadata and review layer fits the intent, but its new tables and behaviours need a plan amendment. |
 | Images / OCR | Current triage extracts only plain text and CSV; PDFs explicitly skipped. The current Sprite configuration disables image tools | Do not promise that existing inference can process the supplied photographs. |
 
@@ -60,14 +60,14 @@ The transferable ideas are previewing files, selecting a version, attaching a no
 |---|---|
 | Working original, folders, ordinary file sharing, native edits | Google Drive and the user's existing applications |
 | Working native spreadsheet/document | Google Sheets / Docs |
-| Brewery items, batches, additions, readings and operational ledger | Business-owned Sheets initially; a specialist system if complexity later warrants it |
+| The business's own operational ledger (for the brewery: items, batches, additions, readings) | Business-owned Sheets initially; a specialist system if complexity later warrants it |
 | Projects, tasks, recurring duties, reminders and outbox | Captain |
 | File identity, observed revisions, links to work, review notes | Captain metadata |
 | Preserved source bytes | Drive retained revisions or explicitly created archival files in Drive |
 | Interpretation of a scanned page | A bounded extraction step producing a draft, followed by a person's review |
 | Financial general ledger and accounting entries | The accounting system; a stocktake workbook is not automatically an accounting general ledger |
 
-An external production record can be linked to a task such as “Complete cellar note for Arrive 19.” Captain need not understand a fermentation state machine to track that commitment.
+An external operational record can be linked to a task. For the brewery that task is “Complete cellar note for Arrive 19”; for a joinery it might be “Finish the job sheet for the Smith kitchen.” Captain need not understand a fermentation state machine, or any other process model, to track that commitment.
 
 The existing counted-stock feature should remain available. For a given stock category, choose one authority: Captain's counted list, a designated external workbook, or the commerce system. Do not have both Captain and a workbook independently own “the current count.” A later reviewed importer could record an accepted external count as an observation, with its source, but must not silently derive movements or overwrite Shopify quantities.
 
@@ -90,13 +90,15 @@ The existing counted-stock feature should remain available. For a given stock ca
 4. The mail shows “Exact content match” with the matching file/version, “Several exact matches,” “No match in indexed versions,” or a reason it could not be checked.
 5. An unmatched attachment remains a Gmail attachment. Saving it to Drive or treating it as a new version is a separate, deliberate action.
 
-### A brewer using paper
+### Someone capturing a paper record
 
-1. Print the day's stocktake or cellar note from a familiar template.
-2. Write on it in the cellar, including corrections and freeform observations.
+1. Print the day's record from a familiar template. For the brewery that is a stocktake sheet or a cellar note; for another business it is whatever page its kit defines.
+2. Write on it at the point of work, including corrections and freeform observations.
 3. Scan the completed page to a designated Drive folder using a phone or scanner.
 4. A draft extraction appears beside the scan. A person fixes uncertain values and accepts the record.
-5. The operational workbook receives the accepted rows. Captain links the scan and accepted record to the relevant task.
+5. The business's operational workbook receives the accepted rows. Captain links the scan and accepted record to the relevant task.
+
+Nothing in these five steps is specific to brewing. The template, the reference lists and the validation rules are the business's own configuration in its own Workspace; Captain sees scans, review, acceptance and evidence links.
 
 ### Someone working inside Google Sheets
 
@@ -246,7 +248,7 @@ For evidence, capture the chosen document revision where the API supports retrie
 
 If the selected historical export is unavailable, show that state. A person can deliberately capture the current document as a **new** evidence snapshot. Never claim it represents the earlier version. UI named versions are useful to people, but should not be treated as an API retention or immutable snapshot mechanism. [Google version history][google-history]
 
-For a stocktake close, preserve both a human-readable PDF and machine-readable accepted rows where needed. The PDF proves what a person saw; structured rows support later reporting. Record the workbook, tab/sheet ID, stocktake ID and extraction/acceptance identifiers. A row number or A1 range alone is not a durable record identity after sorting and insertion.
+For a record close (a stocktake, an inspection round), preserve both a human-readable PDF and machine-readable accepted rows where needed. The PDF proves what a person saw; structured rows support later reporting. Record the workbook, tab/sheet ID, record ID and extraction/acceptance identifiers. A row number or A1 range alone is not a durable record identity after sorting and insertion.
 
 On macOS, supported Google Docs/Sheets offline editing is through Chrome or Edge with Google's offline setup and selected files made available in advance. Changes sync after reconnection. A browser-installed app window can make this feel like a desktop application, but it uses the browser's profile and storage. A Finder entry for a native Google document is not an ordinary locally editable `.docx` or `.xlsx`. [Google offline instructions][google-offline], [Chrome app windows][chrome-apps]
 
@@ -280,41 +282,56 @@ Authenticate the person to Captain, map a verified identity to an active members
 
 Request access to the current file explicitly. Google provides `drive.file` grants and an `onFileScopeGrantedTrigger` for relevant add-on flows. The Apps Script `documents.currentonly` and `spreadsheets.currentonly` scopes do **not** grant the backend equivalent REST API access: they are restricted to Apps Script Services. Keep the add-on's host permission, Captain session and backend provider connection distinct. [Add-on scopes][workspace-scopes]
 
-A minimal Apps Script/card adapter can call the existing Captain API; business decisions stay in Captain services. Name the adapter and any dependencies in the main plan before implementation. Pilot within the brewery Workspace first. Public distribution, OAuth verification and any restricted-scope review are separate release gates, not implied by a successful private prototype.
+A minimal Apps Script/card adapter can call the existing Captain API; business decisions stay in Captain services. Name the adapter and any dependencies in the main plan before implementation. Pilot within the first business's Workspace first (the brewery). Public distribution, OAuth verification and any restricted-scope review are separate release gates, not implied by a successful private prototype.
 
-## 11. Stocktake and cellar notes outside Captain
+## 11. Operational records outside Captain: a kit of generic parts
 
-### Start with a Google Workspace kit
+Captain has no configurable domain model (plan §12): no entity types, custom fields, units or process definitions. A business's operational records therefore live outside Captain, in the business's own Workspace, built from parts that are the same for every business. What differs per business is configuration: which record types exist, what each page asks for, which reference lists it draws on, and which validation rules apply. This section describes the parts, how a workflow is assembled from them, and then the brewery's assembly as the worked example.
 
-The recommended first operational setup is:
+### The parts
 
-1. A business-owned Sheet holding reference lists and accepted records.
-2. Printable stocktake and cellar-note templates, with PDFs for consistent printing.
-3. A Drive location for incoming scans and preserved accepted evidence.
-4. A simple review screen or Sheet-based review process before records become accepted.
-5. Captain tasks, reminders and links around that process.
+1. **Reference lists.** A business-owned Sheet holding the stable IDs a record can refer to: the things being counted, made, inspected or worked on, and the places it happens.
+2. **Record templates.** One printable template per record type, with a PDF for consistent printing, carrying a record ID, page ID and template version.
+3. **A scan location.** A Drive folder for incoming scans and for preserved accepted evidence.
+4. **A review step.** A simple review screen or Sheet-based review before a draft becomes an accepted record.
+5. **An acceptance destination.** An accepted-rows ledger in the workbook, written idempotently under a stable acceptance ID.
+6. **Captain around it.** Tasks, series, reminders, evidence links and the record's place in Commitments.
 
 Start with manual review and entry. Add extraction after a representative test set exists. This gets the working process right before investing in handwriting automation.
 
+### Assembling a workflow from the parts
+
+A business assembles its kit in this order, and none of it is Captain code:
+
+1. **Name the record types.** Each is a thing that happens repeatedly and produces values worth keeping: a count, a production step, an inspection, a job sheet.
+2. **Give each record type a template.** Decide the fixed fields (who, when, where, against which reference), the repeated rows (items, additions, readings), whether continuation pages are needed, and where freeform notes go.
+3. **Decide the row shape** in the acceptance destination (below), so the same rows serve reporting later.
+4. **Write the validation rules** for each template: required fields, units, allowed references, and which ambiguities must stop acceptance.
+5. **Put the Captain pieces around it.** A recurring series for the record when it is periodic, a task per instance when it is not, and evidence links from the accepted record back to the scan.
+
+Captain's contribution is the same for every kit: the scan lands in Drive, a draft extraction (once it exists) is reviewed, the acceptance is recorded, and the evidence is linked to a task. The schema is the business's; the review and evidence envelope is Captain's, and it is small and generic.
+
 ### Spreadsheet shape
 
-One column per stocktake is a reasonable **counting view**, but a poor long-term storage model. Keep accepted data as rows: stocktake ID, item ID, location, counted quantity, unit, counted time, counter, accepted time, reviewer and source page. Generate the familiar date-column matrix from those rows.
+One column per occurrence (one column per stocktake, one per inspection round) is a reasonable **working view**, but a poor long-term storage model. Keep accepted data as rows: record ID, subject reference (the item, batch or job), location, value, unit, recorded time, recorder, accepted time, reviewer and source page. Generate the familiar date-column matrix from those rows. For a stocktake the subject is the item and the value is the count; for a reading the subject is the batch and the value is the measurement.
 
-Use business-owned reference tabs for stable item and location IDs. Units should be explicit; automatic conversions need separately tested business rules. Blank, not counted and zero must be distinct values.
+Use business-owned reference tabs for stable subject and location IDs. Units should be explicit; automatic conversions need separately tested business rules. Blank, not recorded and zero must be distinct values.
 
-The proposed checkbox can request “close stocktake.” An authorised installable Apps Script trigger can validate the count, write an accepted snapshot, record the closer and apply a protected range. A simple edit trigger should not be assumed to have the permissions needed for all of those operations. Protection prevents many accidental edits; spreadsheet owners can still change protected data, so it is not an immutable audit record. Programmatic/API edits need an explicit close path because they do not simply reproduce a person's edit-trigger flow. [Apps Script triggers][apps-script-triggers], [Sheets protection][sheets-protection]
+The proposed checkbox can request “close record” (for the brewery, “close stocktake”). An authorised installable Apps Script trigger can validate the values, write an accepted snapshot, record the closer and apply a protected range. A simple edit trigger should not be assumed to have the permissions needed for all of those operations. Protection prevents many accidental edits; spreadsheet owners can still change protected data, so it is not an immutable audit record. Programmatic/API edits need an explicit close path because they do not simply reproduce a person's edit-trigger flow. [Apps Script triggers][apps-script-triggers], [Sheets protection][sheets-protection]
 
 Keep the accepted row ledger and snapshot independent of that column's lock. Corrections create a documented correction or superseding accepted record. Do not erase the earlier accepted result. If “general ledger” means an accounting ledger, design a separate validated handoff to the accounting system; stock counts alone are not accounting postings.
 
-An installable trigger runs as its creator, who is not necessarily the person checking the box. Record execution identity separately from the counted-by/closed-by identity, and use an authenticated close action if the editor cannot be reliably identified. Serialise closing, re-read the input and use a stable stocktake acceptance ID so a double-click or retry cannot create two accepted stocktakes. [Trigger execution identity][apps-script-triggers]
+An installable trigger runs as its creator, who is not necessarily the person checking the box. Record execution identity separately from the counted-by/closed-by identity, and use an authenticated close action if the editor cannot be reliably identified. Serialise closing, re-read the input and use a stable acceptance ID so a double-click or retry cannot create two accepted records. [Trigger execution identity][apps-script-triggers]
 
-This workbook automation belongs to the brewery's external kit. It is not a general custom-schema/process designer inside Captain.
+This workbook automation belongs to the business's external kit. It is not a general custom-schema/process designer inside Captain.
 
-### What the supplied notes imply for the template
+### Worked example: the brewery's kit
+
+The brewery is the first business to assemble the kit, so its assembly is written out here as the example. Its record types are a stocktake, a brew day, fermentation readings and blending or finishing. Its reference lists are items, locations and batches. Its Captain pieces are a recurring stocktake series and a task per batch.
 
 The review looked at four photographs of the brewery's current paper records, which are not in this repository: a brew-day sheet with ingredients and planned steps, recorded times/temperatures/volumes, fermentation readings continuing onto another page, and a separate blending note. They contain ticks, cross-outs, overwritten quantities, ditto marks and marginal observations. A template must preserve room for those realities; slice F assembles a test set from real pages, so the photographs need not be committed here.
 
-Use a family of pages rather than one densely compressed universal form:
+Use a family of pages rather than one densely compressed universal form. The brewery's family is:
 
 - **Stocktake:** location, item/reference, unit, count, not-counted marker and notes.
 - **Brew day:** batch/reference, recipe/template version, planned ingredients alongside actual additions, process readings and freeform exceptions.
@@ -323,7 +340,7 @@ Use a family of pages rather than one densely compressed universal form:
 
 Every page should carry a human-readable record ID, page ID, template version and optional QR code encoding opaque identifiers, not credentials. Continuation pages repeat the batch identity. Leave generous writing space, clear units and an unstructured notes area. Print planned values separately from blank actual fields so a tick or an unfilled cell cannot be mistaken for a measured quantity.
 
-Use paper and suitable writing materials for the cellar environment; test legibility after wet handling. Capture a flat, well-lit scan before filing the original. The supplied pages are examples to interpret, not instructions for Captain or the extraction model to execute.
+Use paper and suitable writing materials for the working environment (for the brewery, a wet cellar); test legibility after the handling the pages will actually get. Capture a flat, well-lit scan before filing the original. The supplied pages are examples to interpret, not instructions for Captain or the extraction model to execute.
 
 ### Extraction and acceptance
 
@@ -331,13 +348,13 @@ The pipeline should be:
 
 `scan in Drive → identify page/template → draft extraction → deterministic validation → human review → accepted external rows + evidence link`
 
-Store the source representation, page association, extractor/schema version, candidate values, ambiguity flags, reviewer corrections and acceptance identity. A model's confidence number is not enough: show uncertain cells and the corresponding source region. Keep freeform notes as notes; do not force every sentence into a production event.
+Store the source representation, page association, extractor/schema version, candidate values, ambiguity flags, reviewer corrections and acceptance identity. A model's confidence number is not enough: show uncertain cells and the corresponding source region. Keep freeform notes as notes; do not force every sentence into an operational event.
 
-Validation must catch missing pages, conflicting record IDs, unrecognised items, ambiguous dates, missing units, decimal/handwriting ambiguity and duplicate ingestion. Cross-outs and ditto marks should be flagged when their meaning is uncertain. Planned amounts are not actual consumption. A blank is not zero. An apparent reading on a continuation page is not safe to attach to a batch merely because the previous image looked related.
+Validation must catch missing pages, conflicting record IDs, unrecognised items, ambiguous dates, missing units, decimal/handwriting ambiguity and duplicate ingestion. Cross-outs and ditto marks should be flagged when their meaning is uncertain. Planned amounts are not actual consumption. A blank is not zero. An apparent reading on a continuation page is not safe to attach to a record merely because the previous image looked related.
 
-Accept stocktake and production records explicitly, then write them idempotently. Use a stable acceptance ID in the destination and verify it after uncertain results; Google Sheets writes are not assumed to be exactly-once transactions. Record corrections as new revisions of the accepted record. The same scan, re-uploaded or retried, must not double a count or addition.
+Accept records explicitly, then write them idempotently. Use a stable acceptance ID in the destination and verify it after uncertain results; Google Sheets writes are not assumed to be exactly-once transactions. Record corrections as new revisions of the accepted record. The same scan, re-uploaded or retried, must not double a count or addition.
 
-The schema for brewery fields belongs to the external kit. Captain may own a small generic review/evidence envelope, but should not acquire arbitrary custom entities by storing an unbounded “anything” payload and building a domain editor around it.
+The schema for the business's fields (the brewery's gravities and additions, another business's own measures) belongs to the external kit. Captain may own a small generic review/evidence envelope, but should not acquire arbitrary custom entities by storing an unbounded “anything” payload and building a domain editor around it.
 
 ### Inference gap and recommendation
 
@@ -355,16 +372,16 @@ Image resizing, decoding and PDF handling need resource limits and safe processi
 |---|---|---|
 | Drive + Sheets + printable templates | Uses existing accounts, Finder and familiar tools; requires careful IDs, review and snapshot handling | Start here. |
 | Docs/Sheets Captain sidebar | Makes task/evidence actions available where people edit | Add after file identity and preservation work. |
-| Google Forms | Useful for simple online submissions and uploading a scan; less suited to flexible repeated ingredient/reading tables | Optional capture door, not the primary cellar-note editor. |
+| Google Forms | Useful for simple online submissions and uploading a scan; less suited to flexible repeated row tables such as ingredients or readings | Optional capture door, not the primary record editor. |
 | AppSheet over the workbook | Candidate for structured entry/review if spreadsheet entry becomes awkward | Evaluate later against the actual row model, offline requirements and account licensing. |
 | Airtable | Candidate if related records and business-facing review screens justify another system | Defer until the Workspace pilot demonstrates a concrete limitation. |
 | Baserow / NocoDB or another database front end | Candidate if ownership, portability or SQL-backed relationships become the priority | Adds administration; not necessary for the first kit. |
-| Specialist brewery/manufacturing software | Appropriate if traceability, lots, costing, scheduling and movement-led inventory become central | Prefer this over gradually turning Captain into a production system. |
+| Specialist domain software (for the brewery, brewing or manufacturing software) | Appropriate if traceability, lots, costing, scheduling and movement-led inventory become central | Prefer this over gradually turning Captain into an operations system for any one domain. |
 | General document/OCR service | Could improve extraction of forms and handwriting | Select by testing real wet/corrected notes; it does not remove the need for review. |
 | Lore-backed Embrace | Offers an explicit asset/version system, but adds a separate backend and user integration | Shelf as the forward architecture after a safe archive/export decision. |
 | Hidden snapshots and local symlinks | Attempts to provide custom versioning while disguising it as normal files | Reject as the default user workflow. |
 
-These are architecture choices, not a current pricing or feature benchmark of every alternative. No recommendation depends on an unverified promise about an alternative product's offline support. Before purchasing one, test the same representative stocktake and cellar-note workflow against it.
+These are architecture choices, not a current pricing or feature benchmark of every alternative. No recommendation depends on an unverified promise about an alternative product's offline support. Before purchasing one, test the business's own representative record workflow against it (for the brewery, a stocktake and a cellar note).
 
 ## 13. Proposed technical shape
 
@@ -430,7 +447,7 @@ Before implementation, make a reviewed update to the live `docs/plan.md` and rep
 | D11, five tabs | Keep; file views are nested/contextual. A top-level Files tab would require a separate product decision. |
 | D13, attachment bytes | Preserve no durable Captain byte storage. Explicitly document transient fingerprinting, preview and MIME assembly limits. Any persistent derived-byte cache needs a later amendment. |
 | D14, design authority | Keep. Recreate useful Embrace interactions using Captain design; identify any narrowly approved source-reuse exception. |
-| D15, counted stock | Keep. Clarify the single authority per stock category and separation from external brewery records. |
+| D15, counted stock | Keep. Clarify the single authority per stock category and separation from the business's external operational records. |
 | §5 / §8, data and integrations | Add the selected logical records, scopes, provider operations and access policy. |
 | §12, no file store / documents / team chat | Clarify a bounded file-reference, evidence and review layer; originals and editing remain external. No general chat or document editor. |
 | §14, printable records | Resolve: external business-owned templates and records; Captain tracks commitments/evidence. Extraction is a later scoped capability. |
@@ -475,9 +492,9 @@ Build the small add-on adapter, identity/organisation selection, current-file li
 
 ### F. External paper-record pilot
 
-Create the business-owned workbook and printable template family. Run at least one manual stocktake and one production cycle through scan, review and accepted records. Assemble a test set from real staff handwriting, including wet pages, corrections, continuation pages and duplicate scans. Then choose and test the bounded extraction capability.
+Assemble the kit for the first business (§11): the brewery's workbook, reference lists and template family. Run at least one manual cycle of each record type (for the brewery, one stocktake and one production cycle) through scan, review and accepted records. Assemble a test set from real staff handwriting, including wet pages, corrections, continuation pages and duplicate scans. Then choose and test the bounded extraction capability.
 
-**Exit:** every accepted value has inspectable evidence; uncertain critical fields require review; duplicate retries do not duplicate destination records; the review process takes less effort than manual transcription. Keep extraction advisory until those conditions are demonstrated.
+**Exit:** every accepted value has inspectable evidence; uncertain critical fields require review; duplicate retries do not duplicate destination records; the review process takes less effort than manual transcription; a second business could assemble its own kit from the same parts without new Captain code. Keep extraction advisory until those conditions are demonstrated.
 
 ## 16. Failure cases that must be visible
 
@@ -505,7 +522,7 @@ Create the business-owned workbook and printable template family. Run at least o
 4. Distinguish working history, fixed evidence and ready-to-use versions; fix outgoing attachments to exact representations.
 5. Use deterministic byte matching for Gmail attachment identity, with explicit ambiguity and indexing coverage.
 6. Add a Captain sidebar in Docs/Sheets after the underlying file/evidence services, without embedding Google's editor in Captain.
-7. Keep brewery-specific records in a Workspace kit; pilot manual paper capture before automating extraction.
+7. Keep each business's own operational records in a Workspace kit assembled from generic parts, with the brewery as the first assembly; pilot manual paper capture before automating extraction.
 8. Preserve the current administrative product, five tabs, first-party connectors, data-only inference and person-sent outbox. Treat any necessary exception as a named plan decision.
 
 The first engineering action after this direction is accepted should be **slice A plus the live plan amendment for slice B**, not a wholesale Embrace port or a production OCR pipeline.
