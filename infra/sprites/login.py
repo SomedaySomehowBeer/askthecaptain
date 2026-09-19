@@ -9,11 +9,13 @@ root = os.environ.get('CAPTAIN_ROOT', '/home/sprite/captain')
 command = ['claude', 'setup-token'] if provider == 'claude' else ['codex', 'login', '--device-auth']
 url_pattern = re.compile(r'https://(?:claude\.ai|claude\.com|platform\.claude\.com|console\.anthropic\.com|auth\.openai\.com)/[^\s\x1b<>]+')
 device_pattern = re.compile(r'\b[A-Z0-9]{4}-[A-Z0-9]{4}\b')
-token_pattern = re.compile(r'sk-ant-oat01-[A-Za-z0-9_-]+(?=[\r\n ])')
+# The CLI lays words out with cursor moves, not spaces: a token ends at any character outside its alphabet, escapes included.
+token_pattern = re.compile(r'sk-ant-oat01-[A-Za-z0-9_-]+(?=[^A-Za-z0-9_-])')
 escapes = re.compile(r'\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[ -/]*[0-~]')
+column_moves = re.compile(r'\x1b\[\d*G')
 def mask(text): return re.sub(r'sk-ant-[A-Za-z0-9_-]+|[A-Za-z0-9_-]{32,}|\*{6,}', '…', text)
 def visible(text):
-	lines = [l.strip() for l in escapes.sub('', text).replace('\r', '\n').split('\n')]
+	lines = [re.sub(r' +', ' ', l).strip() for l in escapes.sub('', column_moves.sub(' ', text)).replace('\r', '\n').split('\n')]
 	return [l for l in lines if re.search(r'[A-Za-z]{3}', l) and 'https://' not in l and not l.startswith('***')]
 
 master_fd, slave_fd = pty.openpty()
@@ -26,7 +28,14 @@ def controlling():
 env = {'PATH': os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin'), 'HOME': os.environ.get('HOME', '/home/sprite'), 'LANG': 'C.UTF-8', 'TERM': 'xterm-256color'}
 child = subprocess.Popen(command, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd, cwd=root, env=env, preexec_fn=controlling)
 os.close(slave_fd)
-seen = set(); transcript = ''; sent_at = None; reported = set(); retry_pending = False; started = time.time()
+seen = set(); transcript = ''; sent_at = None; reported = set(); retry_pending = False; started = time.time(); saved = False
+def save_token():
+	global saved
+	token = token_pattern.search(transcript)
+	if not token: return False
+	fd = os.open(root + '/claude-token', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+	with os.fdopen(fd, 'w') as file: file.write(token.group(0))
+	saved = True; print('Claude login saved on the Sprite.', flush=True); return True
 print('Sign-in started. Open the link below on your phone; paste a returned code back if Claude asks for it.', flush=True)
 try:
 	while child.poll() is None:
@@ -47,12 +56,7 @@ try:
 		try: data = os.read(master_fd, 8192).decode(errors='replace')
 		except OSError: break
 		transcript += data
-		token = token_pattern.search(transcript)
-		if token:
-			fd = os.open(root + '/claude-token', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-			with os.fdopen(fd, 'w') as file: file.write(token.group(0))
-			print('Claude login saved on the Sprite.', flush=True)
-			break
+		if save_token(): break
 		for value in url_pattern.findall(transcript):
 			if value not in seen: print(value, flush=True); seen.add(value)
 		for value in device_pattern.findall(escapes.sub('', transcript)):
@@ -65,7 +69,18 @@ try:
 		transcript = transcript[-32768:]
 finally:
 	if child.poll() is None: child.terminate()
-	child.wait(); os.close(master_fd)
+	child.wait()
+	# The CLI may print the token and exit in one go: drain what is left before deciding.
+	while not saved:
+		try:
+			ready, _, _ = select.select([master_fd], [], [], 0.2)
+			if not ready: break
+			data = os.read(master_fd, 8192).decode(errors='replace')
+			if not data: break
+			transcript += data + '\n'
+		except OSError: break
+	if not saved: transcript += '\n'; save_token()
+	os.close(master_fd)
 	for value in visible(transcript)[-2:]:
 		if value not in reported: print('CLI: ' + mask(value)[:160], flush=True)
 	print('CLI exited ' + str(child.returncode), flush=True)
