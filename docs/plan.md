@@ -78,6 +78,8 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
 | `packages/engine` | durable workflow execution: pg-boss and a small typed runner in the API process |
 | `packages/model` | the inference client: provider adapter, structured output, budgets, usage |
+| `packages/retrieval` | embedding units, the client for the embedding service, thread vectors and hybrid search over the mail index (§5, §7) |
+| `infra/embed` | the stateless embedding service: one small sentence encoder behind a bearer secret, shared by all organisations, holding no data (D21) |
 | `packages/ui` | design tokens and shared components |
 | `infra` | OpenTofu for Neon, Cloudflare and monitoring; owner-run inference Sprite provisioning |
 
@@ -147,7 +149,29 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 - `attachment_text` — extracted text for attachments that triage was allowed to read (§7),
   capped in length, kept for a bounded period, then dropped.
 - `outbox` — drafts awaiting a person: thread (or none), to, subject, body, created by run,
-  state ∈ drafted · sent · discarded, sent by, sent at, provider message id.
+  state ∈ drafted · sent · discarded, sent by, sent at, provider message id; outcome ∈ sent ·
+  edited · discarded · not_needed · expired, and remind-at for a draft a person deferred.
+- `mail_senders` — per sender address: threads seen, verdicts by category, needs-owner count,
+  replies and stars by a person, draft outcomes (sent, edited then sent, discarded, not needed,
+  requested), last seen. The learned priors the triage gate and the draft score read (§6); any
+  reply or star from a person resets the sender to "always classify".
+- `content_vectors` — the retrieval index: source ∈ mail_message · note (a later source, such as
+  the extracted text of an enrolled file version, adds a value, not a table), source id, chunk index,
+  encoder name and version, vector (pgvector). Derived from content and treated as that content:
+  same policy, cascades with its source, never logged or exported on its own. The thread vector is
+  recomputed from these rows and kept on `mail_threads` with its encoder version; a note's vector
+  is kept on the note.
+
+**Notes**
+- `notes` — plain text a person writes in Captain: a quick note, meeting notes, anything between.
+  Author, title (optional), body capped at 20,000 characters, and at most one link each to a
+  calendar event, a contact, a company, a project and a task; archived at. Not a document store
+  (§12): no formatting, files or comments. A note is content like a mail thread: triaged, indexed
+  and citable as evidence, and its author is the person, so it never needs the owner and is
+  never drafted a reply. A review note on a file version (the files proposal, §14) is this same
+  record with a file-version anchor, not a separate table.
+- `note_triage` — one row per note, the same shape as `mail_triage` less the needs-owner flag:
+  summary, facts, produced by run, model.
 
 **Calendar**
 - `calendars`, `calendar_events` — synced cache; event writes go to the provider and are re-read.
@@ -158,10 +182,23 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 - `contacts`, `companies` — the business's counterparties, kept current by triage and by hand.
 
 **Commitments**
-- `projects` — name, description, stages, owner, archived. One system project per organisation,
-  **Obligations**, flagged so the UI shows it as a deadline book.
+- `projects` — name, description, stages, owner, state ∈ proposed · active · archived, proposed
+  by run, and a brief: what this is, where it stands, who is involved, open questions, each line
+  citing an evidence thread; written by discovery, editable by a person, and the whole of an
+  idea-stage project that has no tasks yet. One system project per organisation, **Obligations**,
+  flagged so the UI shows it as a deadline book. A proposed project is visible on Commitments and
+  becomes active only when a person accepts it.
+- `project_sources` — project, source ∈ mail_thread · note, source id, linked by ∈ rule · model ·
+  person with the run or person that made the link. A source may belong to more than one project.
+- `project_candidates` — a proposed project name the triage model returned for a thread or note
+  that fits no existing project: normalised name, the sources that proposed it and whether each is
+  the person's own writing, first and last seen. Promoted
+  to a discovery seed by the threshold rule in §6, never directly to a project.
 - `tasks` — project, title, body, status ∈ suggested · open · in_progress · done · cancelled,
-  owner, due, source (mail thread, series, person, run), completed by, completed at.
+  owner, due, source (mail thread, series, person, run), completed by, completed at, and parent:
+  a sub-task is a task whose parent is another task in the same project, one level deep, with no
+  series and no sub-tasks of its own. A parent is completed by a person; completing its last
+  sub-task suggests that, never does it.
 - `task_series` — the rule that generates recurring tasks. A series belongs to a project (by
   default Obligations), carries a template (title pattern, body, owner, evidence required), a
   recurrence (monthly, quarterly, yearly, weekdays, custom) and a due rule (for example "due 21 days
@@ -170,7 +207,7 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   changes future occurrences only; completing a task never touches its series. "Excise return" is a
   monthly series in Obligations whose September task is due on 21 October. "Order cans" is a monthly
   series in the Production project. A one-off task simply has no series.
-- `evidence` — a link from a task to a mail message, a file or a URL, with who attached it.
+- `evidence` — a link from a task to a mail message, a note, a file or a URL, with who attached it.
 
 **Stock** (what nothing else counts)
 - `stock_items` — name, location, unit label (text), current count, counted at, counted by,
@@ -278,10 +315,28 @@ Settings → Activity only when they fail.
 
 ### The first workflows
 
-- **inbox-triage** (on mail arrival, and 06:00): read new threads → infer classification per thread
-  (category, needs owner, summary, facts: counterparty, amounts, dates, references) → write triage
-  rows, create suggested tasks, complete duties whose confirmation arrived, update contacts → infer
-  reply drafts for threads that need one → write outbox drafts → await send → write labels.
+- **inbox-triage** (on mail arrival, on a saved note, and 06:00): read new threads and notes → gate
+  each thread with
+  deterministic rules and sender priors, no model (bulk and automated mail is filed as information
+  with the rule named in the journal) → infer classification per thread that passes the gate, and per note and per sent message with
+  enough own text (§14 own writing)
+  (category, needs owner, summary, facts: counterparty, amounts, dates, references, suggested tasks
+  each with optional steps that become sub-tasks, and a project: an existing one, none, or a
+  proposed name with its stage, idea or underway) → write triage rows, the project link, the sender
+  verdict, suggested tasks in the linked project or Obligations, complete duties whose
+  confirmation arrived, update contacts → infer reply drafts for threads whose draft score crosses the
+  organisation's threshold (§14), at most twenty per run → write outbox drafts → await send →
+  write labels.
+- **discover-projects** (on demand from Commitments by an owner or admin, and at 06:00 when a
+  candidate has crossed its threshold; rerunnable): read the seeds (a thread a person chose, a
+  candidate name, or on the first run the clusters of the synced backlog) → read the retrieval
+  index for each seed's neighbours and widen deterministically → infer, once per seed, which
+  candidates belong and what they amount to: a project (with a brief, a stage and any tasks, each
+  with steps and its evidence thread), a single task with or without steps, a relationship, or
+  nothing → write a proposed project with its brief, thread links, suggested tasks and evidence;
+  or one suggested task in the linked project or Obligations; or a company link → notify the
+  enabling person. Nothing
+  is active until a person accepts it. Delivery detail in §14.
 - **morning-brief** (06:30): read overdue and due-this-week tasks, outbox, today's events, overdue
   receivables → infer a brief from that data → write `briefs.record` → notify the enabling person.
   Requires ready inference and that person's subscribed push device. Google calendar and Xero are
@@ -401,8 +456,8 @@ export const inboxTriage = defineWorkflow({
 - **Provider adapter.** A thin Sprite provider interface supports Claude and Codex without
   changing steps. The shim runs the CLI with every model tool and MCP server disabled, takes
   instruction, labelled input and output schema, and returns structured output and usage only.
-- **Privacy.** Mail bodies go to the model only inside triage and drafting steps of workflows the
-  owner enabled. Usage is recorded per step; content is not logged.
+- **Privacy.** Mail bodies and notes go to the model only inside triage and drafting steps of
+  workflows the owner enabled. Usage is recorded per step; content is not logged.
 - **Untrusted content.** Everything a model reads from mail is untrusted: bodies, subjects, sender
   names, attachment text. The prompt labels it as such and the instruction lives outside it. The
   structural defence is D2: the only thing an injected instruction can influence is the data the
@@ -410,6 +465,13 @@ export const inboxTriage = defineWorkflow({
   an action is not. Facts that matter (amounts, bank details, due dates) are cross-checked against
   the ledger and known counterparties where a source exists, and anything from an unknown sender
   is marked needs-owner regardless of what the model said.
+- **Retrieval is not inference.** A small sentence encoder (ONNX, CPU) runs in one Captain-run
+  embedding service (`infra/embed`, D21) to embed mail into the retrieval index (§5
+  `content_vectors`). It takes no instruction and returns numbers, not text, so it is a `read` step
+  and D2 does not apply to it; it is not a model tier and never sees a schema. The service is
+  stateless and shared by all organisations: mail text reaches it over TLS with a bearer secret,
+  is embedded in memory and never written to disk. It is not the inference Sprite (D18), which
+  keeps hosting nothing but the CLI. There is no third-party embeddings service.
 - **Attachments.** Triage may read an attachment only if its media type is on the allow list
   (PDF, CSV, plain text; images later, with OCR) and it is under the size cap. Text is extracted
   server-side, truncated, cached briefly (§5) and passed as labelled untrusted content. Files are
@@ -505,6 +567,14 @@ and time, and folds the previous three questions under a disclosure. Empty, read
 unavailable and spent-budget states say what to do, linking Settings → Inference when appropriate.
 Each submission is independent; no action or conversation is inferred from a question.
 
+### Notes (jobs 4 and 6)
+
+A note is written in one motion: a note control sits with the question box on Today and on every
+event, contact, company, project and task, pre-linked to the thing it was opened from. Today lists
+the last few notes; each linked thing lists its own. A note is plain text with an optional title
+and can be edited or archived by its author or an owner. It is not a sixth tab (D11) and not a
+document editor (§12). Screens are designed in the Claude Design project first (D14).
+
 `POST /v1/organisations/:id/answers` accepts an active member's question (up to 1000 characters),
 limited to 30 attempts/hour per organisation using the existing process rate limiter. `GET` reads
 that person's last few exchanges, with inference availability. Deterministic code selects sources:
@@ -536,6 +606,7 @@ no dependency, provider operation, background process or tab (D2, D6, D11).
 | 2 Think | 2 | Inference client with budgets; engine decision recorded by the inbox-triage spike (D19: pg-boss); harden the runner and ship inbox-triage and the outbox for the first customer |
 | 3 Assist | 2 | morning-brief, chase-due, materialise-series, calendar-prep; push; Today tab; Xero connection |
 | 4 Ready for a second customer | 2 | MFA, backups and restore drill, export and deletion, terms and privacy, support runbook; a second business onboarded by hand |
+| 5 Projects from mail and notes | 2 | In order: the triage gate, sender priors, weighted drafting and trimmed model input; notes; sub-tasks and the project brief; the retrieval index filled by mail sync; project association in triage; discover-projects and proposed projects on Commitments |
 
 Each phase ships to production behind feature flags to the first customer. Phase 1 and the inference
 client in Phase 2 can proceed in parallel.
@@ -555,7 +626,8 @@ client in Phase 2 can proceed in parallel.
   assistant does not need it: "Package batch 42" is a task. The business's vocabulary is the names
   of its projects, tasks and series.
 - Marketplace integrations beyond Google, Xero and Shopify.
-- Team chat, documents, or a file store; link to where those already live.
+- Team chat, documents, or a file store; link to where those already live. Notes (§5) are plain
+  text a person writes in Captain, not documents: no formatting, files, sharing or comments.
 
 ## 13. Decisions
 
@@ -567,7 +639,7 @@ client in Phase 2 can proceed in parallel.
 | D4 | A workflow acts in the name of the person who enabled it and can do nothing they could not. |
 | D5 | Anything sent to a third party waits in the outbox for a person. |
 | D6 | Tenant isolation is forced RLS with a non-bypassing runtime role. |
-| D7 | Captain owns projects and tasks. Recurrence is a series on a task. Obligations are tasks in a flagged system project. |
+| D7 | Captain owns projects and tasks. One project holds many tasks; a task may hold sub-tasks one level deep as its checklist; projects do not nest. Recurrence is a series on a task, never on a sub-task. Obligations are tasks in a flagged system project. |
 | D8 | Connectors are first-party SDKs behind our own OAuth and encryption; no third-party integration platforms. |
 | D9 | Inference uses each organisation's own Claude or Codex subscription through an unmodified CLI, behind a Sprite provider adapter; monthly token allowances and per-step usage, not dollar reservations. |
 | D10 | The durable execution engine is chosen by a bounded spike in Phase 2 between Restate and pg-boss with a small runner. |
@@ -580,6 +652,10 @@ client in Phase 2 can proceed in parallel.
 | D17 | One environment until the second customer: one Neon branch and compute, one live pair of Fly apps deployed from `main`; production promotion exists but stays dormant. |
 | D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and resource removal are owner-run. The Sprite is the only inference runtime today; the API path is a documented seam, not a second runtime. |
 | D19 | Durable workflows use pg-boss with a small Captain runner in the existing process and Postgres, following the D10 spike. Tenant-scoped run/step journals and destination idempotency remain ours; neither engine guarantees exactly-once remote writes. Production execution follows the transaction, continuation and recovery contracts in §4; each workflow waits for its complete handler registry. No Restate service or SDK is retained. |
+| D20 | Deterministic code decides before any model call: a rules gate on Gmail categories, list headers, sender shape and reply state, plus per-sender priors learned from earlier verdicts and a person's replies, files bulk and automated mail without inference. The model classifies only what passes. |
+| D21 | The retrieval index is a pgvector column in the tenant's own Postgres rows, filled by a small sentence encoder in one Captain-run, stateless embedding service shared by all organisations (a Fly machine or Sprite that holds no data). No separate vector store and no third-party embeddings service; vectors are mail-derived data under the same policy as mail. |
+| D22 | Captain proposes projects from evidence and a person makes them real. The triage model may name a project per thread; deterministic thresholds decide when that evidence is worth a discovery call; the discovery call judges the assembled evidence against the criteria in §14 and answers project, task, relationship or nothing; a person accepts. A project is never created from a single mail, and a proposed project is inert until accepted. |
+| D23 | Notes are first-class content: plain text a person writes in Captain, treated like mail in triage, retrieval, evidence and discovery, with the person as author so nothing needs the owner and nothing is drafted. Captain is not a document store. |
 
 ## 14. Open questions
 
@@ -589,6 +665,17 @@ client in Phase 2 can proceed in parallel.
   management system; out of scope until asked.
 - Pricing and the operator's own costs per tenant.
 - When to enable the API-key path and cost-based budgets; pricing for it.
+- Encoder choice for the retrieval index (MiniLM or bge-small class), and whether the embedding
+  service is a Sprite or a plain Fly machine; an owner operation either way.
+- Whether Gmail's Updates category is gated by sender knowledge, as §14 says, or always classified.
+- Files in place: `docs/proposals/2026-09-16-files-in-place-and-workspace.md` is merged for
+  discussion, not adopted. Its slice B plan amendment must reconcile with D23 (file annotations are
+  notes with a file-version anchor), add its version-qualified file kind to `evidence` alongside
+  `note`, add one sentence to the §12 documents non-goal rather than rewriting it, and may add a
+  source value to `content_vectors`. Its sequencing against Phase 5 is the owner's call.
+- Proposing first steps for an idea-stage project: an infer step over the brief that suggests tasks
+  for a person to accept. A later phase, after proposals have been accepted and discarded for a
+  while and the brief format has settled.
 
 ### Inbox triage delivery detail (D2, D4, D5, D13)
 
@@ -614,3 +701,128 @@ send** reconciles against Gmail Sent and never sends another copy. An unconfirme
 with instructions to check Gmail. The outbox pins the Google account, connection and reply header;
 reconnecting a different account cannot send an old account's draft. Sent and discarded states wake
 the workflow; no workflow handler sends mail.
+
+### Project discovery delivery detail (D2, D7, D20, D21, D22)
+
+Today every task the triage suggests lands in Obligations and no mail is linked to a project. Phase 5
+delivers the four pieces below in order; each is its own pull request set and each is useful alone.
+
+**The gate (D20).** Before any model call, deterministic code decides whether a thread needs one.
+A thread is filed as information with needs-owner off, a `mail_triage` row whose model column names
+the rule, and no facts, when any of these hold: Gmail's promotions, social or forums category label;
+a List-Unsubscribe or List-Id header, Precedence bulk or Auto-Submitted (the sync keeps these three
+headers; nothing else new is stored); a sender local part of noreply, no-reply, notifications or
+mailer-daemon; a reply from a person later than the latest incoming message; or a sender prior of at
+least three information verdicts with needs-owner off and no reply or star from a person. Gmail's
+Updates category goes to the model only when the sender is known (a person-maintained contact, a
+Xero contact or a Shopify customer, or prior sent mail). Every gate decision is journaled with the
+rule that fired. Sender priors live in `mail_senders`, updated by each verdict and each send from the
+outbox; a reply or star resets the sender. The small tier runs on the cheapest model that returns the
+schema reliably (§14 open question on tiers), configured per provider as today.
+
+**Trimmed input.** A classified thread sends the latest message in full (the existing 20,000
+character cap), each earlier message's own text to 500 characters, and no quoted reply blocks or
+signatures. Attachments are unchanged (D13). Drafting sends the same trimmed thread.
+
+**Own writing.** Notes and sent mail are the person's own words, and they are where intentions
+show up first. Both are classified for tasks with steps, facts and a project name with its stage,
+never for needs-owner and never drafted. A sent message is classified only when it carries at
+least about 40 tokens of its own text, the same floor as the index, so acknowledgements cost
+nothing; a note is always classified when saved, and again when edited beyond a trivial change.
+A single note that names one concrete action becomes a suggested task directly, as mail does. Own
+writing also seeds discovery on its own rule: a candidate name proposed by two or more own items,
+a note or a sent message, in any period and at any stage, qualifies, because a person writing
+about the same outcome twice is the strongest evidence there is that it is theirs to own. The
+discovery call then decides, as for everything else, whether that is a project, a task with steps,
+or nothing.
+
+**The index (D21).** Mail sync embeds each new message after it is saved, in the same bounded batch
+and outside the transaction, as a `read`. The embedding unit is: subject, then the parent message's
+own text to about 200 tokens (found by In-Reply-To in the store; when the parent is not stored the
+message's quoted block is kept as the context instead), then this message's own text. A message with
+fewer than about 40 tokens of own text gets no vector and inherits its parent's, since its meaning is
+the parent plus a yes or a no, which the model reads at discovery time, not the encoder. A note's unit is its title
+or first line, then the title of the linked event or the name of the linked contact, company,
+project or task when there is one, then its body; a note has no parent and is embedded when saved
+and re-embedded when edited. Longer units
+are chunked at about 256 tokens; the message vector is the mean of its chunks. The thread vector is
+the mean of its message vectors weighted by min(1, tokens ÷ 300), recomputed when a message arrives,
+so an acknowledgement barely moves it. Each row stores the encoder name and version; a changed
+encoder re-embeds by housekeeping (a system routine, D3), never inline. Embedding happens in the
+embedding service (§7), one shared stateless machine that scales to zero; the sync batches units
+per request and tolerates a cold start, and a service that is down leaves rows unembedded for
+housekeeping to fill later, never a failed sync.
+
+**Weighted drafting.** A draft is prepared when a thread's draft score crosses the organisation's
+threshold, not for every thread that needs the owner. The score is deterministic and explainable:
+the model's needs-owner verdict and a request category count for it; a known sender, a sender the
+person has replied to before, and a linked project or open task count for it; the sender's draft
+outcomes weigh most, sent or edited-then-sent up, discarded or not-needed down, and a draft the
+person asked for on a thread we did not draft is the strongest up signal. The initial rule before
+any outcomes exist is: needs owner and (known sender or request). At most twenty drafts per run
+on the large tier, so a burst cannot spend the allowance. Every draft records its outcome in
+`outbox` and the counts roll into `mail_senders`. On a thread with a draft the control is a split
+button: **Send** as the action, and in its menu Edit, Remind me later (tomorrow morning or next
+week, which sets remind-at and keeps the draft), Not needed (no reply wanted; a down signal for the
+sender on both drafting and needs-owner) and Discard (wrong draft; a down signal on drafting only).
+On a needs-you thread without a draft the split button is **Draft a reply** with Not needed and
+Remind me later in its menu. A draft untouched for seven days expires with a neutral outcome. D5
+is unchanged: only Send sends, and only a person presses it.
+
+**What it becomes.** The determination is four-way, and it is made twice: cheaply per thread inside
+the classify call, and properly over assembled evidence inside the discovery call. The definitions
+are the same in both instructions:
+
+- **A project** is work with an outcome that takes more than one exchange or more than one action,
+  or an intention still being discussed. It need not have tasks yet. Onboarding a can supplier,
+  this year's wholesale price list, or two mails weighing whether to open a taproom are projects;
+  the last is an idea-stage project whose whole substance is its brief.
+- **A task** is one concrete action with an owner. When it has a checklist of steps that are all
+  ours to do and finish together, such as update the prices, export the sheet and send it, the
+  steps are sub-tasks and the task is still one task. Sub-tasks never make a project.
+- **A relationship** is ongoing correspondence with a counterparty and no shared outcome. It links
+  the company and creates nothing.
+- **Nothing** is everything else.
+
+The classify step names a project per thread, with a stage of idea or underway, and returns tasks
+each with optional steps. Deterministic thresholds decide when a candidate is worth a discovery
+call: for a candidate marked underway, at least three threads across at least fourteen days; for a
+candidate marked idea, two threads, or one thread in which both parties wrote, because ideation is
+the moment a person most wants the project written down; or two or more suggested tasks in
+Obligations that share a counterparty and a reference, the concrete symptom of a missing project; or
+two or more own items, a note or a sent message, proposing the same name in any period; or a person
+choosing a thread or note and pressing Make this a project; or, on the first run, a cluster of the
+backlog. The discovery call then judges the assembled evidence and answers project, task,
+relationship or nothing. A project proposal carries its brief and any tasks, an idea-stage one
+carries the brief alone, and a task answer becomes one suggested task with its steps in the linked
+project or Obligations. Last, a person accepts. Proposing first steps for an idea-stage project is a
+later phase (§14 open questions); Phase 5 writes the project down and stops. The thresholds are
+constants until a second tenant shows they should be settings.
+
+**Retrieval.** A seed is embedded with the same unit rules. Candidates are threads and notes in
+the organisation scored by thread or note similarity plus the best single message similarity,
+then widened deterministically: the same counterparty company, shared references such as invoice
+or order numbers, the reply chain, the normalised subject, notes linked to the same event, company,
+project or task, and a window of sixty days either side of the seed.
+At most fifty candidates per seed. Every query runs under the tenant's RLS like any other read.
+
+**Association in triage.** For a thread that passes the gate, rules first: an existing link, a
+counterparty company linked to exactly one active project, or a reference that matches a task links
+the thread without the model. Otherwise the classify input carries the active projects' names and
+one-line descriptions (at most fifty, most recently active first) and the schema gains a project
+field: an existing project's name, none, or a proposed name. Code links only to a name that exists;
+a proposed name goes to `project_candidates`. Suggested tasks from a linked thread go to that project,
+otherwise to Obligations as today.
+
+**Discovery (D22).** One large-tier call per seed receives the seed and its candidates, trimmed and
+each carrying an opaque id, and returns: the ids that belong, kind ∈ project · relationship · noise,
+name, description, stage, tasks each with a title, reference, due date and evidence id, and open
+questions. Code discards any id outside the candidate set, writes a proposed project only for kind
+project, links the company for relationship and journals noise. Contacts, calendar events, Xero
+documents and existing tasks are attached by walking from the chosen threads with the existing
+links, never by the model. A candidate name becomes a seed when at least three threads across at
+least fourteen days proposed it; at most ten seeds run per invocation. On Commitments a proposed
+project shows its threads, tasks and evidence with Accept and Discard; accepting sets it active and
+its tasks open, discarding archives it and marks its candidate closed so it is not proposed again.
+Clusters tend to follow counterparties and topics, and some are relationships rather than work; the
+failure mode is a discarded proposal, never a wrong active project.

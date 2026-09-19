@@ -27,6 +27,8 @@ these administrative jobs. Per organisation, Captain keeps:
   contacts and companies, including contact details and notes.
 - Projects, tasks, recurring duties, owners, dates and evidence links; stock items, counts,
   count history, locations, suppliers and reorder points.
+- Notes you or your team write in Captain, with whatever event, contact, company, project or
+  task you attached them to. <!-- plan §5 Notes, D23; not yet built -->
 - Xero contacts, invoices, bills and payments; Shopify products, variants, quantities by location,
   reorder points and accessible orders, including customer name/email where supplied.
 - Workflow settings and journals, audit records of who changed what, inference runtime details,
