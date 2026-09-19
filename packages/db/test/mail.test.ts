@@ -17,6 +17,7 @@ before(async () => {
 		const [message] = await db.owner`insert into mail_messages (organisation_id, connection_id, thread_id, provider_id, from_header, to_header, cc_header, subject, date_header, sent_at, snippet, in_reply_to, body)
 			values (${org!.id}, ${conn!.id}, ${thread!.id}, 'm', 'from', 'to', '', 'subject', '', now(), 'snippet', '', 'body') returning id`;
 		await db.owner`insert into mail_attachments (organisation_id, message_id, part_id, filename, media_type, size) values (${org!.id}, ${message!.id}, '1', 'invoice.pdf', 'application/pdf', 123)`;
+		await db.owner`insert into mail_senders (organisation_id, email) values (${org!.id}, ${`${name.toLowerCase()}-sender@example.test`})`;
 		return { org: org!.id as string, connection: conn!.id as string, thread: thread!.id as string, message: message!.id as string };
 	}
 	a = await seed('A'); b = await seed('B');
@@ -48,3 +49,15 @@ it('attachment schema has no byte/content column; scheduler discovery returns on
 	await db.owner`update connections set status = 'disconnected' where id = ${b.connection}`;
 	assert.deepEqual((await db.app`select * from gmail_sync_organisations()`).map((r) => r.organisationId), [a.org]);
 });
+it('sender priors isolate by tenant and are keyed by address, not id', async () => {
+	assert.equal((await db.app`select email from mail_senders`).length, 0);
+	await withTenant(db.app, { organisationId: a.org }, async (tx) => {
+		assert.deepEqual((await tx`select email from mail_senders`).map((r) => r.email), ['a-sender@example.test']);
+		assert.equal((await tx`delete from mail_senders where organisation_id = ${b.org} returning email`).length, 0);
+	});
+	// A rejected statement aborts its transaction, so each refusal gets its own.
+	await assert.rejects(withTenant(db.app, { organisationId: a.org }, (tx) => tx`insert into mail_senders (organisation_id, email) values (${b.org}, 'x@example.test')`));
+	await assert.rejects(withTenant(db.app, { organisationId: a.org }, (tx) => tx`insert into mail_senders (organisation_id, email) values (${a.org}, 'Upper@example.test')`), /check/);
+	assert.equal((await db.owner`select email from mail_senders where organisation_id = ${b.org}`).length, 1);
+});
+

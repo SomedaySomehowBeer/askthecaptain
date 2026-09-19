@@ -95,3 +95,36 @@ it('HTTP outbox actions require membership; tenant tables reject cross-tenant re
   assert.equal((await request(`outbox/${draft.id}/discard`, memberSession.token, 'POST')).status, 200);
  } finally { await f.engine.close(); }
 });
+it('the gate files bulk, list and automated mail with no model call, learns a quiet sender, and a reply resets it', async () => {
+ const f = await triageFixture(db); try {
+  await f.mail('promo', 'deals@shop.test', 'Big sale on everything', { labelIds: ['INBOX', 'CATEGORY_PROMOTIONS'] });
+  await f.mail('list', 'news@list.test', 'This week in brewing', { listUnsubscribe: true });
+  await f.mail('robot', 'no-reply@bank.test', 'Your statement is ready');
+  for (const n of [1, 2, 3]) await f.mail(`quiet-${n}`, 'quiet@vendor.test', `FYI number ${n}.\nKind regards,\nQuiet\n> quoted line`);
+  await f.tx(sql => sql`update contacts set source = 'hand' where email = 'quiet@vendor.test'`);
+  // The fixture's verification call is already in the stub's log; count model calls from here.
+  const before = f.provider.requests.length;
+  f.provider.responses.push(result(classification()), result(classification()), result(classification()));
+  const run = await f.start(); await until(() => f.tx(sql => sql`select state, reason from workflow_runs where id = ${run}`), rows => rows[0]?.state === 'succeeded');
+  const rows = await f.tx(sql => sql`select t.provider_id, mt.model, mt.needs_owner, mt.summary from mail_triage mt join mail_threads t on t.id = mt.thread_id`);
+  const model = Object.fromEntries(rows.map(r => [r.providerId, r.model]));
+  assert.deepEqual(model, { promo: 'gate:category_promotions', list: 'gate:list_header', robot: 'gate:automated_sender', 'quiet-1': 'stub-claude', 'quiet-2': 'stub-claude', 'quiet-3': 'stub-claude' });
+  assert.ok(rows.every(r => r.needsOwner === false)); assert.match(rows.find(r => r.providerId === 'promo')!.summary, /Promotions/);
+  assert.equal(f.provider.requests.length, before + 3);
+  // The model saw own text only: the sign-off and the quoted line were cut before the request left.
+  assert.ok(!JSON.stringify(f.provider.requests).includes('quoted line')); assert.ok(!JSON.stringify(f.provider.requests).includes('Kind regards'));
+  assert.equal((await f.tx(sql => sql`select 1 from audit_events where action = 'mail.filed'`)).length, 3);
+  const [quiet] = await f.tx(sql => sql`select threads_seen, information_verdicts, needs_owner_count from mail_senders where email = 'quiet@vendor.test'`);
+  assert.deepEqual(quiet, { threadsSeen: 3, informationVerdicts: 3, needsOwnerCount: 0 });
+  await f.mail('quiet-4', 'quiet@vendor.test', 'FYI number 4');
+  const second = await f.start(); await until(() => f.tx(sql => sql`select state from workflow_runs where id = ${second}`), rows => rows[0]?.state === 'succeeded');
+  assert.equal((await f.tx(sql => sql`select model from mail_triage mt join mail_threads t on t.id = mt.thread_id where t.provider_id = 'quiet-4'`))[0]!.model, 'gate:sender_prior');
+  assert.equal(f.provider.requests.length, before + 3);
+  await f.tx(sql => sql`update mail_senders set replies = 1 where email = 'quiet@vendor.test'`); f.provider.responses.push(result(classification()));
+  await f.mail('quiet-5', 'quiet@vendor.test', 'FYI number 5');
+  const third = await f.start(); await until(() => f.tx(sql => sql`select state from workflow_runs where id = ${third}`), rows => rows[0]?.state === 'succeeded');
+  assert.equal((await f.tx(sql => sql`select model from mail_triage mt join mail_threads t on t.id = mt.thread_id where t.provider_id = 'quiet-5'`))[0]!.model, 'stub-claude');
+  assert.equal(f.provider.requests.length, before + 4);
+ } finally { await f.engine.close(); }
+});
+

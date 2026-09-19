@@ -40,7 +40,9 @@ const optional = (value: unknown) => value === undefined ? undefined : string(va
 const id = (value: unknown) => { const result = string(value); if (!result) throw new GmailError(); return result; };
 export type MailAttachment = { partId: string; filename: string; mediaType: string; size: number; providerAttachmentId: string | null };
 export type MailMessage = { providerId: string; fromHeader: string; toHeader: string; ccHeader: string; bccHeader: string; subject: string; dateHeader: string;
-	rfcMessageId?: string; sentAt: string; snippet: string; labelIds: string[]; inReplyTo: string; body: string; bodyUnavailable: boolean; attachments: MailAttachment[] };
+	rfcMessageId?: string; sentAt: string; snippet: string; labelIds: string[]; inReplyTo: string; body: string; bodyUnavailable: boolean; attachments: MailAttachment[];
+	/** List and automation headers for the triage gate (D20). Optional so stored fixtures need not carry them. */
+	listUnsubscribe?: boolean; listId?: string; precedence?: string; autoSubmitted?: string };
 export type MailThread = { providerId: string; messages: MailMessage[] };
 export type HistoryPage = { threadIds: string[]; historyId: string; nextPageToken?: string };
 
@@ -92,7 +94,8 @@ function parseMessage(value: unknown): MailMessage {
 	const sent = new Date(Number(internalDate)); if (!Number.isFinite(sent.getTime())) throw new GmailError();
 	const text = body(payload, '0', 0);
 	return { providerId: id(m.id), fromHeader: h.from ?? '', toHeader: h.to ?? '', ccHeader: h.cc ?? '', bccHeader: h.bcc ?? '', subject: h.subject ?? '', dateHeader: h.date ?? '',
-		rfcMessageId: h['message-id'] ?? '', sentAt: sent.toISOString(), snippet: strip(optional(m.snippet) ?? ''), labelIds: strings(m.labelIds), inReplyTo: h['in-reply-to'] ?? '', body: text, bodyUnavailable: unavailable && !text, attachments };
+		rfcMessageId: h['message-id'] ?? '', sentAt: sent.toISOString(), snippet: strip(optional(m.snippet) ?? ''), labelIds: strings(m.labelIds), inReplyTo: h['in-reply-to'] ?? '',
+		listUnsubscribe: Boolean(h['list-unsubscribe']), listId: (h['list-id'] ?? '').slice(0, 300), precedence: (h['precedence'] ?? '').slice(0, 40).toLowerCase(), autoSubmitted: (h['auto-submitted'] ?? '').slice(0, 40).toLowerCase(), body: text, bodyUnavailable: unavailable && !text, attachments };
 }
 
 /** First-party Gmail REST client. Responses are validated and errors never contain provider bodies. */

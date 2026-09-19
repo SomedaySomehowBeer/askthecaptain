@@ -39,6 +39,14 @@
             "value": "<previous@example.test>"
           },
           {
+            "name": "List-Unsubscribe",
+            "value": "<mailto:leave@example.test>"
+          },
+          {
+            "name": "Precedence",
+            "value": "Bulk"
+          },
+          {
             "name": "Bcc",
             "value": "Private <private@example.test>"
           }

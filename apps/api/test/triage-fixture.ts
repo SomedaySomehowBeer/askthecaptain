@@ -52,9 +52,9 @@ export async function triageFixture(db: Harness) {
  const workflows = new WorkflowService(db.app, null, engine); await workflows.sync();
  await workflows.enable(actor, org, 'inbox-triage', { enabled: true, parameters: { replyStyle: 'Short and warm.', draftReplies: true } });
  const outbox = new OutboxService(db.app, connections, (sql, tenant, run, key) => engine.wake(sql, tenant, run, key), gmail);
- async function mail(id = 'thread-one', sender = 'supplier@example.test', body = 'Delivery Thursday. INV-42') {
+ async function mail(id = 'thread-one', sender = 'supplier@example.test', body = 'Delivery Thursday. INV-42', extra: { labelIds?: string[]; listUnsubscribe?: boolean; precedence?: string } = {}) {
   await tx(async sql => {
-   await saveThread(sql, org, conn, { providerId: id, messages: [{ providerId: id + '-message', rfcMessageId: `<${id}@supplier.test>`, fromHeader: sender, toHeader: conn.accountEmail, ccHeader: '', bccHeader: '', subject: 'Delivery update', dateHeader: '', sentAt: new Date().toISOString(), snippet: 'Delivery update', labelIds: ['INBOX'], inReplyTo: '', body, bodyUnavailable: false,
+   await saveThread(sql, org, conn, { providerId: id, messages: [{ providerId: id + '-message', rfcMessageId: `<${id}@supplier.test>`, fromHeader: sender, toHeader: conn.accountEmail, ccHeader: '', bccHeader: '', subject: 'Delivery update', dateHeader: '', sentAt: new Date().toISOString(), snippet: 'Delivery update', labelIds: extra.labelIds ?? ['INBOX'], listUnsubscribe: extra.listUnsubscribe ?? false, precedence: extra.precedence ?? '', inReplyTo: '', body, bodyUnavailable: false,
     attachments: [{ partId: '1', filename: 'delivery.pdf', mediaType: 'application/pdf', size: 100, providerAttachmentId: 'pdf' }, { partId: '2', filename: 'delivery.csv', mediaType: 'text/csv', size: 100, providerAttachmentId: 'csv' }] }] });
    await upkeepContacts(sql, org, conn.accountEmail);
   });
