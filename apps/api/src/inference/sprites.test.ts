@@ -33,8 +33,10 @@ test('provision creates, uploads the files under 0600, starts the service, makes
 
 test('an existing Sprite is reused, a failure names the operation and status but no body, and destroy tolerates 404', async () => {
 	calls.length = 0;
-	const client = new SpritesClient('t', fake({ 'POST /v1/sprites': [409, { error: 'exists' }], 'PUT /v1/sprites/captain-x/fs/write': [500, { error: 'PRIVATE-DETAIL' }] }));
-	await assert.rejects(client.provision('captain-x', { 'shim.mjs': Buffer.from('x') }), (e: unknown) => e instanceof SpritesError && e.op === 'write shim.mjs' && e.status === 500 && !e.message.includes('PRIVATE'));
+	const client = new SpritesClient('t', fake({ 'POST /v1/sprites': [409, { error: 'exists' }], 'PUT /v1/sprites/captain-x/fs/write': [500, { error: 'PRIVATE-DETAIL', message: 'private words' }] }));
+	await assert.rejects(client.provision('captain-x', { 'shim.mjs': Buffer.from('x') }), (e: unknown) => e instanceof SpritesError && e.op === 'write shim.mjs' && e.status === 500 && e.reason === null && !e.message.includes('PRIVATE') && !e.message.includes('private words'));
+	const forbidden = new SpritesClient('t', fake({ 'POST /v1/sprites': [403, { error: 'org_not_enabled', message: 'Contact support about org ACME' }] }));
+	await assert.rejects(forbidden.provision('captain-x', {}), (e: unknown) => e instanceof SpritesError && e.status === 403 && e.reason === 'org_not_enabled' && !e.message.includes('ACME'));
 	await assert.rejects(client.provision('Bad Name', {}), (e: unknown) => e instanceof SpritesError && e.op === 'create');
 	const gone = new SpritesClient('t', fake({ 'DELETE /v1/sprites/captain-x': [404, null] }));
 	await gone.destroy('captain-x');
