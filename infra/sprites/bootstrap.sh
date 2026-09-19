@@ -15,11 +15,20 @@ if ! command -v node >/dev/null; then say 'node is not on PATH'; exit 1; fi
 if ! node -e 'if (Number(process.versions.node.split(".")[0]) < 22) process.exit(1)'; then say "node $(node --version) is older than 22"; exit 1; fi
 npm_bin="$(dirname "$(command -v node)")/npm"; [ -x "$npm_bin" ] || npm_bin="$(command -v npm || true)"
 if [ -z "$npm_bin" ]; then say 'npm is not installed beside node'; exit 1; fi
-if ! codex --version 2>/dev/null | grep -q '^codex-cli 0.154.0$' || ! claude --version 2>/dev/null | grep -q '^2.1.272 '; then
+claude_ok() { claude --version 2>/dev/null | grep -q '^2.1.272 '; }
+codex_ok() { codex --version 2>/dev/null | grep -q '^codex-cli 0.154.0$'; }
+if ! codex_ok || ! claude_ok; then
 	say 'installing the pinned CLIs'
 	mkdir -p "$prefix"
-	"$npm_bin" install -g --prefix "$prefix" @anthropic-ai/claude-code@2.1.272 @openai/codex@0.154.0
+	"$npm_bin" install -g --prefix "$prefix" --ignore-scripts=false @anthropic-ai/claude-code@2.1.272 @openai/codex@0.154.0
 fi
+# Claude Code's postinstall downloads its native binary; on a Sprite it did not run with the install (2026-09-19).
+if ! claude_ok && [ -f "$prefix/lib/node_modules/@anthropic-ai/claude-code/install.cjs" ]; then
+	say 'running the Claude Code postinstall'
+	node "$prefix/lib/node_modules/@anthropic-ai/claude-code/install.cjs"
+fi
+claude_ok || { say "claude is not usable: $(claude --version 2>&1 | head -1)"; exit 1; }
+codex_ok || { say "codex is not usable: $(codex --version 2>&1 | head -1)"; exit 1; }
 if [ ! -d "$root" ]; then
 	mkdir -p "$root"
 	# NEW Sprite only: remove bundled agent integrations before either CLI sees them.
