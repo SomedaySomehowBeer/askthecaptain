@@ -18,6 +18,7 @@ import { GmailPush, startGmailPushSchedule } from './mail/push.ts';
 import { GmailWatch } from './mail/watch.ts';
 import { CalendarSync, startCalendarSchedule } from './calendar/sync.ts';
 import { InferenceService } from './inference/service.ts';
+import { SpritesClient } from './inference/sprites.ts';
 import { MailSync, startMailSchedule } from './mail/sync.ts';
 import { GoogleConnector } from '@captain/connectors';
 import { ConnectionService } from './connections/service.ts';
@@ -47,7 +48,8 @@ if (!google) console.warn('[api] Google sign-in is not configured (GOOGLE_CLIENT
 const connections = new ConnectionService(db, env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 	? new GoogleConnector(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/connections/google/callback', env.API_URL).toString()) : null,
 	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
-const inference = new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null);
+const inference = new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, undefined, env.SPRITES_API_TOKEN ? new SpritesClient(env.SPRITES_API_TOKEN) : null);
+if (!env.SPRITES_API_TOKEN) console.warn('[api] Sprites is not configured (SPRITES_API_TOKEN); inference runtimes cannot be created');
 const pushKeys = env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY && env.WEB_PUSH_SUBJECT ? { publicKey: env.WEB_PUSH_PUBLIC_KEY, privateKey: env.WEB_PUSH_PRIVATE_KEY, subject: env.WEB_PUSH_SUBJECT } : null;
 if (!pushKeys) console.warn('[api] Web Push is not configured (WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY / WEB_PUSH_SUBJECT)');
 const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, pushKeys?.publicKey ?? null);

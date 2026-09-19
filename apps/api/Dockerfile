@@ -9,6 +9,8 @@ COPY apps/api/package.json apps/api/
 COPY packages ./packages
 RUN pnpm install --frozen-lockfile --filter @captain/api...
 COPY apps/api ./apps/api
+# The inference Sprite's bootstrap files, uploaded by the API when an owner sets up a subscription (D18).
+COPY infra/sprites ./infra/sprites
 RUN pnpm --filter @captain/api build \
  && test -f /repo/packages/engine/src/install.ts \
  && pnpm --filter @captain/api exec node --import tsx --input-type=module -e "await import('@captain/engine')"

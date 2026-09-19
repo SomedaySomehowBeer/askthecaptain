@@ -24,6 +24,8 @@ const schema = z.object({
 	WEB_PUSH_PRIVATE_KEY: z.string().min(1).optional(),
 	WEB_PUSH_SUBJECT: z.string().regex(/^mailto:.+@.+$/).optional(),
 	MASTER_KEY: z.string().regex(/^[A-Za-z0-9+/]{43}=$/).optional(),
+	/** A Sprites API token scoped to the organisation that holds only Captain runtimes (D18). Absent: runtimes cannot be created. */
+	SPRITES_API_TOKEN: z.string().min(1).optional(),
 	GOOGLE_CLIENT_ID: z.string().optional(),
 	GOOGLE_CLIENT_SECRET: z.string().optional(),
 	SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30)

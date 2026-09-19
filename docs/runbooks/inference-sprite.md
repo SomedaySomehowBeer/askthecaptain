@@ -27,44 +27,35 @@ The documented create command has no region flag: record the actual region, or
 `unknown`, rather than claiming Sydney. Confirm region availability with Fly if
 residency is required before provisioning.
 
-## Owner/operator setup (creates billable resources)
+## Setup
 
-1. Configure API `MASTER_KEY` using the existing D16 process. In Settings →
-   Inference choose Claude or Codex and set a monthly token allowance. Zero is the
-   initial allowance and prevents probes as well as workflow inference.
-2. On the operator's machine install `sprite` from its official instructions and
-   authenticate with `sprite org auth`. Set **non-secret** `ATC_ORGANISATION_ID`,
-   `ATC_PROVIDER` (`claude` or `codex`) and `ATC_FLY_ORG`; run
-   `infra/sprites/provision.sh`. Run once per new runtime; inspect and clean up any
-   partial failure manually, never create a second Sprite for the same tenant.
-3. The script generates `/opt/captain/runtime.json` on the Sprite (mode 0600),
-   starts the service and prints its exact HTTPS URL. It does not print the secret.
-   It deliberately makes URL routing public because the shim supplies its own
-   authentication. Do not add other services or routes to this Sprite.
-4. Run `sprite exec -o <fly-org> -s captain-<organisation-uuid> --tty -- python3
-   /opt/captain/login.py <provider>` (as one line). This wrapper runs unmodified
-   `claude setup-token` or `codex login --device-auth` on the Sprite. It displays
-   only allowlisted sign-in URLs and device codes. Claude's generated long-lived
-   token is captured into `/opt/captain/claude-token` (0600), never echoed; Codex
-   stores its own login in `/home/sprite/.codex/auth.json`.
-5. While that session waits, open a second Sprite console and run
-   `node /opt/captain/register.mjs`. Supply the API HTTPS origin, organisation,
-   exact Sprite URL/name, region and account email. Paste the current sign-in URL
-   from step 4. Supply an owner Captain session at the hidden prompt; obtain it
-   from your own signed-in browser cookie without pasting it into chat, a command,
-   history or a log. Registration sends the generated secret directly from the
-   Sprite to the owner-only `/inference/runtime/configure` endpoint for encryption.
-6. Refresh Settings → Inference and select **Complete sign-in**. Enter Codex's
-   device code, or paste Claude's returned code into the waiting Sprite session.
-   These CLI logins require that operator session; a link alone is not sufficient.
-   If the URL expires, restart step 4 and register the fresh URL. Run **Verify
-   sign-in** after login completes. Verification checks `/health` and asks for the
-   empty JSON object with `maxTokens: 1`, accounting for its actual usage.
+**Operator, once per platform.** Create a Sprites organisation that will hold nothing but Captain
+runtimes, generate an API token for it at sprites.dev/account, and set it as the API secret
+`SPRITES_API_TOKEN`. Without it Settings → Inference says runtimes cannot be created yet. The
+token can create and destroy Sprites and write files to them; keep it out of every other system.
 
-The implementation was verified locally with stubs and an isolated fake provider,
-not a live subscription or provisioned Sprite. The owner must verify the pinned
-CLI installation, sign-in and wake behaviour on the first Sprite before enabling
-workflows. Ryan owns the Anthropic hosting-clause consideration before operating
+**Owner, from any device.**
+
+1. Configure API `MASTER_KEY` using the existing D16 process (operator). In Settings → Inference
+   set a monthly token allowance above zero; zero prevents probes as well as workflow inference.
+2. Choose Claude or Codex and press **Set up subscription**. The API creates the Sprite
+   `captain-<organisation-uuid>` through the Sprites HTTP API, uploads `infra/sprites/*` and a
+   generated `runtime.json` (provider and per-Sprite secret, mode 0600) to
+   `/home/sprite/captain-setup`, defines the `inference` service running `bootstrap.sh`, starts it,
+   makes the Sprite URL public (the shim authenticates every route itself) and stores the URL and
+   secret sealed with the organisation's data key. The status reads **Setting up**.
+3. `bootstrap.sh` installs the pinned CLIs when missing, lays out `/opt/captain`, moves the secret
+   there and execs the shim. When the shim answers `/health`, refreshing Settings moves the status
+   to **Needs sign-in**. First boot takes a few minutes.
+4. Sign in from Settings (landing with the next pull request; until then `login.py` remains on the
+   Sprite for an operator with `sprite exec`). Then **Verify sign-in**.
+5. **Disconnect runtime** destroys the Sprite through the same API, and the subscription login
+   with it. A partial failure leaves the status **Failed** with the operation and HTTP status in
+   the audit journal; disconnect and set up again.
+
+The implementation was verified with stubs and an isolated fake Sprites API, not a live Sprite.
+The owner must verify the pinned CLI installation, sign-in and wake behaviour on the first Sprite
+before enabling workflows. Ryan owns the Anthropic hosting-clause consideration before operating
 Claude; this runbook does not make a legal determination.
 
 ## Data-only invocation

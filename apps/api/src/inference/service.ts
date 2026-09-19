@@ -6,10 +6,16 @@ import { SpriteProvider } from '@captain/model/sprite';
 import { newDataKey, open, seal } from '../connections/encryption.ts';
 import { badRequest, forbidden, HttpError, notFound } from '../errors.ts';
 import { roleOf, type Actor } from '../tenant.ts';
+import { spriteFiles, SpritesError, type Provisioner } from './sprites.ts';
+import { randomBytes } from 'node:crypto';
 const publicRuntime = (runtime: store.Runtime | undefined) => runtime && (({ connectionEncrypted: _, ...visible }) => visible)(runtime);
 export class InferenceService {
  private readonly db: Sql; private readonly master: Buffer | null; private readonly providerFactory: (url: string, secret: string) => Provider;
- constructor(db: Sql, master: Buffer | null, providerFactory: (url: string, secret: string) => Provider = (url, secret) => new SpriteProvider(url, secret)) { this.db = db; this.master = master; this.providerFactory = providerFactory; }
+ /** The Sprites API, when the platform holds a token (D18); null means runtimes cannot be created here. */
+ private readonly sprites: Provisioner | null; private readonly files: typeof spriteFiles;
+ constructor(db: Sql, master: Buffer | null, providerFactory: (url: string, secret: string) => Provider = (url, secret) => new SpriteProvider(url, secret), sprites: Provisioner | null = null, files: typeof spriteFiles = spriteFiles) {
+  this.db = db; this.master = master; this.providerFactory = providerFactory; this.sprites = sprites; this.files = files;
+ }
  private async owner(actor: Actor, organisationId: string) { if (await roleOf(this.db, actor.userId, organisationId) !== 'owner') throw forbidden('Only an owner can manage inference sign-in.'); }
  private configured() { if (!this.master) throw badRequest('runtime_not_ready', 'Inference is disabled. Ask the operator to configure encryption.'); return this.master; }
  private async provider(tx: Parameters<typeof store.getRuntime>[0], organisationId: string, runtime: store.Runtime) {
@@ -23,16 +29,49 @@ export class InferenceService {
  }
  async get(actor: Actor, organisationId: string) {
   const role = await roleOf(this.db, actor.userId, organisationId);
-  return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => ({ role, disabled: !this.master,
-   runtime: publicRuntime(await store.getRuntime(tx, organisationId)) ?? null, budget: await store.budget(tx, organisationId), usage: await store.usageByTier(tx, organisationId) }));
+  return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
+   let runtime = await store.getRuntime(tx, organisationId);
+   // Setting up: once the shim answers /health the CLIs are installed and sign-in can begin. Only the owner may move the row.
+   if (runtime?.status === 'provisioning' && runtime.connectionEncrypted && role === 'owner' && await this.answers(tx, organisationId, runtime)) {
+    await store.runtimeState(tx, organisationId, 'needs_login'); runtime = await store.getRuntime(tx, organisationId);
+   }
+   return { role, disabled: !this.master, spritesConfigured: Boolean(this.sprites), runtime: publicRuntime(runtime) ?? null, budget: await store.budget(tx, organisationId), usage: await store.usageByTier(tx, organisationId) };
+  });
+ }
+ private async answers(tx: Parameters<typeof store.getRuntime>[0], organisationId: string, runtime: store.Runtime) {
+  try { const provider = await this.provider(tx, organisationId, runtime); await Promise.race([provider.health(), new Promise((_, reject) => setTimeout(() => reject(new Error('slow')), 4000).unref())]); return true; }
+  catch { return false; }
  }
  async request(actor: Actor, organisationId: string, provider: SubscriptionProviderName) {
-  await this.owner(actor, organisationId); this.configured();
-  return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
+  await this.owner(actor, organisationId); const master = this.configured();
+  // Without a Sprites token the record is created and an operator attaches a Sprite by hand (the configure route).
+  if (!this.sprites) return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
    const runtime = await store.createRuntime(tx, organisationId, actor.userId, provider);
    if (!runtime) throw badRequest('runtime_exists', 'Remove the existing runtime before choosing another provider.');
-   return { runtime: publicRuntime(runtime), instructions: `The operator runs infra/sprites/provision.sh for organisation ${organisationId}, then follows docs/runbooks/inference-sprite.md to sign in and verify. Creating this record does not create a Fly resource.` };
+   return { runtime: publicRuntime(runtime), instructions: 'This platform has no Sprites token configured. An operator attaches a runtime by hand, following docs/runbooks/inference-sprite.md.' };
   });
+  const created = await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
+   const runtime = await store.createRuntime(tx, organisationId, actor.userId, provider);
+   if (!runtime) throw badRequest('runtime_exists', 'Remove the existing runtime before choosing another provider.');
+   return runtime;
+  });
+  // The Sprite is created outside any transaction: several HTTP calls, then the connection is sealed and stored (D16).
+  const spriteName = `captain-${organisationId}`; const secret = randomBytes(32).toString('hex');
+  try {
+   const { url, region } = await this.sprites.provision(spriteName, await this.files(provider, secret));
+   new SpriteProvider(url, secret); // Enforce the exact HTTPS Sprite origin before storing it.
+   await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
+    const fresh = newDataKey(master, organisationId); const wrapped = await store.dataKey(tx, organisationId, fresh.wrapped);
+    const key = open(master, wrapped!, organisationId, 'data_key');
+    await store.getRuntime(tx, organisationId, true);
+    await store.configureRuntime(tx, organisationId, { spriteName, region, loginHint: null, loginUrl: null, status: 'provisioning', encrypted: seal(key, Buffer.from(JSON.stringify({ url, secret })), organisationId, 'inference_connection') });
+   });
+  } catch (error) {
+   const code = error instanceof SpritesError ? `sprites_${error.op.split(' ')[0]}_${error.status}` : 'provisioning_failed';
+   await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => { await store.dataKey(tx, organisationId); await store.getRuntime(tx, organisationId, true); await store.runtimeState(tx, organisationId, 'failed', code); });
+   throw new HttpError(503, 'provisioning_failed', 'Captain could not create the runtime. Disconnect it and try again; if it keeps failing, ask the operator.');
+  }
+  return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => ({ runtime: publicRuntime(await store.getRuntime(tx, organisationId)), instructions: 'Captain is setting up your runtime. This takes a few minutes the first time; refresh to check.', created: created.id }));
  }
  async configure(actor: Actor, organisationId: string, input: { url: string; secret: string; spriteName: string; region: string; loginHint: string | null; loginUrl: string | null }) {
   await this.owner(actor, organisationId); const master = this.configured();
@@ -49,12 +88,15 @@ export class InferenceService {
  }
  async remove(actor: Actor, organisationId: string) {
   await this.owner(actor, organisationId);
-  await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
-   await store.dataKey(tx, organisationId);
-   if (!await store.getRuntime(tx, organisationId, true)) throw notFound();
-   await store.runtimeState(tx, organisationId, 'removed');
-  });
-  return { instructions: 'The connection secret has been removed from Captain. The operator must destroy the Sprite to remove its subscription login.' };
+  const runtime = await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => { await store.dataKey(tx, organisationId); return store.getRuntime(tx, organisationId); });
+  if (!runtime) throw notFound();
+  // Destroying the Sprite removes the subscription login with it; a Sprite that is already gone is fine.
+  if (this.sprites && runtime.spriteName && runtime.status !== 'removed') {
+   try { await this.sprites.destroy(runtime.spriteName); }
+   catch { throw new HttpError(503, 'sprites_unavailable', 'Captain could not remove the runtime just now. Try again in a minute.'); }
+  }
+  await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => { await store.dataKey(tx, organisationId); await store.getRuntime(tx, organisationId, true); await store.runtimeState(tx, organisationId, 'removed'); });
+  return { instructions: this.sprites ? 'The runtime and its sign-in are gone. Set up a subscription again whenever you like.' : 'The connection secret has been removed from Captain. The operator must destroy the Sprite to remove its subscription login.' };
  }
  async setBudget(actor: Actor, organisationId: string, limit: number) {
   if (await roleOf(this.db, actor.userId, organisationId) === 'member') throw forbidden('Only an owner or admin can change the allowance.');
