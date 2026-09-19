@@ -9,11 +9,11 @@ export type Provisioned = { url: string; region: string };
 export interface Provisioner { provision(spriteName: string, files: Record<string, Buffer>): Promise<Provisioned>; destroy(spriteName: string): Promise<void> }
 export class SpritesError extends Error {
 	readonly op: string; readonly status: number;
-	/** The API's machine-readable error code (its `error` field, letters and underscores only), never its message. */
+	/** The API's `error` field as a slug: a code or a plain lowercase sentence ("restricted tokens cannot set labels"), never anything with names, digits or punctuation. */
 	readonly reason: string | null;
 	constructor(op: string, status: number, reason: string | null = null) { super(`sprites ${op} failed with status ${status}${reason ? ` (${reason})` : ''}`); this.name = 'SpritesError'; this.op = op; this.status = status; this.reason = reason; }
 }
-const reasonShape = /^[a-z][a-z0-9_]{0,63}$/;
+const reasonShape = /^[a-z][a-z _-]{0,79}$/;
 
 /** Where the API writes the runtime's files on the Sprite; bootstrap.sh moves the secret out of it. */
 export const setupDir = '/home/sprite/captain-setup';
@@ -32,7 +32,7 @@ export class SpritesClient implements Provisioner {
 		} catch { throw new SpritesError(op, 0); }
 		if (!ok.includes(response.status)) {
 			let reason: string | null = null;
-			try { const data = JSON.parse((await response.text()).slice(0, 4096)) as { error?: unknown }; if (typeof data.error === 'string' && reasonShape.test(data.error)) reason = data.error; } catch { /* no usable code */ }
+			try { const data = JSON.parse((await response.text()).slice(0, 4096)) as { error?: unknown }; if (typeof data.error === 'string' && reasonShape.test(data.error)) reason = data.error.trim().replace(/[ -]+/g, '_'); } catch { /* no usable code */ }
 			throw new SpritesError(op, response.status, reason);
 		}
 		const text = await response.text().catch(() => '');
@@ -41,7 +41,8 @@ export class SpritesClient implements Provisioner {
 	async provision(name: string, files: Record<string, Buffer>): Promise<Provisioned> {
 		if (!spriteName.test(name)) throw new SpritesError('create', 0);
 		// 409 means it already exists: never create a second Sprite for the same organisation; finish setting it up.
-		await this.#call('create', 'POST', '/v1/sprites', { name, labels: ['captain'] }, [201, 409]);
+		// No labels: a restricted token (the kind an owner should make) may not set them.
+		await this.#call('create', 'POST', '/v1/sprites', { name }, [200, 201, 409]);
 		for (const [file, bytes] of Object.entries(files)) {
 			const q = new URLSearchParams({ path: `${setupDir}/${file}`, mode: '0600', mkdirParents: 'true' });
 			await this.#call(`write ${file}`, 'PUT', `/v1/sprites/${name}/fs/write?${q}`, bytes);
