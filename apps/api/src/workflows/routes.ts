@@ -2,11 +2,13 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { badRequest } from '../errors.ts';
 import type { Session } from '../auth/service.ts';
+import { catalog } from '@captain/steps';
 import type { WorkflowService } from './service.ts';
 
 type Vars = { Variables: { requestId: string; session: Session } };
 const uuid = z.string().uuid();
 const key = z.string().regex(/^[a-z][a-z0-9-]{1,40}$/);
+const stepWords = Object.fromEntries(Object.entries(catalog).map(([k, entry]) => [k, { kind: entry.kind, does: entry.does, until: entry.until ?? null }]));
 
 /** The workflow catalogue, enablement and journal under an organisation. Mounted inside the
  *  signed-in router; the service checks membership and role on every call. */
@@ -15,7 +17,8 @@ export function workflowRoutes(workflows: WorkflowService) {
 	const actor = (c: { get(key: 'session'): Session; get(key: 'requestId'): string }) => ({ userId: c.get('session').userId, requestId: c.get('requestId') });
 	const org = (c: { req: { param(name: 'id'): string } }) => uuid.parse(c.req.param('id'));
 
-	routes.get('/v1/organisations/:id/workflows', async (c) => c.json({ workflows: await workflows.list(actor(c), org(c)) }));
+	// The catalogue's words travel with the definitions so Settings can show each step in plain language.
+	routes.get('/v1/organisations/:id/workflows', async (c) => c.json({ workflows: await workflows.list(actor(c), org(c)), catalog: stepWords }));
 	routes.put('/v1/organisations/:id/workflows/:key', async (c) => {
 		const input = z.object({ enabled: z.boolean(), parameters: z.record(z.string(), z.unknown()).optional() }).parse(await c.req.json());
 		return c.json(await workflows.enable(actor(c), org(c), key.parse(c.req.param('key')), input));

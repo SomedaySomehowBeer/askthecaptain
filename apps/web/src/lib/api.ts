@@ -52,7 +52,14 @@ export type Commitments = { projects: Project[]; tasks: Task[]; series: Series[]
 // Workflows (D3, D4)
 export type WorkflowParameterSpec = { type: 'text'; description: string; default?: string; required?: boolean; maxLength?: number } | { type: 'boolean'; description: string; default: boolean } | { type: 'number'; description: string; default: number; min?: number; max?: number };
 export type WorkflowTrigger = { kind: 'event'; event: string } | { kind: 'daily'; at: string } | { kind: 'weekly'; day: string; at: string } | { kind: 'manual' };
-export type WorkflowDefinition = { key: string; version: number; name: string; description: string; job: number; triggers: WorkflowTrigger[]; parameters: Record<string, WorkflowParameterSpec>; steps: unknown[] };
+/** A definition's steps as the API sends them (packages/steps `definition.ts`, plan §6). */
+export type WorkflowPredicate = { truthy: string } | { eq: [string, string | number | boolean | null] } | { gt: [string, number] } | { lt: [string, number] } | { param: string } | { not: WorkflowPredicate } | { and: WorkflowPredicate[] } | { or: WorkflowPredicate[] };
+export type WorkflowArg = string | number | boolean | null | { ref: string } | { param: string } | string[];
+export type WorkflowActionStep = { kind: 'read' | 'infer' | 'write' | 'await' | 'notify'; key: string; args?: Record<string, WorkflowArg>; as?: string; when?: WorkflowPredicate; schema?: string; tier?: 'small' | 'large'; timeoutDays?: number };
+export type WorkflowStep = WorkflowActionStep | { kind: 'each'; list: string; steps: WorkflowStep[]; independent?: boolean } | { kind: 'branch'; when: WorkflowPredicate; then: WorkflowStep[]; else?: WorkflowStep[] };
+export type WorkflowDefinition = { key: string; version: number; name: string; description: string; job: number; triggers: WorkflowTrigger[]; parameters: Record<string, WorkflowParameterSpec>; steps: WorkflowStep[] };
+/** What each catalogue step does, in the catalogue's words. */
+export type WorkflowCatalog = Record<string, { kind: string; does: string; until: string | null }>;
 export type WorkflowEnablement = { id: string; enabled: boolean; enabledBy: string | null; enabledByName: string | null; parameters: Record<string, unknown>; updatedAt: string; definitionVersion: number };
 export type OfferedWorkflow = { definition: WorkflowDefinition; requirements: string[]; unmet: { requirement: string; words: string }[]; enablement: WorkflowEnablement | null; runnerProblem?: string | null };
 export type WorkflowRun = { id: string; definitionKey: string; definitionVersion: number; trigger: unknown; state: string; reason: string | null; startedAt: string | null; finishedAt: string | null; createdAt: string };

@@ -44,8 +44,10 @@ it('the catalogue is synced from code, idempotently, and offered with what each 
 	assert.equal(await workflows.sync(), definitions.length);
 	const rows = await db.owner`select key, version, digest from workflow_definitions order by key`;
 	assert.equal(rows.length, definitions.length);
-	const offered = await body<{ workflows: Offered[] }>(await json('GET', `/v1/organisations/${orgId}/workflows`, owner.token), 200);
+	const offered = await body<{ workflows: Offered[]; catalog: Record<string, { kind: string; does: string; until: string | null }> }>(await json('GET', `/v1/organisations/${orgId}/workflows`, owner.token), 200);
 	assert.deepEqual(offered.workflows.map((w) => w.definition.key), definitions.map((d) => d.key));
+	assert.equal(offered.catalog['gmail.newThreads']?.does, 'reads mail threads that arrived since the last run');
+	assert.equal(offered.catalog['outbox.sent']?.until, 'the draft is sent or discarded');
 	const triage = offered.workflows.find((w) => w.definition.key === 'inbox-triage')!;
 	assert.deepEqual(triage.unmet.map((u) => u.requirement).sort(), ['connection:google', 'inference']);
 	assert.equal(triage.enablement, null);

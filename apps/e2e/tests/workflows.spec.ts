@@ -21,6 +21,24 @@ test.describe('workflows', () => {
 		await expect(page.getByText('No runs yet.')).toBeVisible();
 	});
 
+	test('each workflow is drawn as its steps, in words, with loops and conditions as blocks', async ({ page }) => {
+		await page.goto(`${webUrl()}/settings/workflows`);
+		const triage = page.getByRole('list', { name: 'The steps of Inbox triage' });
+		await expect(triage).toContainText('Starts');
+		await expect(triage).toContainText('When mail arrives, and every day at 06:00.');
+		await expect(triage).toContainText('Reads mail threads that arrived since the last run');
+		await expect(triage).toContainText('For each thread in');
+		await expect(triage).toContainText('Classifies a thread');
+		await expect(triage).toContainText('The small model, answering in the “triage” shape.');
+		await expect(triage).toContainText('triage needs owner and draft replies is on');
+		await expect(triage).toContainText('Until the draft is sent or discarded, giving up after 7 days.');
+		await expect(triage).toContainText('End of each thread');
+		await expect(triage.getByText('Ask the model', { exact: true })).toHaveCount(2);
+		const chase = page.getByRole('list', { name: 'The steps of Chase what is due' });
+		await expect(chase).toContainText('Each task waits on its own');
+		await expect(chase).toContainText('Only if task active');
+	});
+
 	test('parameters are saved while a workflow stays off', async ({ page }) => {
 		await page.goto(`${webUrl()}/settings/workflows`);
 		const stocktake = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Stocktake', exact: true }) });
