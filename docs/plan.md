@@ -483,6 +483,13 @@ Phone-first. Five tabs:
 - **Settings** — organisation, members, connections, workflows, inference subscription and budget, activity
   (the workflow journal), notifications.
 
+**Settings → Workflows.** Each workflow is drawn as its steps, in the manner of Apple Shortcuts:
+what starts it, then one card per step in the catalogue's words (Read, Ask the model, Write, Wait,
+Notify) with the values it uses and saves as named chips and its settings as chips, and `each` and
+`branch` as indented Repeat and If blocks. A person can see exactly what turning a workflow on
+authorises before they do. A run's detail lays the journal over the same steps, saying how far each
+got and for how many items, with the flat journal beneath it.
+
 **Settings → Inference.** A provider selector (Claude or Codex), owner-run provisioning and sign-in
 steps with a login link, runtime status with the next action, a monthly token allowance form and
 usage by tier. Empty, loading, failed and disabled states say what is known and what to do next;
