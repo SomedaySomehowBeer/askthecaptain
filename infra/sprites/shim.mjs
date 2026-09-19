@@ -2,10 +2,11 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
-const root = '/opt/captain';
+const root = process.env.CAPTAIN_ROOT ?? '/home/sprite/captain';
+const binPath = '/home/sprite/.npm-global/bin:/usr/local/bin:/usr/bin:/bin';
 const failure = code => Object.assign(new Error(code), { code });
 export function command(request, directory) {
- const common = { cwd: directory, env: { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: '/home/sprite', LANG: 'C.UTF-8' } };
+ const common = { cwd: directory, env: { PATH: binPath, HOME: '/home/sprite', LANG: 'C.UTF-8' } };
  if (request.provider === 'claude') return { ...common, binary: 'claude', args: ['-p', '--model', request.model, '--output-format', 'json', '--json-schema', JSON.stringify(request.schema), '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--disable-slash-commands', '--no-session-persistence', '--setting-sources', '', '--settings', '{"disableAllHooks":true}', '--system-prompt', request.instruction], env: { ...common.env, CLAUDE_CONFIG_DIR: `${directory}/claude`, CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(request.maxTokens), CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' } };
  return { ...common, binary: 'codex', args: ['exec', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--json', '--color', 'never', '--model', request.model, '-c', `model_catalog_json="${root}/catalog.json"`, '-c', `model_instructions_file="${directory}/instruction.txt"`, '-c', `log_dir="${directory}/logs"`, '-c', `sqlite_home="${directory}/state"`, '--output-schema', `${directory}/schema.json`, '-'] };
 }
@@ -71,7 +72,7 @@ export async function invoke(request) {
  *  CLI login, and exposes only the allowlisted sign-in URL, a device code and the outcome. A Claude
  *  authorisation code arrives once from the API and goes straight to the CLI's stdin. */
 const loginUrl = /https:\/\/(?:claude\.ai|platform\.claude\.com|auth\.openai\.com)\/[^\s<>"']+/;
-export function loginManager(provider, spawnLogin = () => spawn('python3', [`${root}/login.py`, provider], { cwd: root, env: { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: '/home/sprite', LANG: 'C.UTF-8' }, stdio: ['pipe', 'pipe', 'pipe'] })) {
+export function loginManager(provider, spawnLogin = () => spawn('python3', [`${root}/login.py`, provider], { cwd: root, env: { PATH: binPath, HOME: '/home/sprite', LANG: 'C.UTF-8', CAPTAIN_ROOT: root }, stdio: ['pipe', 'pipe', 'pipe'] })) {
  let child = null, timer = null;
  const state = { state: 'idle', url: null, code: null, needsCode: provider === 'claude' };
  const finish = outcome => { state.state = outcome; if (timer) clearTimeout(timer); timer = null; child = null; };

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Run on an isolated test host/Sprite with a generated catalog. No real model request.
-Usage: python3 check-codex-tools.py /opt/captain/catalog.json /path/to/codex.toml
+Usage: python3 check-codex-tools.py /home/sprite/captain/catalog.json /path/to/codex.toml
 The endpoint is a localhost mock; logs/state go to a temporary directory.
 """
 import json, os, subprocess, sys, tempfile, threading, tomllib
