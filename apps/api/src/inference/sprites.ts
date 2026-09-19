@@ -9,8 +9,11 @@ export type Provisioned = { url: string; region: string };
 export interface Provisioner { provision(spriteName: string, files: Record<string, Buffer>): Promise<Provisioned>; destroy(spriteName: string): Promise<void> }
 export class SpritesError extends Error {
 	readonly op: string; readonly status: number;
-	constructor(op: string, status: number) { super(`sprites ${op} failed with status ${status}`); this.name = 'SpritesError'; this.op = op; this.status = status; }
+	/** The API's machine-readable error code (its `error` field, letters and underscores only), never its message. */
+	readonly reason: string | null;
+	constructor(op: string, status: number, reason: string | null = null) { super(`sprites ${op} failed with status ${status}${reason ? ` (${reason})` : ''}`); this.name = 'SpritesError'; this.op = op; this.status = status; this.reason = reason; }
 }
+const reasonShape = /^[a-z][a-z0-9_]{0,63}$/;
 
 /** Where the API writes the runtime's files on the Sprite; bootstrap.sh moves the secret out of it. */
 export const setupDir = '/home/sprite/captain-setup';
@@ -27,7 +30,11 @@ export class SpritesClient implements Provisioner {
 				headers: { authorization: `Bearer ${this.#token}`, ...(body === undefined ? {} : { 'content-type': binary ? 'application/octet-stream' : 'application/json' }) },
 				body: body === undefined ? undefined : binary ? new Uint8Array(body as Buffer) : JSON.stringify(body) });
 		} catch { throw new SpritesError(op, 0); }
-		if (!ok.includes(response.status)) { await response.body?.cancel().catch(() => {}); throw new SpritesError(op, response.status); }
+		if (!ok.includes(response.status)) {
+			let reason: string | null = null;
+			try { const data = JSON.parse((await response.text()).slice(0, 4096)) as { error?: unknown }; if (typeof data.error === 'string' && reasonShape.test(data.error)) reason = data.error; } catch { /* no usable code */ }
+			throw new SpritesError(op, response.status, reason);
+		}
 		const text = await response.text().catch(() => '');
 		try { return text ? JSON.parse(text) : null; } catch { return null; }
 	}

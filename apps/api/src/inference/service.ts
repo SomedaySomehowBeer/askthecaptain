@@ -103,7 +103,7 @@ export class InferenceService {
     await store.configureRuntime(tx, organisationId, { spriteName, region, loginHint: null, loginUrl: null, status: 'provisioning', encrypted: seal(key, Buffer.from(JSON.stringify({ url, secret })), organisationId, 'inference_connection') });
    });
   } catch (error) {
-   const code = error instanceof SpritesError ? `sprites_${error.op.split(' ')[0]}_${error.status}` : 'provisioning_failed';
+   const code = error instanceof SpritesError ? `sprites_${error.op.split(' ')[0]}_${error.status}${error.reason ? `_${error.reason}` : ''}` : 'provisioning_failed';
    await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => { await store.dataKey(tx, organisationId); await store.getRuntime(tx, organisationId, true); await store.runtimeState(tx, organisationId, 'failed', code); });
    throw new HttpError(503, 'provisioning_failed', `Captain could not create the runtime (${code}). Press Set up subscription again; if it keeps failing, tell the operator that code.`);
   }
