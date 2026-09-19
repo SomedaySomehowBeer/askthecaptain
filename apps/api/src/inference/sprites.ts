@@ -31,8 +31,14 @@ export class SpritesClient implements Provisioner {
 				body: body === undefined ? undefined : binary ? new Uint8Array(body as Buffer) : JSON.stringify(body) });
 		} catch { throw new SpritesError(op, 0); }
 		if (!ok.includes(response.status)) {
-			let reason: string | null = null;
-			try { const data = JSON.parse((await response.text()).slice(0, 4096)) as { error?: unknown }; if (typeof data.error === 'string' && reasonShape.test(data.error)) reason = data.error.trim().replace(/[ -]+/g, '_'); } catch { /* no usable code */ }
+			let reason: string | null = null; let said = '';
+			try {
+				const data = JSON.parse((await response.text()).slice(0, 4096)) as { error?: unknown; message?: unknown };
+				if (typeof data.error === 'string' && reasonShape.test(data.error)) reason = data.error.trim().replace(/[ -]+/g, '_');
+				said = [data.error, data.message].filter((v): v is string => typeof v === 'string').join(' | ');
+			} catch { /* no usable body */ }
+			// The operator's server log (not the tenant journal): what Sprites said, with anything token-shaped masked.
+			console.warn(`[sprites] ${op} ${response.status}${said ? `: ${said.replace(/[A-Za-z0-9_-]{32,}/g, '…').slice(0, 300)}` : ''}`);
 			throw new SpritesError(op, response.status, reason);
 		}
 		const text = await response.text().catch(() => '');
