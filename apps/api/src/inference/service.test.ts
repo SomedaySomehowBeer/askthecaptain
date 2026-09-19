@@ -6,6 +6,7 @@ import { withTenant } from '@captain/db';
 import { InferenceError, StubProvider, type Result } from '@captain/model';
 import { freshDatabase, databaseUrl, type Harness } from '../../../../packages/db/test/harness.ts';
 import { InferenceService } from './service.ts';
+import { SpritesError } from './sprites.ts';
 const it = databaseUrl ? test : test.skip; let db: Harness;
 before(async () => { if (databaseUrl) db = await freshDatabase(); }); after(async () => { await db?.close(); });
 const reply = (output: unknown): Result => ({ output, usage: { inputTokens: 60, outputTokens: 40 }, model: 'claude-sonnet-5', latencyMs: 10 });
@@ -118,14 +119,20 @@ it('setting up a subscription creates the Sprite through the API, moves to needs
  assert.equal((await service.get(actor, organisationId)).runtime!.status, 'removed');
  const events = await db.owner`select action, detail from audit_events where organisation_id = ${organisationId}`;
  assert.ok(!JSON.stringify(events).includes(sprites.secret));
- const failing = new InferenceService(db.app, randomBytes(32), () => stub, { provision: async () => { throw Object.assign(new Error('sprites write shim.mjs failed with status 500'), { name: 'SpritesError', op: 'write shim.mjs', status: 500 }); }, destroy: async () => {} });
+ const failing = new InferenceService(db.app, randomBytes(32), () => stub, { provision: async () => { throw new SpritesError('write shim.mjs', 500); }, destroy: async () => {} });
  const [org2] = await db.owner`insert into organisations (name) values (${suffix + '-2'}) returning id`; const org2Id = String(org2!.id);
  await db.owner`insert into memberships (organisation_id, user_id, role) values (${org2Id}, ${actor.userId}, 'owner')`;
  await assert.rejects(failing.request(actor, org2Id, 'claude'), { code: 'provisioning_failed' });
- assert.equal((await failing.get(actor, org2Id)).runtime!.status, 'failed');
+ const failedState = await failing.get(actor, org2Id); assert.equal(failedState.runtime!.status, 'failed'); assert.equal(failedState.runtime!.spriteName, `captain-${org2Id}`); assert.equal(failedState.runtime!.error, 'sprites_write_500');
  await assert.rejects(failing.loginStart(actor, org2Id), { code: 'runtime_not_ready' });
+ // Set up again from Failed reuses the row; a provisioner that now works moves it on.
+ const retry = new InferenceService(db.app, randomBytes(32), () => stub, provisioner);
+ assert.equal((await retry.request(actor, org2Id, 'codex')).runtime!.status, 'provisioning');
+ assert.equal(sprites.provisioned.at(-1), `captain-${org2Id}`);
+ // Disconnect after a failure that never recorded a URL still destroys the Sprite by its name.
+ await db.owner`update inference_runtimes set status = 'failed', sprite_name = null, connection_encrypted = null where organisation_id = ${org2Id}`;
+ await retry.remove(actor, org2Id); assert.equal(sprites.destroyed.at(-1), `captain-${org2Id}`);
  const none = new InferenceService(db.app, randomBytes(32), () => stub, null);
- await failing.remove(actor, org2Id);
  const byHand = await none.request(actor, org2Id, 'claude'); assert.equal(byHand.runtime!.status, 'provisioning'); assert.equal(byHand.runtime!.spriteName, null);
  assert.equal((await none.get(actor, org2Id)).spritesConfigured, false);
 });

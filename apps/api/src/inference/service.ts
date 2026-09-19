@@ -82,12 +82,13 @@ export class InferenceService {
   // Without a Sprites token the record is created and an operator attaches a Sprite by hand (the configure route).
   if (!this.sprites) return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
    const runtime = await store.createRuntime(tx, organisationId, actor.userId, provider);
-   if (!runtime) throw badRequest('runtime_exists', 'Remove the existing runtime before choosing another provider.');
+   if (!runtime) throw badRequest('runtime_exists', 'A runtime already exists. Disconnect it below before choosing another provider.');
    return { runtime: publicRuntime(runtime), instructions: 'This platform has no Sprites token configured. An operator attaches a runtime by hand, following docs/runbooks/inference-sprite.md.' };
   });
   const created = await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
    const runtime = await store.createRuntime(tx, organisationId, actor.userId, provider);
-   if (!runtime) throw badRequest('runtime_exists', 'Remove the existing runtime before choosing another provider.');
+   if (!runtime) throw badRequest('runtime_exists', 'A runtime already exists. Disconnect it below before choosing another provider.');
+   await store.spriteName(tx, organisationId, `captain-${organisationId}`);
    return runtime;
   });
   // The Sprite is created outside any transaction: several HTTP calls, then the connection is sealed and stored (D16).
@@ -104,7 +105,7 @@ export class InferenceService {
   } catch (error) {
    const code = error instanceof SpritesError ? `sprites_${error.op.split(' ')[0]}_${error.status}` : 'provisioning_failed';
    await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => { await store.dataKey(tx, organisationId); await store.getRuntime(tx, organisationId, true); await store.runtimeState(tx, organisationId, 'failed', code); });
-   throw new HttpError(503, 'provisioning_failed', 'Captain could not create the runtime. Disconnect it and try again; if it keeps failing, ask the operator.');
+   throw new HttpError(503, 'provisioning_failed', `Captain could not create the runtime (${code}). Press Set up subscription again; if it keeps failing, tell the operator that code.`);
   }
   return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => ({ runtime: publicRuntime(await store.getRuntime(tx, organisationId)), instructions: 'Captain is setting up your runtime. This takes a few minutes the first time; refresh to check.', created: created.id }));
  }
@@ -126,8 +127,8 @@ export class InferenceService {
   const runtime = await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => { await store.dataKey(tx, organisationId); return store.getRuntime(tx, organisationId); });
   if (!runtime) throw notFound();
   // Destroying the Sprite removes the subscription login with it; a Sprite that is already gone is fine.
-  if (this.sprites && runtime.spriteName && runtime.status !== 'removed') {
-   try { await this.sprites.destroy(runtime.spriteName); }
+  if (this.sprites && runtime.status !== 'removed') {
+   try { await this.sprites.destroy(runtime.spriteName ?? `captain-${organisationId}`); }
    catch { throw new HttpError(503, 'sprites_unavailable', 'Captain could not remove the runtime just now. Try again in a minute.'); }
   }
   await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => { await store.dataKey(tx, organisationId); await store.getRuntime(tx, organisationId, true); await store.runtimeState(tx, organisationId, 'removed'); });

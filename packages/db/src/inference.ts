@@ -15,12 +15,16 @@ export async function getRuntime(tx: TransactionSql, organisationId: string, loc
 export async function createRuntime(tx: TransactionSql, organisationId: string, userId: string, provider: Runtime['provider']) {
  const [row] = await tx<Runtime[]>`insert into inference_runtimes (organisation_id, added_by, provider, status) values (${organisationId}, ${userId}, ${provider}, 'provisioning')
  on conflict (organisation_id) do update set provider = excluded.provider, added_by = excluded.added_by, status = 'provisioning', sprite_name = null, region = null, connection_encrypted = null, login_hint = null, login_url = null, last_verified_at = null, error = null, updated_at = now()
- where inference_runtimes.status = 'removed' returning *`;
+ where inference_runtimes.status in ('removed', 'failed') returning *`;
  if (row) await inferenceAudit(tx, organisationId, 'inference.runtime_requested', { provider }); return row;
 }
 export async function configureRuntime(tx: TransactionSql, organisationId: string, input: { encrypted: Buffer; spriteName: string; region: string; loginHint: string | null; loginUrl: string | null; status?: 'provisioning' | 'needs_login' }) {
  await tx`update inference_runtimes set connection_encrypted = ${input.encrypted}, sprite_name = ${input.spriteName}, region = ${input.region}, login_hint = ${input.loginHint}, login_url = ${input.loginUrl}, status = ${input.status ?? 'needs_login'}, updated_at = now() where organisation_id = ${organisationId}`;
  await inferenceAudit(tx, organisationId, 'inference.runtime_configured');
+}
+/** The Sprite's deterministic name, recorded before provisioning so a failure part-way can still be cleaned up. */
+export async function spriteName(tx: TransactionSql, organisationId: string, name: string) {
+ await tx`update inference_runtimes set sprite_name = ${name}, updated_at = now() where organisation_id = ${organisationId}`;
 }
 /** The allowlisted sign-in URL the shim reported, so Settings can show it without another round trip. */
 export async function loginUrl(tx: TransactionSql, organisationId: string, url: string | null) {
