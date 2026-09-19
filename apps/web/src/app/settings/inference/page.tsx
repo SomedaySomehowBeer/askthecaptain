@@ -56,7 +56,7 @@ function SignIn({ login, provider, fallbackUrl }: { login: Login | null; provide
   {url ? <a href={url} className="button button--primary" target="_blank" rel="noreferrer">Open sign-in</a> : null}
   {login.code ? <><p className="secondary">Enter this code on the sign-in page:</p><p className="mono" style={{ fontSize: '28px', letterSpacing: '0.12em' }}>{login.code}</p></> : null}
   {login.needsCode
-   ? <InferenceForm action="code" disabled={false} label="Submit code"><div className="field"><label htmlFor="inference-code">The code the sign-in page gave you</label><input id="inference-code" name="code" type="text" autoComplete="off" required minLength={6} maxLength={512} pattern="[A-Za-z0-9_#.:\-]+" /></div></InferenceForm>
+   ? <InferenceForm action="code" disabled={false} label="Submit code"><div className="field"><label htmlFor="inference-code">The code the sign-in page gave you</label><input id="inference-code" name="code" type="text" autoComplete="off" required minLength={6} maxLength={1024} /><p className="muted">Paste it as the sign-in page gives it; a link stuck on the end is fine.</p></div></InferenceForm>
    : <p className="secondary">When the page says you are signed in, refresh here and press Verify sign-in.</p>}
  </div>;
  return <div className="stack">
