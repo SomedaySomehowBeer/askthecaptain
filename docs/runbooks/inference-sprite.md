@@ -34,6 +34,14 @@ runtimes, generate an API token for it at sprites.dev/account, and set it as the
 `SPRITES_API_TOKEN`. Without it Settings → Inference says runtimes cannot be created yet. The
 token can create and destroy Sprites and write files to them; keep it out of every other system.
 
+Token restrictions, learned on 2026-09-19: a restricted token may not set labels (Captain sends
+none), and a token's **sprite creation limit counts creations over the token's lifetime, not
+active Sprites**: once the count is reached, deleting Sprites does not free it, and every
+further create answers 403 "token has reached its sprite creation limit". Set the limit to the
+number of organisations you expect to onboard plus room for retries, or leave it unlimited and
+guard the secret instead. A failed create records `sprites_create_403` in the journal and writes
+Sprites' own sentence to the API's server log (`flyctl logs -a <api app> | grep '\[sprites\]'`).
+
 **Owner, from any device.**
 
 1. Configure API `MASTER_KEY` using the existing D16 process (operator). In Settings → Inference
