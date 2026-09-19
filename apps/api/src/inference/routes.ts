@@ -21,7 +21,8 @@ export function inferenceRoutes(service?: InferenceService) {
  });
  routes.post('/v1/organisations/:id/inference/runtime/login', async c => c.json(await requireService().loginStart(actor(c), uuid.parse(c.req.param('id')))));
  routes.post('/v1/organisations/:id/inference/runtime/login/code', async c => {
-  const input = z.object({ code: z.string().regex(/^[A-Za-z0-9_#.:-]{6,512}$/) }).strict().parse(await c.req.json());
+  // Tolerate the sign-in page's copy button, which appends the sign-in URL to the code.
+  const input = z.object({ code: z.string().max(1024).transform(v => v.trim().replace(/\s*https?:\/\/.*$/s, '').trim()).pipe(z.string().regex(/^[A-Za-z0-9_#.:-]{6,512}$/)) }).strict().parse(await c.req.json());
   return c.json(await requireService().loginCode(actor(c), uuid.parse(c.req.param('id')), input.code));
  });
  routes.post('/v1/organisations/:id/inference/runtime/verify', async c => { await requireService().verify(actor(c), uuid.parse(c.req.param('id'))); return c.json({ ok: true }); });
