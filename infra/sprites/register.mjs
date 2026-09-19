@@ -15,7 +15,7 @@ try {
  let session;
  execFileSync('stty', ['-echo'], { stdio: ['inherit', 'ignore', 'ignore'] });
  try { session = await prompt.question('Owner session token (hidden): '); } finally { execFileSync('stty', ['echo'], { stdio: ['inherit', 'ignore', 'ignore'] }); console.log(); }
- const { secret } = JSON.parse(await readFile('/opt/captain/runtime.json', 'utf8'));
+ const { secret } = JSON.parse(await readFile((process.env.CAPTAIN_ROOT ?? '/home/sprite/captain') + '/runtime.json', 'utf8'));
  const result = await fetch(new URL(`/v1/organisations/${encodeURIComponent(organisation)}/inference/runtime/configure`, api), {
   method: 'POST', redirect: 'error', headers: { authorization: `Bearer ${session}`, 'content-type': 'application/json' },
   body: JSON.stringify({ url, secret, spriteName, region, loginHint, loginUrl }), signal: AbortSignal.timeout(30000)

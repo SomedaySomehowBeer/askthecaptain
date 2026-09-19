@@ -6,7 +6,8 @@ if provider not in ('claude', 'codex'): raise SystemExit('Choose claude or codex
 master_fd, slave_fd = pty.openpty()
 fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 4096, 0, 0))
 command = ['claude', 'setup-token'] if provider == 'claude' else ['codex', 'login', '--device-auth']
-child = subprocess.Popen(command, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd, cwd='/opt/captain', start_new_session=True)
+root = os.environ.get('CAPTAIN_ROOT', '/home/sprite/captain')
+child = subprocess.Popen(command, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd, cwd=root, start_new_session=True)
 os.close(slave_fd)
 seen = set(); transcript = ''
 print('Open the sign-in link below (also available in Settings once registered). Follow its instructions; paste a returned code here if Claude asks for it.', flush=True)
@@ -20,7 +21,7 @@ try:
   transcript += re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', data)
   token = re.search(r'sk-ant-oat01-[A-Za-z0-9_-]+(?=[\r\n ])', transcript)
   if token:
-   fd = os.open('/opt/captain/claude-token', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+   fd = os.open(root + '/claude-token', os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
    with os.fdopen(fd, 'w') as file: file.write(token.group(0))
    print('Claude login saved on the Sprite.', flush=True)
    break

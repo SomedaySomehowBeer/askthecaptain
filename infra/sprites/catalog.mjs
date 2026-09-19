@@ -8,4 +8,4 @@ for (const model of models) Object.assign(model, {
  supports_search_tool: false, model_messages: null, base_instructions: 'Return schema-conforming JSON data only.',
  use_responses_lite: false, prefer_websockets: false, include_skills_usage_instructions: false, include_apps_usage_instructions: false, include_plugin_usage_instructions: false
 });
-writeFileSync('/opt/captain/catalog.json', JSON.stringify({ models }), { mode: 0o600 });
+writeFileSync(`${process.env.CAPTAIN_ROOT ?? '/home/sprite/captain'}/catalog.json`, JSON.stringify({ models }), { mode: 0o600 });
