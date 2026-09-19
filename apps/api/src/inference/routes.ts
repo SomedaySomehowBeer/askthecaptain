@@ -19,6 +19,11 @@ export function inferenceRoutes(service?: InferenceService) {
   const input = z.object({ url: z.string().url(), secret: z.string().regex(/^[a-f0-9]{64}$/), spriteName: z.string().regex(/^[a-z0-9-]{1,63}$/), region: z.string().min(1).max(64), loginHint: z.string().email().max(254).nullable(), loginUrl: loginUrl.nullable() }).strict().parse(await c.req.json());
   await requireService().configure(actor(c), uuid.parse(c.req.param('id')), input); return c.json({ ok: true });
  });
+ routes.post('/v1/organisations/:id/inference/runtime/login', async c => c.json(await requireService().loginStart(actor(c), uuid.parse(c.req.param('id')))));
+ routes.post('/v1/organisations/:id/inference/runtime/login/code', async c => {
+  const input = z.object({ code: z.string().regex(/^[A-Za-z0-9_#.:-]{6,512}$/) }).strict().parse(await c.req.json());
+  return c.json(await requireService().loginCode(actor(c), uuid.parse(c.req.param('id')), input.code));
+ });
  routes.post('/v1/organisations/:id/inference/runtime/verify', async c => { await requireService().verify(actor(c), uuid.parse(c.req.param('id'))); return c.json({ ok: true }); });
  routes.delete('/v1/organisations/:id/inference/runtime', async c => c.json(await requireService().remove(actor(c), uuid.parse(c.req.param('id')))));
  routes.patch('/v1/organisations/:id/inference/budget', async c => {

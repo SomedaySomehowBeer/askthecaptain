@@ -11,7 +11,10 @@ export class InferenceError extends Error {
 export type Request = { provider: ProviderName; model: string; instruction: string; input: string; schema: Record<string, unknown>; maxTokens: number };
 export const resultSchema = z.object({ output: z.unknown(), usage: z.object({ inputTokens: z.number().int().nonnegative().safe(), outputTokens: z.number().int().nonnegative().safe() }), model: z.string().min(1), latencyMs: z.number().int().nonnegative().max(2147483647) });
 export type Result = z.infer<typeof resultSchema>;
-export interface Provider { infer(request: Request): Promise<Result>; health(): Promise<void> }
+/** Sign-in driven from Settings: what the shim reports about the provider's own CLI login. */
+export type LoginState = { state: 'idle' | 'waiting' | 'done' | 'failed'; url: string | null; code: string | null; needsCode: boolean };
+export const loginStateSchema = z.object({ state: z.enum(['idle', 'waiting', 'done', 'failed']), url: z.string().nullable(), code: z.string().max(40).nullable(), needsCode: z.boolean() }).strict();
+export interface Provider { infer(request: Request): Promise<Result>; health(): Promise<void>; loginStart(): Promise<LoginState>; loginStatus(): Promise<LoginState>; loginCode(code: string): Promise<LoginState> }
 export type InferInput<T> = { organisationId: string; step: string; tier: Tier; instruction: string; input: unknown; schema: z.ZodType<T>; runId?: string; maxTokens?: number };
 export function modelFor(provider: ProviderName, tier: Tier, env: NodeJS.ProcessEnv = process.env) {
  if (provider === 'anthropic_api') throw new InferenceError('runtime_not_ready');
@@ -54,6 +57,11 @@ export class StubProvider implements Provider {
  readonly responses: (Result | InferenceError)[];
  constructor(responses: (Result | InferenceError)[]) { this.responses = responses; }
  async health() {}
+ /** A sign-in that waits for one code (Claude) or none (Codex); tests drive it through these calls. */
+ login: LoginState = { state: 'idle', url: null, code: null, needsCode: true }; codes: string[] = [];
+ async loginStart() { this.login = { ...this.login, state: 'waiting', url: 'https://claude.ai/oauth/authorize?state=stub', code: this.login.needsCode ? null : 'STUB-CODE' }; return this.login; }
+ async loginStatus() { return this.login; }
+ async loginCode(code: string) { if (this.login.state !== 'waiting') throw new InferenceError('provider_unavailable'); this.codes.push(code); this.login = { ...this.login, state: 'done' }; return this.login; }
  async infer(request: Request): Promise<Result> {
   this.requests.push(request); const next = this.responses.shift();
   if (!next || next instanceof InferenceError) throw next ?? new InferenceError('provider_unavailable');

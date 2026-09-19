@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { command, parseOutput, server } from './shim.mjs';
+import { command, loginManager, parseOutput, server } from './shim.mjs';
+import { spawn } from 'node:child_process';
 const request = { provider: 'claude', model: 'claude-sonnet-5', instruction: 'Classify', input: 'data', schema: { type: 'object' }, maxTokens: 32 };
 test('CLI has no tool/config inheritance and uses instruction/schema flags', () => {
  const claude = command(request, '/tmp/test'); assert.equal(claude.args[claude.args.indexOf('--tools') + 1], ''); assert.ok(claude.args.includes('--strict-mcp-config')); assert.ok(claude.args.includes('--no-session-persistence'));
@@ -26,3 +27,34 @@ test('all shim routes require the per-Sprite secret; wrong provider never invoke
   assert.equal(calls, 0);
  } finally { await new Promise(resolve => app.close(resolve)); }
 });
+const fakeLogin = (lines, doneOn) => () => spawn(process.execPath, ['-e', `
+ const lines = ${JSON.stringify(lines)}; for (const l of lines) console.log(l);
+ process.stdin.on('data', d => { if (String(d).trim() === ${JSON.stringify(doneOn)}) { console.log('Claude login saved on the Sprite.'); process.exit(0); } else { console.log('Sign-in did not finish; run this command again.'); process.exit(1); } });
+`], { stdio: ['pipe', 'pipe', 'pipe'] });
+const settle = () => new Promise(resolve => setTimeout(resolve, 150));
+test('login exposes only the allowlisted URL and device code, forwards one code to the CLI, and reports the outcome', async () => {
+ const login = loginManager('claude', fakeLogin(['noise https://evil.test/steal?x=1', 'Open https://claude.ai/oauth/authorize?client_id=abc&state=xyz now', 'Device code: ABCD-1234', 'secret token sk-ant-oat01-NEVER'], 'good#code'));
+ assert.deepEqual(login.status(), { state: 'idle', url: null, code: null, needsCode: true });
+ assert.equal(login.start().state, 'waiting'); await settle();
+ const waiting = login.status(); assert.equal(waiting.url, 'https://claude.ai/oauth/authorize?client_id=abc&state=xyz'); assert.equal(waiting.code, 'ABCD-1234');
+ assert.ok(!JSON.stringify(waiting).includes('evil') && !JSON.stringify(waiting).includes('sk-ant'));
+ login.code('good#code'); await settle(); assert.equal(login.status().state, 'done');
+ assert.throws(() => login.code('again'), { code: 'invalid_request' });
+ const failing = loginManager('codex', fakeLogin(['Device code: WXYZ-9876'], 'other')); failing.start(); await settle();
+ assert.equal(failing.status().needsCode, false); failing.code('wrong'); await settle(); assert.equal(failing.status().state, 'failed');
+ login.stop(); failing.stop();
+});
+test('login routes sit behind the secret and validate the code shape', async () => {
+ const login = loginManager('claude', fakeLogin(['https://platform.claude.com/x'], 'ok#code1'));
+ const app = server('s', 'claude', async () => ({}), login); await new Promise(resolve => app.listen(0, '127.0.0.1', resolve));
+ const url = `http://127.0.0.1:${app.address().port}`; const auth = { authorization: 'Bearer s', 'content-type': 'application/json' };
+ try {
+  assert.equal((await fetch(url + '/login/status')).status, 401);
+  assert.equal((await fetch(url + '/login/start', { method: 'POST', headers: auth })).status, 200); await settle();
+  assert.equal((await (await fetch(url + '/login/status', { headers: auth })).json()).url, 'https://platform.claude.com/x');
+  assert.equal((await fetch(url + '/login/code', { method: 'POST', headers: auth, body: JSON.stringify({ code: 'bad code with spaces' }) })).status, 400);
+  assert.equal((await fetch(url + '/login/code', { method: 'POST', headers: auth, body: JSON.stringify({ code: 'ok#code1' }) })).status, 200); await settle();
+  assert.equal((await (await fetch(url + '/login/status', { headers: auth })).json()).state, 'done');
+ } finally { login.stop(); await new Promise(resolve => app.close(resolve)); }
+});
+

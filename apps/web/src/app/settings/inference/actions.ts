@@ -7,6 +7,7 @@ export async function updateInference(_: { error?: string; message?: string }, f
  const requests: Record<string, { path: string; method: string; body?: unknown }> = {
   create: { path: '/runtime', method: 'POST', body: { provider: form.get('provider') } },
   verify: { path: '/runtime/verify', method: 'POST' }, remove: { path: '/runtime', method: 'DELETE' },
+  login: { path: '/runtime/login', method: 'POST' }, code: { path: '/runtime/login/code', method: 'POST', body: { code: String(form.get('code') ?? '').trim() } },
   budget: { path: '/budget', method: 'PATCH', body: { limitTokens: Number(form.get('limitTokens')) } }
  };
  const request = requests[action]; if (!request) return { error: 'Choose an inference action.' };

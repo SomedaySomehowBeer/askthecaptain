@@ -67,13 +67,60 @@ export async function invoke(request) {
   return parseOutput(request.provider, await run(spec, request.input), request.model, Date.now() - started);
  } finally { await rm(directory, { recursive: true, force: true }); }
 }
-export function server(secret, provider, inference = invoke) {
+/** Sign-in driven from Settings (plan §7, D18 as amended): runs login.py, which runs the provider's own
+ *  CLI login, and exposes only the allowlisted sign-in URL, a device code and the outcome. A Claude
+ *  authorisation code arrives once from the API and goes straight to the CLI's stdin. */
+const loginUrl = /https:\/\/(?:claude\.ai|platform\.claude\.com|auth\.openai\.com)\/[^\s<>"']+/;
+export function loginManager(provider, spawnLogin = () => spawn('python3', [`${root}/login.py`, provider], { cwd: root, env: { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: '/home/sprite', LANG: 'C.UTF-8' }, stdio: ['pipe', 'pipe', 'pipe'] })) {
+ let child = null, timer = null;
+ const state = { state: 'idle', url: null, code: null, needsCode: provider === 'claude' };
+ const finish = outcome => { state.state = outcome; if (timer) clearTimeout(timer); timer = null; child = null; };
+ return {
+  status: () => ({ ...state }),
+  start() {
+   if (state.state === 'waiting') return { ...state };
+   Object.assign(state, { state: 'waiting', url: null, code: null });
+   let buffer = '';
+   try { child = spawnLogin(); } catch { finish('failed'); return { ...state }; }
+   const read = chunk => {
+    buffer += chunk; const lines = buffer.split('\n'); buffer = lines.pop() ?? '';
+    for (const line of lines) {
+     const url = loginUrl.exec(line); if (url && !state.url) state.url = url[0];
+     const code = /^Device code: ([A-Z0-9-]{4,20})$/.exec(line.trim()); if (code) state.code = code[1];
+     if (/login saved on the Sprite\.$/.test(line.trim())) finish('done');
+     if (/did not finish/.test(line)) finish('failed');
+    }
+   };
+   child.stdout.on('data', chunk => read(chunk.toString())); child.stderr.on('data', () => {});
+   child.on('error', () => finish('failed'));
+   child.on('close', () => { if (state.state === 'waiting') finish('failed'); });
+   timer = setTimeout(() => { if (child) child.kill('SIGTERM'); finish('failed'); }, 15 * 60 * 1000); timer.unref();
+   return { ...state };
+  },
+  stop() { if (child) child.kill('SIGTERM'); finish(state.state === 'waiting' ? 'failed' : state.state); },
+  code(code) {
+   if (state.state !== 'waiting' || !child) throw failure('invalid_request');
+   child.stdin.write(code + '\n'); return { ...state };
+  }
+ };
+}
+export function server(secret, provider, inference = invoke, login = loginManager(provider)) {
  let busy = false;
  return createServer(async (req, res) => {
   const send = (status, data) => { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(data)); };
   const supplied = Buffer.from(req.headers.authorization ?? ''), expected = Buffer.from(`Bearer ${secret}`);
   if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) return send(401, { code: 'runtime_not_ready' });
   if (req.url === '/health' && req.method === 'GET') return send(200, { ok: true });
+  if (req.url === '/login/status' && req.method === 'GET') return send(200, login.status());
+  if (req.url === '/login/start' && req.method === 'POST') return send(200, login.start());
+  if (req.url === '/login/code' && req.method === 'POST') {
+   try {
+    let body = ''; for await (const chunk of req) { body += chunk; if (Buffer.byteLength(body) > 4096) return send(413, { code: 'invalid_request' }); }
+    const { code } = JSON.parse(body);
+    if (typeof code !== 'string' || !/^[A-Za-z0-9_#.:-]{6,512}$/.test(code)) return send(400, { code: 'invalid_request' });
+    return send(200, login.code(code));
+   } catch { return send(400, { code: 'invalid_request' }); }
+  }
   if (req.url !== '/infer' || req.method !== 'POST') return send(404, { code: 'not_found' });
   if (busy) return send(429, { code: 'rate_limited' });
   busy = true;
