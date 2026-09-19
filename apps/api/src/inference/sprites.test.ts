@@ -15,7 +15,7 @@ test('provision creates, uploads the files under 0600, starts the service, makes
 	calls.length = 0;
 	const client = new SpritesClient('org/tok/secret', fake({
 		'POST /v1/sprites': [201, { name: 'captain-x' }], 'PUT /v1/sprites/captain-x/fs/write': [200, null], 'PUT /v1/sprites/captain-x/services/inference': [200, {}],
-		'POST /v1/sprites/captain-x/services/inference/start': [200, null], 'PUT /v1/sprites/captain-x': [200, {}], 'GET /v1/sprites/captain-x': [200, { url: 'https://captain-x.sprites.app', primary_region: 'syd' }]
+		'POST /v1/sprites/captain-x/services/inference/stop': [404, { error: 'not running' }], 'POST /v1/sprites/captain-x/services/inference/start': [200, null], 'PUT /v1/sprites/captain-x': [200, {}], 'GET /v1/sprites/captain-x': [200, { url: 'https://captain-x.sprites.app', primary_region: 'syd' }]
 	}));
 	const files = await spriteFiles('claude', 'a'.repeat(64));
 	assert.deepEqual(Object.keys(files).sort(), ['bootstrap.sh', 'catalog.mjs', 'codex.toml', 'login.py', 'runtime.json', 'shim.mjs']);
@@ -28,7 +28,7 @@ test('provision creates, uploads the files under 0600, starts the service, makes
 	const service = JSON.parse(calls.find((c) => c.url.endsWith('/services/inference'))!.body!);
 	assert.deepEqual(service, { name: 'inference', cmd: 'bash', args: ['/home/sprite/captain-setup/bootstrap.sh'], needs: [], http_port: 8080 });
 	assert.deepEqual(JSON.parse(calls.find((c) => c.method === 'PUT' && c.url.endsWith('/v1/sprites/captain-x'))!.body!), { url_settings: { auth: 'public' } });
-	assert.deepEqual(calls.map((c) => c.method), ['POST', 'PUT', 'PUT', 'PUT', 'PUT', 'PUT', 'PUT', 'PUT', 'POST', 'PUT', 'GET']);
+	assert.deepEqual(calls.map((c) => c.method), ['POST', 'PUT', 'PUT', 'PUT', 'PUT', 'PUT', 'PUT', 'PUT', 'POST', 'POST', 'PUT', 'GET']);
 	assert.deepEqual(JSON.parse(calls[0]!.body!), { name: 'captain-x' });
 });
 

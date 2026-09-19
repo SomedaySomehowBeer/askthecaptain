@@ -54,6 +54,8 @@ export class SpritesClient implements Provisioner {
 			await this.#call(`write ${file}`, 'PUT', `/v1/sprites/${name}/fs/write?${q}`, bytes);
 		}
 		await this.#call('service', 'PUT', `/v1/sprites/${name}/services/inference`, { name: 'inference', cmd: 'bash', args: [`${setupDir}/bootstrap.sh`], needs: [], http_port: 8080 });
+		// A running service would keep the old files and secret: stop first (a service that is not running answers 4xx, which is fine).
+		await this.#call('stop', 'POST', `/v1/sprites/${name}/services/inference/stop`, undefined, [200, 201, 204, 400, 404, 409]);
 		await this.#call('start', 'POST', `/v1/sprites/${name}/services/inference/start`);
 		// The shim authenticates every route with its own secret, so the Sprite URL itself can be public.
 		await this.#call('url', 'PUT', `/v1/sprites/${name}`, { url_settings: { auth: 'public' } });

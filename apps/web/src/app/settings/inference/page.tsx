@@ -5,7 +5,7 @@ import { Page, requireCurrent } from '../../../components/Page.tsx';
 import { api, load } from '../../../lib/api.ts';
 import { InferenceForm } from './InferenceForm.tsx';
 export const metadata: Metadata = { title: 'Inference' };
-type Login = { state: 'idle' | 'waiting' | 'done' | 'failed'; url: string | null; code: string | null; needsCode: boolean };
+type Login = { state: 'idle' | 'waiting' | 'done' | 'failed'; url: string | null; code: string | null; needsCode: boolean; note?: string | null };
 type State = { role: 'owner' | 'admin' | 'member'; disabled: boolean; spritesConfigured?: boolean; login?: Login | null; runtime: { provider: 'claude' | 'codex' | 'anthropic_api'; status: 'provisioning' | 'needs_login' | 'ready' | 'failed' | 'removed'; loginHint: string | null; loginUrl: string | null; error?: string | null; spriteName?: string | null } | null; budget: { month: string; limitTokens: number; usedTokens: number }; usage: { tier: string; inputTokens: number; outputTokens: number; calls: number }[] };
 const states = { provisioning: 'Setting up', needs_login: 'Needs sign-in', ready: 'Ready', failed: 'Failed', removed: 'Disconnected' };
 export default async function InferencePage() {
@@ -28,6 +28,7 @@ async function Details({ me }: { me: Awaited<ReturnType<typeof requireCurrent>> 
     {runtime.status === 'failed' && owner && (runtime.error?.startsWith('sprites_') || runtime.error === 'provisioning_failed') ? <InferenceForm action="create" disabled={disabled || !spritesConfigured} label="Set up subscription again"><input type="hidden" name="provider" value={runtime.provider} /></InferenceForm> : null}
     {(runtime.status === 'needs_login' || (runtime.status === 'failed' && runtime.spriteName && !(runtime.error?.startsWith('sprites_') || runtime.error === 'provisioning_failed'))) && owner ? <SignIn login={login} provider={runtime.provider} fallbackUrl={runtime.loginUrl} /> : null}
     {runtime.status === 'needs_login' && !owner ? <Notice>The owner signs in to the subscription from this page.</Notice> : null}
+    {['needs_login', 'failed'].includes(runtime.status) && owner && runtime.spriteName ? <details className="disclosure"><summary>Reinstall the runtime's files</summary><p className="muted">Uploads Captain's current runtime files to the same Sprite and restarts its service. The Sprite and any finished sign-in stay; the CLIs are not reinstalled.</p><InferenceForm action="create" disabled={disabled || !spritesConfigured} label="Reinstall runtime"><input type="hidden" name="provider" value={runtime.provider} /></InferenceForm></details> : null}
     <InferenceForm action="verify" disabled={!owner || disabled || runtime.provider === 'anthropic_api'} label="Verify sign-in" />
     <InferenceForm action="remove" disabled={!owner} label="Disconnect runtime" />
    </> : <>{spritesConfigured ? <Notice title="No inference subscription connected">Choose the subscription your business wants Captain to use. Setting up creates a private runtime for your organisation; it takes a few minutes.</Notice>
@@ -58,8 +59,10 @@ function SignIn({ login, provider, fallbackUrl }: { login: Login | null; provide
   {login.needsCode
    ? <InferenceForm action="code" disabled={false} label="Submit code"><div className="field"><label htmlFor="inference-code">The code the sign-in page gave you</label><input id="inference-code" name="code" type="text" autoComplete="off" required minLength={6} maxLength={1024} /><p className="muted">Paste it as the sign-in page gives it; a link stuck on the end is fine.</p></div></InferenceForm>
    : <p className="secondary">When the page says you are signed in, refresh here and press Verify sign-in.</p>}
+  {login.note ? <p className="muted">The runtime's sign-in said: <span className="mono">{login.note}</span></p> : null}
  </div>;
  return <div className="stack">
+  {login?.note ? <p className="muted">The runtime's sign-in said: <span className="mono">{login.note}</span></p> : null}
   <Notice>{login?.state === 'failed' ? 'That sign-in did not finish. Start it again.' : `Sign in to your ${provider === 'codex' ? 'Codex' : 'Claude'} subscription from here. Nothing about the account is stored in Captain; the login stays on your runtime.`}</Notice>
   <InferenceForm action="login" disabled={false} label="Sign in" />
  </div>;

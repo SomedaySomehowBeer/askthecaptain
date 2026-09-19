@@ -15,7 +15,7 @@ export async function getRuntime(tx: TransactionSql, organisationId: string, loc
 export async function createRuntime(tx: TransactionSql, organisationId: string, userId: string, provider: Runtime['provider']) {
  const [row] = await tx<Runtime[]>`insert into inference_runtimes (organisation_id, added_by, provider, status) values (${organisationId}, ${userId}, ${provider}, 'provisioning')
  on conflict (organisation_id) do update set provider = excluded.provider, added_by = excluded.added_by, status = 'provisioning', sprite_name = null, region = null, connection_encrypted = null, login_hint = null, login_url = null, last_verified_at = null, error = null, updated_at = now()
- where inference_runtimes.status in ('removed', 'failed') returning *`;
+ where inference_runtimes.status in ('removed', 'failed', 'needs_login', 'provisioning') returning *`;
  if (row) await inferenceAudit(tx, organisationId, 'inference.runtime_requested', { provider }); return row;
 }
 export async function configureRuntime(tx: TransactionSql, organisationId: string, input: { encrypted: Buffer; spriteName: string; region: string; loginHint: string | null; loginUrl: string | null; status?: 'provisioning' | 'needs_login' }) {
