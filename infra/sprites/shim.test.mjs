@@ -41,6 +41,8 @@ test('login exposes only the allowlisted URL and device code, forwards one code 
  login.code('good#code'); await settle(); assert.equal(login.status().state, 'done');
  const noted = loginManager('claude', fakeLogin(['CLI: Invalid code, try again', 'CLI: token sk-ant-oat01-SECRETSECRETSECRETSECRETSECRET here'], 'never')); noted.start(); await settle();
  assert.equal(noted.status().note, 'CLI: Invalid code, try again · CLI: token … here'); noted.stop();
+ const crashing = loginManager('claude', () => spawn(process.execPath, ['-e', 'console.error("Traceback (most recent call last):\\n  File x\\nOSError: [Errno 1] Operation not permitted"); process.exit(1)'], { stdio: ['pipe', 'pipe', 'pipe'] })); crashing.start(); await settle();
+ assert.equal(crashing.status().state, 'failed'); assert.equal(crashing.status().note, 'wrapper: OSError: [Errno 1] Operation not permitted');
  assert.throws(() => login.code('again'), { code: 'invalid_request' });
  const failing = loginManager('codex', fakeLogin(['Device code: WXYZ-9876'], 'other')); failing.start(); await settle();
  assert.equal(failing.status().needsCode, false); failing.code('wrong'); await settle(); assert.equal(failing.status().state, 'failed');
