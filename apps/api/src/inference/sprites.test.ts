@@ -29,6 +29,7 @@ test('provision creates, uploads the files under 0600, starts the service, makes
 	assert.deepEqual(service, { name: 'inference', cmd: 'bash', args: ['/home/sprite/captain-setup/bootstrap.sh'], needs: [], http_port: 8080 });
 	assert.deepEqual(JSON.parse(calls.find((c) => c.method === 'PUT' && c.url.endsWith('/v1/sprites/captain-x'))!.body!), { url_settings: { auth: 'public' } });
 	assert.deepEqual(calls.map((c) => c.method), ['POST', 'PUT', 'PUT', 'PUT', 'PUT', 'PUT', 'PUT', 'PUT', 'POST', 'PUT', 'GET']);
+	assert.deepEqual(JSON.parse(calls[0]!.body!), { name: 'captain-x' });
 });
 
 test('an existing Sprite is reused, a failure names the operation and status but no body, and destroy tolerates 404', async () => {
@@ -37,6 +38,10 @@ test('an existing Sprite is reused, a failure names the operation and status but
 	await assert.rejects(client.provision('captain-x', { 'shim.mjs': Buffer.from('x') }), (e: unknown) => e instanceof SpritesError && e.op === 'write shim.mjs' && e.status === 500 && e.reason === null && !e.message.includes('PRIVATE') && !e.message.includes('private words'));
 	const forbidden = new SpritesClient('t', fake({ 'POST /v1/sprites': [403, { error: 'org_not_enabled', message: 'Contact support about org ACME' }] }));
 	await assert.rejects(forbidden.provision('captain-x', {}), (e: unknown) => e instanceof SpritesError && e.status === 403 && e.reason === 'org_not_enabled' && !e.message.includes('ACME'));
+	const sentence = new SpritesClient('t', fake({ 'POST /v1/sprites': [403, { error: 'restricted tokens cannot set labels' }] }));
+	await assert.rejects(sentence.provision('captain-x', {}), (e: unknown) => e instanceof SpritesError && e.reason === 'restricted_tokens_cannot_set_labels');
+	const named = new SpritesClient('t', fake({ 'POST /v1/sprites': [403, { error: 'Org ACME (id 42) is suspended.' }] }));
+	await assert.rejects(named.provision('captain-x', {}), (e: unknown) => e instanceof SpritesError && e.reason === null);
 	await assert.rejects(client.provision('Bad Name', {}), (e: unknown) => e instanceof SpritesError && e.op === 'create');
 	const gone = new SpritesClient('t', fake({ 'DELETE /v1/sprites/captain-x': [404, null] }));
 	await gone.destroy('captain-x');
