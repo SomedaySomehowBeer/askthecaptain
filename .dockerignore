@@ -4,6 +4,8 @@
 **/dist
 **/.next
 docs
-infra
+# infra stays out except the Sprite files the API uploads when an owner sets up a subscription (D18).
+infra/*
+!infra/sprites
 apps/e2e
 .github
