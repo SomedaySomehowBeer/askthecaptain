@@ -10,6 +10,8 @@ import { upkeepContacts } from '../contacts/upkeep.ts';
 import { suggest, complete } from '../commitments/triage.ts';
 import { workflowDraft } from './outbox.ts';
 import { draftSchema, triageSchema, journal, type Context, type Thread } from './data.ts';
+import { gate, ruleWords, type Prior, type Rule } from './gate.ts';
+import { trimmedMessages } from './text.ts';
 
 export class TriageService {
  readonly db: Sql; readonly connections: Pick<ConnectionService, 'accessToken'>; readonly inference: InferenceService; readonly gmail: GmailClient;
@@ -29,16 +31,19 @@ export class TriageService {
   const threads: Thread[] = [];
   for (const threadId of new Set(batch.map(m => String(m.threadId)))) {
    const [t] = await tx`select id, connection_id, account_email, provider_id from mail_threads where id = ${threadId}`;
-   const messages = await tx`select id, from_header, body, sent_at, subject, rfc_message_id, label_ids from mail_messages
+   const messages = await tx`select id, from_header, body, sent_at, subject, rfc_message_id, label_ids, list_unsubscribe, list_id, precedence, auto_submitted from mail_messages
     where thread_id = ${threadId} order by sent_at desc, provider_id desc limit 20`;
    const latest = messages[0]!; const sender = addresses(latest.fromHeader)[0]?.email ?? '';
    if (sender === conn.accountEmail || latest.labelIds.includes('SENT')) continue;
    const [known] = await tx`select 1 from contacts where email = ${sender} and archived_at is null and source <> 'mail'`;
    const sent = await tx`select to_header, cc_header from mail_messages where connection_id = ${conn.id} and sent_at < ${latest.sentAt} and 'SENT' = any(label_ids)`;
    const knownSender = !!known || sent.some(m => addresses(m.toHeader + ',' + m.ccHeader).some(a => a.email === sender));
+   // The gate's signals (D20) come from the latest incoming message and the thread's stars; the model sees own text only (§14 trimmed input).
+   const signals = { labelIds: latest.labelIds as string[], listUnsubscribe: Boolean(latest.listUnsubscribe), listId: String(latest.listId ?? ''), precedence: String(latest.precedence ?? ''),
+    autoSubmitted: String(latest.autoSubmitted ?? ''), sender, knownSender, starred: messages.some(m => (m.labelIds as string[]).includes('STARRED')) };
    threads.push({ id: t!.id, connectionId: t!.connectionId, accountEmail: t!.accountEmail, providerId: t!.providerId,
-    sourceMessageId: latest.id, sender, knownSender, subject: latest.subject, rfcMessageId: latest.rfcMessageId,
-    messages: messages.reverse().map(m => ({ id: m.id, fromHeader: m.fromHeader, body: m.body.slice(0, 20000), sentAt: m.sentAt.toISOString() })) });
+    sourceMessageId: latest.id, sender, knownSender, subject: latest.subject, rfcMessageId: latest.rfcMessageId, signals,
+    messages: trimmedMessages(messages.reverse().map(m => ({ id: m.id, fromHeader: m.fromHeader, body: m.body, sentAt: m.sentAt.toISOString() }))) });
   }
   return threads;
  }
@@ -60,10 +65,32 @@ export class TriageService {
   }
   return notes; // Never put extracted text into a durable step output (D13).
  }
+ /** Sender priors (plan §5 `mail_senders`): counts only, updated by every verdict; a star seen on the thread counts once per verdict. */
+ async sender(tx: TransactionSql, organisationId: string, thread: Thread, verdict: { information: boolean; needsOwner: boolean }) {
+  if (!thread.sender) return;
+  await tx`insert into mail_senders (organisation_id, email, threads_seen, information_verdicts, needs_owner_count, stars)
+   values (${organisationId}, ${thread.sender.toLowerCase()}, 1, ${verdict.information ? 1 : 0}, ${verdict.needsOwner ? 1 : 0}, ${thread.signals.starred ? 1 : 0})
+   on conflict (organisation_id, email) do update set threads_seen = mail_senders.threads_seen + 1, information_verdicts = mail_senders.information_verdicts + excluded.information_verdicts,
+   needs_owner_count = mail_senders.needs_owner_count + excluded.needs_owner_count, stars = mail_senders.stars + excluded.stars, last_seen_at = now(), updated_at = now()`;
+ }
  registry() {
   const registry = new Registry();
   registry.registerStep('gmail.newThreads', { kind: 'read', transaction: ctx => this.newThreads(ctx) });
   registry.registerStep('attachments.extractText', { kind: 'read', retrySafe: true, call: (ctx, args) => this.attachments(ctx, args.thread as Thread) });
+  registry.registerStep('triage.gate', { kind: 'read', transaction: async (ctx, args) => {
+   const thread = args.thread as Thread; const [row] = await ctx.tx<Prior[]>`select threads_seen, information_verdicts, needs_owner_count, replies, stars from mail_senders where email = ${thread.sender}`;
+   return gate(thread.signals, row ?? null);
+  } });
+  registry.registerStep('triage.file', { kind: 'write', transaction: async (ctx, args) => {
+   const thread = args.thread as Thread; const rule = (args.gate as { rule: Rule }).rule; const { tx } = ctx;
+   await tx`insert into mail_triage (organisation_id, thread_id, category, needs_owner, summary, facts, produced_by, model, source_message_id)
+    values (${ctx.organisationId}, ${thread.id}, 'information', false, ${'Filed without reading it. ' + ruleWords[rule]}, ${tx.json({ counterparty: null, amounts: [], dates: [], references: [] })}, ${ctx.runId}, ${'gate:' + rule}, ${thread.sourceMessageId})
+    on conflict (organisation_id, thread_id) do update set category = excluded.category, needs_owner = excluded.needs_owner, summary = excluded.summary,
+    facts = excluded.facts, produced_by = excluded.produced_by, model = excluded.model, source_message_id = excluded.source_message_id, updated_at = now()
+    where mail_triage.source_message_id <= excluded.source_message_id`;
+   await this.sender(tx, ctx.organisationId, thread, { information: true, needsOwner: false });
+   await journal(ctx, 'mail.filed', 'mail_thread', thread.id, { rule }); return null;
+  } });
   registry.registerStep('classifyThread', { kind: 'infer', retrySafe: true, call: async (ctx, args) => {
    const thread = args.thread as Thread;
    // A resumed run may outlive the cache; reacquire allowed text, without retaining it in the journal.
@@ -81,6 +108,7 @@ export class TriageService {
     on conflict (organisation_id, thread_id) do update set category = excluded.category, needs_owner = excluded.needs_owner, summary = excluded.summary,
     facts = excluded.facts, produced_by = excluded.produced_by, model = excluded.model, source_message_id = excluded.source_message_id, updated_at = now()
     where mail_triage.source_message_id <= excluded.source_message_id`;
+   await this.sender(tx, ctx.organisationId, thread, { information: triage.category === 'information', needsOwner: triage.needsOwner });
    await journal(ctx, 'mail.triaged', 'mail_thread', thread.id); return null;
   } });
   registry.registerStep('tasks.suggestFromTriage', { kind: 'write', transaction: (ctx, args) => suggest(ctx, args.thread as Thread, triageSchema.parse(args.triage).tasks) });

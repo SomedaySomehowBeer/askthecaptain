@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { boolean, check, foreignKey, index, jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
 import { organisations, connections } from './connections-schema.ts';
 import { mailMessages, mailThreads } from './mail-schema.ts';
 import { workflowRuns } from './workflows-schema.ts';
@@ -32,3 +32,11 @@ export const outbox = pgTable('outbox', {
  foreignKey({ columns: [t.organisationId, t.threadId], foreignColumns: [mailThreads.organisationId, mailThreads.id] }),
  foreignKey({ columns: [t.organisationId, t.connectionId], foreignColumns: [connections.organisationId, connections.id] }).onDelete('cascade'),
  foreignKey({ columns: [t.organisationId, t.createdBy], foreignColumns: [workflowRuns.organisationId, workflowRuns.id] })]);
+/** Per-sender priors the triage gate and the draft score read (plan §5, D20). Counts only; never mail. */
+export const mailSenders = pgTable('mail_senders', {
+ organisationId: org(), email: text('email').notNull(), threadsSeen: integer('threads_seen').notNull().default(0), informationVerdicts: integer('information_verdicts').notNull().default(0),
+ needsOwnerCount: integer('needs_owner_count').notNull().default(0), replies: integer('replies').notNull().default(0), stars: integer('stars').notNull().default(0),
+ draftsSent: integer('drafts_sent').notNull().default(0), draftsEdited: integer('drafts_edited').notNull().default(0), draftsDiscarded: integer('drafts_discarded').notNull().default(0),
+ draftsNotNeeded: integer('drafts_not_needed').notNull().default(0), draftsRequested: integer('drafts_requested').notNull().default(0),
+ lastSeenAt: at('last_seen_at').notNull().defaultNow(), createdAt: at('created_at').notNull().defaultNow(), updatedAt: at('updated_at').notNull().defaultNow()
+}, t => [primaryKey({ columns: [t.organisationId, t.email] })]);

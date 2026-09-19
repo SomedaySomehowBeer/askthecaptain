@@ -1,11 +1,12 @@
 import { awaitStep, boolean, branch, daily, defineWorkflow, each, infer, onEvent, param, read, text, write } from '../definition.ts';
 
-/** Plan §6 example. As mail arrives and each morning: read new threads, classify each, record the
- *  triage, raise suggested tasks, complete duties whose confirmation arrived, keep contacts current;
- *  for threads that need the owner, draft a reply into the outbox and wait for a person to send it;
- *  then label the thread as handled. */
+/** Plan §6. As mail arrives and each morning: read new threads; gate each with rules and sender
+ *  priors (D20), filing bulk and automated mail without a model call; classify the rest, record the
+ *  triage, raise suggested tasks, complete duties whose confirmation arrived; for threads that need
+ *  the owner, draft a reply into the outbox and wait for a person to send it; keep contacts current
+ *  and label the thread as handled either way. */
 export const inboxTriage = defineWorkflow({
-	key: 'inbox-triage', version: 1, name: 'Inbox triage', job: 1,
+	key: 'inbox-triage', version: 2, name: 'Inbox triage', job: 1,
 	description: 'Reads new mail, says what needs you, drafts the replies you would send, and files the rest.',
 	triggers: [onEvent('mail.synced'), daily('06:00')],
 	parameters: {
@@ -15,17 +16,22 @@ export const inboxTriage = defineWorkflow({
 	steps: [
 		read('gmail.newThreads', { as: 'threads' }),
 		each('threads', [
-			read('attachments.extractText', { args: { thread: { ref: 'item' }, allow: ['application/pdf', 'text/csv', 'text/plain'], maxBytes: 5_000_000 }, as: 'attachments' }),
-			infer('classifyThread', { schema: 'triage', tier: 'small', args: { thread: { ref: 'item' }, attachments: { ref: 'attachments' } }, as: 'triage' }),
-			write('triage.record', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
-			write('tasks.suggestFromTriage', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
-			write('tasks.completeFromConfirmations', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
-			write('contacts.upsertFromTriage', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
-			branch({ and: [{ truthy: 'triage.needsOwner' }, { param: 'draftReplies' }] }, [
-				infer('draftReply', { schema: 'draft', tier: 'large', args: { thread: { ref: 'item' }, triage: { ref: 'triage' }, style: param('replyStyle') }, as: 'draft' }),
-				write('outbox.create', { args: { thread: { ref: 'item' }, draft: { ref: 'draft' } }, as: 'outboxDraft' }),
-				awaitStep('outbox.sent', { args: { draft: { ref: 'outboxDraft' } }, timeoutDays: 7 })
+			read('triage.gate', { args: { thread: { ref: 'item' } }, as: 'gate' }),
+			branch({ truthy: 'gate.passes' }, [
+				read('attachments.extractText', { args: { thread: { ref: 'item' }, allow: ['application/pdf', 'text/csv', 'text/plain'], maxBytes: 5_000_000 }, as: 'attachments' }),
+				infer('classifyThread', { schema: 'triage', tier: 'small', args: { thread: { ref: 'item' }, attachments: { ref: 'attachments' } }, as: 'triage' }),
+				write('triage.record', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
+				write('tasks.suggestFromTriage', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
+				write('tasks.completeFromConfirmations', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
+				branch({ and: [{ truthy: 'triage.needsOwner' }, { param: 'draftReplies' }] }, [
+					infer('draftReply', { schema: 'draft', tier: 'large', args: { thread: { ref: 'item' }, triage: { ref: 'triage' }, style: param('replyStyle') }, as: 'draft' }),
+					write('outbox.create', { args: { thread: { ref: 'item' }, draft: { ref: 'draft' } }, as: 'outboxDraft' }),
+					awaitStep('outbox.sent', { args: { draft: { ref: 'outboxDraft' } }, timeoutDays: 7 })
+				])
+			], [
+				write('triage.file', { args: { thread: { ref: 'item' }, gate: { ref: 'gate' } } })
 			]),
+			write('contacts.upsertFromTriage', { args: { thread: { ref: 'item' } } }),
 			write('gmail.label', { args: { thread: { ref: 'item' }, label: 'Captain/Handled' } })
 		])
 	]

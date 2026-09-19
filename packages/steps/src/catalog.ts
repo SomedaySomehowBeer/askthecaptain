@@ -30,6 +30,7 @@ export const catalog: Record<string, CatalogEntry> = {
 	'contacts.forEvent': { kind: 'read', does: 'reads the contacts attending an event', requires: [] },
 	'xero.overdueReceivables': { kind: 'read', does: 'reads cached overdue invoices and explicit Xero connection state', requires: [] },
 	'stock.items': { kind: 'read', does: 'reads the counted stock list for a location', requires: [] },
+	'triage.gate': { kind: 'read', does: 'decides by rules, with no model, whether the thread is bulk or automated mail (D20)', requires: [] },
 	'shopify.stockLevels': { kind: 'read', does: 'reads shop levels or reports that Shopify is disconnected or incomplete', requires: [] },
 	// infer
 	'answer': { kind: 'infer', does: 'answers one question from deterministically retrieved records, with sources', requires: ['inference'], schemas: ['answer'] },
@@ -42,6 +43,7 @@ export const catalog: Record<string, CatalogEntry> = {
 	// write
 	'briefs.record': { kind: 'write', does: 'saves the validated morning brief for Today', requires: [] },
 	'triage.record': { kind: 'write', does: 'records the triage result for the thread', requires: [] },
+	'triage.file': { kind: 'write', does: 'files the thread as information, naming the rule that filed it', requires: [] },
 	'tasks.suggestFromTriage': { kind: 'write', does: 'creates suggested tasks from the facts found', requires: [] },
 	'tasks.completeFromConfirmations': { kind: 'write', does: 'completes duties whose confirmation arrived', requires: [] },
 	'contacts.upsertFromTriage': { kind: 'write', does: 'keeps contacts current from the thread', requires: [] },

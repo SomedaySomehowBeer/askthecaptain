@@ -22,8 +22,9 @@ async function Inbox({ me, before }: { me: Awaited<ReturnType<typeof requireCurr
 	const { connection, lastSync, threads, timezone, nextBefore, automaticSyncEnabled, triageNotice, outbox } = result.value;
 	if (!connection || connection.status === 'disconnected') return <Notice title="Connect Google to see your mail" action={{ href: '/settings/connections', label: 'Go to Connections' }}>An owner or admin can connect the business’s Gmail account in Settings.</Notice>;
 	const canSync = me.organisation.role !== 'member'; const available = connection.status === 'connected';
-	const groups = new Map<string, ThreadSummary[]>(['Needs you', 'Waiting for a reply you drafted', 'Awaiting triage', 'Handled'].map(name => [name, []]));
-	for (const thread of threads) { const day = thread.hasDraft ? 'Waiting for a reply you drafted' : !thread.triage ? 'Awaiting triage' : thread.triage.needsOwner ? 'Needs you' : 'Handled'; groups.set(day, [...(groups.get(day) ?? []), thread]); }
+	// Filed mail was kept out of the way by the gate's rules (D20), with no model call; it sits last, closed.
+	const groups = new Map<string, ThreadSummary[]>(['Needs you', 'Waiting for a reply you drafted', 'Awaiting triage', 'Handled', 'Filed'].map(name => [name, []]));
+	for (const thread of threads) { const day = thread.hasDraft ? 'Waiting for a reply you drafted' : !thread.triage ? 'Awaiting triage' : thread.triage.needsOwner ? 'Needs you' : thread.triage.model?.startsWith('gate:') ? 'Filed' : 'Handled'; groups.set(day, [...(groups.get(day) ?? []), thread]); }
 	return <>
 		{triageNotice ? <Notice tone="attention" action={{ href: '/settings/workflows', label: 'Review workflows' }}>{triageNotice}</Notice> : null}
 		<section className="card stack mail-message">
@@ -38,7 +39,7 @@ async function Inbox({ me, before }: { me: Awaited<ReturnType<typeof requireCurr
 		</section>
 		{before ? <Link href="/inbox" className="button button--ghost">Newest mail</Link> : null}
 		{threads.length === 0 ? <Notice title="No synced mail yet">{lastSync?.detail.success ? 'The recent-mail sync found no threads to show.' : 'Use Sync now to collect recent mail, or wait for the next automatic check.'}</Notice> : null}
-		{[...groups].filter(([, items]) => items.length).map(([day, items]) => <section className="card" key={day}><h2>{day}</h2><ul className="bare">
+		{[...groups].filter(([, items]) => items.length).map(([day, items]) => <section className="card" key={day}><h2>{day}</h2>{day === 'Filed' ? <p className="muted">Bulk and automated mail, filed by rule without reading it. Open one to see which rule.</p> : null}<ul className="bare">
 			{items.map((thread) => <li className="mail-row" key={thread.id}><Link className="mail-link" href={`/inbox/${thread.id}`}>
 				<div className="line"><strong>{thread.fromHeader || 'Sender unavailable'}</strong><time dateTime={thread.sentAt}>{mailTime(thread.sentAt, timezone)}</time></div>
 				<h3>{thread.subject || '(No subject)'}</h3>{thread.triage ? <TriageFacts triage={thread.triage} /> : <p className="secondary">{thread.snippet || 'No preview available.'}</p>}

@@ -1,3 +1,4 @@
+import { addresses } from '../contacts/addresses.ts';
 import { WorkflowPause } from '@captain/engine';
 import { XeroService } from '../xero/service.ts';
 import { randomUUID } from 'node:crypto';
@@ -146,7 +147,12 @@ export class OutboxService {
   if (!providerId) throw uncertain();
   return this.tx(actor, org, async tx => {
    const [updated] = await tx`update outbox set state = 'sent', provider_message_id = ${providerId}, sent_at = now(), updated_at = now() where id = ${id} and state = 'drafted' returning *`;
-   if (updated) { await this.journal(tx, actor, org, id, 'sent'); if (updated.createdBy) await this.wake(tx, org, updated.createdBy, `outbox:${id}`); }
+   if (updated) {
+    await this.journal(tx, actor, org, id, 'sent'); if (updated.createdBy) await this.wake(tx, org, updated.createdBy, `outbox:${id}`);
+    // A reply from a person resets the sender's prior (D20): from now on their mail always reaches the model.
+    for (const email of new Set(addresses((updated.to as string[]).join(',')).map(a => a.email))) await tx`insert into mail_senders (organisation_id, email, replies) values (${org}, ${email}, 1)
+     on conflict (organisation_id, email) do update set replies = mail_senders.replies + 1, updated_at = now()`;
+   }
    return updated ?? (await tx`select * from outbox where id = ${id}`)[0]!;
   });
  }

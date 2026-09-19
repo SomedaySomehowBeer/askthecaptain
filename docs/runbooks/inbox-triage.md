@@ -41,3 +41,26 @@ and [reply threading](https://developers.google.com/workspace/gmail/api/guides/t
 The opt-in Playwright regression in `apps/e2e/tests/inbox.spec.ts` requires a disposable fixture
 from `apps/api/test/triage-fixture.ts`, a member session, `E2E_TRIAGE_THREAD` and
 `E2E_TRIAGE_FIXTURE=1`. Run it only against fake Gmail; it edits and sends a draft.
+
+## The gate (D20)
+
+Before any model call, `triage.gate` decides by rules whether a thread is bulk or automated mail:
+Gmail's Promotions, Social or Forums category; a List-Unsubscribe or List-Id header; Precedence
+bulk, list or junk; an Auto-Submitted header other than `no`; a no-reply, notifications or
+mailer-daemon sender; a sender whose three or more earlier verdicts were all information with
+needs-owner off and whom nobody has replied to or starred; or Gmail's Updates category from a
+sender the business does not know. A filed thread gets a `mail_triage` row with category
+`information`, needs-owner off, a summary that names the rule in words and a `model` of
+`gate:<rule>`, plus a `mail.filed` audit event. Sync keeps the four headers on `mail_messages`;
+nothing else new is stored. The Inbox shows filed threads last, under **Filed**.
+
+Sender priors live in `mail_senders` (counts only): every verdict, filed or modelled, bumps the
+sender; a send from the outbox bumps `replies` for each recipient; a star seen on the thread bumps
+`stars`. A reply or a star means the sender's mail always reaches the model again.
+
+The model sees each message's own text only: quoted reply blocks, forwarded header blocks and
+signatures are cut, the latest message keeps up to 20,000 characters and earlier ones 500.
+
+The definition is version 2. An organisation that enabled version 1 must save the workflow's
+parameters again in Settings → Workflows before a new run will start; the runner says so.
+
