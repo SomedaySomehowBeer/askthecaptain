@@ -15,8 +15,6 @@
 	--font-ui: var(--font-sans); --font-data: var(--font-mono);
 	/* Web extensions: the system's sea is 3.7:1 on paper; text on light uses a darker sea. */
 	--accent-text: #246d3a; --accent-hover: #7fd497;
-	/* A floating bar's shadow is diffuse, with no crisp edge, and the bar lets content show through. */
-	--shadow-float: 0 8px 28px rgba(22, 21, 19, 0.10);
 	--captain-src: url('/brand/captain.svg');
 	--tabbar-h: 0px;
 	color-scheme: light;
@@ -50,7 +48,8 @@ a { color: var(--accent-text); }
 	:root { --tabbar-h: calc(76px + env(safe-area-inset-bottom, 0px)); }
 	.topnav { display: none; }
 	.wordmark__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-	.tabbar { display: flex; position: fixed; left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 10; padding: 6px; gap: 2px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--panel) 86%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); box-shadow: var(--shadow-float); }
+	/* No shadow: Safari clips the page at its own toolbar, so a shadow below the bar ends in a hard line. The hairline and the blur say “floating” on their own. */
+	.tabbar { display: flex; position: fixed; left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); z-index: 10; padding: 6px; gap: 2px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--panel) 86%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); box-shadow: none; }
 	.tabbar__tab { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 52px; padding: 4px 7px; color: var(--muted); text-decoration: none; border-radius: 999px; }
 	.tabbar__tab[aria-current='page'] { color: var(--accent-text); background: var(--accent-soft, var(--atc-mint-soft)); }
 	.tabbar__tab:active { opacity: var(--press-opacity); }
