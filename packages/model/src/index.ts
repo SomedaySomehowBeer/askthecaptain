@@ -12,8 +12,8 @@ export type Request = { provider: ProviderName; model: string; instruction: stri
 export const resultSchema = z.object({ output: z.unknown(), usage: z.object({ inputTokens: z.number().int().nonnegative().safe(), outputTokens: z.number().int().nonnegative().safe() }), model: z.string().min(1), latencyMs: z.number().int().nonnegative().max(2147483647) });
 export type Result = z.infer<typeof resultSchema>;
 /** Sign-in driven from Settings: what the shim reports about the provider's own CLI login. */
-export type LoginState = { state: 'idle' | 'waiting' | 'done' | 'failed'; url: string | null; code: string | null; needsCode: boolean };
-export const loginStateSchema = z.object({ state: z.enum(['idle', 'waiting', 'done', 'failed']), url: z.string().nullable(), code: z.string().max(40).nullable(), needsCode: z.boolean() }).strict();
+export type LoginState = { state: 'idle' | 'waiting' | 'done' | 'failed'; url: string | null; code: string | null; needsCode: boolean; note?: string | null };
+export const loginStateSchema = z.object({ state: z.enum(['idle', 'waiting', 'done', 'failed']), url: z.string().nullable(), code: z.string().max(40).nullable(), needsCode: z.boolean(), note: z.string().max(400).nullable().optional() }).strict();
 export interface Provider { infer(request: Request): Promise<Result>; health(): Promise<void>; loginStart(): Promise<LoginState>; loginStatus(): Promise<LoginState>; loginCode(code: string): Promise<LoginState> }
 export type InferInput<T> = { organisationId: string; step: string; tier: Tier; instruction: string; input: unknown; schema: z.ZodType<T>; runId?: string; maxTokens?: number };
 export function modelFor(provider: ProviderName, tier: Tier, env: NodeJS.ProcessEnv = process.env) {

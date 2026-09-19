@@ -108,7 +108,9 @@ it('setting up a subscription creates the Sprite through the API, moves to needs
  const state = await service.get(actor, organisationId); assert.equal(state.runtime!.status, 'needs_login'); assert.equal(state.spritesConfigured, true);
  assert.ok(!JSON.stringify(state).includes(sprites.secret));
  const [row] = await db.owner`select connection_encrypted from inference_runtimes where organisation_id = ${organisationId}`; assert.ok(row!.connectionEncrypted);
- await assert.rejects(service.request(actor, organisationId, 'claude'), { code: 'runtime_exists' });
+ // Not ready yet: setting up again reinstalls in place on the same Sprite.
+ assert.equal((await service.request(actor, organisationId, 'codex')).runtime!.status, 'provisioning'); assert.equal(sprites.provisioned.length, 2);
+ healthy = true; assert.equal((await service.get(actor, organisationId)).runtime!.status, 'needs_login');
  // Sign-in from Settings: start, read the state live, forward one code, never journal it.
  const started = await service.loginStart(actor, organisationId); assert.equal(started.state, 'waiting'); assert.equal(started.url, 'https://claude.ai/oauth/authorize?state=stub');
  const signing = await service.get(actor, organisationId); assert.equal(signing.login?.state, 'waiting'); assert.equal(signing.runtime!.loginUrl, 'https://claude.ai/oauth/authorize?state=stub');

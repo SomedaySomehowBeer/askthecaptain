@@ -75,13 +75,14 @@ export async function invoke(request) {
 const loginUrl = /https:\/\/(?:claude\.ai|claude\.com|platform\.claude\.com|console\.anthropic\.com|auth\.openai\.com)\/[^\s<>"'\x1b]+/;
 export function loginManager(provider, spawnLogin = () => spawn('python3', [`${root}/login.py`, provider], { cwd: root, env: { PATH: binPath, HOME: '/home/sprite', LANG: 'C.UTF-8', CAPTAIN_ROOT: root }, stdio: ['pipe', 'pipe', 'pipe'] })) {
  let child = null, timer = null;
- const state = { state: 'idle', url: null, code: null, needsCode: provider === 'claude' };
+ const state = { state: 'idle', url: null, code: null, needsCode: provider === 'claude', note: null };
+ const notes = [];
  const finish = outcome => { state.state = outcome; if (timer) clearTimeout(timer); timer = null; child = null; };
  return {
   status: () => ({ ...state }),
   start() {
    if (state.state === 'waiting') return { ...state };
-   Object.assign(state, { state: 'waiting', url: null, code: null });
+   Object.assign(state, { state: 'waiting', url: null, code: null, note: null }); notes.length = 0;
    let buffer = '';
    try { child = spawnLogin(); } catch { finish('failed'); return { ...state }; }
    const read = chunk => {
@@ -89,6 +90,7 @@ export function loginManager(provider, spawnLogin = () => spawn('python3', [`${r
     for (const line of lines) {
      const url = loginUrl.exec(line); if (url && !state.url) state.url = url[0];
      const code = /^Device code: ([A-Z0-9-]{4,20})$/.exec(line.trim()); if (code) state.code = code[1];
+     const note = /^CLI(?: exited \d+|: .+)$/.exec(line.trim()); if (note) { notes.push(note[0].replace(/[A-Za-z0-9_-]{32,}/g, '…').slice(0, 160)); state.note = notes.slice(-3).join(' · ').slice(0, 400); }
      if (/login saved on the Sprite\.$/.test(line.trim())) finish('done');
      if (/did not finish/.test(line)) finish('failed');
     }
