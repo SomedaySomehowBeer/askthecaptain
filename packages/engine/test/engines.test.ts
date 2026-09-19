@@ -41,7 +41,7 @@ for (const code of ['budget_spent', 'needs_login', 'runtime_not_ready'] as const
   // Repair runtime state as the operator would after login; do not consume fixture inference output.
   await db.owner`update inference_runtimes set status = 'ready' where organisation_id = ${f.organisationId}`;
   await f.tx(tx => f.engine.control(tx, f.organisationId, id, 'resume')); await finish(f, id);
-  assert.equal((await f.state(id)).definitionVersion, 1);
+  assert.equal((await f.state(id)).definitionVersion, f.definition.version);
  } finally { await f.engine.close(); }
 });
 it('a committed wait survives worker restart, then an early destination event completes it', async () => {
@@ -106,9 +106,9 @@ it('timeout remains durable and names the awaiting step', async () => {
 it('snapshots stay pinned after enablement edits and cannot be rewritten', async () => {
  const f = await fixture(db); try {
   const id = await f.start(); await until(async () => (await f.state(id)).state === 'waiting', 'wait');
-  await f.tx(async tx => { await tx`update workflow_enablements set parameters = '{"draftReplies":false}', definition_version = 2 where id = ${f.enablementId}`; });
+  await f.tx(async tx => { await tx`update workflow_enablements set parameters = '{"draftReplies":false}', definition_version = ${f.definition.version + 1} where id = ${f.enablementId}`; });
   await assert.rejects(f.tx(async tx => { await tx`update workflow_runs set snapshot = '{}' where id = ${id}`; }), /immutable/);
-  await finish(f, id); assert.equal((await f.state(id)).definitionVersion, 1);
+  await finish(f, id); assert.equal((await f.state(id)).definitionVersion, f.definition.version);
   assert.equal((await f.tx(tx => tx`select id from engine_spike.outbox where run_id = ${id}`)).length, 2);
  } finally { await f.engine.close(); }
 });
