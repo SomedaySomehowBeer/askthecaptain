@@ -22,6 +22,10 @@ export async function configureRuntime(tx: TransactionSql, organisationId: strin
  await tx`update inference_runtimes set connection_encrypted = ${input.encrypted}, sprite_name = ${input.spriteName}, region = ${input.region}, login_hint = ${input.loginHint}, login_url = ${input.loginUrl}, status = ${input.status ?? 'needs_login'}, updated_at = now() where organisation_id = ${organisationId}`;
  await inferenceAudit(tx, organisationId, 'inference.runtime_configured');
 }
+/** The allowlisted sign-in URL the shim reported, so Settings can show it without another round trip. */
+export async function loginUrl(tx: TransactionSql, organisationId: string, url: string | null) {
+ await tx`update inference_runtimes set login_url = ${url}, updated_at = now() where organisation_id = ${organisationId}`;
+}
 export async function runtimeState(tx: TransactionSql, organisationId: string, status: Runtime['status'], error: string | null = null) {
  await tx`update inference_runtimes set status = ${status}, error = ${error}, last_verified_at = now(), updated_at = now(),
  connection_encrypted = case when ${status} = 'removed' then null else connection_encrypted end,

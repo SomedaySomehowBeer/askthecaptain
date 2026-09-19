@@ -47,8 +47,15 @@ token can create and destroy Sprites and write files to them; keep it out of eve
 3. `bootstrap.sh` installs the pinned CLIs when missing, lays out `/opt/captain`, moves the secret
    there and execs the shim. When the shim answers `/health`, refreshing Settings moves the status
    to **Needs sign-in**. First boot takes a few minutes.
-4. Sign in from Settings (landing with the next pull request; until then `login.py` remains on the
-   Sprite for an operator with `sprite exec`). Then **Verify sign-in**.
+4. Press **Sign in**. The API asks the shim to start `login.py`, which runs `claude setup-token`
+   or `codex login --device-auth` on the Sprite. Settings shows **Open sign-in** with the
+   provider's allowlisted URL and, for Codex, the device code in large type. Sign in on the phone.
+   Codex completes on its own: refresh, then **Verify sign-in**. Claude hands back a one-time
+   code: paste it into the code field; the API forwards it once to the shim, which writes it to
+   the CLI's stdin, and the long-lived token is written to `/opt/captain/claude-token` (0600) on
+   the Sprite. The code is never stored or journaled; the journal records only that one was
+   forwarded. Then **Verify sign-in**. A sign-in that does not finish within fifteen minutes
+   reads failed; press Sign in again.
 5. **Disconnect runtime** destroys the Sprite through the same API, and the subscription login
    with it. A partial failure leaves the status **Failed** with the operation and HTTP status in
    the audit journal; disconnect and set up again.

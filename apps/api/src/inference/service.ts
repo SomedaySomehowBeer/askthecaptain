@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { withTenant, type Sql } from '@captain/db';
 import * as store from '@captain/db/inference';
-import { infer, InferenceError, type InferInput, type Provider, type SubscriptionProviderName } from '@captain/model';
+import { infer, InferenceError, type InferInput, type LoginState, type Provider, type SubscriptionProviderName } from '@captain/model';
 import { SpriteProvider } from '@captain/model/sprite';
 import { newDataKey, open, seal } from '../connections/encryption.ts';
 import { badRequest, forbidden, HttpError, notFound } from '../errors.ts';
 import { roleOf, type Actor } from '../tenant.ts';
 import { spriteFiles, SpritesError, type Provisioner } from './sprites.ts';
 import { randomBytes } from 'node:crypto';
+/** The sign-in hosts a shim may name; anything else is dropped rather than shown. */
+export const allowedLoginUrl = (value: string) => { try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && !u.port && ['claude.ai', 'platform.claude.com', 'auth.openai.com'].includes(u.hostname); } catch { return false; } };
 const publicRuntime = (runtime: store.Runtime | undefined) => runtime && (({ connectionEncrypted: _, ...visible }) => visible)(runtime);
 export class InferenceService {
  private readonly db: Sql; private readonly master: Buffer | null; private readonly providerFactory: (url: string, secret: string) => Provider;
@@ -35,7 +37,40 @@ export class InferenceService {
    if (runtime?.status === 'provisioning' && runtime.connectionEncrypted && role === 'owner' && await this.answers(tx, organisationId, runtime)) {
     await store.runtimeState(tx, organisationId, 'needs_login'); runtime = await store.getRuntime(tx, organisationId);
    }
-   return { role, disabled: !this.master, spritesConfigured: Boolean(this.sprites), runtime: publicRuntime(runtime) ?? null, budget: await store.budget(tx, organisationId), usage: await store.usageByTier(tx, organisationId) };
+   // Signing in: the shim's view of the provider's own login, read live for the owner; null when it cannot be read.
+   const login = runtime && ['needs_login', 'failed'].includes(runtime.status) && runtime.connectionEncrypted && role === 'owner' ? await this.loginState(tx, organisationId, runtime) : null;
+   return { role, disabled: !this.master, spritesConfigured: Boolean(this.sprites), runtime: publicRuntime(runtime) ?? null, login, budget: await store.budget(tx, organisationId), usage: await store.usageByTier(tx, organisationId) };
+  });
+ }
+ private async loginState(tx: Parameters<typeof store.getRuntime>[0], organisationId: string, runtime: store.Runtime): Promise<LoginState | null> {
+  try { const provider = await this.provider(tx, organisationId, runtime); return await Promise.race([provider.loginStatus(), new Promise<never>((_, reject) => setTimeout(() => reject(new Error('slow')), 4000).unref())]); }
+  catch { return null; }
+ }
+ /** Sign-in from Settings: the shim runs the provider's own CLI login; only its allowlisted URL and device code come back. */
+ async loginStart(actor: Actor, organisationId: string): Promise<LoginState> {
+  await this.owner(actor, organisationId);
+  return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
+   await store.dataKey(tx, organisationId);
+   const runtime = await store.getRuntime(tx, organisationId, true);
+   if (!runtime || !runtime.connectionEncrypted || !['needs_login', 'failed', 'ready'].includes(runtime.status)) throw badRequest('runtime_not_ready', 'Set up the runtime first. Sign-in starts once it reads Needs sign-in.');
+   const provider = await this.provider(tx, organisationId, runtime);
+   const state = await provider.loginStart();
+   await store.loginUrl(tx, organisationId, state.url && allowedLoginUrl(state.url) ? state.url : null);
+   await store.inferenceAudit(tx, organisationId, 'inference.login_started');
+   return state;
+  });
+ }
+ /** Claude's one-time authorisation code: forwarded to the shim once, held in memory only, never journaled. */
+ async loginCode(actor: Actor, organisationId: string, code: string): Promise<LoginState> {
+  await this.owner(actor, organisationId);
+  return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
+   await store.dataKey(tx, organisationId);
+   const runtime = await store.getRuntime(tx, organisationId, true);
+   if (!runtime || !runtime.connectionEncrypted || runtime.status === 'removed') throw badRequest('runtime_not_ready', 'Set up the runtime and start sign-in first.');
+   const provider = await this.provider(tx, organisationId, runtime);
+   const state = await provider.loginCode(code);
+   await store.inferenceAudit(tx, organisationId, 'inference.login_code_forwarded');
+   return state;
   });
  }
  private async answers(tx: Parameters<typeof store.getRuntime>[0], organisationId: string, runtime: store.Runtime) {

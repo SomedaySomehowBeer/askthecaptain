@@ -108,6 +108,12 @@ it('setting up a subscription creates the Sprite through the API, moves to needs
  assert.ok(!JSON.stringify(state).includes(sprites.secret));
  const [row] = await db.owner`select connection_encrypted from inference_runtimes where organisation_id = ${organisationId}`; assert.ok(row!.connectionEncrypted);
  await assert.rejects(service.request(actor, organisationId, 'claude'), { code: 'runtime_exists' });
+ // Sign-in from Settings: start, read the state live, forward one code, never journal it.
+ const started = await service.loginStart(actor, organisationId); assert.equal(started.state, 'waiting'); assert.equal(started.url, 'https://claude.ai/oauth/authorize?state=stub');
+ const signing = await service.get(actor, organisationId); assert.equal(signing.login?.state, 'waiting'); assert.equal(signing.runtime!.loginUrl, 'https://claude.ai/oauth/authorize?state=stub');
+ assert.equal((await service.loginCode(actor, organisationId, 'one-time#SECRET-CODE')).state, 'done'); assert.deepEqual(stub.codes, ['one-time#SECRET-CODE']);
+ assert.equal((await service.get(actor, organisationId)).login?.state, 'done');
+ assert.ok(!JSON.stringify(await db.owner`select * from audit_events where organisation_id = ${organisationId}`).includes('SECRET-CODE'));
  await service.remove(actor, organisationId); assert.deepEqual(sprites.destroyed, [`captain-${organisationId}`]);
  assert.equal((await service.get(actor, organisationId)).runtime!.status, 'removed');
  const events = await db.owner`select action, detail from audit_events where organisation_id = ${organisationId}`;
@@ -117,6 +123,7 @@ it('setting up a subscription creates the Sprite through the API, moves to needs
  await db.owner`insert into memberships (organisation_id, user_id, role) values (${org2Id}, ${actor.userId}, 'owner')`;
  await assert.rejects(failing.request(actor, org2Id, 'claude'), { code: 'provisioning_failed' });
  assert.equal((await failing.get(actor, org2Id)).runtime!.status, 'failed');
+ await assert.rejects(failing.loginStart(actor, org2Id), { code: 'runtime_not_ready' });
  const none = new InferenceService(db.app, randomBytes(32), () => stub, null);
  await failing.remove(actor, org2Id);
  const byHand = await none.request(actor, org2Id, 'claude'); assert.equal(byHand.runtime!.status, 'provisioning'); assert.equal(byHand.runtime!.spriteName, null);
