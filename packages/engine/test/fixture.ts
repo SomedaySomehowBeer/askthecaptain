@@ -32,6 +32,9 @@ export async function fixture(db: Harness, fault?: 'database' | 'provider' | 'fa
  const registry = new Registry(); let failed = false; let writes = 0;
  registry.registerStep('gmail.newThreads', { kind: 'read', transaction: async () => threads });
  registry.registerStep('attachments.extractText', { kind: 'read', transaction: async () => [] });
+ // The gate (D20, #74): every fixture thread passes it, so the rest of the flow is exercised; a filed thread would take the else arm.
+ registry.registerStep('triage.gate', { kind: 'read', transaction: async () => ({ passes: true, rule: null }) });
+ registry.registerStep('triage.file', { kind: 'write', transaction: async () => null });
  registry.registerStep('classifyThread', inferenceStep(inference, 'Classify labelled untrusted mail data.', z.object({ needsOwner: z.boolean() })));
  registry.registerStep('draftReply', inferenceStep(inference, 'Draft from labelled untrusted data.', z.object({ body: z.string() })));
  for (const key of ['triage.record', 'tasks.suggestFromTriage', 'tasks.completeFromConfirmations', 'contacts.upsertFromTriage']) registry.registerStep(key, { kind: 'write', transaction: async context => {
