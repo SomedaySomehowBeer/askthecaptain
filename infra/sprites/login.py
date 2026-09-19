@@ -26,7 +26,7 @@ try:
    print('Claude login saved on the Sprite.', flush=True)
    break
   # Emit only allowlisted login URLs and device user codes, never arbitrary CLI output.
-  for value in re.findall(r'https://(?:claude\.ai|platform\.claude\.com|auth\.openai\.com)/[^\s\x1b<>]+', transcript):
+  for value in re.findall(r'https://(?:claude\.ai|claude\.com|platform\.claude\.com|console\.anthropic\.com|auth\.openai\.com)/[^\s\x1b<>]+', transcript):
    if value not in seen: print(value, flush=True); seen.add(value)
   for value in re.findall(r'\b[A-Z0-9]{4}-[A-Z0-9]{4}\b', transcript):
    if value not in seen: print('Device code: ' + value, flush=True); seen.add(value)

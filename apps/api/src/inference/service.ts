@@ -9,7 +9,7 @@ import { roleOf, type Actor } from '../tenant.ts';
 import { spriteFiles, SpritesError, type Provisioner } from './sprites.ts';
 import { randomBytes } from 'node:crypto';
 /** The sign-in hosts a shim may name; anything else is dropped rather than shown. */
-export const allowedLoginUrl = (value: string) => { try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && !u.port && ['claude.ai', 'platform.claude.com', 'auth.openai.com'].includes(u.hostname); } catch { return false; } };
+export const allowedLoginUrl = (value: string) => { try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password && !u.port && ['claude.ai', 'claude.com', 'platform.claude.com', 'console.anthropic.com', 'auth.openai.com'].includes(u.hostname); } catch { return false; } };
 const publicRuntime = (runtime: store.Runtime | undefined) => runtime && (({ connectionEncrypted: _, ...visible }) => visible)(runtime);
 export class InferenceService {
  private readonly db: Sql; private readonly master: Buffer | null; private readonly providerFactory: (url: string, secret: string) => Provider;
