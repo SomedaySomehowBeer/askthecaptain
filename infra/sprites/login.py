@@ -19,11 +19,14 @@ def visible(text):
 master_fd, slave_fd = pty.openpty()
 fcntl.ioctl(slave_fd, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 4096, 0, 0))
 def controlling():
-	os.setsid(); fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+	os.setsid()
+	# The pty becomes the CLI's controlling terminal so it treats the session as interactive; not fatal if refused.
+	try: fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+	except OSError: pass
 env = {'PATH': os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin'), 'HOME': os.environ.get('HOME', '/home/sprite'), 'LANG': 'C.UTF-8', 'TERM': 'xterm-256color'}
 child = subprocess.Popen(command, stdin=slave_fd, stdout=slave_fd, stderr=slave_fd, cwd=root, env=env, preexec_fn=controlling)
 os.close(slave_fd)
-seen = set(); transcript = ''; sent_at = None; reported = set(); retry_pending = False
+seen = set(); transcript = ''; sent_at = None; reported = set(); retry_pending = False; started = time.time()
 print('Sign-in started. Open the link below on your phone; paste a returned code back if Claude asks for it.', flush=True)
 try:
 	while child.poll() is None:
@@ -36,6 +39,10 @@ try:
 			if retry_pending: os.write(master_fd, b'\r'); time.sleep(1.5); retry_pending = False
 			os.write(master_fd, line.rstrip('\r\n').encode()); time.sleep(0.3); os.write(master_fd, b'\r')
 			sent_at = time.time(); reported.clear()
+		# While no link or device code has appeared after a few seconds, report what the CLI shows instead, masked.
+		if not seen and time.time() - started > 4:
+			for value in visible(transcript)[-3:]:
+				if value not in reported: print('CLI: ' + mask(value)[:160], flush=True); reported.add(value)
 		if master_fd not in ready: continue
 		try: data = os.read(master_fd, 8192).decode(errors='replace')
 		except OSError: break

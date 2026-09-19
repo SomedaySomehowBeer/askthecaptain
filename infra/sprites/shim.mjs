@@ -95,7 +95,9 @@ export function loginManager(provider, spawnLogin = () => spawn('python3', [`${r
      if (/did not finish/.test(line)) finish('failed');
     }
    };
-   child.stdout.on('data', chunk => read(chunk.toString())); child.stderr.on('data', () => {});
+   // The wrapper's own failures (a Python error, a missing CLI) arrive on stderr: keep the last line, masked, as the note.
+   const readError = chunk => { const line = chunk.toString().split('\n').map(l => l.trim()).filter(l => /[A-Za-z]{3}/.test(l)).pop(); if (line) { notes.push(('wrapper: ' + line).replace(/[A-Za-z0-9_-]{32,}/g, '…').slice(0, 160)); state.note = notes.slice(-3).join(' · ').slice(0, 400); } };
+   child.stdout.on('data', chunk => read(chunk.toString())); child.stderr.on('data', chunk => readError(chunk));
    child.on('error', () => finish('failed'));
    child.on('close', () => { if (state.state === 'waiting') finish('failed'); });
    timer = setTimeout(() => { if (child) child.kill('SIGTERM'); finish('failed'); }, 15 * 60 * 1000); timer.unref();

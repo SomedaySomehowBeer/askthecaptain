@@ -4,6 +4,7 @@ import { Notice } from '../../../components/Notice.tsx';
 import { Page, requireCurrent } from '../../../components/Page.tsx';
 import { api, load } from '../../../lib/api.ts';
 import { InferenceForm } from './InferenceForm.tsx';
+import { Refresh } from './Refresh.tsx';
 export const metadata: Metadata = { title: 'Inference' };
 type Login = { state: 'idle' | 'waiting' | 'done' | 'failed'; url: string | null; code: string | null; needsCode: boolean; note?: string | null };
 type State = { role: 'owner' | 'admin' | 'member'; disabled: boolean; spritesConfigured?: boolean; login?: Login | null; runtime: { provider: 'claude' | 'codex' | 'anthropic_api'; status: 'provisioning' | 'needs_login' | 'ready' | 'failed' | 'removed'; loginHint: string | null; loginUrl: string | null; error?: string | null; spriteName?: string | null } | null; budget: { month: string; limitTokens: number; usedTokens: number }; usage: { tier: string; inputTokens: number; outputTokens: number; calls: number }[] };
@@ -23,7 +24,7 @@ async function Details({ me }: { me: Awaited<ReturnType<typeof requireCurrent>> 
   {disabled ? <Notice>Inference is disabled. Ask the operator to finish configuring encryption.</Notice> : null}
   <section className="card"><h2>Subscription</h2>
    {present ? <><p>{{ claude: 'Claude', codex: 'Codex', anthropic_api: 'Anthropic API (not available)' }[runtime.provider]} · {states[runtime.status]}</p>{runtime.loginHint ? <p>{runtime.loginHint}</p> : null}
-    {runtime.status === 'provisioning' ? <Notice>Captain is creating your runtime and installing the sign-in tools. This takes a few minutes the first time; refresh to check. Set the token allowance below while you wait.</Notice> : null}
+    {runtime.status === 'provisioning' ? <><Refresh everyMs={10000} /><Notice>Captain is creating your runtime and installing the sign-in tools. This takes a few minutes the first time; this page checks every few seconds. Set the token allowance below while you wait.</Notice></> : null}
     {runtime.status === 'failed' ? <Notice tone="attention" title={runtime.error?.startsWith('sprites_') || runtime.error === 'provisioning_failed' ? 'Setup failed.' : 'Verification failed.'}>{runtime.error ? <>Recorded reason: <span className="mono">{runtime.error}</span>. </> : null}{runtime.error?.startsWith('sprites_') || runtime.error === 'provisioning_failed' ? 'Press Set up subscription to try again; the same runtime is reused. If it keeps failing, tell the operator the reason above.' : 'Sign in again, then verify. If it keeps failing, disconnect the runtime and set it up again.'}</Notice> : null}
     {runtime.status === 'failed' && owner && (runtime.error?.startsWith('sprites_') || runtime.error === 'provisioning_failed') ? <InferenceForm action="create" disabled={disabled || !spritesConfigured} label="Set up subscription again"><input type="hidden" name="provider" value={runtime.provider} /></InferenceForm> : null}
     {(runtime.status === 'needs_login' || (runtime.status === 'failed' && runtime.spriteName && !(runtime.error?.startsWith('sprites_') || runtime.error === 'provisioning_failed'))) && owner ? <SignIn login={login} provider={runtime.provider} fallbackUrl={runtime.loginUrl} /> : null}
@@ -53,12 +54,13 @@ function SignIn({ login, provider, fallbackUrl }: { login: Login | null; provide
  const url = login?.url ?? fallbackUrl;
  if (login?.state === 'done') return <Notice title="Signed in.">Press Verify sign-in below to check the runtime answers.</Notice>;
  if (login?.state === 'waiting') return <div className="stack">
-  <p>{url ? 'Open the sign-in page, sign in with the account that holds the subscription, then come back here.' : 'Starting the sign-in on your runtime. Refresh in a moment for the link.'}</p>
+  <Refresh everyMs={url ? 5000 : 2000} />
+  <p>{url ? 'Open the sign-in page, sign in with the account that holds the subscription, then come back here.' : 'Starting the sign-in on your runtime. The link appears here in a moment.'}</p>
   {url ? <a href={url} className="button button--primary" target="_blank" rel="noreferrer">Open sign-in</a> : null}
   {login.code ? <><p className="secondary">Enter this code on the sign-in page:</p><p className="mono" style={{ fontSize: '28px', letterSpacing: '0.12em' }}>{login.code}</p></> : null}
   {login.needsCode
    ? <InferenceForm action="code" disabled={false} label="Submit code"><div className="field"><label htmlFor="inference-code">The code the sign-in page gave you</label><input id="inference-code" name="code" type="text" autoComplete="off" required minLength={6} maxLength={1024} /><p className="muted">Paste it as the sign-in page gives it; a link stuck on the end is fine.</p></div></InferenceForm>
-   : <p className="secondary">When the page says you are signed in, refresh here and press Verify sign-in.</p>}
+   : <p className="secondary">When the page says you are signed in, this page notices and offers Verify sign-in.</p>}
   {login.note ? <p className="muted">The runtime's sign-in said: <span className="mono">{login.note}</span></p> : null}
  </div>;
  return <div className="stack">
