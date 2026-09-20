@@ -68,8 +68,13 @@ export class InferenceService {
    const runtime = await store.getRuntime(tx, organisationId, true);
    if (!runtime || !runtime.connectionEncrypted || runtime.status === 'removed') throw badRequest('runtime_not_ready', 'Set up the runtime and start sign-in first.');
    const provider = await this.provider(tx, organisationId, runtime);
-   const state = await provider.loginCode(code);
+   let state = await provider.loginCode(code);
    await store.inferenceAudit(tx, organisationId, 'inference.login_code_forwarded');
+   // The CLI takes a few seconds to accept or reject the code: wait for its answer so the person sees it in one step.
+   for (let waited = 0; state.state === 'waiting' && !state.note && waited < 8; waited++) {
+    await new Promise(resolve => setTimeout(resolve, 1000).unref());
+    try { state = await provider.loginStatus(); } catch { break; }
+   }
    return state;
   });
  }
@@ -142,7 +147,7 @@ export class InferenceService {
   await this.owner(actor, organisationId);
   // A minimal output probe: the empty JSON object. Usage is charged to the same monthly allowance.
   // The CLI refuses a one-token output limit outright; 64 leaves room for the empty object and costs next to nothing.
-  return this.execute(actor, { organisationId, step: 'runtime.verify', tier: 'small', instruction: 'Return only the empty JSON object {}.', input: null, schema: z.object({}).strict(), maxTokens: 64 }, true).then(result => result.output);
+  return this.execute(actor, { organisationId, step: 'runtime.verify', tier: 'small', instruction: 'Return only the empty JSON object {}.', input: null, schema: z.object({}).strict(), maxTokens: 64, probe: true }, true).then(result => result.output);
  }
  /** The runner supplies the person who enabled the workflow; no identity is inferred by the model. */
  async infer<T>(actor: Actor, input: InferInput<T>): Promise<T>;
@@ -182,9 +187,11 @@ export class InferenceService {
  }
 }
 export function inferenceHttpError(error: unknown): never {
- if (error instanceof InferenceError) throw new HttpError(error.code === 'budget_spent' || error.code === 'rate_limited' ? 429 : 503, error.code, {
+ if (!(error instanceof InferenceError)) throw error;
+ const message = {
   runtime_not_ready: 'Inference is not ready. Ask the owner to configure and verify its runtime.', needs_login: 'Sign in to the subscription on the Sprite, then verify again.',
   rate_limited: 'The subscription is rate limited. Try again later.', provider_unavailable: 'The provider is unavailable. Try again later.', invalid_output: 'The model returned invalid data twice. Retry this step later.', budget_spent: 'The monthly token allowance is spent or too small for this call. Ask an owner or admin to increase it.'
- }[error.code]);
- throw error;
+ }[error.code];
+ // A probe's detail is the runtime's own one-line account of the failure, for the owner who is fixing it.
+ throw new HttpError(error.code === 'budget_spent' || error.code === 'rate_limited' ? 429 : 503, error.code, error.detail ? `${message} The runtime said: ${error.detail}` : message);
 }
