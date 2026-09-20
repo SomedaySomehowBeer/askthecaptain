@@ -44,7 +44,7 @@ export class NotesService {
    if (!found) throw badRequest('link_missing', `The linked ${table.replace('calendar_events', 'event').replace(/s$/, '')} was not found.`);
   }
  }
- create(actor: Actor, organisationId: string, value: unknown) {
+ async create(actor: Actor, organisationId: string, value: unknown) {
   const input = noteInput.parse(value);
   return this.tx(actor, organisationId, async tx => {
    await NotesService.checkLinks(tx, input);
@@ -55,7 +55,7 @@ export class NotesService {
    return (await NotesService.select(tx, tx`n.id = ${row!.id}`, 1))[0]!;
   });
  }
- update(actor: Actor, organisationId: string, id: string, value: unknown) {
+ async update(actor: Actor, organisationId: string, id: string, value: unknown) {
   const input = noteInput.parse(value);
   return this.tx(actor, organisationId, async tx => {
    const [existing] = await tx`select id from notes where id = ${id} and archived_at is null for update`; if (!existing) throw notFound();

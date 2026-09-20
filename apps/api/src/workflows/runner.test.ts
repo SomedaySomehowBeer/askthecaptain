@@ -35,9 +35,9 @@ it('manual run, Resume and Cancel routes enforce management roles and tenant bou
   assert.equal((await request(`/runs/${randomUUID()}/cancel`)).status, 404);
   await db.owner`insert into connections (organisation_id, provider, connected_by, account_email, scopes, status) values (${f.organisationId}, 'google', ${f.userId}, 'fixture@example.test', '{}', 'connected')`;
   await workflows.enable(f.actor, f.organisationId, 'inbox-triage', { enabled: true });
-  assert.ok((await f.engine.boss.getSchedules()).some(s => s.key === `${f.enablementId}_1`));
+  assert.ok((await f.engine.boss.getSchedules()).some(s => s.key === `${f.enablementId}_${f.definition.triggers.findIndex(t => t.kind !== 'event')}`));
   await workflows.enable(f.actor, f.organisationId, 'inbox-triage', { enabled: false });
-  assert.ok(!(await f.engine.boss.getSchedules()).some(s => s.key === `${f.enablementId}_1`));
+  assert.ok(!(await f.engine.boss.getSchedules()).some(s => s.key === `${f.enablementId}_${f.definition.triggers.findIndex(t => t.kind !== 'event')}`));
   await f.engine.close(); assert.equal((await request('/inbox-triage/run')).status, 400);
  } finally { await f.engine.close(); await db.close(); }
 });
