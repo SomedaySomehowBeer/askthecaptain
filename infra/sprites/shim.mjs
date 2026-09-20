@@ -81,13 +81,15 @@ export async function invoke(request) {
  *  authorisation code arrives once from the API and goes straight to the CLI's stdin. */
 // The hosts the two CLIs sign in through today (claude.com/cai/oauth/… since Claude Code 2.1.27x).
 const loginUrl = /https:\/\/(?:claude\.ai|claude\.com|platform\.claude\.com|console\.anthropic\.com|auth\.openai\.com)\/[^\s<>"'\x1b]+/;
-export function loginManager(provider, spawnLogin = () => spawn('python3', [`${root}/login.py`, provider], { cwd: root, env: { PATH: binPath, HOME: '/home/sprite', LANG: 'C.UTF-8', CAPTAIN_ROOT: root }, stdio: ['pipe', 'pipe', 'pipe'] })) {
+export function loginManager(provider, spawnLogin = () => spawn('python3', [`${root}/login.py`, provider], { cwd: root, env: { PATH: binPath, HOME: '/home/sprite', LANG: 'C.UTF-8', CAPTAIN_ROOT: root }, stdio: ['pipe', 'pipe', 'pipe'] }), savedLogin = () => provider === 'claude' && existsSync(`${root}/claude-token`)) {
  let child = null, timer = null;
  const state = { state: 'idle', url: null, code: null, needsCode: provider === 'claude', note: null };
  const notes = [];
  const finish = outcome => { state.state = outcome; if (timer) clearTimeout(timer); timer = null; child = null; };
+ // A sign-in saved on this Sprite (a reinstall or restart keeps it) counts as done until someone starts a new one.
+ const current = () => ({ ...state, state: state.state === 'idle' && savedLogin() ? 'done' : state.state });
  return {
-  status: () => ({ ...state }),
+  status: current,
   start() {
    if (state.state === 'waiting') return { ...state };
    Object.assign(state, { state: 'waiting', url: null, code: null, note: null }); notes.length = 0;

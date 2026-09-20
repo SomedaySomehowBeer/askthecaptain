@@ -52,7 +52,11 @@ async function Details({ me }: { me: Awaited<ReturnType<typeof requireCurrent>> 
  *  a device code come back; Claude hands the person a code to paste here, forwarded once and never kept. */
 function SignIn({ login, provider, fallbackUrl }: { login: Login | null; provider: string; fallbackUrl: string | null }) {
  const url = login?.url ?? fallbackUrl;
- if (login?.state === 'done') return <Notice title="Signed in.">Press Verify sign-in below to check the runtime answers.</Notice>;
+ if (login?.state === 'done') return <div className="stack">
+  <Notice title="Signed in.">Press Verify sign-in below to check the runtime answers.</Notice>
+  {login.note ? <p className="muted">The runtime's sign-in said: <span className="mono">{login.note}</span></p> : null}
+  <details><summary>Sign in with a different account, or again</summary><p className="secondary">Starts a fresh sign-in on the runtime; the saved one is replaced when it finishes.</p><InferenceForm action="login" disabled={false} label="Sign in again" /></details>
+ </div>;
  if (login?.state === 'waiting') return <div className="stack">
   <Refresh everyMs={url ? 5000 : 2000} />
   <p>{url ? 'Open the sign-in page, sign in with the account that holds the subscription, then come back here.' : 'Starting the sign-in on your runtime. The link appears here in a moment.'}</p>
