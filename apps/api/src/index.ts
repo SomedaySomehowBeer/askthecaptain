@@ -5,6 +5,8 @@ import { StocktakeService } from './stock/workflow.ts';
 import { StockService } from './stock/service.ts';
 import { TriageService } from './triage/service.ts';
 import { NotesService } from './notes/service.ts';
+import { httpEmbedClient } from '@captain/retrieval';
+import { IndexService, startIndexSchedule } from './retrieval/service.ts';
 import { OutboxService } from './triage/outbox.ts';
 import { startAttachmentExpiry } from './triage/expiry.ts';
 import { ShopifyConnector } from '@captain/connectors/shopify';
@@ -61,10 +63,12 @@ new CalendarPrepService(db).register(registry, inference);
 const engine = new BossEngine(db, env.DATABASE_URL, registry, definitions);
 const stock = new StockService(db, (tx, org, event, data, key) => engine.emit(tx, org, event, data, key));
 const outbox = new OutboxService(db, connections, (tx, org, run, key) => engine.wake(tx, org, run, key));
-const notes = new NotesService(db, (tx, org, event, data) => engine.emit(tx, org, event, data));
+const index = new IndexService(db, env.EMBED_URL && env.EMBED_TOKEN ? httpEmbedClient(env.EMBED_URL, env.EMBED_TOKEN) : null);
+const notes = new NotesService(db, (tx, org, event, data) => engine.emit(tx, org, event, data), org => index.fill(org, { budget: 64, messages: false }));
+const stopIndex = startIndexSchedule(index, env.INDEX_DISABLED === '1' || !index.available);
 const stopAttachmentExpiry = startAttachmentExpiry(db);
 if (env.WORKFLOWS_DISABLED !== '1') await engine.open().catch(async () => { console.error('[api] workflow runner unavailable; follow docs/runbooks/workflow-runner.md'); await engine.close(); });
-const mailSync = new MailSync(db, connections, undefined, (tx, org, event, data) => engine.emit(tx, org, event, data));
+const mailSync = new MailSync(db, connections, undefined, (tx, org, event, data) => engine.emit(tx, org, event, data), org => index.fill(org, { budget: 512 }));
 const pushConfig = env.GMAIL_PUBSUB_TOPIC && env.GMAIL_PUSH_AUDIENCE ? { topic: env.GMAIL_PUBSUB_TOPIC, audience: env.GMAIL_PUSH_AUDIENCE } : undefined;
 const gmailWatch = new GmailWatch(db, connections, pushConfig);
 const gmailPush = pushConfig ? new GmailPush(db, mailSync, pushConfig) : undefined;
@@ -95,5 +99,5 @@ const app = createApp({ stock, triage, notes, shopifyConnections, shopifySync, s
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
-const shutdown = () => { server.close(); void Promise.all([stopShopifySync(), stopAttachmentExpiry(), stopXeroSync(), stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
+const shutdown = () => { server.close(); void Promise.all([stopShopifySync(), stopAttachmentExpiry(), stopIndex(), stopXeroSync(), stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

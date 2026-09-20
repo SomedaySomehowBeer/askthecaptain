@@ -20,7 +20,9 @@ export type SyncResult = { threads: number; messages: number; attachments: numbe
 export class MailSync {
 	readonly #emit: ((tx: TransactionSql, organisationId: string, event: string, data: unknown) => Promise<void>) | undefined;
 	readonly #running = new Set<string>(); readonly #db: Sql; readonly #connections: ConnectionService; readonly #gmail: GmailClient;
-	constructor(db: Sql, connections: ConnectionService, gmail = new GmailClient(), emit?: (tx: TransactionSql, organisationId: string, event: string, data: unknown) => Promise<void>) { this.#db = db; this.#connections = connections; this.#gmail = gmail; this.#emit = emit; }
+	/** Embeds what a save batch stored (D21), outside the transaction; its failure never fails a sync. */
+	readonly #afterSave: ((organisationId: string) => Promise<unknown>) | undefined;
+	constructor(db: Sql, connections: ConnectionService, gmail = new GmailClient(), emit?: (tx: TransactionSql, organisationId: string, event: string, data: unknown) => Promise<void>, afterSave?: (organisationId: string) => Promise<unknown>) { this.#db = db; this.#connections = connections; this.#gmail = gmail; this.#emit = emit; this.#afterSave = afterSave; }
 	async organisations(): Promise<string[]> {
 		return (await this.#db<{ organisationId: string }[]>`select organisation_id from gmail_sync_organisations()`).map((row) => row.organisationId);
 	}
@@ -109,6 +111,7 @@ export class MailSync {
 					return page;
 				});
 				counts.threads += saved.threads; counts.messages += saved.messages; counts.attachments += saved.attachments; counts.deleted += saved.deleted;
+				if (saved.messages > 0) { stage = 'index'; await this.#afterSave?.(organisationId).catch(() => undefined); stage = 'save'; }
 			}
 			// Backfill unchanged cached contacts, also in bounded batches, including a quiet history run.
 			stage = 'contacts'; const unchanged = full ? [] : await batch((tx) => tx`select provider_id from mail_threads where connection_id = ${conn.id}

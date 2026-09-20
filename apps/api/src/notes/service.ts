@@ -15,7 +15,10 @@ const links: [keyof NoteInput, string][] = [['eventId', 'calendar_events'], ['co
  *  needs the owner and no reply is drafted. Not a document store: no formatting, files or comments. */
 export class NotesService {
  readonly db: Sql; readonly emit: Emit | null;
- constructor(db: Sql, emit: Emit | null = null) { this.db = db; this.emit = emit; }
+ /** Embeds the saved note (D21) after the transaction; its failure never fails the save. */
+ readonly afterSave: ((organisationId: string) => Promise<unknown>) | null;
+ constructor(db: Sql, emit: Emit | null = null, afterSave: ((organisationId: string) => Promise<unknown>) | null = null) { this.db = db; this.emit = emit; this.afterSave = afterSave; }
+ private async saved<T>(organisationId: string, work: Promise<T>): Promise<T> { const result = await work; await this.afterSave?.(organisationId).catch(() => undefined); return result; }
  private tx<T>(actor: Actor, organisationId: string, fn: (tx: TransactionSql) => Promise<T>) {
   return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => { await requireMember(tx, actor.userId, organisationId); return fn(tx); });
  }
@@ -46,25 +49,25 @@ export class NotesService {
  }
  async create(actor: Actor, organisationId: string, value: unknown) {
   const input = noteInput.parse(value);
-  return this.tx(actor, organisationId, async tx => {
+  return this.saved(organisationId, this.tx(actor, organisationId, async tx => {
    await NotesService.checkLinks(tx, input);
    const [row] = await tx`insert into notes (organisation_id, author_id, title, body, event_id, contact_id, company_id, project_id, task_id)
     values (${organisationId}, ${actor.userId}, ${input.title}, ${input.body}, ${input.eventId}, ${input.contactId}, ${input.companyId}, ${input.projectId}, ${input.taskId}) returning id`;
    await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId, action: 'note.created', subjectType: 'note', subjectId: String(row!.id) });
    await this.emit?.(tx, organisationId, 'note.saved', { noteId: String(row!.id) });
    return (await NotesService.select(tx, tx`n.id = ${row!.id}`, 1))[0]!;
-  });
+  }));
  }
  async update(actor: Actor, organisationId: string, id: string, value: unknown) {
   const input = noteInput.parse(value);
-  return this.tx(actor, organisationId, async tx => {
+  return this.saved(organisationId, this.tx(actor, organisationId, async tx => {
    const [existing] = await tx`select id from notes where id = ${id} and archived_at is null for update`; if (!existing) throw notFound();
    await NotesService.checkLinks(tx, input);
    await tx`update notes set title = ${input.title}, body = ${input.body}, event_id = ${input.eventId}, contact_id = ${input.contactId}, company_id = ${input.companyId}, project_id = ${input.projectId}, task_id = ${input.taskId}, updated_at = now() where id = ${id}`;
    await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId, action: 'note.updated', subjectType: 'note', subjectId: id });
    await this.emit?.(tx, organisationId, 'note.saved', { noteId: id });
    return (await NotesService.select(tx, tx`n.id = ${id}`, 1))[0]!;
-  });
+  }));
  }
  archive(actor: Actor, organisationId: string, id: string) {
   return this.tx(actor, organisationId, async tx => {
