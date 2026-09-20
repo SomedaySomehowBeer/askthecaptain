@@ -41,6 +41,8 @@ jobs:
           fi
       - run: pnpm check
       - run: pnpm test
+      - name: infra services (plain node, no workspace)
+        run: node --test infra/sprites/*.test.mjs infra/embed/*.test.mjs
       - name: browser regression for React retries
         run: |
           pnpm --filter @captain/e2e exec playwright install --with-deps chromium

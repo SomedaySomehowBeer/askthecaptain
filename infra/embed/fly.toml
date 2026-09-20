@@ -1,0 +1,28 @@
+app = "askthecaptain-embed"
+primary_region = "syd"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  MODEL_DIR = "/app/models"
+
+# One machine that scales to zero; the sync batches units per request and tolerates the cold start.
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/healthz"
+
+# bge-small (q8) in batches of eight peaks near 270 MB.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
