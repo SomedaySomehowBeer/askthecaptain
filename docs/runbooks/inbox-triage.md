@@ -111,3 +111,17 @@ The definition is version 5 (version 2 added the gate; version 3 the drafting ru
 optional style note; version 4 the draft score, threshold parameter and outcomes; version 5 notes). An organisation that enabled an earlier version must save the workflow's
 parameters again in Settings → Workflows before a new run will start; the runner says so.
 
+
+## Association (D22)
+
+Every thread that passes the gate, and every note, is tied to a project or leaves a candidate. Rules
+first, no model: an existing link (`project_sources`), a counterparty company whose contacts' threads
+are linked to exactly one active project, or a task reference (the task's body text, at least four
+characters) quoted in the thread. Only then does the classify input carry the active projects (name
+and one-line description, most recently active first, at most fifty, never Obligations) and the schema
+gains `project`: an existing project's exact name, a proposed name with its stage (idea or underway),
+or null. Code links only to a name that exists (`linked_by = model`); a proposed name goes to
+`project_candidates` with its sources, marked `own` when the person wrote it (a note). A note the
+person linked to a project keeps that link (`linked_by = person`). Suggested tasks from a linked
+thread or note go to that project, otherwise to Obligations as before. Candidates become discovery
+seeds by the §6 thresholds, never projects directly. Inbox triage is version 6: Save parameters once.

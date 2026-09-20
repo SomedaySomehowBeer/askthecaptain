@@ -6,9 +6,10 @@ import { awaitStep, boolean, branch, daily, defineWorkflow, each, infer, number,
  *  the owner and whose draft score reaches the threshold (fresh, unanswered, a request or a familiar
  *  sender, past drafts to them used), draft a reply into the outbox and wait for a person to send it;
  *  the backlog on a first run gets no drafts and a run drafts at most twenty; keep contacts current
- *  and label the thread as handled either way. */
+ *  and label the thread as handled either way. Each thread and note is linked to a project by rule or by the
+ *  model's choice among the active projects, or its proposed name becomes a candidate (D22). */
 export const inboxTriage = defineWorkflow({
-	key: 'inbox-triage', version: 5, name: 'Inbox triage', job: 1,
+	key: 'inbox-triage', version: 6, name: 'Inbox triage', job: 1,
 	description: 'Reads new mail and notes, says what needs you, drafts the replies you would send, and files the rest.',
 	triggers: [onEvent('mail.synced'), onEvent('note.saved'), daily('06:00')],
 	parameters: {
@@ -22,8 +23,10 @@ export const inboxTriage = defineWorkflow({
 			read('triage.gate', { args: { thread: { ref: 'item' } }, as: 'gate' }),
 			branch({ truthy: 'gate.passes' }, [
 				read('attachments.extractText', { args: { thread: { ref: 'item' }, allow: ['application/pdf', 'text/csv', 'text/plain'], maxBytes: 5_000_000 }, as: 'attachments' }),
-				infer('classifyThread', { schema: 'triage', tier: 'small', args: { thread: { ref: 'item' }, attachments: { ref: 'attachments' } }, as: 'triage' }),
-				write('triage.record', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
+				// Association (D22): rules first; the model names a project only when no rule could.
+				read('triage.projectRule', { args: { thread: { ref: 'item' } }, as: 'link' }),
+				infer('classifyThread', { schema: 'triage', tier: 'small', args: { thread: { ref: 'item' }, attachments: { ref: 'attachments' }, link: { ref: 'link' } }, as: 'triage' }),
+				write('triage.record', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' }, link: { ref: 'link' } } }),
 				write('tasks.suggestFromTriage', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
 				write('tasks.completeFromConfirmations', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
 				read('triage.draftScore', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' }, threshold: param('draftThreshold') }, as: 'drafting' }),

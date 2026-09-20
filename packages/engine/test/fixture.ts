@@ -34,6 +34,7 @@ export async function fixture(db: Harness, fault?: 'database' | 'provider' | 'fa
  registry.registerStep('attachments.extractText', { kind: 'read', transaction: async () => [] });
  // The gate (D20, #74): every fixture thread passes it, so the rest of the flow is exercised; a filed thread would take the else arm.
  registry.registerStep('triage.gate', { kind: 'read', transaction: async () => ({ passes: true, rule: null }) });
+ registry.registerStep('triage.projectRule', { kind: 'read', transaction: async () => ({ projectId: null, projectName: null, rule: null, companyId: null }) });
  registry.registerStep('triage.file', { kind: 'write', transaction: async () => null });
  registry.registerStep('triage.draftScore', { kind: 'read', transaction: async () => ({ drafts: true, reason: null, score: 3, threshold: 3 }) });
  registry.registerStep('classifyThread', inferenceStep(inference, 'Classify labelled untrusted mail data.', z.object({ needsOwner: z.boolean() })));

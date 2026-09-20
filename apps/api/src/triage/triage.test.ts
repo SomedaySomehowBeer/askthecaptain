@@ -180,3 +180,44 @@ it('a saved note is read by the same run as mail: classified with the person as 
   assert.equal(f.provider.requests.length, calls);
  } finally { await f.engine.close(); }
 });
+it('association (D22): rules link a thread before the model, the model links only to a name that exists, proposed names become candidates, and tasks follow the link', async () => {
+ const f = await triageFixture(db); try {
+  const commitments = new CommitmentsService(db.app);
+  const cans = await commitments.createProject(f.actor, f.org, { name: 'Cans for October', description: 'Switching the lager to cans.' });
+  // Thread one: no rule applies; the model names the existing project, so the thread is linked by the model and its task lands there.
+  await f.mail('cans-1', 'sam@cans.test', 'Artwork approved. CAN-77');
+  await f.mail('mystery', 'pat@elsewhere.test', 'Thinking about a taproom in the city. TAP-1');
+  await f.tx(sql => sql`insert into companies (organisation_id, name, domain) values (${f.org}, 'Cans Co', 'cans.test') on conflict (organisation_id, domain) do update set name = excluded.name`);
+  f.provider.responses.push(
+   result({ ...classification(), tasks: [{ title: 'Send final artwork', reference: 'CAN-77', due: null }], project: { name: 'cans for october', stage: null } }),
+   result({ ...classification(), tasks: [], project: { name: 'City taproom', stage: 'idea' } }));
+  const run = await f.start(); await until(() => f.tx(sql => sql`select state from workflow_runs where id = ${run}`), rows => rows[0]?.state === 'succeeded');
+  const links = await f.tx(sql => sql`select ps.source_id, ps.linked_by, ps.rule, ps.company_id, t.provider_id from project_sources ps join mail_threads t on t.id = ps.source_id where ps.project_id = ${cans.id}`);
+  assert.deepEqual(links.map(l => [l.providerId, l.linkedBy, l.rule]), [['cans-1', 'model', null]]); assert.ok(links[0]!.companyId, 'the counterparty company is kept on the link');
+  const [task] = await f.tx(sql => sql`select project_id from tasks where title = 'Send final artwork'`); assert.equal(task!.projectId, cans.id);
+  const candidates = await f.tx(sql => sql`select c.normalised, c.stage, s.own from project_candidates c join project_candidate_sources s on s.organisation_id = c.organisation_id and s.normalised = c.normalised`);
+  assert.deepEqual(candidates.map(c => [c.normalised, c.stage, c.own]), [['city taproom', 'idea', false]]);
+  // The model saw the active projects for both threads, never Obligations.
+  const inputs = JSON.stringify(f.provider.requests); assert.ok(inputs.includes('Cans for October')); assert.ok(!inputs.includes('Obligations'));
+  // Thread two from the same company: the company rule links it with no name from the model, and the model saw no project list.
+  await f.mail('cans-2', 'jo@cans.test', 'Pallet count is 40. CAN-78');
+  const before = f.provider.requests.length; f.provider.responses.push(result({ ...classification(), project: { name: null, stage: null } }));
+  const second = await f.start(); await until(() => f.tx(sql => sql`select state from workflow_runs where id = ${second}`), rows => rows[0]?.state === 'succeeded');
+  const [ruled] = await f.tx(sql => sql`select linked_by, rule from project_sources ps join mail_threads t on t.id = ps.source_id where t.provider_id = 'cans-2'`);
+  assert.deepEqual([ruled!.linkedBy, ruled!.rule], ['rule', 'company']);
+  assert.ok(!JSON.stringify(f.provider.requests.slice(before)).includes('"Cans for October"'), 'no project list once a rule has linked');
+  // A task reference quoted in a thread links it without the model; a note the person linked keeps that link and its tasks follow.
+  await commitments.createTask(f.actor, f.org, { title: 'Book the canning line', body: 'LINE-2026-10', projectId: cans.id } as never);
+  await f.mail('line', 'ops@packer.test', 'Confirming LINE-2026-10 for the 14th.');
+  const notes = new NotesService(db.app, null); const note = await notes.create(f.actor, f.org, { title: 'Canning call', body: 'Agreed with Sam on the call: the artwork is final by Friday, then we book the canning line for the 14th and order 2,000 blanks from the supplier, with the barcode fix checked before the plates are made.', projectId: cans.id });
+  f.provider.responses.push(result({ ...classification(), tasks: [], project: { name: null, stage: null } }), result({ category: 'plan', summary: 'Canning plan.', facts: { counterparty: 'Sam', amounts: [], dates: ['Friday'], references: [] }, tasks: [{ title: 'Order 2,000 blanks', reference: '', due: null }], project: { name: 'Something else', stage: 'underway' } }));
+  const third = await f.start(); await until(() => f.tx(sql => sql`select state from workflow_runs where id = ${third}`), rows => rows[0]?.state === 'succeeded');
+  const [byRef] = await f.tx(sql => sql`select linked_by, rule from project_sources ps join mail_threads t on t.id = ps.source_id where t.provider_id = 'line'`); assert.deepEqual([byRef!.linkedBy, byRef!.rule], ['rule', 'task_reference']);
+  const [byPerson] = await f.tx(sql => sql`select linked_by, rule from project_sources where source_kind = 'note' and source_id = ${note.id}`); assert.deepEqual([byPerson!.linkedBy, byPerson!.rule], ['person', 'person_link']);
+  const [noteTask] = await f.tx(sql => sql`select project_id from tasks where title = 'Order 2,000 blanks'`); assert.equal(noteTask!.projectId, cans.id);
+  assert.equal((await f.tx(sql => sql`select 1 from project_candidates where normalised = 'something else'`)).length, 0, 'a person-linked note proposes nothing');
+  // Deleting the thread removes its link; another tenant sees nothing.
+  await db.owner`delete from mail_threads where provider_id = 'cans-2' and organisation_id = ${f.org}`;
+  assert.equal((await f.tx(sql => sql`select 1 from project_sources ps join mail_threads t on t.id = ps.source_id where t.provider_id = 'cans-2'`)).length, 0);
+ } finally { await f.engine.close(); }
+});
