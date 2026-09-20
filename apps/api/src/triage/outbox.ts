@@ -17,6 +17,12 @@ export const draftInput = z.object({ threadId: z.uuid().nullable().default(null)
 const uncertain = () => new HttpError(409, 'send_uncertain', 'Sending has not been confirmed. Check Sent in Gmail, then use Check send again. Captain will not send a second copy.');
 type Wake = (tx: TransactionSql, organisationId: string, runId: string, key: string) => Promise<unknown>;
 export type Outcome = 'sent' | 'edited_sent' | 'discarded' | 'not_needed' | 'expired';
+/** No reply wanted: the thread leaves Needs you, and the sender's prior learns it (an information verdict, one less needs-owner). */
+export async function noReplyWanted(tx: TransactionSql, threadId: string | null, emails: Iterable<string>) {
+ for (const email of new Set(emails)) await tx`insert into mail_senders (organisation_id, email, information_verdicts) select organisation_id, ${email}, 1 from mail_threads where id = ${threadId} limit 1
+  on conflict (organisation_id, email) do update set information_verdicts = mail_senders.information_verdicts + 1, needs_owner_count = greatest(0, mail_senders.needs_owner_count - 1), updated_at = now()`;
+ if (threadId) await tx`update mail_triage set needs_owner = false, remind_at = null, updated_at = now() where thread_id = ${threadId}`;
+}
 /** A draft untouched for seven days expires with a neutral outcome (plan §6). */
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export async function expireDraft(tx: TransactionSql, org: string, id: string) {
@@ -112,9 +118,8 @@ export class OutboxService {
   if (columns) for (const email of new Set(addresses(row.to.join(',')).map(a => a.email))) {
    await tx.unsafe(`insert into mail_senders (organisation_id, email, ${columns}) values ($1, $2, 1)
     on conflict (organisation_id, email) do update set ${columns} = mail_senders.${columns} + 1, updated_at = now()`, [org, email]);
-   if (outcome === 'not_needed') await tx`update mail_senders set information_verdicts = information_verdicts + 1, needs_owner_count = greatest(0, needs_owner_count - 1) where email = ${email}`;
   }
-  if (outcome === 'not_needed' && row.threadId) await tx`update mail_triage set needs_owner = false, updated_at = now() where thread_id = ${row.threadId}`;
+  if (outcome === 'not_needed') await noReplyWanted(tx, row.threadId, addresses(row.to.join(',')).map(a => a.email));
  }
  async change(actor: Actor, org: string, id: string, action: 'edit' | 'discard' | 'not_needed' | 'remind', body?: string, when?: 'tomorrow' | 'next_week') {
   if (action === 'edit') z.string().min(1).max(20000).parse(body);

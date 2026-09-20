@@ -3,6 +3,7 @@ import { after, before, test } from 'node:test';
 import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
 import { withTenant } from '@captain/db';
 import { createApp } from '../app.ts';
+import { TriageService } from './service.ts';
 import { AuthService } from '../auth/service.ts';
 import { OrganisationService } from '../organisations/service.ts';
 import { CommitmentsService } from '../commitments/service.ts';
@@ -137,3 +138,26 @@ it('the gate files bulk, list and automated mail with no model call, learns a qu
  } finally { await f.engine.close(); }
 });
 
+
+it('a person can ask for a draft on a needs-you thread, hold it for later, or say no reply is wanted', async () => {
+ const f = await triageFixture(db); try {
+  const thread = await f.mail(); const triage = new TriageService(db.app, f.connections, f.inference, f.gmail);
+  const [run] = await f.tx(sql => sql`insert into workflow_runs (organisation_id, enablement_id, definition_key, definition_version, definition_digest, trigger, state)
+   select organisation_id, id, definition_key, definition_version, 'fixture', '{}', 'succeeded' from workflow_enablements returning id`);
+  const [message] = await f.tx(sql => sql`select id from mail_messages`);
+  await f.tx(sql => sql`insert into mail_triage (organisation_id, thread_id, category, needs_owner, summary, facts, produced_by, model, source_message_id)
+   values (${f.org}, ${thread}, 'other', true, 'Fixture', '{}', ${run!.id}, 'stub', ${message!.id})`);
+  const held = await triage.threadAction(f.member, f.org, thread, 'remind', 'next_week'); assert.ok(new Date(held.remindAt).getTime() > Date.now() + 5 * 24 * 3600 * 1000);
+  f.provider.responses.push(result({ body: 'Thanks, Thursday suits us.' }));
+  const draft = await triage.requestDraft(f.member, f.org, thread);
+  assert.equal(draft.body, 'Thanks, Thursday suits us.'); assert.equal(draft.createdByPerson, f.member.userId); assert.equal(draft.state, 'drafted'); assert.deepEqual(draft.to, ['supplier@example.test']);
+  assert.ok(!JSON.stringify(f.provider.requests.at(-1)).includes('fixture-token'));
+  assert.equal((await f.tx(sql => sql`select drafts_requested from mail_senders where email = 'supplier@example.test'`))[0]!.draftsRequested, 1);
+  assert.equal((await f.tx(sql => sql`select remind_at from mail_triage where thread_id = ${thread}`))[0]!.remindAt, null);
+  await assert.rejects(triage.requestDraft(f.member, f.org, thread), { code: 'draft_exists' });
+  await f.outbox.change(f.member, f.org, draft.id, 'discard');
+  const closed = await triage.threadAction(f.member, f.org, thread, 'not_needed'); assert.equal(closed.needsOwner, false);
+  const [prior] = await f.tx(sql => sql`select information_verdicts, needs_owner_count from mail_senders where email = 'supplier@example.test'`); assert.equal(prior!.informationVerdicts, 1); assert.equal(prior!.needsOwnerCount, 0);
+  await assert.rejects(triage.threadAction(f.stranger, f.org, thread, 'not_needed'), { status: 404 });
+ } finally { await f.engine.close(); }
+});

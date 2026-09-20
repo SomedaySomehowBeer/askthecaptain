@@ -1,4 +1,5 @@
 import { DraftForm } from '../DraftForm.tsx';
+import { ThreadActions } from '../ThreadActions.tsx';
 import { TriageFacts } from '../TriageFacts.tsx';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -21,6 +22,7 @@ async function Thread({ me, id }: { me: Awaited<ReturnType<typeof requireCurrent
 	return <>
         {thread.triageNotice ? <Notice tone="attention" action={{ href: '/settings/workflows', label: 'Review workflows' }}>{thread.triageNotice}</Notice> : null}
         {thread.triage ? <section className="card"><h2>Triage</h2><TriageFacts triage={thread.triage} /></section> : <Notice>This thread is awaiting triage.</Notice>}
+        {thread.triage?.needsOwner && !thread.outbox.some(d => d.state === 'drafted') ? <ThreadActions threadId={thread.id} remindAt={thread.triage.remindAt ?? null} timezone={thread.timezone} connected={thread.connectionStatus === 'connected'} /> : null}
         {thread.outbox.map(draft => <DraftForm key={draft.id + draft.body + draft.state + (draft.remindAt ?? '')} draft={draft} connected={thread.connectionStatus === 'connected'} timezone={thread.timezone} />)}
 		{thread.connectionStatus !== 'connected' ? <Notice tone="attention" action={{ href: '/settings/connections', label: 'Reconnect Google' }}>Google access is unavailable. This is the last saved copy; reconnect to receive updates.</Notice> : null}
 		{thread.messages.map((m) => <article className="card stack mail-message" key={m.id}>
