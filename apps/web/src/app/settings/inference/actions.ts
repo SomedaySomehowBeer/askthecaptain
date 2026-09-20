@@ -12,8 +12,16 @@ export async function updateInference(_: { error?: string; message?: string }, f
   budget: { path: '/budget', method: 'PATCH', body: { limitTokens: Number(form.get('limitTokens')) } }
  };
  const request = requests[action]; if (!request) return { error: 'Choose an inference action.' };
- try { await api(`/v1/organisations/${me.organisation.organisationId}/inference${request.path}`, { ...request, token: me.token }); }
+ let result: unknown;
+ try { result = await api(`/v1/organisations/${me.organisation.organisationId}/inference${request.path}`, { ...request, token: me.token }); }
  catch (error) { return { error: error instanceof ApiError ? error.message : 'That did not work. Try again.' }; }
  revalidatePath('/settings/inference');
- return { message: action === 'remove' ? 'Disconnected from Captain. Ask the operator to destroy the Sprite and remove its saved sign-in.' : 'Inference settings updated.' };
+ if (action === 'code') {
+  // The API waited for the CLI's answer to the code; say what came back rather than a generic line.
+  const login = result as { state?: string; note?: string | null };
+  if (login.state === 'done') return { message: 'Signed in. Press Verify sign-in.' };
+  if (login.state === 'failed') return { error: `The runtime did not accept that code.${login.note ? ` It said: ${login.note}` : ''} Start the sign-in again.` };
+  return { message: login.note ? `Code sent. The runtime said: ${login.note}` : 'Code sent. The runtime is still checking it; this page updates when it finishes.' };
+ }
+ return { message: action === 'remove' ? 'Disconnected from Captain. Ask the operator to destroy the Sprite and remove its saved sign-in.' : action === 'verify' ? 'The runtime answered. Inference is ready.' : 'Inference settings updated.' };
 }

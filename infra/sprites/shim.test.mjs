@@ -48,6 +48,18 @@ test('login exposes only the allowlisted URL and device code, forwards one code 
  assert.equal(failing.status().needsCode, false); failing.code('wrong'); await settle(); assert.equal(failing.status().state, 'failed');
  login.stop(); failing.stop();
 });
+test('a failed probe carries the runtime\'s masked one-line account; ordinary requests carry only the code', async () => {
+ const failing = async () => { throw Object.assign(new Error('provider_unavailable'), { code: 'provider_unavailable', detail: 'exit 1: token sk-ant-oat01-SECRETSECRETSECRETSECRET rejected' }); };
+ const app = server('s', 'claude', failing); await new Promise(resolve => app.listen(0, '127.0.0.1', resolve));
+ const url = `http://127.0.0.1:${app.address().port}`; const headers = { authorization: 'Bearer s', 'content-type': 'application/json' };
+ try {
+  const plain = await (await fetch(url + '/infer', { method: 'POST', headers, body: JSON.stringify(request) })).json();
+  assert.deepEqual(plain, { code: 'provider_unavailable' });
+  const probe = await (await fetch(url + '/infer', { method: 'POST', headers, body: JSON.stringify({ ...request, probe: true }) })).json();
+  assert.deepEqual(probe, { code: 'provider_unavailable', detail: 'exit 1: token sk-ant-oat01-SECRETSECRETSECRETSECRET rejected' });
+  assert.equal((await fetch(url + '/infer', { method: 'POST', headers, body: JSON.stringify({ ...request, probe: 'yes' }) })).status, 400);
+ } finally { await new Promise(resolve => app.close(resolve)); }
+});
 test('login routes sit behind the secret and validate the code shape', async () => {
  const login = loginManager('claude', fakeLogin(['https://platform.claude.com/x'], 'ok#code1'));
  const app = server('s', 'claude', async () => ({}), login); await new Promise(resolve => app.listen(0, '127.0.0.1', resolve));

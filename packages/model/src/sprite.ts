@@ -13,8 +13,10 @@ export class SpriteProvider implements Provider {
    if (response.status === 401) throw new InferenceError('runtime_not_ready');
    if (response.status === 429) throw new InferenceError('rate_limited');
    const raw = await response.text(); if (raw.length > 1048576) throw new InferenceError('provider_unavailable');
-   const data = JSON.parse(raw) as { code?: unknown; ok?: boolean };
-   if (!response.ok) throw new InferenceError(errorCodes.find(c => c === data.code) ?? 'provider_unavailable');
+   const data = JSON.parse(raw) as { code?: unknown; ok?: boolean; detail?: unknown };
+   // The runtime's one-line account of a failed probe; kept printable and short whatever it sends.
+   const detail = typeof data.detail === 'string' ? data.detail.replace(/[^\x20-\x7e]+/g, ' ').trim().slice(0, 200) || null : null;
+   if (!response.ok) throw new InferenceError(errorCodes.find(c => c === data.code) ?? 'provider_unavailable', detail);
    return data;
   } catch (error) { throw error instanceof InferenceError ? error : new InferenceError('provider_unavailable'); }
  }

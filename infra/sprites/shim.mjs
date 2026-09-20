@@ -2,9 +2,13 @@ import { createServer } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 const root = process.env.CAPTAIN_ROOT ?? '/home/sprite/captain';
 const binPath = '/home/sprite/.npm-global/bin:/usr/local/bin:/usr/bin:/bin';
-const failure = code => Object.assign(new Error(code), { code });
+const failure = (code, detail) => Object.assign(new Error(code), { code, ...(detail ? { detail } : {}) });
+// What a failed CLI run said, for the owner's readiness probe only: one line, escapes and token-shaped runs removed.
+const said = text => String(text ?? '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[ -/]*[0-~]/g, ' ').replace(/sk-ant-[A-Za-z0-9_-]+|[A-Za-z0-9_-]{32,}/g, '…').replace(/[^\x20-\x7e]+/g, ' ').replace(/ +/g, ' ').trim().slice(0, 200) || undefined;
 export function command(request, directory) {
  const common = { cwd: directory, env: { PATH: binPath, HOME: '/home/sprite', LANG: 'C.UTF-8' } };
  if (request.provider === 'claude') return { ...common, binary: 'claude', args: ['-p', '--model', request.model, '--output-format', 'json', '--json-schema', JSON.stringify(request.schema), '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--disable-slash-commands', '--no-session-persistence', '--setting-sources', '', '--settings', '{"disableAllHooks":true}', '--system-prompt', request.instruction], env: { ...common.env, CLAUDE_CONFIG_DIR: `${directory}/claude`, CLAUDE_CODE_MAX_OUTPUT_TOKENS: String(request.maxTokens), CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1' } };
@@ -17,24 +21,26 @@ function run(spec, input) {
   const timer = setTimeout(() => { expired = true; child.kill('SIGKILL'); }, 100000);
   const collect = target => chunk => { size += chunk.length; if (size > 1048576) { expired = true; child.kill('SIGKILL'); } else if (target === 'out') stdout += chunk; else stderr += chunk; };
   child.stdout.on('data', collect('out')); child.stderr.on('data', collect('err'));
-  child.on('error', () => { clearTimeout(timer); reject(failure('provider_unavailable')); });
+  child.on('error', error => { clearTimeout(timer); reject(failure('provider_unavailable', said(`cannot start ${spec.binary}: ${error.code ?? error.message}`))); });
   child.on('close', code => {
    clearTimeout(timer);
-   if (expired) return reject(failure('provider_unavailable'));
+   if (expired) return reject(failure('provider_unavailable', 'the CLI took too long or wrote too much'));
    if (code !== 0) {
     const text = stdout + stderr;
-    return reject(failure(/rate.limit|usage.limit|429/i.test(text) ? 'rate_limited' : /not.logged|login|authentication|401|oauth.*expired/i.test(text) ? 'needs_login' : 'provider_unavailable'));
+    return reject(failure(/rate.limit|usage.limit|429/i.test(text) ? 'rate_limited' : /not.logged|login|authentication|401|oauth.*expired/i.test(text) ? 'needs_login' : 'provider_unavailable', said(`exit ${code}: ${stderr.trim() || summary(stdout)}`)));
    }
    resolve(stdout);
   });
   child.stdin.on('error', () => {}); child.stdin.end(input);
  });
 }
+// The CLI's JSON result, reduced to its error text when it has one; otherwise the raw start of the output.
+function summary(stdout) { try { const result = JSON.parse(stdout); return [result.result, ...(result.errors ?? [])].filter(v => typeof v === 'string').join(' ') || stdout; } catch { return stdout; } }
 export function parseOutput(provider, raw, requestedModel, latencyMs) {
  let output, usage, model = requestedModel;
  if (provider === 'claude') {
   const result = JSON.parse(raw);
-  if (result.is_error) throw failure(/rate.limit|usage.limit/i.test(JSON.stringify(result)) ? 'rate_limited' : 'provider_unavailable');
+  if (result.is_error) throw failure(/rate.limit|usage.limit/i.test(JSON.stringify(result)) ? 'rate_limited' : 'provider_unavailable', said(summary(raw)));
   output = result.structured_output;
   if (output === undefined) { try { output = JSON.parse(result.result); } catch { output = result.result; } }
   usage = { inputTokens: result.usage?.input_tokens + (result.usage?.cache_read_input_tokens ?? 0) + (result.usage?.cache_creation_input_tokens ?? 0), outputTokens: result.usage?.output_tokens };
@@ -52,7 +58,9 @@ export function parseOutput(provider, raw, requestedModel, latencyMs) {
  return { output, usage, model, latencyMs };
 }
 export async function invoke(request) {
- const directory = await mkdtemp('/dev/shm/captain-infer-'); const started = Date.now();
+ // Memory-backed when the machine offers it; a Sprite without /dev/shm gets the ordinary temp directory.
+ let directory; try { directory = await mkdtemp(`${existsSync('/dev/shm') ? '/dev/shm' : tmpdir()}/captain-infer-`); } catch (e) { throw failure('provider_unavailable', said(`workspace: ${e.code ?? e.message}`)); }
+ const started = Date.now();
  try {
   await writeFile(`${directory}/schema.json`, JSON.stringify(request.schema), { mode: 0o600 });
   await writeFile(`${directory}/instruction.txt`, request.instruction, { mode: 0o600 });
@@ -129,13 +137,14 @@ export function server(secret, provider, inference = invoke, login = loginManage
   }
   if (req.url !== '/infer' || req.method !== 'POST') return send(404, { code: 'not_found' });
   if (busy) return send(429, { code: 'rate_limited' });
-  busy = true;
+  busy = true; let probe = false;
   try {
    let body = ''; for await (const chunk of req) { body += chunk; if (Buffer.byteLength(body) > 262144) return send(413, { code: 'invalid_request' }); }
    const input = JSON.parse(body);
-   if (input.provider !== provider || !/^[a-zA-Z0-9.-]{1,100}$/.test(input.model) || typeof input.instruction !== 'string' || typeof input.input !== 'string' || !input.schema || typeof input.schema !== 'object' || !Number.isInteger(input.maxTokens) || input.maxTokens < 1 || input.maxTokens > 16384) return send(400, { code: 'invalid_request' });
+   if (input.provider !== provider || !/^[a-zA-Z0-9.-]{1,100}$/.test(input.model) || typeof input.instruction !== 'string' || typeof input.input !== 'string' || !input.schema || typeof input.schema !== 'object' || !Number.isInteger(input.maxTokens) || input.maxTokens < 1 || input.maxTokens > 16384 || (input.probe !== undefined && input.probe !== true)) return send(400, { code: 'invalid_request' });
+   probe = input.probe === true;
    send(200, await inference(input));
-  } catch (e) { const code = ['needs_login', 'rate_limited'].includes(e.code) ? e.code : 'provider_unavailable'; send(code === 'rate_limited' ? 429 : 503, { code }); }
+  } catch (e) { const code = ['needs_login', 'rate_limited'].includes(e.code) ? e.code : 'provider_unavailable'; send(code === 'rate_limited' ? 429 : 503, { code, ...(probe && e.detail ? { detail: e.detail } : {}) }); }
   finally { busy = false; }
  });
 }

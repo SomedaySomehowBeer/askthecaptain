@@ -5,17 +5,18 @@ export type Tier = 'small' | 'large';
 export const errorCodes = ['runtime_not_ready', 'needs_login', 'rate_limited', 'provider_unavailable', 'invalid_output', 'budget_spent'] as const;
 export type ErrorCode = typeof errorCodes[number];
 export class InferenceError extends Error {
- readonly code: ErrorCode;
- constructor(code: ErrorCode) { super(code); this.code = code; }
+ readonly code: ErrorCode; readonly detail: string | null;
+ constructor(code: ErrorCode, detail: string | null = null) { super(code); this.code = code; this.detail = detail; }
 }
-export type Request = { provider: ProviderName; model: string; instruction: string; input: string; schema: Record<string, unknown>; maxTokens: number };
+/** `probe` marks the owner's readiness check: the runtime may answer a failure with a one-line, masked account of what its CLI said. */
+export type Request = { provider: ProviderName; model: string; instruction: string; input: string; schema: Record<string, unknown>; maxTokens: number; probe?: true };
 export const resultSchema = z.object({ output: z.unknown(), usage: z.object({ inputTokens: z.number().int().nonnegative().safe(), outputTokens: z.number().int().nonnegative().safe() }), model: z.string().min(1), latencyMs: z.number().int().nonnegative().max(2147483647) });
 export type Result = z.infer<typeof resultSchema>;
 /** Sign-in driven from Settings: what the shim reports about the provider's own CLI login. */
 export type LoginState = { state: 'idle' | 'waiting' | 'done' | 'failed'; url: string | null; code: string | null; needsCode: boolean; note?: string | null };
 export const loginStateSchema = z.object({ state: z.enum(['idle', 'waiting', 'done', 'failed']), url: z.string().nullable(), code: z.string().max(40).nullable(), needsCode: z.boolean(), note: z.string().max(400).nullable().optional() }).strict();
 export interface Provider { infer(request: Request): Promise<Result>; health(): Promise<void>; loginStart(): Promise<LoginState>; loginStatus(): Promise<LoginState>; loginCode(code: string): Promise<LoginState> }
-export type InferInput<T> = { organisationId: string; step: string; tier: Tier; instruction: string; input: unknown; schema: z.ZodType<T>; runId?: string; maxTokens?: number };
+export type InferInput<T> = { organisationId: string; step: string; tier: Tier; instruction: string; input: unknown; schema: z.ZodType<T>; runId?: string; maxTokens?: number; probe?: true };
 export function modelFor(provider: ProviderName, tier: Tier, env: NodeJS.ProcessEnv = process.env) {
  if (provider === 'anthropic_api') throw new InferenceError('runtime_not_ready');
  return env[`MODEL_${provider.toUpperCase()}_${tier.toUpperCase()}`] ?? ({ claude: { small: 'claude-sonnet-5', large: 'claude-opus-5' }, codex: { small: 'gpt-5.6-luna', large: 'gpt-6-astra' } })[provider][tier];
@@ -35,7 +36,7 @@ export async function infer<T>(input: InferInput<T>, providerName: ProviderName,
  for (let attempt = 0; attempt < 2; attempt++) {
   try {
    await accounting.before({ tokens: Math.ceil((instruction.length + data.length + JSON.stringify(schema).length) / 4) + maxTokens });
-   const result = resultSchema.parse(await provider.infer({ provider: providerName, model: modelFor(providerName, input.tier), instruction, input: data, schema, maxTokens }));
+   const result = resultSchema.parse(await provider.infer({ provider: providerName, model: modelFor(providerName, input.tier), instruction, input: data, schema, maxTokens, ...(input.probe ? { probe: true } : {}) }));
    await accounting.record(result); // Invalid outputs still consumed tokens.
    const parsed = input.schema.safeParse(result.output);
    if (parsed.success) return parsed.data;
