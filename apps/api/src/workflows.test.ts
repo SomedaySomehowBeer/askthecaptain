@@ -57,7 +57,7 @@ it('a workflow cannot be turned on until its requirements are met; parameters ar
 	const refused = await json('PUT', `/v1/organisations/${orgId}/workflows/inbox-triage`, owner.token, { enabled: true, parameters: { replyStyle: 'Warm.' } });
 	assert.equal(refused.status, 400); assert.match(((await refused.json()) as { error: string }).error, /needs a connected Google account and an inference runtime/);
 	const saved = await body<{ enabled: boolean; parameters: Record<string, unknown> }>(await json('PUT', `/v1/organisations/${orgId}/workflows/inbox-triage`, owner.token, { enabled: false, parameters: { replyStyle: 'Warm.' } }), 200);
-	assert.equal(saved.enabled, false); assert.deepEqual(saved.parameters, { replyStyle: 'Warm.', draftReplies: true });
+	assert.equal(saved.enabled, false); assert.deepEqual(saved.parameters, { replyStyle: 'Warm.', draftReplies: true, draftThreshold: 3 });
 	// Every shipped workflow needs inference, which has not shipped, so none can be turned on yet: the honest state.
 	assert.equal((await json('PUT', `/v1/organisations/${orgId}/workflows/chase-due`, owner.token, { enabled: true, parameters: { windowDays: 10 } })).status, 400);
 	const bad = await json('PUT', `/v1/organisations/${orgId}/workflows/stocktake`, owner.token, { enabled: false, parameters: { location: '', extra: 1 } });

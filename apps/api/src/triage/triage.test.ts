@@ -14,7 +14,8 @@ it('real triage journals, caps attachment retention, suggests tasks, drafts with
  const f = await triageFixture(db); try {
   const thread = await f.mail(); await f.mail('known-update', 'known@example.test');
   await f.tx(sql => sql`update contacts set source = 'hand' where email = 'known@example.test'`);
-  f.provider.responses.push(result(classification()), result({ body: 'Thanks for the update.' }), result(classification()));
+  // An unknown sender needs the owner; a request earns the draft under the initial rule (needs owner and a request or a known sender).
+  f.provider.responses.push(result({ ...classification(), category: 'request' }), result({ body: 'Thanks for the update.' }), result(classification()));
   const run = await f.start(); const runId = run;
   await until(() => f.tx(sql => sql`select state, reason from workflow_runs where id = ${runId}`), rows => rows[0]?.state === 'waiting');
   const [triage] = await f.tx(sql => sql`select * from mail_triage`); assert.equal(triage!.needsOwner, true); assert.equal(triage!.model, 'stub-claude');
