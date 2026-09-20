@@ -36,3 +36,5 @@ create policy note_triage_tenant on note_triage for all to app using (organisati
 -- A suggested task can come from a note.
 alter table tasks drop constraint tasks_source_kind_check;
 alter table tasks add constraint tasks_source_kind_check check (source_kind in ('person', 'mail', 'series', 'run', 'note'));
+
+grant select, insert, update, delete on notes, note_triage to app;
