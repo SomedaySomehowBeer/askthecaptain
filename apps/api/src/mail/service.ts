@@ -32,7 +32,7 @@ export class MailService {
 				and (${before?.[0] ?? null}::timestamptz is null or (t.last_message_at, t.id) < (${before?.[0] ?? null}::timestamptz, ${before?.[1] ?? null}::uuid))
 				order by t.last_message_at desc, t.id desc limit ${limit + 1}`;
 			const edge = threads[limit - 1];
-			return { triageNotice: (await triageState(tx)) ?? this.runnerProblem(), outbox: await tx`select id, thread_id, subject, body, "to", cc, state, send_started_at from outbox where state = 'drafted' order by created_at limit 100`, automaticSyncEnabled: this.#automatic, nextBefore: threads.length > limit ? `${edge!.sentAt.toISOString()}|${edge!.id}` : null, connection: conn, timezone: org!.timezone as string, lastSync: lastSync ?? null, threads: threads.slice(0, limit), hasMore: threads.length > limit };
+			return { triageNotice: (await triageState(tx)) ?? this.runnerProblem(), outbox: await tx`select id, thread_id, subject, body, "to", cc, state, send_started_at, outcome, edited, remind_at from outbox where state = 'drafted' order by created_at limit 100`, automaticSyncEnabled: this.#automatic, nextBefore: threads.length > limit ? `${edge!.sentAt.toISOString()}|${edge!.id}` : null, connection: conn, timezone: org!.timezone as string, lastSync: lastSync ?? null, threads: threads.slice(0, limit), hasMore: threads.length > limit };
 		});
 	}
 	async thread(actor: Actor, organisationId: string, threadId: string) {
@@ -47,7 +47,7 @@ export class MailService {
 			const attachments = await tx`select a.id, a.message_id, a.filename, a.media_type, a.size, a.provider_attachment_id from mail_attachments a
 				join mail_messages m on m.id = a.message_id where m.thread_id = ${threadId} order by a.part_id`;
 			const senders = new Map((await tx`select id, email, name from contacts where email = any(${tx.array(messages.flatMap((m) => addresses(m.fromHeader).map((a) => a.email)))}::text[])`).map((c) => [c.email, c]));
-			return { ...thread, triageNotice: (await triageState(tx)) ?? this.runnerProblem(), triage: (await tx`select * from mail_triage where thread_id = ${threadId}`)[0] ?? null, outbox: await tx`select id, thread_id, subject, body, "to", cc, state, send_started_at from outbox where thread_id = ${threadId} order by created_at`, messages: messages.map((m) => ({ ...m, senderContact: senders.get(addresses(m.fromHeader)[0]?.email) ?? null, attachments: attachments.filter((a) => a.messageId === m.id) })) };
+			return { ...thread, triageNotice: (await triageState(tx)) ?? this.runnerProblem(), triage: (await tx`select * from mail_triage where thread_id = ${threadId}`)[0] ?? null, outbox: await tx`select id, thread_id, subject, body, "to", cc, state, send_started_at, outcome, edited, remind_at from outbox where thread_id = ${threadId} order by created_at`, messages: messages.map((m) => ({ ...m, senderContact: senders.get(addresses(m.fromHeader)[0]?.email) ?? null, attachments: attachments.filter((a) => a.messageId === m.id) })) };
 		});
 	}
 	async sync(actor: Actor, organisationId: string) {

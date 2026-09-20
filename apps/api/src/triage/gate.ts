@@ -39,20 +39,44 @@ export function gate(signals: Signals, prior: Prior | null): Verdict {
 	return { passes: true, rule: null };
 }
 
-/** Whether a reply is worth drafting, decided by rules before the large model is asked (plan §6). A thread the
- *  owner already answered needs no draft; nor does one whose latest message is more than a day old by the time
- *  the run reaches it, which is the first run's backlog and any long gap in syncing. */
-export type DraftingReason = 'already_replied' | 'older_than_a_day';
-export type Drafting = { drafts: true; reason: null } | { drafts: false; reason: DraftingReason };
-export function drafting(signals: Pick<Signals, 'latestAt' | 'repliedByOwner'>, now: number = Date.now()): Drafting {
-	if (signals.repliedByOwner) return { drafts: false, reason: 'already_replied' };
+/** Whether a reply is worth drafting, decided by rules before the large model is asked (plan §6, weighted
+ *  drafting). Two hard stops first: a thread the owner already answered, and one whose latest message is more
+ *  than a day old when the run reaches it (the first run's backlog, or a long gap in syncing). Then a score the
+ *  person can read: the verdict and the request category count for it; a known sender or one the person has
+ *  replied to count for it; the sender's past draft outcomes weigh most, sent up, discarded or not needed down,
+ *  and a draft the person asked for on a thread we did not draft is the strongest up signal. A run drafts at
+ *  most twenty replies on the large tier. */
+export type DraftingReason = 'already_replied' | 'older_than_a_day' | 'needs_owner_off' | 'below_threshold' | 'run_cap';
+export type Drafting = { drafts: true; reason: null; score: number; threshold: number } | { drafts: false; reason: DraftingReason; score: number; threshold: number };
+export type DraftPrior = Pick<Prior, 'replies'> & { draftsSent: number; draftsEdited: number; draftsDiscarded: number; draftsNotNeeded: number; draftsRequested: number };
+export type TriageVerdict = { needsOwner: boolean; category: string };
+export const DRAFTS_PER_RUN = 20;
+export function draftScore(signals: Pick<Signals, 'knownSender'>, verdict: TriageVerdict, prior: DraftPrior | null): number {
+	if (!verdict.needsOwner) return 0;
+	let score = 2;
+	if (verdict.category === 'request') score += 1;
+	if (signals.knownSender) score += 1;
+	if ((prior?.replies ?? 0) > 0) score += 1;
+	if (prior) score += 2 * (prior.draftsSent + prior.draftsEdited) - 2 * prior.draftsDiscarded - 3 * prior.draftsNotNeeded + 3 * prior.draftsRequested;
+	return Math.max(0, Math.min(10, score));
+}
+export function drafting(signals: Pick<Signals, 'latestAt' | 'repliedByOwner' | 'knownSender'>, verdict: TriageVerdict, prior: DraftPrior | null, threshold: number, draftsThisRun = 0, now: number = Date.now()): Drafting {
+	const score = draftScore(signals, verdict, prior);
+	const stop = (reason: DraftingReason): Drafting => ({ drafts: false, reason, score, threshold });
+	if (signals.repliedByOwner) return stop('already_replied');
 	const sent = Date.parse(signals.latestAt);
-	if (!Number.isFinite(sent) || now - sent > 24 * 60 * 60 * 1000) return { drafts: false, reason: 'older_than_a_day' };
-	return { drafts: true, reason: null };
+	if (!Number.isFinite(sent) || now - sent > 24 * 60 * 60 * 1000) return stop('older_than_a_day');
+	if (!verdict.needsOwner) return stop('needs_owner_off');
+	if (score < threshold) return stop('below_threshold');
+	if (draftsThisRun >= DRAFTS_PER_RUN) return stop('run_cap');
+	return { drafts: true, reason: null, score, threshold };
 }
 export const draftingWords: Record<DraftingReason, string> = {
 	already_replied: 'You have already replied to it.',
-	older_than_a_day: 'Its latest message is more than a day old, so a drafted reply would come too late.'
+	older_than_a_day: 'Its latest message is more than a day old, so a drafted reply would come too late.',
+	needs_owner_off: 'The triage found nothing that needs you.',
+	below_threshold: 'Its draft score is under your threshold: an unfamiliar sender, no request, or past drafts to this sender went unused.',
+	run_cap: 'This run has already drafted twenty replies; the next run continues.'
 };
 
 /** The rule in the person's words, for the Inbox and the journal. */

@@ -11,10 +11,11 @@ export async function syncMail(): Promise<{ error?: string; ok?: boolean }> {
 
 export async function changeDraft(_state: { error?: string; ok?: boolean } | undefined, form: FormData): Promise<{ error?: string; ok?: boolean }> {
  const me = await requireCurrent('/inbox'); const id = String(form.get('id')); const action = String(form.get('action'));
- if (!['edit', 'send', 'discard'].includes(action)) return { error: 'Choose a draft action.' };
+ if (!['edit', 'send', 'discard', 'not_needed', 'remind'].includes(action)) return { error: 'Choose a draft action.' };
+ const when = String(form.get('when') ?? ''); if (action === 'remind' && !['tomorrow', 'next_week'].includes(when)) return { error: 'Choose when to be reminded.' };
  try {
   await api(`/v1/organisations/${me.organisation.organisationId}/outbox/${encodeURIComponent(id)}/${action}`, { method: 'POST', token: me.token,
-   ...(action === 'edit' ? { body: { body: String(form.get('body')) } } : {}) });
+   ...(action === 'edit' ? { body: { body: String(form.get('body')) } } : action === 'remind' ? { body: { when } } : {}) });
  } catch (error) { revalidatePath('/inbox', 'layout'); return { error: error instanceof ApiError ? error.message : 'The draft could not be updated. Try again.' }; }
  revalidatePath('/inbox', 'layout'); return { ok: true };
 }

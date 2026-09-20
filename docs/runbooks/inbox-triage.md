@@ -61,21 +61,35 @@ sender; a send from the outbox bumps `replies` for each recipient; a star seen o
 The model sees each message's own text only: quoted reply blocks, forwarded header blocks and
 signatures are cut, the latest message keeps up to 20,000 characters and earlier ones 500.
 
-## Drafting rules (no model)
+## Weighted drafting (no model)
 
-Before the large model is asked for a reply, `triage.drafting` decides by rules whether a draft is
-worth making, and the run's steps show the outcome:
+Before the large model is asked for a reply, `triage.draftScore` decides by rules whether a draft
+is worth making, and the run's steps show the outcome with its reason:
 
 - **already_replied**: a message from the mailbox follows the latest incoming one.
 - **older_than_a_day**: the latest incoming message is more than 24 hours old when the run reaches
   it. On a first run this is the backlog; in steady state mail is triaged at each sync, so fresh
   threads always qualify.
+- **needs_owner_off**: the verdict found nothing that needs the owner.
+- **below_threshold**: the draft score is under the workflow's `draftThreshold` parameter
+  (default 3). Score: needs owner 2; request category +1; known sender +1; a sender the person has
+  replied to +1; per past draft to the sender: sent or edited-then-sent +2, discarded −2, not
+  needed −3, a draft the person asked for +3; clamped to 0–10. So before any outcomes exist the
+  rule is: needs owner and (known sender or request).
+- **run_cap**: twenty drafts already made in this run on the large tier.
 
 Classification, tasks and confirmations still run for these threads; only the draft is skipped.
+
+Every draft records its **outcome** in `outbox.outcome` when it closes: `sent`, `edited_sent`,
+`discarded`, `not_needed` (no reply wanted; also turns the thread's needs-owner off and counts as
+an information verdict for the sender) or `expired` (untouched for seven days; neutral). The
+counts roll into `mail_senders.drafts_*`. On a drafted thread the control is a split button: Send,
+with Edit, Remind me tomorrow morning, Remind me next week, Not needed and Discard in its menu.
+Remind me later sets `remind_at` and keeps the draft; edits and reminders restart the seven days.
 The reply-style parameter is optional: left blank, the draft instruction asks for plain, brief
 replies in the voice of the owner's own messages in the thread.
 
-The definition is version 3 (version 2 added the gate; version 3 the drafting rules and the
-optional style note). An organisation that enabled an earlier version must save the workflow's
+The definition is version 4 (version 2 added the gate; version 3 the drafting rules and the
+optional style note; version 4 the draft score, threshold parameter and outcomes). An organisation that enabled an earlier version must save the workflow's
 parameters again in Settings → Workflows before a new run will start; the runner says so.
 

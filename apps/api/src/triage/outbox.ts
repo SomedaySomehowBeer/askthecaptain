@@ -16,6 +16,24 @@ export const draftInput = z.object({ threadId: z.uuid().nullable().default(null)
  subject: z.string().max(300).regex(/^[^\r\n]*$/), body: z.string().min(1).max(20000) }).strict();
 const uncertain = () => new HttpError(409, 'send_uncertain', 'Sending has not been confirmed. Check Sent in Gmail, then use Check send again. Captain will not send a second copy.');
 type Wake = (tx: TransactionSql, organisationId: string, runId: string, key: string) => Promise<unknown>;
+export type Outcome = 'sent' | 'edited_sent' | 'discarded' | 'not_needed' | 'expired';
+/** A draft untouched for seven days expires with a neutral outcome (plan §6). */
+export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+export async function expireDraft(tx: TransactionSql, org: string, id: string) {
+ const [row] = await tx`select * from outbox where id = ${id}`; if (!row) return null;
+ if (row.state !== 'drafted' || row.sendStartedAt || Date.now() - new Date(row.updatedAt).getTime() < DRAFT_TTL_MS) return row;
+ const [expired] = await tx`update outbox set state = 'discarded', outcome = 'expired', discarded_at = now(), updated_at = now() where id = ${id} and state = 'drafted' returning *`;
+ if (expired) await audit(tx, { organisationId: org, actor: { kind: 'system' }, action: 'outbox.expired', subjectType: 'outbox', subjectId: id });
+ return expired ?? row;
+}
+/** Tomorrow morning or next week at seven in the organisation's own time zone. */
+export function remindAt(when: 'tomorrow' | 'next_week', timeZone: string, now = new Date()): Date {
+ const parts = (date: Date) => { const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }).formatToParts(date).map(x => [x.type, Number(x.value)])); return p as Record<string, number>; };
+ const local = parts(now); const days = when === 'tomorrow' ? 1 : 7;
+ const guess = Date.UTC(local.year!, local.month! - 1, local.day! + days, 7, 0, 0);
+ const at = parts(new Date(guess)); const asUtc = Date.UTC(at.year!, at.month! - 1, at.day!, at.hour!, at.minute!, at.second!);
+ return new Date(guess - (asUtc - guess));
+}
 export async function createDraft(ctx: Context, destination: Thread | { to: string; subject: string }, body: string, invoiceProviderId: string | null = null) {
  const thread = 'id' in destination ? destination : null;
  const conn = thread ? { id: thread.connectionId, accountEmail: thread.accountEmail } : await connection(ctx.tx);
@@ -86,17 +104,38 @@ export class OutboxService {
    await this.journal(tx, actor, org, row!.id, 'created'); return row!;
   });
  }
- async change(actor: Actor, org: string, id: string, action: 'edit' | 'discard', body?: string) {
+ /** How a draft ended feeds the sender's draft outcomes (plan §6): sent up, discarded or not needed down. Not needed also
+  *  says no reply was wanted, a down signal on needs-owner. Recorded once, when the draft closes. */
+ static async recordOutcome(tx: TransactionSql, org: string, draft: { to: unknown; threadId: unknown }, outcome: Outcome) {
+  const row = { to: draft.to as string[], threadId: (draft.threadId ?? null) as string | null };
+  const columns = { sent: 'drafts_sent', edited_sent: 'drafts_edited', discarded: 'drafts_discarded', not_needed: 'drafts_not_needed', expired: null }[outcome];
+  if (columns) for (const email of new Set(addresses(row.to.join(',')).map(a => a.email))) {
+   await tx.unsafe(`insert into mail_senders (organisation_id, email, ${columns}) values ($1, $2, 1)
+    on conflict (organisation_id, email) do update set ${columns} = mail_senders.${columns} + 1, updated_at = now()`, [org, email]);
+   if (outcome === 'not_needed') await tx`update mail_senders set information_verdicts = information_verdicts + 1, needs_owner_count = greatest(0, needs_owner_count - 1) where email = ${email}`;
+  }
+  if (outcome === 'not_needed' && row.threadId) await tx`update mail_triage set needs_owner = false, updated_at = now() where thread_id = ${row.threadId}`;
+ }
+ async change(actor: Actor, org: string, id: string, action: 'edit' | 'discard' | 'not_needed' | 'remind', body?: string, when?: 'tomorrow' | 'next_week') {
   if (action === 'edit') z.string().min(1).max(20000).parse(body);
+  if (action === 'remind') z.enum(['tomorrow', 'next_week']).parse(when);
   return this.tx(actor, org, async tx => {
    const [row] = await tx`select * from outbox where id = ${id} for update`; if (!row) throw notFound();
-   if (row.state === 'discarded' && action === 'discard') return row;
+   if (row.state === 'discarded' && (action === 'discard' || action === 'not_needed')) return row;
    if (row.state !== 'drafted') throw badRequest('draft_closed', 'This draft has already been sent or discarded.');
    if (row.sendStartedAt) throw uncertain();
-   const [updated] = action === 'edit' ? await tx`update outbox set body = ${body!}, updated_at = now() where id = ${id} returning *`
-    : await tx`update outbox set state = 'discarded', discarded_by = ${actor.userId}, discarded_at = now(), updated_at = now() where id = ${id} returning *`;
-   await this.journal(tx, actor, org, id, action === 'edit' ? 'edited' : 'discarded');
-   if (action === 'discard' && row.createdBy) await this.wake(tx, org, row.createdBy, `outbox:${id}`);
+   let updated;
+   if (action === 'edit') [updated] = await tx`update outbox set body = ${body!}, edited = true, updated_at = now() where id = ${id} returning *`;
+   else if (action === 'remind') {
+    const [org_] = await tx`select timezone from organisations where id = ${org}`;
+    [updated] = await tx`update outbox set remind_at = ${remindAt(when!, String(org_?.timezone ?? 'UTC'))}, updated_at = now() where id = ${id} returning *`;
+   } else {
+    const outcome: Outcome = action === 'discard' ? 'discarded' : 'not_needed';
+    [updated] = await tx`update outbox set state = 'discarded', outcome = ${outcome}, discarded_by = ${actor.userId}, discarded_at = now(), updated_at = now() where id = ${id} returning *`;
+    await OutboxService.recordOutcome(tx, org, row as unknown as { to: unknown; threadId: unknown }, outcome);
+   }
+   await this.journal(tx, actor, org, id, action === 'edit' ? 'edited' : action === 'remind' ? 'reminder_set' : action === 'discard' ? 'discarded' : 'not_needed');
+   if ((action === 'discard' || action === 'not_needed') && row.createdBy) await this.wake(tx, org, row.createdBy, `outbox:${id}`);
    return updated!;
   });
  }
@@ -146,9 +185,10 @@ export class OutboxService {
   }
   if (!providerId) throw uncertain();
   return this.tx(actor, org, async tx => {
-   const [updated] = await tx`update outbox set state = 'sent', provider_message_id = ${providerId}, sent_at = now(), updated_at = now() where id = ${id} and state = 'drafted' returning *`;
+   const [updated] = await tx`update outbox set state = 'sent', outcome = case when edited then 'edited_sent' else 'sent' end, provider_message_id = ${providerId}, sent_at = now(), updated_at = now() where id = ${id} and state = 'drafted' returning *`;
    if (updated) {
     await this.journal(tx, actor, org, id, 'sent'); if (updated.createdBy) await this.wake(tx, org, updated.createdBy, `outbox:${id}`);
+    await OutboxService.recordOutcome(tx, org, updated as unknown as { to: unknown; threadId: unknown }, updated.outcome as Outcome);
     // A reply from a person resets the sender's prior (D20): from now on their mail always reaches the model.
     for (const email of new Set(addresses((updated.to as string[]).join(',')).map(a => a.email))) await tx`insert into mail_senders (organisation_id, email, replies) values (${org}, ${email}, 1)
      on conflict (organisation_id, email) do update set replies = mail_senders.replies + 1, updated_at = now()`;

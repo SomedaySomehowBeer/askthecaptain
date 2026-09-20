@@ -30,7 +30,7 @@ export const catalog: Record<string, CatalogEntry> = {
 	'contacts.forEvent': { kind: 'read', does: 'reads the contacts attending an event', requires: [] },
 	'xero.overdueReceivables': { kind: 'read', does: 'reads cached overdue invoices and explicit Xero connection state', requires: [] },
 	'stock.items': { kind: 'read', does: 'reads the counted stock list for a location', requires: [] },
-	'triage.drafting': { kind: 'read', does: 'decides by rules, with no model, whether a reply is worth drafting: not when the owner already replied or the latest message is over a day old', requires: [] },
+	'triage.draftScore': { kind: 'read', does: 'scores the thread for drafting by rules, with no model: needs you, a request, a familiar sender and how past drafts to them ended; none when already replied, over a day old, or twenty drafted this run', requires: [] },
 	'triage.gate': { kind: 'read', does: 'decides by rules, with no model, whether the thread is bulk or automated mail (D20)', requires: [] },
 	'shopify.stockLevels': { kind: 'read', does: 'reads shop levels or reports that Shopify is disconnected or incomplete', requires: [] },
 	// infer

@@ -5,12 +5,13 @@ import { classifyThreadInstruction, draftReplyInstruction } from '@captain/steps
 import type { InferenceService } from '../inference/service.ts';
 import type { ConnectionService } from '../connections/service.ts';
 import { connection } from '../mail/store.ts';
+import { z } from 'zod';
 import { addresses } from '../contacts/addresses.ts';
 import { upkeepContacts } from '../contacts/upkeep.ts';
 import { suggest, complete } from '../commitments/triage.ts';
-import { workflowDraft } from './outbox.ts';
+import { DRAFT_TTL_MS, expireDraft, workflowDraft } from './outbox.ts';
 import { draftSchema, triageSchema, journal, type Context, type Thread } from './data.ts';
-import { drafting, gate, ruleWords, type Prior, type Rule } from './gate.ts';
+import { drafting, gate, ruleWords, type DraftPrior, type Prior, type Rule } from './gate.ts';
 import { trimmedMessages } from './text.ts';
 
 export class TriageService {
@@ -82,7 +83,13 @@ export class TriageService {
    const thread = args.thread as Thread; const [row] = await ctx.tx<Prior[]>`select threads_seen, information_verdicts, needs_owner_count, replies, stars from mail_senders where email = ${thread.sender}`;
    return gate(thread.signals, row ?? null);
   } });
-  registry.registerStep('triage.drafting', { kind: 'read', transaction: async (_ctx, args) => drafting((args.thread as Thread).signals) });
+  registry.registerStep('triage.draftScore', { kind: 'read', transaction: async (ctx, args) => {
+   const thread = args.thread as Thread; const verdict = args.triage as { needsOwner: boolean; category: string };
+   const threshold = z.number().int().min(0).max(10).catch(3).parse(args.threshold);
+   const [prior] = await ctx.tx<DraftPrior[]>`select replies, drafts_sent, drafts_edited, drafts_discarded, drafts_not_needed, drafts_requested from mail_senders where email = ${thread.sender}`;
+   const [count] = await ctx.tx`select count(*)::int as drafts from outbox where created_by = ${ctx.runId} and thread_id is not null`;
+   return drafting(thread.signals, verdict, prior ?? null, threshold, count?.drafts ?? 0);
+  } });
   registry.registerStep('triage.file', { kind: 'write', transaction: async (ctx, args) => {
    const thread = args.thread as Thread; const rule = (args.gate as { rule: Rule }).rule; const { tx } = ctx;
    await tx`insert into mail_triage (organisation_id, thread_id, category, needs_owner, summary, facts, produced_by, model, source_message_id)
@@ -124,9 +131,13 @@ export class TriageService {
    input: { replyStyle: args.style ?? '', untrustedMail: { subject: (args.thread as Thread).subject, messages: (args.thread as Thread).messages }, untrustedTriage: args.triage }
   }) });
   registry.registerStep('outbox.create', { kind: 'write', transaction: workflowDraft });
-  registry.registerStep('outbox.sent', { kind: 'await', transaction: async ({ tx }, args) => {
-   const id = (args.draft as { id: string }).id; const [row] = await tx`select state from outbox where id = ${id}`;
-   return { ready: row?.state === 'sent' || row?.state === 'discarded', key: `outbox:${id}`, output: { state: row?.state ?? 'missing' } };
+  // The wait ends when a person sends or closes the draft, or when it has sat untouched for seven days and expires
+  // with a neutral outcome. Remind me later and edits count as touches, so the seven days start again.
+  registry.registerStep('outbox.sent', { kind: 'await', transaction: async ({ tx, organisationId }, args) => {
+   const id = (args.draft as { id?: string } | null)?.id; if (!id) return { ready: true, key: 'outbox:none', output: { state: 'skipped' } };
+   const row = await expireDraft(tx, organisationId, id); const closed = row?.state === 'sent' || row?.state === 'discarded';
+   const wakeAt = row && !closed ? new Date(new Date(row.updatedAt).getTime() + DRAFT_TTL_MS + 1000) : undefined;
+   return { ready: !row || closed, key: `outbox:${id}`, output: { state: row ? (row.outcome ?? row.state) : 'missing' }, ...(wakeAt ? { wakeAt } : {}) };
   } });
   registry.registerStep('gmail.label', { kind: 'write', retrySafe: true, call: async (ctx, args) => {
    const thread = args.thread as Thread; await this.gmail.label(await this.token(ctx, thread), thread.providerId, 'Captain/Handled');

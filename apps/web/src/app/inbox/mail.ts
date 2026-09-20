@@ -1,5 +1,5 @@
 export type Triage = { category: string; needsOwner: boolean; summary: string; model?: string; facts: { counterparty: string | null; amounts: string[]; dates: string[]; references: string[] } };
-export type Draft = { id: string; threadId: string | null; subject: string; body: string; to: string[]; cc: string[]; state: 'drafted' | 'sent' | 'discarded'; sendStartedAt: string | null };
+export type Draft = { id: string; threadId: string | null; subject: string; body: string; to: string[]; cc: string[]; state: 'drafted' | 'sent' | 'discarded'; sendStartedAt: string | null; outcome: 'sent' | 'edited_sent' | 'discarded' | 'not_needed' | 'expired' | null; edited: boolean; remindAt: string | null };
 export type ThreadSummary = { triage: Triage | null; hasDraft: boolean; id: string; fromHeader: string; subject: string; snippet: string; sentAt: string; labelNames: string[]; attachmentCount: number };
 export type MailList = { triageNotice: string | null; outbox: Draft[]; nextBefore: string | null; automaticSyncEnabled: boolean; timezone: string; connection: { status: string; accountEmail: string; error: string | null } | null;
 	lastSync: { at: string; detail: { success: boolean; capped?: boolean; error?: string } } | null; threads: ThreadSummary[]; hasMore: boolean };
