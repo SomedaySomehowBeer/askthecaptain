@@ -44,6 +44,8 @@ test('login exposes only the allowlisted URL and device code, forwards one code 
  const crashing = loginManager('claude', () => spawn(process.execPath, ['-e', 'console.error("Traceback (most recent call last):\\n  File x\\nOSError: [Errno 1] Operation not permitted"); process.exit(1)'], { stdio: ['pipe', 'pipe', 'pipe'] })); crashing.start(); await settle();
  assert.equal(crashing.status().state, 'failed'); assert.equal(crashing.status().note, 'wrapper: OSError: [Errno 1] Operation not permitted');
  assert.throws(() => login.code('again'), { code: 'invalid_request' });
+ const saved = loginManager('claude', fakeLogin(['https://claude.com/x'], 'never'), () => true);
+ assert.equal(saved.status().state, 'done'); assert.equal(saved.start().state, 'waiting'); saved.stop();
  const failing = loginManager('codex', fakeLogin(['Device code: WXYZ-9876'], 'other')); failing.start(); await settle();
  assert.equal(failing.status().needsCode, false); failing.code('wrong'); await settle(); assert.equal(failing.status().state, 'failed');
  login.stop(); failing.stop();
