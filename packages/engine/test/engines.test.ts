@@ -87,7 +87,9 @@ it('enqueue and schedules share the enablement transaction, timezone and only-ru
   await assert.rejects(f.tx(async tx => { await f.engine.start(tx, f.organisationId, f.definition.key); throw Error('rollback'); }), /rollback/);
   assert.equal((await f.tx(tx => tx`select * from workflow_runs`)).length, 0);
   await f.tx(tx => f.engine.configure(tx, f.organisationId, f.enablementId, f.definition.key));
-  const rows = await f.engine.boss.getSchedules('workflow_inbox-triage'); const row = rows.find(r => r.key === `${f.enablementId}_1`)!;
+  // The schedule key carries the trigger's index in the definition; find the daily one rather than assuming its place.
+  const daily = f.definition.triggers.findIndex(t => t.kind !== 'event');
+  const rows = await f.engine.boss.getSchedules('workflow_inbox-triage'); const row = rows.find(r => r.key === `${f.enablementId}_${daily}`)!;
   assert.equal(row.timezone, 'Australia/Perth'); assert.equal(row.cron, '00 06 * * *'); assert.deepEqual(Object.keys(row.data as object), ['runId']);
   const id = (row.data as { runId: string }).runId; await f.engine.boss.send('workflow_inbox-triage', { runId: id }); await finish(f, id);
   const next = (await f.engine.boss.getSchedules('workflow_inbox-triage')).find(r => r.key === row.key)!; assert.notEqual((next.data as { runId: string }).runId, id);
@@ -145,10 +147,11 @@ it('release installation is repeatable without replacing pending work or schedul
   const jobId = await f.engine.boss.send('workflow_inbox-triage', { runId: run!.id }, { startAfter: new Date(Date.now() + 86400000) });
   await f.engine.close();
   const queues = await db.owner`select name from workflow_queue.queue order by name`;
-  const schedules = await db.owner`select name, key, cron, timezone, data from workflow_queue.schedule where key = ${f.enablementId + '_1'}`;
+  const key = `${f.enablementId}_${f.definition.triggers.findIndex(t => t.kind !== 'event')}`;
+  const schedules = await db.owner`select name, key, cron, timezone, data from workflow_queue.schedule where key = ${key}`;
   for (let attempt = 0; attempt < 2; attempt++) await installQueues(db.databaseUrl, [f.definition]);
   assert.deepEqual(await db.owner`select name from workflow_queue.queue order by name`, queues);
-  assert.deepEqual(await db.owner`select name, key, cron, timezone, data from workflow_queue.schedule where key = ${f.enablementId + '_1'}`, schedules);
+  assert.deepEqual(await db.owner`select name, key, cron, timezone, data from workflow_queue.schedule where key = ${key}`, schedules);
   const [job] = await db.owner`select state, data from workflow_queue.job where id = ${jobId}`;
   assert.equal(job!.state, 'created'); assert.deepEqual(job!.data, { runId: run!.id });
   await f.engine.open(); // Runtime app-role startup still works after repeated release installs.
