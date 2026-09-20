@@ -10,7 +10,7 @@ import { upkeepContacts } from '../contacts/upkeep.ts';
 import { suggest, complete } from '../commitments/triage.ts';
 import { workflowDraft } from './outbox.ts';
 import { draftSchema, triageSchema, journal, type Context, type Thread } from './data.ts';
-import { gate, ruleWords, type Prior, type Rule } from './gate.ts';
+import { drafting, gate, ruleWords, type Prior, type Rule } from './gate.ts';
 import { trimmedMessages } from './text.ts';
 
 export class TriageService {
@@ -40,7 +40,8 @@ export class TriageService {
    const knownSender = !!known || sent.some(m => addresses(m.toHeader + ',' + m.ccHeader).some(a => a.email === sender));
    // The gate's signals (D20) come from the latest incoming message and the thread's stars; the model sees own text only (§14 trimmed input).
    const signals = { labelIds: latest.labelIds as string[], listUnsubscribe: Boolean(latest.listUnsubscribe), listId: String(latest.listId ?? ''), precedence: String(latest.precedence ?? ''),
-    autoSubmitted: String(latest.autoSubmitted ?? ''), sender, knownSender, starred: messages.some(m => (m.labelIds as string[]).includes('STARRED')) };
+    autoSubmitted: String(latest.autoSubmitted ?? ''), sender, knownSender, starred: messages.some(m => (m.labelIds as string[]).includes('STARRED')),
+    latestAt: latest.sentAt.toISOString(), repliedByOwner: messages.some(m => m.sentAt > latest.sentAt && ((m.labelIds as string[]).includes('SENT') || addresses(m.fromHeader)[0]?.email === conn.accountEmail)) };
    threads.push({ id: t!.id, connectionId: t!.connectionId, accountEmail: t!.accountEmail, providerId: t!.providerId,
     sourceMessageId: latest.id, sender, knownSender, subject: latest.subject, rfcMessageId: latest.rfcMessageId, signals,
     messages: trimmedMessages(messages.reverse().map(m => ({ id: m.id, fromHeader: m.fromHeader, body: m.body, sentAt: m.sentAt.toISOString() }))) });
@@ -81,6 +82,7 @@ export class TriageService {
    const thread = args.thread as Thread; const [row] = await ctx.tx<Prior[]>`select threads_seen, information_verdicts, needs_owner_count, replies, stars from mail_senders where email = ${thread.sender}`;
    return gate(thread.signals, row ?? null);
   } });
+  registry.registerStep('triage.drafting', { kind: 'read', transaction: async (_ctx, args) => drafting((args.thread as Thread).signals) });
   registry.registerStep('triage.file', { kind: 'write', transaction: async (ctx, args) => {
    const thread = args.thread as Thread; const rule = (args.gate as { rule: Rule }).rule; const { tx } = ctx;
    await tx`insert into mail_triage (organisation_id, thread_id, category, needs_owner, summary, facts, produced_by, model, source_message_id)

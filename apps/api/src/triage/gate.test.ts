@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { gate, localPart, ruleWords, type Signals } from './gate.ts';
+import { drafting, draftingWords, gate, localPart, ruleWords, type Signals } from './gate.ts';
 
-const plain: Signals = { labelIds: ['INBOX'], listUnsubscribe: false, listId: '', precedence: '', autoSubmitted: '', sender: 'jo@supplier.test', knownSender: false, starred: false };
+const plain: Signals = { labelIds: ['INBOX'], listUnsubscribe: false, listId: '', precedence: '', autoSubmitted: '', sender: 'jo@supplier.test', knownSender: false, starred: false, latestAt: '2026-09-20T02:00:00.000Z', repliedByOwner: false };
 const quiet = { threadsSeen: 3, informationVerdicts: 3, needsOwnerCount: 0, replies: 0, stars: 0 };
 
 test('bulk and automated mail is filed by the first rule that holds, with a reason in words', () => {
@@ -34,4 +34,14 @@ test('Updates goes to the model only for a known sender', () => {
 	assert.equal(gate({ ...plain, labelIds: ['CATEGORY_UPDATES'] }, null).rule, 'category_updates_unknown');
 	assert.equal(gate({ ...plain, labelIds: ['CATEGORY_UPDATES'], knownSender: true }, null).passes, true);
 	assert.equal(localPart('Do.Not-Reply+x@a.test'), 'donotreply');
+});
+
+test('a reply is drafted only for fresh threads the owner has not answered, with the reason in words', () => {
+	const now = Date.parse('2026-09-20T12:00:00.000Z');
+	assert.deepEqual(drafting(plain, now), { drafts: true, reason: null });
+	assert.deepEqual(drafting({ ...plain, repliedByOwner: true }, now), { drafts: false, reason: 'already_replied' });
+	assert.deepEqual(drafting({ ...plain, latestAt: '2026-09-19T11:59:00.000Z' }, now), { drafts: false, reason: 'older_than_a_day' });
+	assert.equal(drafting({ ...plain, latestAt: '2026-09-19T12:01:00.000Z' }, now).drafts, true);
+	assert.equal(drafting({ ...plain, latestAt: 'not a date' }, now).reason, 'older_than_a_day');
+	for (const words of Object.values(draftingWords)) assert.match(words, /\.$/);
 });
