@@ -19,3 +19,14 @@ export async function changeDraft(_state: { error?: string; ok?: boolean } | und
  } catch (error) { revalidatePath('/inbox', 'layout'); return { error: error instanceof ApiError ? error.message : 'The draft could not be updated. Try again.' }; }
  revalidatePath('/inbox', 'layout'); return { ok: true };
 }
+
+/** Draft a reply, Not needed and Remind me later on a needs-you thread without a draft. Drafting asks the model and takes a moment. */
+export async function threadAction(_state: { error?: string; ok?: boolean; message?: string } | undefined, form: FormData): Promise<{ error?: string; ok?: boolean; message?: string }> {
+ const me = await requireCurrent('/inbox'); const id = String(form.get('threadId')); const action = String(form.get('action')); const when = String(form.get('when') ?? '');
+ if (!['draft', 'not_needed', 'remind'].includes(action)) return { error: 'Choose an action.' };
+ if (action === 'remind' && !['tomorrow', 'next_week'].includes(when)) return { error: 'Choose when to be reminded.' };
+ try { await api(`/v1/organisations/${me.organisation.organisationId}/mail/threads/${encodeURIComponent(id)}/${action}`, { method: 'POST', token: me.token, ...(action === 'remind' ? { body: { when } } : {}) }); }
+ catch (error) { revalidatePath('/inbox', 'layout'); return { error: error instanceof ApiError ? error.message : 'That did not work. Try again.' }; }
+ revalidatePath('/inbox', 'layout');
+ return { ok: true, message: action === 'draft' ? 'The draft is below. Review it; only you can send it.' : action === 'remind' ? 'Reminder set.' : 'Marked as no reply wanted.' };
+}

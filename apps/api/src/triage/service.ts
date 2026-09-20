@@ -4,15 +4,39 @@ import { Registry, type HandlerContext } from '@captain/engine';
 import { classifyThreadInstruction, draftReplyInstruction } from '@captain/steps';
 import type { InferenceService } from '../inference/service.ts';
 import type { ConnectionService } from '../connections/service.ts';
-import { connection } from '../mail/store.ts';
+import { connection, requireMember } from '../mail/store.ts';
+import { audit } from '../audit.ts';
+import { badRequest, notFound } from '../errors.ts';
+import type { Actor } from '../tenant.ts';
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { addresses } from '../contacts/addresses.ts';
 import { upkeepContacts } from '../contacts/upkeep.ts';
 import { suggest, complete } from '../commitments/triage.ts';
-import { DRAFT_TTL_MS, expireDraft, workflowDraft } from './outbox.ts';
+import { DRAFT_TTL_MS, expireDraft, noReplyWanted, remindAt, workflowDraft } from './outbox.ts';
 import { draftSchema, triageSchema, journal, type Context, type Thread } from './data.ts';
 import { drafting, gate, ruleWords, type DraftPrior, type Prior, type Rule } from './gate.ts';
 import { trimmedMessages } from './text.ts';
+
+/** One thread as the workflow and the person see it: the latest incoming message's signals, the sender, and the
+ *  messages trimmed to their own text. Null when the latest message is the mailbox's own (nothing to answer). */
+export async function loadThread(tx: TransactionSql, conn: { id: string; accountEmail: string }, threadId: string): Promise<Thread | null> {
+ const [t] = await tx`select id, connection_id, account_email, provider_id from mail_threads where id = ${threadId}`; if (!t) return null;
+ const messages = await tx`select id, from_header, body, sent_at, subject, rfc_message_id, label_ids, list_unsubscribe, list_id, precedence, auto_submitted from mail_messages
+  where thread_id = ${threadId} order by sent_at desc, provider_id desc limit 20`;
+ const latest = messages[0]; if (!latest) return null; const sender = addresses(latest.fromHeader)[0]?.email ?? '';
+ if (sender === conn.accountEmail || latest.labelIds.includes('SENT')) return null;
+ const [known] = await tx`select 1 from contacts where email = ${sender} and archived_at is null and source <> 'mail'`;
+ const sent = await tx`select to_header, cc_header from mail_messages where connection_id = ${conn.id} and sent_at < ${latest.sentAt} and 'SENT' = any(label_ids)`;
+ const knownSender = !!known || sent.some(m => addresses(m.toHeader + ',' + m.ccHeader).some(a => a.email === sender));
+ // The gate's signals (D20) come from the latest incoming message and the thread's stars; the model sees own text only (§14 trimmed input).
+ const signals = { labelIds: latest.labelIds as string[], listUnsubscribe: Boolean(latest.listUnsubscribe), listId: String(latest.listId ?? ''), precedence: String(latest.precedence ?? ''),
+  autoSubmitted: String(latest.autoSubmitted ?? ''), sender, knownSender, starred: messages.some(m => (m.labelIds as string[]).includes('STARRED')),
+  latestAt: latest.sentAt.toISOString(), repliedByOwner: messages.some(m => m.sentAt > latest.sentAt && ((m.labelIds as string[]).includes('SENT') || addresses(m.fromHeader)[0]?.email === conn.accountEmail)) };
+ return { id: t.id, connectionId: t.connectionId, accountEmail: t.accountEmail, providerId: t.providerId,
+  sourceMessageId: latest.id, sender, knownSender, subject: latest.subject, rfcMessageId: latest.rfcMessageId, signals,
+  messages: trimmedMessages(messages.reverse().map(m => ({ id: m.id, fromHeader: m.fromHeader, body: m.body, sentAt: m.sentAt.toISOString() }))) };
+}
 
 export class TriageService {
  readonly db: Sql; readonly connections: Pick<ConnectionService, 'accessToken'>; readonly inference: InferenceService; readonly gmail: GmailClient;
@@ -31,23 +55,52 @@ export class TriageService {
   await tx`update workflow_enablements set mail_cursor = ${batch.at(-1)!.id} where id = ${enablementId}`;
   const threads: Thread[] = [];
   for (const threadId of new Set(batch.map(m => String(m.threadId)))) {
-   const [t] = await tx`select id, connection_id, account_email, provider_id from mail_threads where id = ${threadId}`;
-   const messages = await tx`select id, from_header, body, sent_at, subject, rfc_message_id, label_ids, list_unsubscribe, list_id, precedence, auto_submitted from mail_messages
-    where thread_id = ${threadId} order by sent_at desc, provider_id desc limit 20`;
-   const latest = messages[0]!; const sender = addresses(latest.fromHeader)[0]?.email ?? '';
-   if (sender === conn.accountEmail || latest.labelIds.includes('SENT')) continue;
-   const [known] = await tx`select 1 from contacts where email = ${sender} and archived_at is null and source <> 'mail'`;
-   const sent = await tx`select to_header, cc_header from mail_messages where connection_id = ${conn.id} and sent_at < ${latest.sentAt} and 'SENT' = any(label_ids)`;
-   const knownSender = !!known || sent.some(m => addresses(m.toHeader + ',' + m.ccHeader).some(a => a.email === sender));
-   // The gate's signals (D20) come from the latest incoming message and the thread's stars; the model sees own text only (§14 trimmed input).
-   const signals = { labelIds: latest.labelIds as string[], listUnsubscribe: Boolean(latest.listUnsubscribe), listId: String(latest.listId ?? ''), precedence: String(latest.precedence ?? ''),
-    autoSubmitted: String(latest.autoSubmitted ?? ''), sender, knownSender, starred: messages.some(m => (m.labelIds as string[]).includes('STARRED')),
-    latestAt: latest.sentAt.toISOString(), repliedByOwner: messages.some(m => m.sentAt > latest.sentAt && ((m.labelIds as string[]).includes('SENT') || addresses(m.fromHeader)[0]?.email === conn.accountEmail)) };
-   threads.push({ id: t!.id, connectionId: t!.connectionId, accountEmail: t!.accountEmail, providerId: t!.providerId,
-    sourceMessageId: latest.id, sender, knownSender, subject: latest.subject, rfcMessageId: latest.rfcMessageId, signals,
-    messages: trimmedMessages(messages.reverse().map(m => ({ id: m.id, fromHeader: m.fromHeader, body: m.body, sentAt: m.sentAt.toISOString() }))) });
+   const thread = await loadThread(tx, conn, threadId); if (thread) threads.push(thread);
   }
   return threads;
+ }
+ /** The person asked for a reply on a needs-you thread we did not draft: the strongest up signal for the sender's
+  *  draft score (plan §6). Drafted on the large tier against the same instruction and style as the workflow, then
+  *  placed in the outbox for the person to review and send; no send happens here (D5). */
+ async requestDraft(actor: Actor, organisationId: string, threadId: string) {
+  const prepared = await withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
+   await requireMember(tx, actor.userId, organisationId); const conn = await connection(tx);
+   if (!conn || conn.status !== 'connected') throw badRequest('reconnect_required', 'Reconnect Google in Settings before drafting a reply.');
+   const [existing] = await tx`select id from outbox where thread_id = ${threadId} and state = 'drafted' limit 1`;
+   if (existing) throw badRequest('draft_exists', 'A draft is already waiting on this thread.');
+   const thread = await loadThread(tx, conn, threadId); if (!thread) throw badRequest('already_replied', 'The latest message on this thread is yours; there is nothing to reply to.');
+   const [triage] = await tx`select category, needs_owner, summary, facts from mail_triage where thread_id = ${threadId}`;
+   const [enablement] = await tx`select parameters from workflow_enablements where definition_key = 'inbox-triage' order by updated_at desc limit 1`;
+   return { thread, triage: triage ?? null, style: String((enablement?.parameters as { replyStyle?: unknown } | null)?.replyStyle ?? '') };
+  });
+  const draft = await this.inference.infer(actor, { organisationId, step: 'draftReply.requested', tier: 'large', instruction: draftReplyInstruction, schema: draftSchema,
+   input: { replyStyle: prepared.style, untrustedMail: { subject: prepared.thread.subject, messages: prepared.thread.messages }, untrustedTriage: prepared.triage } });
+  return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
+   const { thread } = prepared;
+   const [row] = await tx`insert into outbox (organisation_id, thread_id, connection_id, account_email, "to", cc, subject, body, in_reply_to, created_by_person, idempotency_key)
+    values (${organisationId}, ${thread.id}, ${thread.connectionId}, ${thread.accountEmail}, ${tx.array(thread.sender ? [thread.sender] : [])}, '{}', ${thread.subject.replace(/[\r\n]/g, ' ').slice(0, 300)}, ${draft.body}, ${thread.rfcMessageId}, ${actor.userId}, ${randomUUID()}) returning *`;
+   if (thread.sender) await tx`insert into mail_senders (organisation_id, email, drafts_requested) values (${organisationId}, ${thread.sender}, 1)
+    on conflict (organisation_id, email) do update set drafts_requested = mail_senders.drafts_requested + 1, updated_at = now()`;
+   await tx`update mail_triage set remind_at = null, updated_at = now() where thread_id = ${thread.id}`;
+   await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId, action: 'outbox.requested', subjectType: 'outbox', subjectId: String(row!.id), detail: { threadId } });
+   return row!;
+  });
+ }
+ /** On a needs-you thread without a draft: Not needed (no reply wanted) or Remind me later (tomorrow morning or next week). */
+ async threadAction(actor: Actor, organisationId: string, threadId: string, action: 'not_needed' | 'remind', when?: 'tomorrow' | 'next_week') {
+  return withTenant(this.db, { organisationId, userId: actor.userId }, async tx => {
+   await requireMember(tx, actor.userId, organisationId);
+   const [triage] = await tx`select thread_id from mail_triage where thread_id = ${threadId}`; if (!triage) throw notFound();
+   if (action === 'remind') {
+    const [org] = await tx`select timezone from organisations where id = ${organisationId}`;
+    await tx`update mail_triage set remind_at = ${remindAt(z.enum(['tomorrow', 'next_week']).parse(when), String(org?.timezone ?? 'UTC'))}, updated_at = now() where thread_id = ${threadId}`;
+   } else {
+    const [latest] = await tx`select from_header from mail_messages where thread_id = ${threadId} order by sent_at desc, provider_id desc limit 1`;
+    await noReplyWanted(tx, threadId, addresses(String(latest?.fromHeader ?? '')).map(a => a.email));
+   }
+   await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId, action: action === 'remind' ? 'mail.reminder_set' : 'mail.no_reply_wanted', subjectType: 'mail_thread', subjectId: threadId });
+   return (await tx`select * from mail_triage where thread_id = ${threadId}`)[0]!;
+  });
  }
  async attachments(ctx: HandlerContext, thread: Thread) {
   const metadata = await this.tx(ctx, tx => tx`select a.*, m.provider_id from mail_attachments a join mail_messages m on m.id = a.message_id where m.id = any(${tx.array(thread.messages.map(m => m.id))}::uuid[]) order by a.id limit 100`);

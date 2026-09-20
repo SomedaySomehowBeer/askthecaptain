@@ -23,8 +23,10 @@ async function Inbox({ me, before }: { me: Awaited<ReturnType<typeof requireCurr
 	if (!connection || connection.status === 'disconnected') return <Notice title="Connect Google to see your mail" action={{ href: '/settings/connections', label: 'Go to Connections' }}>An owner or admin can connect the business’s Gmail account in Settings.</Notice>;
 	const canSync = me.organisation.role !== 'member'; const available = connection.status === 'connected';
 	// Filed mail was kept out of the way by the gate's rules (D20), with no model call; it sits last, closed.
-	const groups = new Map<string, ThreadSummary[]>(['Needs you', 'Waiting for a reply you drafted', 'Awaiting triage', 'Handled', 'Filed'].map(name => [name, []]));
-	for (const thread of threads) { const day = thread.hasDraft ? 'Waiting for a reply you drafted' : !thread.triage ? 'Awaiting triage' : thread.triage.needsOwner ? 'Needs you' : thread.triage.model?.startsWith('gate:') ? 'Filed' : 'Handled'; groups.set(day, [...(groups.get(day) ?? []), thread]); }
+	// A needs-you thread held with Remind me later sits under Later until its time comes.
+	const later = (t: ThreadSummary) => !!t.triage?.remindAt && new Date(t.triage.remindAt).getTime() > Date.now();
+	const groups = new Map<string, ThreadSummary[]>(['Needs you', 'Waiting for a reply you drafted', 'Later', 'Awaiting triage', 'Handled', 'Filed'].map(name => [name, []]));
+	for (const thread of threads) { const day = thread.hasDraft ? 'Waiting for a reply you drafted' : !thread.triage ? 'Awaiting triage' : thread.triage.needsOwner ? (later(thread) ? 'Later' : 'Needs you') : thread.triage.model?.startsWith('gate:') ? 'Filed' : 'Handled'; groups.set(day, [...(groups.get(day) ?? []), thread]); }
 	return <>
 		{triageNotice ? <Notice tone="attention" action={{ href: '/settings/workflows', label: 'Review workflows' }}>{triageNotice}</Notice> : null}
 		<section className="card stack mail-message">

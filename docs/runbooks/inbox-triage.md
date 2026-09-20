@@ -86,6 +86,13 @@ an information verdict for the sender) or `expired` (untouched for seven days; n
 counts roll into `mail_senders.drafts_*`. On a drafted thread the control is a split button: Send,
 with Edit, Remind me tomorrow morning, Remind me next week, Not needed and Discard in its menu.
 Remind me later sets `remind_at` and keeps the draft; edits and reminders restart the seven days.
+
+On a needs-you thread **without** a draft the split button is **Draft a reply**, with Remind me later
+and Not needed in its menu. Draft a reply runs the same draft instruction and style note on the
+large tier at once (`POST /mail/threads/:id/draft`), places the draft in the outbox for the person,
+and counts as `drafts_requested` for the sender, the strongest up signal in the score. Remind me
+later sets `mail_triage.remind_at`; the thread sits under **Later** in Inbox until then. Not needed
+turns needs-owner off and records an information verdict for the sender.
 The reply-style parameter is optional: left blank, the draft instruction asks for plain, brief
 replies in the voice of the owner's own messages in the thread.
 
