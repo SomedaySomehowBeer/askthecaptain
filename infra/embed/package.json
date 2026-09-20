@@ -1,0 +1,15 @@
+{
+  "name": "captain-embed",
+  "private": true,
+  "type": "module",
+  "description": "The stateless embedding service: one small sentence encoder behind a bearer secret (D21).",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server.mjs",
+    "fetch-model": "node fetch-model.mjs",
+    "test": "node --test server.test.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1"
+  }
+}

@@ -8,7 +8,7 @@ on:
         default: false
   push:
     branches: [main]
-    paths: ['apps/**', 'packages/**', 'infra/sprites/**', 'package.json', 'pnpm-lock.yaml', '.dockerignore', '.github/workflows/deploy.yml']
+    paths: ['apps/**', 'packages/**', 'infra/sprites/**', 'infra/embed/**', 'package.json', 'pnpm-lock.yaml', '.dockerignore', '.github/workflows/deploy.yml']
 permissions:
   contents: read
 concurrency:
@@ -36,6 +36,24 @@ jobs:
       - run: flyctl scale count 1 --yes --config apps/web/fly.staging.toml
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
       - run: flyctl deploy --config apps/web/fly.staging.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+  embed:
+    # The embedding service (D21) is one app shared by staging and production. The owner creates the
+    # app and its secret once (docs/runbooks/embedding.md); until then this job reports and skips.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - id: app
+        run: |
+          if flyctl status --app askthecaptain-embed >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT";
+          else echo "::notice::askthecaptain-embed is not created yet; see docs/runbooks/embedding.md"; echo "exists=false" >> "$GITHUB_OUTPUT"; fi
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+      - if: steps.app.outputs.exists == 'true'
+        run: flyctl scale count 1 --yes --config infra/embed/fly.toml
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+      - if: steps.app.outputs.exists == 'true'
+        run: flyctl deploy infra/embed --config infra/embed/fly.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
   e2e-gate:
     needs: [api-staging, web-staging]
