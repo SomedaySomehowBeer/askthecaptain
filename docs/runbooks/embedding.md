@@ -31,6 +31,18 @@ timings only.
    when it is promoted). The API treats a missing `EMBED_URL` as "no index yet": rows stay
    unembedded for housekeeping to fill later.
 
+## The index in the API
+
+With `EMBED_URL` and `EMBED_TOKEN` set, the API keeps the retrieval index (migration
+`0030_content_vectors`, pgvector): one row per chunk in `content_vectors` tagged with the encoder name
+and version, the thread vector on `mail_threads` and the note vector on `notes`, each cascading with
+its source and under the tenant's RLS. Mail sync embeds what each save batch stored, outside the
+transaction; a note is embedded when saved; an hourly fill (`INDEX_DISABLED=1` stops it) embeds
+whatever an outage or a cold start left behind. A message with under about 40 tokens of its own text
+inherits its parent's vector. A service that is down leaves rows unembedded; nothing fails.
+`packages/retrieval` holds the client, the unit rules and `similar()`, the similarity half of retrieval.
+Local Postgres for tests must carry the extension: `pgvector/pgvector:pg18`, as CI does.
+
 ## Local
 
 ```
