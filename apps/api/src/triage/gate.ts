@@ -10,6 +10,10 @@ export type Signals = {
 	knownSender: boolean;
 	/** A person starred any message in the thread. */
 	starred: boolean;
+	/** When the latest incoming message was sent (ISO 8601). */
+	latestAt: string;
+	/** A message from the mailbox itself follows the latest incoming one. */
+	repliedByOwner: boolean;
 };
 export type Prior = { threadsSeen: number; informationVerdicts: number; needsOwnerCount: number; replies: number; stars: number };
 export type Rule = 'category_promotions' | 'category_social' | 'category_forums' | 'list_header' | 'precedence_bulk' | 'auto_submitted' | 'automated_sender' | 'sender_prior' | 'category_updates_unknown';
@@ -34,6 +38,22 @@ export function gate(signals: Signals, prior: Prior | null): Verdict {
 	if (labels.has('CATEGORY_UPDATES') && !signals.knownSender && !reset) return filed('category_updates_unknown');
 	return { passes: true, rule: null };
 }
+
+/** Whether a reply is worth drafting, decided by rules before the large model is asked (plan §6). A thread the
+ *  owner already answered needs no draft; nor does one whose latest message is more than a day old by the time
+ *  the run reaches it, which is the first run's backlog and any long gap in syncing. */
+export type DraftingReason = 'already_replied' | 'older_than_a_day';
+export type Drafting = { drafts: true; reason: null } | { drafts: false; reason: DraftingReason };
+export function drafting(signals: Pick<Signals, 'latestAt' | 'repliedByOwner'>, now: number = Date.now()): Drafting {
+	if (signals.repliedByOwner) return { drafts: false, reason: 'already_replied' };
+	const sent = Date.parse(signals.latestAt);
+	if (!Number.isFinite(sent) || now - sent > 24 * 60 * 60 * 1000) return { drafts: false, reason: 'older_than_a_day' };
+	return { drafts: true, reason: null };
+}
+export const draftingWords: Record<DraftingReason, string> = {
+	already_replied: 'You have already replied to it.',
+	older_than_a_day: 'Its latest message is more than a day old, so a drafted reply would come too late.'
+};
 
 /** The rule in the person's words, for the Inbox and the journal. */
 export const ruleWords: Record<Rule, string> = {

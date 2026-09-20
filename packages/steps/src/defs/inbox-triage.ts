@@ -3,14 +3,15 @@ import { awaitStep, boolean, branch, daily, defineWorkflow, each, infer, onEvent
 /** Plan §6. As mail arrives and each morning: read new threads; gate each with rules and sender
  *  priors (D20), filing bulk and automated mail without a model call; classify the rest, record the
  *  triage, raise suggested tasks, complete duties whose confirmation arrived; for threads that need
- *  the owner, draft a reply into the outbox and wait for a person to send it; keep contacts current
+ *  the owner and are fresh and unanswered, draft a reply into the outbox and wait for a person to send
+ *  it (the backlog on a first run gets no drafts); keep contacts current
  *  and label the thread as handled either way. */
 export const inboxTriage = defineWorkflow({
-	key: 'inbox-triage', version: 2, name: 'Inbox triage', job: 1,
+	key: 'inbox-triage', version: 3, name: 'Inbox triage', job: 1,
 	description: 'Reads new mail, says what needs you, drafts the replies you would send, and files the rest.',
 	triggers: [onEvent('mail.synced'), daily('06:00')],
 	parameters: {
-		replyStyle: text('A short note on how replies should sound, with up to three example replies.', { maxLength: 4000 }),
+		replyStyle: text('Optional. A short note on how replies should sound, with up to three example replies. Left blank, drafts follow the voice of your own messages in the thread.', { maxLength: 4000 }),
 		draftReplies: boolean('Draft replies for threads that need you.', true)
 	},
 	steps: [
@@ -23,7 +24,8 @@ export const inboxTriage = defineWorkflow({
 				write('triage.record', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
 				write('tasks.suggestFromTriage', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
 				write('tasks.completeFromConfirmations', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
-				branch({ and: [{ truthy: 'triage.needsOwner' }, { param: 'draftReplies' }] }, [
+				read('triage.drafting', { args: { thread: { ref: 'item' } }, as: 'drafting' }),
+				branch({ and: [{ truthy: 'triage.needsOwner' }, { param: 'draftReplies' }, { truthy: 'drafting.drafts' }] }, [
 					infer('draftReply', { schema: 'draft', tier: 'large', args: { thread: { ref: 'item' }, triage: { ref: 'triage' }, style: param('replyStyle') }, as: 'draft' }),
 					write('outbox.create', { args: { thread: { ref: 'item' }, draft: { ref: 'draft' } }, as: 'outboxDraft' }),
 					awaitStep('outbox.sent', { args: { draft: { ref: 'outboxDraft' } }, timeoutDays: 7 })

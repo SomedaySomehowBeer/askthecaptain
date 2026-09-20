@@ -61,6 +61,21 @@ sender; a send from the outbox bumps `replies` for each recipient; a star seen o
 The model sees each message's own text only: quoted reply blocks, forwarded header blocks and
 signatures are cut, the latest message keeps up to 20,000 characters and earlier ones 500.
 
-The definition is version 2. An organisation that enabled version 1 must save the workflow's
+## Drafting rules (no model)
+
+Before the large model is asked for a reply, `triage.drafting` decides by rules whether a draft is
+worth making, and the run's steps show the outcome:
+
+- **already_replied**: a message from the mailbox follows the latest incoming one.
+- **older_than_a_day**: the latest incoming message is more than 24 hours old when the run reaches
+  it. On a first run this is the backlog; in steady state mail is triaged at each sync, so fresh
+  threads always qualify.
+
+Classification, tasks and confirmations still run for these threads; only the draft is skipped.
+The reply-style parameter is optional: left blank, the draft instruction asks for plain, brief
+replies in the voice of the owner's own messages in the thread.
+
+The definition is version 3 (version 2 added the gate; version 3 the drafting rules and the
+optional style note). An organisation that enabled an earlier version must save the workflow's
 parameters again in Settings → Workflows before a new run will start; the runner says so.
 
