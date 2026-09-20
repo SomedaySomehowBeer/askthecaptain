@@ -27,7 +27,7 @@ export const inboxTriage = defineWorkflow({
 				write('tasks.suggestFromTriage', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
 				write('tasks.completeFromConfirmations', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' } } }),
 				read('triage.draftScore', { args: { thread: { ref: 'item' }, triage: { ref: 'triage' }, threshold: param('draftThreshold') }, as: 'drafting' }),
-				branch({ and: [{ param: 'draftReplies' }, { truthy: 'drafting.drafts' }] }, [
+				branch({ and: [{ truthy: 'triage.needsOwner' }, { param: 'draftReplies' }, { truthy: 'drafting.drafts' }] }, [
 					infer('draftReply', { schema: 'draft', tier: 'large', args: { thread: { ref: 'item' }, triage: { ref: 'triage' }, style: param('replyStyle') }, as: 'draft' }),
 					write('outbox.create', { args: { thread: { ref: 'item' }, draft: { ref: 'draft' } }, as: 'outboxDraft' }),
 					awaitStep('outbox.sent', { args: { draft: { ref: 'outboxDraft' } }, timeoutDays: 60 })
