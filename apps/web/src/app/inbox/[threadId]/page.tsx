@@ -21,7 +21,7 @@ async function Thread({ me, id }: { me: Awaited<ReturnType<typeof requireCurrent
 	return <>
         {thread.triageNotice ? <Notice tone="attention" action={{ href: '/settings/workflows', label: 'Review workflows' }}>{thread.triageNotice}</Notice> : null}
         {thread.triage ? <section className="card"><h2>Triage</h2><TriageFacts triage={thread.triage} /></section> : <Notice>This thread is awaiting triage.</Notice>}
-        {thread.outbox.map(draft => <DraftForm key={draft.id + draft.body + draft.state} draft={draft} connected={thread.connectionStatus === 'connected'} />)}
+        {thread.outbox.map(draft => <DraftForm key={draft.id + draft.body + draft.state + (draft.remindAt ?? '')} draft={draft} connected={thread.connectionStatus === 'connected'} timezone={thread.timezone} />)}
 		{thread.connectionStatus !== 'connected' ? <Notice tone="attention" action={{ href: '/settings/connections', label: 'Reconnect Google' }}>Google access is unavailable. This is the last saved copy; reconnect to receive updates.</Notice> : null}
 		{thread.messages.map((m) => <article className="card stack mail-message" key={m.id}>
 			<h2>{m.subject || '(No subject)'}</h2><div className="stack secondary"><p><strong>From:</strong> {m.senderContact ? <Link href={`/inbox/contacts/${m.senderContact.id}`}>{m.senderContact.name || m.senderContact.email}</Link> : m.fromHeader || 'Sender unavailable'}</p><p><strong>To:</strong> {m.toHeader || 'Recipients unavailable'}</p>

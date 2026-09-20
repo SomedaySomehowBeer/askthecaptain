@@ -14,7 +14,8 @@ it('real triage journals, caps attachment retention, suggests tasks, drafts with
  const f = await triageFixture(db); try {
   const thread = await f.mail(); await f.mail('known-update', 'known@example.test');
   await f.tx(sql => sql`update contacts set source = 'hand' where email = 'known@example.test'`);
-  f.provider.responses.push(result(classification()), result({ body: 'Thanks for the update.' }), result(classification()));
+  // An unknown sender needs the owner; a request earns the draft under the initial rule (needs owner and a request or a known sender).
+  f.provider.responses.push(result({ ...classification(), category: 'request' }), result({ body: 'Thanks for the update.' }), result(classification()));
   const run = await f.start(); const runId = run;
   await until(() => f.tx(sql => sql`select state, reason from workflow_runs where id = ${runId}`), rows => rows[0]?.state === 'waiting');
   const [triage] = await f.tx(sql => sql`select * from mail_triage`); assert.equal(triage!.needsOwner, true); assert.equal(triage!.model, 'stub-claude');
@@ -26,7 +27,8 @@ it('real triage journals, caps attachment retention, suggests tasks, drafts with
   f.loseSend(); await assert.rejects(f.outbox.send(f.member, f.org, draft.id), { code: 'send_uncertain' });
   await assert.rejects(f.outbox.change(f.member, f.org, draft.id, 'discard'), { code: 'send_uncertain' });
   f.failLabel(); const sent = await f.outbox.send(f.member, f.org, draft.id); assert.equal(sent.state, 'sent'); assert.equal(sent.sentBy, f.member.userId);
-  await f.outbox.send(f.member, f.org, draft.id); assert.equal(f.sends(), 1);
+  await f.outbox.send(f.member, f.org, draft.id); assert.equal(f.sends(), 1); assert.equal(sent.outcome, 'edited_sent');
+  const [prior] = await f.tx(sql => sql`select drafts_edited, drafts_sent, replies from mail_senders where email = 'supplier@example.test'`); assert.equal(prior!.draftsEdited, 1); assert.equal(prior!.draftsSent, 0); assert.equal(prior!.replies, 1);
   const send = f.calls.find(c => c.path === 'messages/send')!.body; assert.equal(send.threadId, 'thread-one'); const raw = Buffer.from(send.raw, 'base64url').toString();
   assert.match(raw, /In-Reply-To: <thread-one@supplier.test>/); assert.match(raw, /References: <thread-one@supplier.test>/); assert.ok(raw.includes(Buffer.from('A person edited this.').toString('base64')));
   await until(() => f.tx(sql => sql`select state, reason from workflow_runs where id = ${runId}`), rows => rows[0]?.state === 'succeeded');
@@ -51,8 +53,9 @@ it('discard wakes the wait; paused inference resumes; exact confirmations close 
   f.provider.responses.push(result(output), result({ body: 'Thank you.' })); await f.inference.setBudget(f.actor, f.org, 1_000_000);
   await f.tx(sql => f.engine.control(sql, f.org, run, 'resume'));
   const drafts = await until(() => f.outbox.list(f.actor, f.org), rows => rows.length === 1);
-  await f.outbox.change(f.member, f.org, drafts[0]!.id, 'discard');
+  const discarded = await f.outbox.change(f.member, f.org, drafts[0]!.id, 'discard'); assert.equal(discarded.outcome, 'discarded');
   await until(() => f.tx(sql => sql`select state, reason from workflow_runs where id = ${run}`), rows => rows[0]?.state === 'succeeded');
+  assert.equal((await f.tx(sql => sql`select drafts_discarded from mail_senders where email = 'known@example.test'`))[0]!.draftsDiscarded, 1);
   const tasks = await f.tx(sql => sql`select id, title, status from tasks`);
   assert.equal(tasks.find(t => t.id === task.id)!.status, 'done'); assert.equal(tasks.find(t => t.id === other.id)!.status, 'open');
   assert.equal(tasks.find(t => t.title === 'Wrong title')!.status, 'suggested'); assert.equal(f.sends(), 0);
@@ -92,7 +95,13 @@ it('HTTP outbox actions require membership; tenant tables reject cross-tenant re
   await assert.rejects(otherTx(sql => sql`insert into outbox (organisation_id, connection_id, account_email, "to", subject, body, idempotency_key)
    values (${other!.id}, ${f.conn.id}, 'business@example.test', '{}', 'x', 'x', 'cross')`), { code: '23503' });
   for (const table of ['mail_triage', 'attachment_text', 'outbox']) assert.equal((await otherTx(sql => sql.unsafe(`delete from ${table} returning *`))).length, 0);
-  assert.equal((await request(`outbox/${draft.id}/discard`, memberSession.token, 'POST')).status, 200);
+  assert.equal((await request(`outbox/${draft.id}/remind`, memberSession.token, 'POST', { when: 'later' })).status, 400);
+  assert.equal((await request(`outbox/${draft.id}/remind`, memberSession.token, 'POST', { when: 'tomorrow' })).status, 200);
+  const [reminded] = await f.tx(sql => sql`select remind_at, state from outbox where id = ${draft.id}`); assert.equal(reminded!.state, 'drafted'); assert.ok(new Date(reminded!.remindAt).getTime() > Date.now());
+  assert.equal((await request(`outbox/${draft.id}/not_needed`, memberSession.token, 'POST')).status, 200);
+  const [closed] = await f.tx(sql => sql`select state, outcome from outbox where id = ${draft.id}`); assert.equal(closed!.state, 'discarded'); assert.equal(closed!.outcome, 'not_needed');
+  assert.equal((await f.tx(sql => sql`select needs_owner from mail_triage where thread_id = ${thread}`))[0]!.needsOwner, false);
+  assert.equal((await f.tx(sql => sql`select drafts_not_needed from mail_senders where email = 'supplier@example.test'`))[0]!.draftsNotNeeded, 1);
  } finally { await f.engine.close(); }
 });
 it('the gate files bulk, list and automated mail with no model call, learns a quiet sender, and a reply resets it', async () => {

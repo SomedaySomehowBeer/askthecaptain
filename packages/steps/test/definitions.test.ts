@@ -53,5 +53,5 @@ test('parameters are checked against their specs and defaults are filled', () =>
 	assert.deepEqual(bad.problems.map((p) => p.path).sort(), ['extra', 'remindDaysBefore', 'windowDays']);
 	const stock = resolveParameters(definitions[4]!.parameters, { location: '  ' });
 	assert.deepEqual(stock.problems, [{ path: 'location', message: 'is required' }]);
-	assert.deepEqual(resolveParameters(definitions[0]!.parameters, { replyStyle: 'Warm, short.' }).values, { replyStyle: 'Warm, short.', draftReplies: true });
+	assert.deepEqual(resolveParameters(definitions[0]!.parameters, { replyStyle: 'Warm, short.' }).values, { replyStyle: 'Warm, short.', draftReplies: true, draftThreshold: 3 });
 });

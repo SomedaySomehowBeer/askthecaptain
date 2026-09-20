@@ -46,7 +46,7 @@ async function Inbox({ me, before }: { me: Awaited<ReturnType<typeof requireCurr
 				<div className="row muted">{thread.attachmentCount > 0 ? <span>{attachmentsInWords(thread.attachmentCount)}</span> : null}{thread.labelNames.map((name) => <span className="chip" key={name}>{name}</span>)}</div>
 			</Link></li>)}
 		</ul></section>)}
-		<section className="stack"><h2>Outbox</h2>{outbox.length ? outbox.map(draft => <div key={draft.id}>{draft.threadId ? <Link href={`/inbox/${draft.threadId}`}>Open thread: {draft.subject || '(No subject)'}</Link> : <DraftForm draft={draft} connected={available} />}</div>) : <p>No drafts awaiting you.</p>}</section>
+		<section className="stack"><h2>Outbox</h2>{outbox.length ? outbox.map(draft => <div key={draft.id}>{draft.threadId ? <Link href={`/inbox/${draft.threadId}`}>Open thread: {draft.subject || '(No subject)'}</Link> : <DraftForm draft={draft} connected={available} timezone={timezone} />}</div>) : <p>No drafts awaiting you.</p>}</section>
 		{nextBefore ? <Link className="button button--secondary" href={`/inbox?before=${encodeURIComponent(nextBefore)}`}>Older mail</Link> : null}
 	</>;
 }
