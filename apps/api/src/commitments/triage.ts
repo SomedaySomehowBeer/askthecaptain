@@ -1,14 +1,16 @@
 import { journal, type Context, type Thread, type Triage } from '../triage/data.ts';
 /** Transactional step service: the journal and these writes commit together. */
-export function suggest(context: Context, thread: Thread, tasks: Triage['tasks']) { return suggestFrom(context, { kind: 'mail', id: thread.id }, tasks); }
+export function suggest(context: Context, thread: Thread, tasks: Triage['tasks'], projectId: string | null = null) { return suggestFrom(context, { kind: 'mail', id: thread.id }, tasks, projectId); }
 /** Suggested tasks from a thread or a note (D23) land in Obligations; the source is kept so a repeat run adds nothing twice. */
-export async function suggestFrom(context: Context, source: { kind: 'mail' | 'note'; id: string }, tasks: Triage['tasks']) {
+export async function suggestFrom(context: Context, source: { kind: 'mail' | 'note'; id: string }, tasks: Triage['tasks'], projectId: string | null = null) {
  const { tx, organisationId, userId } = context;
  await tx`select pg_advisory_xact_lock(hashtextextended(${organisationId + ':triage-tasks'}, 0))`;
  const added = await tx`insert into projects (organisation_id, name, system_kind, created_by) values (${organisationId}, 'Obligations', 'obligations', ${userId}) on conflict do nothing returning id`;
  if (added[0]) await journal(context, 'project.created', 'project', added[0].id);
  let count = 0;
- const [project] = await tx`select id from projects where system_kind = 'obligations'`;
+ // Tasks from a linked thread or note go to that project (D22); otherwise to Obligations as before.
+ const [linked] = projectId ? await tx`select id from projects where id = ${projectId} and archived_at is null` : [];
+ const [project] = linked ? [linked] : await tx`select id from projects where system_kind = 'obligations'`;
  for (const task of tasks) {
   const [existing] = await tx`select id from tasks where source_kind = ${source.kind} and source_id = ${source.id} and title = ${task.title} and body = ${task.reference}`;
   if (existing) continue;

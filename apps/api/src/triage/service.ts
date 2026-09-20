@@ -2,6 +2,7 @@ import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { GmailClient } from '@captain/connectors/gmail';
 import { Registry, type HandlerContext } from '@captain/engine';
 import { classifyNoteInstruction, classifyThreadInstruction, draftReplyInstruction } from '@captain/steps';
+import { activeProjects, projectRule, recordAssociation } from './association.ts';
 import type { InferenceService } from '../inference/service.ts';
 import type { ConnectionService } from '../connections/service.ts';
 import { connection, requireMember } from '../mail/store.ts';
@@ -14,7 +15,7 @@ import { addresses } from '../contacts/addresses.ts';
 import { upkeepContacts } from '../contacts/upkeep.ts';
 import { suggest, suggestFrom, complete } from '../commitments/triage.ts';
 import { DRAFT_TTL_MS, expireDraft, noReplyWanted, remindAt, workflowDraft } from './outbox.ts';
-import { draftSchema, noteTriageSchema, triageSchema, journal, type Context, type Note, type Thread } from './data.ts';
+import { draftSchema, noteTriageSchema, triageSchema, journal, type Context, type Note, type Thread, type ProjectLink } from './data.ts';
 import { drafting, gate, ruleWords, type DraftPrior, type Prior, type Rule } from './gate.ts';
 import { trimmedMessages } from './text.ts';
 
@@ -153,13 +154,16 @@ export class TriageService {
    await this.sender(tx, ctx.organisationId, thread, { information: true, needsOwner: false });
    await journal(ctx, 'mail.filed', 'mail_thread', thread.id, { rule }); return null;
   } });
+  // Association (D22), rules first: the thread's project when a rule can say, else the model chooses from the active projects.
+  registry.registerStep('triage.projectRule', { kind: 'read', transaction: (ctx, args) => projectRule(ctx.tx, args.thread as Thread) });
   registry.registerStep('classifyThread', { kind: 'infer', retrySafe: true, call: async (ctx, args) => {
    const thread = args.thread as Thread;
    // A resumed run may outlive the cache; reacquire allowed text, without retaining it in the journal.
    const notes = await this.attachments(ctx, thread);
    const attachments = await this.tx(ctx, tx => tx`select message_id, attachment_id, text from attachment_text where message_id = any(${tx.array(thread.messages.map(m => m.id))}::uuid[]) and expires_at > now()`);
+   const link = args.link as ProjectLink | undefined; const projects = link?.projectId ? [] : await this.tx(ctx, tx => activeProjects(tx));
    const output = await this.inference.infer({ userId: ctx.userId, requestId: ctx.runId }, { organisationId: ctx.organisationId, runId: ctx.runId, step: ctx.step.key,
-    tier: 'small', instruction: classifyThreadInstruction, schema: triageSchema, input: { untrustedMail: { subject: thread.subject, messages: thread.messages }, untrustedAttachments: attachments, extractionNotes: notes } });
+    tier: 'small', instruction: classifyThreadInstruction, schema: triageSchema, input: { untrustedMail: { subject: thread.subject, messages: thread.messages }, untrustedAttachments: attachments, extractionNotes: notes, projects } });
    return { ...output, needsOwner: !thread.knownSender || output.needsOwner };
   } });
   registry.registerStep('triage.record', { kind: 'write', transaction: async (ctx, args) => {
@@ -171,9 +175,14 @@ export class TriageService {
     facts = excluded.facts, produced_by = excluded.produced_by, model = excluded.model, source_message_id = excluded.source_message_id, updated_at = now()
     where mail_triage.source_message_id <= excluded.source_message_id`;
    await this.sender(tx, ctx.organisationId, thread, { information: triage.category === 'information', needsOwner: triage.needsOwner });
-   await journal(ctx, 'mail.triaged', 'mail_thread', thread.id); return null;
+   const link = (args.link ?? null) as ProjectLink | null;
+   const projectId = await recordAssociation(ctx, { kind: 'mail_thread', id: thread.id, own: false, companyId: link?.companyId ?? null }, link, triage.project);
+   await journal(ctx, 'mail.triaged', 'mail_thread', thread.id); return { projectId };
   } });
-  registry.registerStep('tasks.suggestFromTriage', { kind: 'write', transaction: (ctx, args) => suggest(ctx, args.thread as Thread, triageSchema.parse(args.triage).tasks) });
+  registry.registerStep('tasks.suggestFromTriage', { kind: 'write', transaction: async (ctx, args) => {
+   const thread = args.thread as Thread; const [linked] = await ctx.tx`select project_id from project_sources where source_kind = 'mail_thread' and source_id = ${thread.id} order by created_at limit 1`;
+   return suggest(ctx, thread, triageSchema.parse(args.triage).tasks, linked ? String(linked.projectId) : null);
+  } });
   registry.registerStep('tasks.completeFromConfirmations', { kind: 'write', transaction: (ctx, args) => complete(ctx, args.thread as Thread, triageSchema.parse(args.triage)) });
   registry.registerStep('contacts.upsertFromTriage', { kind: 'write', transaction: async (ctx, args) => {
    const thread = args.thread as Thread; await upkeepContacts(ctx.tx, ctx.organisationId, thread.accountEmail, [thread.providerId], { kind: 'workflow', id: ctx.userId });
@@ -205,9 +214,12 @@ export class TriageService {
    return rows.map((r): Note => ({ id: String(r.id), title: String(r.title), body: String(r.body), digest: String(r.digest), length: Number(r.length), updatedAt: new Date(r.updatedAt).toISOString(),
     links: { contact: r.contactName ?? null, company: r.companyName ?? null, project: r.projectName ?? null, task: r.taskTitle ?? null, event: Boolean(r.eventId) } }));
   } });
-  registry.registerStep('classifyNote', { kind: 'infer', retrySafe: true, call: (ctx, args) => { const note = args.note as Note; return this.inference.infer({ userId: ctx.userId, requestId: ctx.runId }, {
+  registry.registerStep('classifyNote', { kind: 'infer', retrySafe: true, call: async (ctx, args) => { const note = args.note as Note;
+   // A note the person linked to a project keeps that link; the model names one only when they did not.
+   const projects = note.links.project ? [] : await this.tx(ctx, tx => activeProjects(tx));
+   return this.inference.infer({ userId: ctx.userId, requestId: ctx.runId }, {
    organisationId: ctx.organisationId, runId: ctx.runId, step: ctx.step.key, tier: 'small', instruction: classifyNoteInstruction, schema: noteTriageSchema,
-   input: { untrustedNote: { title: note.title, body: note.body, linkedTo: note.links } } }); } });
+   input: { untrustedNote: { title: note.title, body: note.body, linkedTo: note.links }, projects } }); } });
   registry.registerStep('notes.record', { kind: 'write', transaction: async (ctx, args) => {
    const note = args.note as Note; const triage = noteTriageSchema.parse(args.triage); const { tx } = ctx;
    const [usage] = await tx`select model from model_usage where run_id = ${ctx.runId} and step_key = 'classifyNote' order by created_at desc, id desc limit 1`;
@@ -215,9 +227,15 @@ export class TriageService {
     values (${ctx.organisationId}, ${note.id}, ${triage.category}, ${triage.summary}, ${tx.json(triage.facts)}, ${ctx.runId}, ${usage?.model ?? 'unknown'}, ${note.digest}, ${note.length})
     on conflict (organisation_id, note_id) do update set category = excluded.category, summary = excluded.summary, facts = excluded.facts, produced_by = excluded.produced_by,
     model = excluded.model, body_digest = excluded.body_digest, body_length = excluded.body_length, updated_at = now()`;
-   await journal(ctx, 'note.triaged', 'note', note.id); return null;
+   const [row] = await tx`select project_id, company_id from notes where id = ${note.id}`;
+   const own = row?.projectId ? { projectId: String(row.projectId), projectName: note.links.project, rule: 'person_link', companyId: row.companyId ? String(row.companyId) : null } : null;
+   const projectId = await recordAssociation(ctx, { kind: 'note', id: note.id, own: true, companyId: own?.companyId ?? (row?.companyId ? String(row.companyId) : null) }, own, triage.project);
+   await journal(ctx, 'note.triaged', 'note', note.id); return { projectId };
   } });
-  registry.registerStep('tasks.suggestFromNote', { kind: 'write', transaction: (ctx, args) => suggestFrom(ctx, { kind: 'note', id: (args.note as Note).id }, noteTriageSchema.parse(args.triage).tasks) });
+  registry.registerStep('tasks.suggestFromNote', { kind: 'write', transaction: async (ctx, args) => {
+   const note = args.note as Note; const [linked] = await ctx.tx`select project_id from project_sources where source_kind = 'note' and source_id = ${note.id} order by created_at limit 1`;
+   return suggestFrom(ctx, { kind: 'note', id: note.id }, noteTriageSchema.parse(args.triage).tasks, linked ? String(linked.projectId) : null);
+  } });
   registry.registerStep('gmail.label', { kind: 'write', retrySafe: true, call: async (ctx, args) => {
    const thread = args.thread as Thread; await this.gmail.label(await this.token(ctx, thread), thread.providerId, 'Captain/Handled');
    await this.tx(ctx, async tx => { await journal({ ...ctx, tx }, 'mail.labelled', 'mail_thread', thread.id); }); return { labelled: true };
