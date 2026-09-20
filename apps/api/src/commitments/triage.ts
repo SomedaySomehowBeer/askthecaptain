@@ -1,6 +1,8 @@
 import { journal, type Context, type Thread, type Triage } from '../triage/data.ts';
 /** Transactional step service: the journal and these writes commit together. */
-export async function suggest(context: Context, thread: Thread, tasks: Triage['tasks']) {
+export function suggest(context: Context, thread: Thread, tasks: Triage['tasks']) { return suggestFrom(context, { kind: 'mail', id: thread.id }, tasks); }
+/** Suggested tasks from a thread or a note (D23) land in Obligations; the source is kept so a repeat run adds nothing twice. */
+export async function suggestFrom(context: Context, source: { kind: 'mail' | 'note'; id: string }, tasks: Triage['tasks']) {
  const { tx, organisationId, userId } = context;
  await tx`select pg_advisory_xact_lock(hashtextextended(${organisationId + ':triage-tasks'}, 0))`;
  const added = await tx`insert into projects (organisation_id, name, system_kind, created_by) values (${organisationId}, 'Obligations', 'obligations', ${userId}) on conflict do nothing returning id`;
@@ -8,10 +10,10 @@ export async function suggest(context: Context, thread: Thread, tasks: Triage['t
  let count = 0;
  const [project] = await tx`select id from projects where system_kind = 'obligations'`;
  for (const task of tasks) {
-  const [existing] = await tx`select id from tasks where source_kind = 'mail' and source_id = ${thread.id} and title = ${task.title} and body = ${task.reference}`;
+  const [existing] = await tx`select id from tasks where source_kind = ${source.kind} and source_id = ${source.id} and title = ${task.title} and body = ${task.reference}`;
   if (existing) continue;
   const [row] = await tx`insert into tasks (organisation_id, project_id, title, body, due, status, source_kind, source_id, created_by)
-   values (${organisationId}, ${project!.id}, ${task.title}, ${task.reference}, ${task.due}::date, 'suggested', 'mail', ${thread.id}, ${userId}) returning id`;
+   values (${organisationId}, ${project!.id}, ${task.title}, ${task.reference}, ${task.due}::date, 'suggested', ${source.kind}, ${source.id}, ${userId}) returning id`;
   await journal(context, 'task.suggested', 'task', row!.id); count++;
  }
  return { suggested: count };

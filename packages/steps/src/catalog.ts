@@ -35,6 +35,8 @@ export const catalog: Record<string, CatalogEntry> = {
 	'shopify.stockLevels': { kind: 'read', does: 'reads shop levels or reports that Shopify is disconnected or incomplete', requires: [] },
 	// infer
 	'answer': { kind: 'infer', does: 'answers one question from deterministically retrieved records, with sources', requires: ['inference'], schemas: ['answer'] },
+	'notes.new': { kind: 'read', does: 'reads notes written or changed since they were last read, skipping very short ones', requires: [] },
+	'classifyNote': { kind: 'infer', does: 'classifies a note the person wrote: category, summary, facts, tasks; nothing needs the owner', requires: ['inference'], schemas: ['noteTriage'] },
 	'classifyThread': { kind: 'infer', does: 'classifies a thread: category, needs owner, summary, facts', requires: ['inference'], schemas: ['triage'] },
 	'draftReply': { kind: 'infer', does: 'drafts a reply in the owner’s voice', requires: ['inference'], schemas: ['draft'] },
 	'writeBrief': { kind: 'infer', does: 'writes the morning brief from the day’s data', requires: ['inference'], schemas: ['brief'] },
@@ -45,6 +47,8 @@ export const catalog: Record<string, CatalogEntry> = {
 	'briefs.record': { kind: 'write', does: 'saves the validated morning brief for Today', requires: [] },
 	'triage.record': { kind: 'write', does: 'records the triage result for the thread', requires: [] },
 	'triage.file': { kind: 'write', does: 'files the thread as information, naming the rule that filed it', requires: [] },
+	'notes.record': { kind: 'write', does: 'records the triage result for the note', requires: [] },
+	'tasks.suggestFromNote': { kind: 'write', does: 'creates suggested tasks from what the note says', requires: [] },
 	'tasks.suggestFromTriage': { kind: 'write', does: 'creates suggested tasks from the facts found', requires: [] },
 	'tasks.completeFromConfirmations': { kind: 'write', does: 'completes duties whose confirmation arrived', requires: [] },
 	'contacts.upsertFromTriage': { kind: 'write', does: 'keeps contacts current from the thread', requires: [] },

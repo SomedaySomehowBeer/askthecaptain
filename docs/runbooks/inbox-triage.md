@@ -61,6 +61,17 @@ sender; a send from the outbox bumps `replies` for each recipient; a star seen o
 The model sees each message's own text only: quoted reply blocks, forwarded header blocks and
 signatures are cut, the latest message keeps up to 20,000 characters and earlier ones 500.
 
+## Notes (D23)
+
+A note is plain text a person writes at `/notes` (title optional, body up to 20,000 characters, at
+most one link each to an event, contact, company, project and task; archived, never deleted).
+Saving emits `note.saved`, which starts this workflow. `notes.new` reads notes not yet read, or
+changed since (a different digest and at least 20 characters of difference), skipping bodies under
+160 characters (about 40 tokens). `classifyNote` returns category (plan, request, information,
+other), summary, facts and tasks; the person is the author, so there is no needs-owner and no draft.
+`notes.record` writes `note_triage`; `tasks.suggestFromNote` puts the tasks in Obligations with
+source kind `note`. The Notes page shows what Captain read under each note.
+
 ## Weighted drafting (no model)
 
 Before the large model is asked for a reply, `triage.draftScore` decides by rules whether a draft
@@ -96,7 +107,7 @@ turns needs-owner off and records an information verdict for the sender.
 The reply-style parameter is optional: left blank, the draft instruction asks for plain, brief
 replies in the voice of the owner's own messages in the thread.
 
-The definition is version 4 (version 2 added the gate; version 3 the drafting rules and the
-optional style note; version 4 the draft score, threshold parameter and outcomes). An organisation that enabled an earlier version must save the workflow's
+The definition is version 5 (version 2 added the gate; version 3 the drafting rules and the
+optional style note; version 4 the draft score, threshold parameter and outcomes; version 5 notes). An organisation that enabled an earlier version must save the workflow's
 parameters again in Settings → Workflows before a new run will start; the runner says so.
 

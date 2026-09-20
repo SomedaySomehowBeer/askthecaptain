@@ -8,9 +8,9 @@ import { awaitStep, boolean, branch, daily, defineWorkflow, each, infer, number,
  *  the backlog on a first run gets no drafts and a run drafts at most twenty; keep contacts current
  *  and label the thread as handled either way. */
 export const inboxTriage = defineWorkflow({
-	key: 'inbox-triage', version: 4, name: 'Inbox triage', job: 1,
-	description: 'Reads new mail, says what needs you, drafts the replies you would send, and files the rest.',
-	triggers: [onEvent('mail.synced'), daily('06:00')],
+	key: 'inbox-triage', version: 5, name: 'Inbox triage', job: 1,
+	description: 'Reads new mail and notes, says what needs you, drafts the replies you would send, and files the rest.',
+	triggers: [onEvent('mail.synced'), onEvent('note.saved'), daily('06:00')],
 	parameters: {
 		replyStyle: text('Optional. A short note on how replies should sound, with up to three example replies. Left blank, drafts follow the voice of your own messages in the thread.', { maxLength: 4000 }),
 		draftReplies: boolean('Draft replies for threads that need you.', true),
@@ -37,6 +37,13 @@ export const inboxTriage = defineWorkflow({
 			]),
 			write('contacts.upsertFromTriage', { args: { thread: { ref: 'item' } } }),
 			write('gmail.label', { args: { thread: { ref: 'item' }, label: 'Captain/Handled' } })
+		]),
+		// Notes (D23): the person's own words, read the same way; no needs-owner, no draft.
+		read('notes.new', { as: 'notes' }),
+		each('notes', [
+			infer('classifyNote', { schema: 'noteTriage', tier: 'small', args: { note: { ref: 'item' } }, as: 'noteTriage' }),
+			write('notes.record', { args: { note: { ref: 'item' }, triage: { ref: 'noteTriage' } } }),
+			write('tasks.suggestFromNote', { args: { note: { ref: 'item' }, triage: { ref: 'noteTriage' } } })
 		])
 	]
 });

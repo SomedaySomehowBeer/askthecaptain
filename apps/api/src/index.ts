@@ -4,6 +4,7 @@ import { BriefService } from './briefs/service.ts';
 import { StocktakeService } from './stock/workflow.ts';
 import { StockService } from './stock/service.ts';
 import { TriageService } from './triage/service.ts';
+import { NotesService } from './notes/service.ts';
 import { OutboxService } from './triage/outbox.ts';
 import { startAttachmentExpiry } from './triage/expiry.ts';
 import { ShopifyConnector } from '@captain/connectors/shopify';
@@ -60,6 +61,7 @@ new CalendarPrepService(db).register(registry, inference);
 const engine = new BossEngine(db, env.DATABASE_URL, registry, definitions);
 const stock = new StockService(db, (tx, org, event, data, key) => engine.emit(tx, org, event, data, key));
 const outbox = new OutboxService(db, connections, (tx, org, run, key) => engine.wake(tx, org, run, key));
+const notes = new NotesService(db, (tx, org, event, data) => engine.emit(tx, org, event, data));
 const stopAttachmentExpiry = startAttachmentExpiry(db);
 if (env.WORKFLOWS_DISABLED !== '1') await engine.open().catch(async () => { console.error('[api] workflow runner unavailable; follow docs/runbooks/workflow-runner.md'); await engine.close(); });
 const mailSync = new MailSync(db, connections, undefined, (tx, org, event, data) => engine.emit(tx, org, event, data));
@@ -89,7 +91,7 @@ const lifecycle = new OrganisationLifecycle(db, [
 	async (actor, organisationId) => { await inference.remove(actor, organisationId).catch(() => undefined); }
 ]);
 const passkeys = new PasskeyService(db, simpleWebAuthn(env.APP_URL));
-const app = createApp({ stock, triage, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, outbox, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
+const app = createApp({ stock, triage, notes, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, outbox, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));

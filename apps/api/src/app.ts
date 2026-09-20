@@ -9,6 +9,8 @@ import { StockService } from './stock/service.ts';
 import { stockRoutes } from './stock/routes.ts';
 import { outboxRoutes, threadRoutes } from './triage/routes.ts';
 import type { TriageService } from './triage/service.ts';
+import { notesRoutes } from './notes/routes.ts';
+import type { NotesService } from './notes/service.ts';
 import type { OutboxService } from './triage/outbox.ts';
 import { xeroRoutes } from './xero/routes.ts';
 import type { XeroConnections } from './xero/connections.ts';
@@ -44,7 +46,7 @@ import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
 
-export type Deps = { stock?: StockService; shopifyConnections?: ShopifyConnections; shopifySync?: ShopifySync; shopifyScheduleEnabled?: boolean; outbox?: OutboxService; triage?: TriageService; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
+export type Deps = { stock?: StockService; shopifyConnections?: ShopifyConnections; shopifySync?: ShopifySync; shopifyScheduleEnabled?: boolean; outbox?: OutboxService; triage?: TriageService; notes?: NotesService; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -192,6 +194,7 @@ export function createApp(deps: Deps) {
 	signedIn.route('/', contactsRoutes(new ContactsService(deps.db)));
 	if (deps.outbox) signedIn.route('/', outboxRoutes(deps.outbox));
 	if (deps.triage) signedIn.route('/', threadRoutes(deps.triage));
+	if (deps.notes) signedIn.route('/', notesRoutes(deps.notes));
 	signedIn.route('/', inferenceRoutes(deps.inference));
 	signedIn.route('/', commitmentsRoutes(deps.commitments));
 	signedIn.get('/v1/organisations/:id/mail/watch', async (c) => {
