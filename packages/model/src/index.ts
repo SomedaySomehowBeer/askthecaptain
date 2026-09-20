@@ -28,10 +28,16 @@ export function untrusted(input: unknown): string {
 }
 export type Limits = { tokens: number; costMicros?: number };
 export type Accounting = { before(estimate: Limits): Promise<void>; record(result: Result): Promise<void>; failed(code: ErrorCode): Promise<void> };
+/** The JSON Schema handed to the CLIs. Zod names the 2020-12 draft in `$schema`; Claude Code's validator has no
+ *  meta-schema for it and rejects the whole schema, so the line goes and the schema stands on its own. */
+export function providerSchema(schema: z.ZodType): Record<string, unknown> {
+ const { $schema: _draft, ...rest } = z.toJSONSchema(schema) as Record<string, unknown>;
+ return rest;
+}
 /** Called only from a workflow or interactive infer step (or the owner's readiness probe). No tool surface. */
 export async function infer<T>(input: InferInput<T>, providerName: ProviderName, provider: Provider, accounting: Accounting): Promise<T> {
  const maxTokens = z.number().int().min(1).max(16384).parse(input.maxTokens ?? 2048);
- const schema = z.toJSONSchema(input.schema) as Record<string, unknown>;
+ const schema = providerSchema(input.schema);
  const data = untrusted(input.input); let instruction = input.instruction;
  for (let attempt = 0; attempt < 2; attempt++) {
   try {

@@ -39,7 +39,8 @@ it('real Postgres check and settlement survives invalid output; API reads expose
  const count = f.stub.requests.length; await assert.rejects(f.service.infer(f.actor, f.input), { code: 'budget_spent' }); assert.equal(f.stub.requests.length, count);
 });
 it('simultaneous calls cannot both pass against the same remaining allowance', async () => {
- const f = await fixture(); await f.service.setBudget(f.actor, f.organisationId, 300); f.stub.responses.push(reply({ urgent: true }), reply({ urgent: true }));
+ // The fixture's verify used 100 tokens; one call's estimate is about 80 more. 230 admits one call and not two, with room for the estimate to drift.
+ const f = await fixture(); await f.service.setBudget(f.actor, f.organisationId, 230); f.stub.responses.push(reply({ urgent: true }), reply({ urgent: true }));
  const values = await Promise.allSettled([f.service.infer(f.actor, f.input), f.service.infer(f.actor, f.input)]);
  assert.equal(values.filter(v => v.status === 'fulfilled').length, 1);
  const rejected = values.find(v => v.status === 'rejected') as PromiseRejectedResult; assert.equal(rejected.reason.code, 'budget_spent');
