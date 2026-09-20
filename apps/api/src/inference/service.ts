@@ -141,7 +141,8 @@ export class InferenceService {
  async verify(actor: Actor, organisationId: string) {
   await this.owner(actor, organisationId);
   // A minimal output probe: the empty JSON object. Usage is charged to the same monthly allowance.
-  return this.execute(actor, { organisationId, step: 'runtime.verify', tier: 'small', instruction: 'Return only the empty JSON object {}.', input: null, schema: z.object({}).strict(), maxTokens: 1 }, true).then(result => result.output);
+  // The CLI refuses a one-token output limit outright; 64 leaves room for the empty object and costs next to nothing.
+  return this.execute(actor, { organisationId, step: 'runtime.verify', tier: 'small', instruction: 'Return only the empty JSON object {}.', input: null, schema: z.object({}).strict(), maxTokens: 64 }, true).then(result => result.output);
  }
  /** The runner supplies the person who enabled the workflow; no identity is inferred by the model. */
  async infer<T>(actor: Actor, input: InferInput<T>): Promise<T>;
