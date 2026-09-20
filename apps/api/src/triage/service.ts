@@ -1,7 +1,7 @@
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { GmailClient } from '@captain/connectors/gmail';
 import { Registry, type HandlerContext } from '@captain/engine';
-import { classifyThreadInstruction, draftReplyInstruction } from '@captain/steps';
+import { classifyNoteInstruction, classifyThreadInstruction, draftReplyInstruction } from '@captain/steps';
 import type { InferenceService } from '../inference/service.ts';
 import type { ConnectionService } from '../connections/service.ts';
 import { connection, requireMember } from '../mail/store.ts';
@@ -12,9 +12,9 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { addresses } from '../contacts/addresses.ts';
 import { upkeepContacts } from '../contacts/upkeep.ts';
-import { suggest, complete } from '../commitments/triage.ts';
+import { suggest, suggestFrom, complete } from '../commitments/triage.ts';
 import { DRAFT_TTL_MS, expireDraft, noReplyWanted, remindAt, workflowDraft } from './outbox.ts';
-import { draftSchema, triageSchema, journal, type Context, type Thread } from './data.ts';
+import { draftSchema, noteTriageSchema, triageSchema, journal, type Context, type Note, type Thread } from './data.ts';
 import { drafting, gate, ruleWords, type DraftPrior, type Prior, type Rule } from './gate.ts';
 import { trimmedMessages } from './text.ts';
 
@@ -192,6 +192,32 @@ export class TriageService {
    const wakeAt = row && !closed ? new Date(new Date(row.updatedAt).getTime() + DRAFT_TTL_MS + 1000) : undefined;
    return { ready: !row || closed, key: `outbox:${id}`, output: { state: row ? (row.outcome ?? row.state) : 'missing' }, ...(wakeAt ? { wakeAt } : {}) };
   } });
+  // Notes (D23): read like mail, classified with the person as author. A note with under about 40 tokens of text is
+  // skipped, and one already read is read again only after an edit beyond a trivial change.
+  registry.registerStep('notes.new', { kind: 'read', transaction: async ({ tx }) => {
+   const rows = await tx`select n.id, n.title, n.body, n.updated_at, n.event_id, c.name as contact_name, co.name as company_name, p.name as project_name, t.title as task_title,
+    md5(n.title || E'\n' || n.body) as digest, length(n.body) as length from notes n
+    left join contacts c on c.organisation_id = n.organisation_id and c.id = n.contact_id left join companies co on co.organisation_id = n.organisation_id and co.id = n.company_id
+    left join projects p on p.organisation_id = n.organisation_id and p.id = n.project_id left join tasks t on t.organisation_id = n.organisation_id and t.id = n.task_id
+    left join note_triage nt on nt.organisation_id = n.organisation_id and nt.note_id = n.id
+    where n.archived_at is null and length(n.body) >= 160 and (nt.note_id is null or (nt.body_digest <> md5(n.title || E'\n' || n.body) and abs(length(n.body) - nt.body_length) >= 20))
+    order by n.updated_at, n.id limit 50`;
+   return rows.map((r): Note => ({ id: String(r.id), title: String(r.title), body: String(r.body), digest: String(r.digest), length: Number(r.length), updatedAt: new Date(r.updatedAt).toISOString(),
+    links: { contact: r.contactName ?? null, company: r.companyName ?? null, project: r.projectName ?? null, task: r.taskTitle ?? null, event: Boolean(r.eventId) } }));
+  } });
+  registry.registerStep('classifyNote', { kind: 'infer', retrySafe: true, call: (ctx, args) => { const note = args.note as Note; return this.inference.infer({ userId: ctx.userId, requestId: ctx.runId }, {
+   organisationId: ctx.organisationId, runId: ctx.runId, step: ctx.step.key, tier: 'small', instruction: classifyNoteInstruction, schema: noteTriageSchema,
+   input: { untrustedNote: { title: note.title, body: note.body, linkedTo: note.links } } }); } });
+  registry.registerStep('notes.record', { kind: 'write', transaction: async (ctx, args) => {
+   const note = args.note as Note; const triage = noteTriageSchema.parse(args.triage); const { tx } = ctx;
+   const [usage] = await tx`select model from model_usage where run_id = ${ctx.runId} and step_key = 'classifyNote' order by created_at desc, id desc limit 1`;
+   await tx`insert into note_triage (organisation_id, note_id, category, summary, facts, produced_by, model, body_digest, body_length)
+    values (${ctx.organisationId}, ${note.id}, ${triage.category}, ${triage.summary}, ${tx.json(triage.facts)}, ${ctx.runId}, ${usage?.model ?? 'unknown'}, ${note.digest}, ${note.length})
+    on conflict (organisation_id, note_id) do update set category = excluded.category, summary = excluded.summary, facts = excluded.facts, produced_by = excluded.produced_by,
+    model = excluded.model, body_digest = excluded.body_digest, body_length = excluded.body_length, updated_at = now()`;
+   await journal(ctx, 'note.triaged', 'note', note.id); return null;
+  } });
+  registry.registerStep('tasks.suggestFromNote', { kind: 'write', transaction: (ctx, args) => suggestFrom(ctx, { kind: 'note', id: (args.note as Note).id }, noteTriageSchema.parse(args.triage).tasks) });
   registry.registerStep('gmail.label', { kind: 'write', retrySafe: true, call: async (ctx, args) => {
    const thread = args.thread as Thread; await this.gmail.label(await this.token(ctx, thread), thread.providerId, 'Captain/Handled');
    await this.tx(ctx, async tx => { await journal({ ...ctx, tx }, 'mail.labelled', 'mail_thread', thread.id); }); return { labelled: true };

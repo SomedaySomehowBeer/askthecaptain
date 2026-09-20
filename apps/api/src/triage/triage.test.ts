@@ -4,6 +4,7 @@ import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
 import { withTenant } from '@captain/db';
 import { createApp } from '../app.ts';
 import { TriageService } from './service.ts';
+import { NotesService } from '../notes/service.ts';
 import { AuthService } from '../auth/service.ts';
 import { OrganisationService } from '../organisations/service.ts';
 import { CommitmentsService } from '../commitments/service.ts';
@@ -159,5 +160,23 @@ it('a person can ask for a draft on a needs-you thread, hold it for later, or sa
   const closed = await triage.threadAction(f.member, f.org, thread, 'not_needed'); assert.equal(closed.needsOwner, false);
   const [prior] = await f.tx(sql => sql`select information_verdicts, needs_owner_count from mail_senders where email = 'supplier@example.test'`); assert.equal(prior!.informationVerdicts, 1); assert.equal(prior!.needsOwnerCount, 0);
   await assert.rejects(triage.threadAction(f.stranger, f.org, thread, 'not_needed'), { status: 404 });
+ } finally { await f.engine.close(); }
+});
+
+it('a saved note is read by the same run as mail: classified with the person as author, its tasks suggested, and not read again unchanged', async () => {
+ const f = await triageFixture(db); try {
+  const notes = new NotesService(db.app, (sql, org, event, data) => f.engine.emit(sql, org, event, data));
+  f.provider.responses.push(result({ category: 'plan', summary: 'Cans for October are being arranged.', facts: { counterparty: 'CanCo', amounts: ['2,000 cans'], dates: ['October'], references: [] }, tasks: [{ title: 'Chase the can quote', reference: 'CanCo', due: null }] }));
+  const note = await notes.create(f.actor, f.org, { title: 'Call with CanCo', body: 'Long call about cans for October. '.repeat(8) + 'They will send a quote on Friday; we chase if it has not arrived.' });
+  const [run] = await until(() => f.tx(sql => sql`select id, state from workflow_runs order by created_at desc limit 1`), rows => rows[0]?.state === 'succeeded');
+  const [triage] = await f.tx(sql => sql`select * from note_triage where note_id = ${note.id}`); assert.equal(triage!.category, 'plan'); assert.equal(triage!.producedBy, run!.id);
+  const [task] = await f.tx(sql => sql`select * from tasks where source_kind = 'note' and source_id = ${note.id}`); assert.equal(task!.status, 'suggested'); assert.equal(task!.title, 'Chase the can quote');
+  assert.ok(!JSON.stringify(f.provider.requests).includes('fixture-token')); const calls = f.provider.requests.length;
+  await notes.update(f.actor, f.org, note.id, { title: 'Call with CanCo', body: 'Long call about cans for October. '.repeat(8) + 'They will send a quote on Friday; we chase if it has not arrived.', projectId: null });
+  await until(() => f.tx(sql => sql`select state from workflow_runs order by created_at desc limit 1`), rows => rows[0]?.state === 'succeeded');
+  assert.equal(f.provider.requests.length, calls);
+  await notes.create(f.actor, f.org, { body: 'Too short to read.' });
+  await until(() => f.tx(sql => sql`select state from workflow_runs order by created_at desc limit 1`), rows => rows[0]?.state === 'succeeded');
+  assert.equal(f.provider.requests.length, calls);
  } finally { await f.engine.close(); }
 });

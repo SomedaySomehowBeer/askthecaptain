@@ -12,6 +12,7 @@ import { SaveForm } from './commitments/SaveForm.tsx';
 import { setTaskStatus } from './commitments/actions.ts';
 import { addDays, localDate, onDay, type CalendarWeek, type Event } from './calendar/calendar.ts';
 import type { MailList } from './inbox/mail.ts';
+import { NotesCard } from './notes/NotesCard.tsx';
 
 export const metadata: Metadata = { title: 'Today' };
 
@@ -88,6 +89,7 @@ export default async function TodayPage() {
 			</section>
 
 			<Suspense fallback={<section className="card" role="status"><h2>Ask Captain</h2><p>Reading your recent questions…</p></section>}><QuestionBox me={me} /></Suspense>
+					<Suspense fallback={null}><NotesCard me={me} /></Suspense>
 		</Page>
 	);
 }

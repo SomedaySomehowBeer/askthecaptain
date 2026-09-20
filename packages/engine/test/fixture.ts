@@ -37,6 +37,10 @@ export async function fixture(db: Harness, fault?: 'database' | 'provider' | 'fa
  registry.registerStep('triage.file', { kind: 'write', transaction: async () => null });
  registry.registerStep('triage.draftScore', { kind: 'read', transaction: async () => ({ drafts: true, reason: null, score: 3, threshold: 3 }) });
  registry.registerStep('classifyThread', inferenceStep(inference, 'Classify labelled untrusted mail data.', z.object({ needsOwner: z.boolean() })));
+ registry.registerStep('classifyNote', inferenceStep(inference, 'Classify labelled untrusted note data.', z.object({ summary: z.string() })));
+ registry.registerStep('notes.new', { kind: 'read', transaction: async () => [] });
+ registry.registerStep('notes.record', { kind: 'write', transaction: async () => null });
+ registry.registerStep('tasks.suggestFromNote', { kind: 'write', transaction: async () => null });
  registry.registerStep('draftReply', inferenceStep(inference, 'Draft from labelled untrusted data.', z.object({ body: z.string() })));
  for (const key of ['triage.record', 'tasks.suggestFromTriage', 'tasks.completeFromConfirmations', 'contacts.upsertFromTriage']) registry.registerStep(key, { kind: 'write', transaction: async context => {
   // The real domain services arrive in PR B; the fixture asserts actor and transaction ownership.
