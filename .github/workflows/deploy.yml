@@ -20,14 +20,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --config apps/api/fly.staging.toml --depot --image-label "git-${GITHUB_SHA}"
+      # One machine per app while we develop (scale-to-zero is in the fly config). The scale step
+      # removes any extra machine an earlier deploy created; --ha=false stops deploy adding one.
+      - run: flyctl scale count 1 --yes --config apps/api/fly.staging.toml
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+      - run: flyctl deploy --config apps/api/fly.staging.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
   web-staging:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --config apps/web/fly.staging.toml --depot --image-label "git-${GITHUB_SHA}"
+      # One machine per app while we develop (scale-to-zero is in the fly config). The scale step
+      # removes any extra machine an earlier deploy created; --ha=false stops deploy adding one.
+      - run: flyctl scale count 1 --yes --config apps/web/fly.staging.toml
+        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+      - run: flyctl deploy --config apps/web/fly.staging.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
   e2e-gate:
     needs: [api-staging, web-staging]
@@ -52,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --config apps/api/fly.toml --depot --image-label "git-${GITHUB_SHA}"
+      - run: flyctl deploy --config apps/api/fly.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
-      - run: flyctl deploy --config apps/web/fly.toml --depot --image-label "git-${GITHUB_SHA}"
+      - run: flyctl deploy --config apps/web/fly.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
