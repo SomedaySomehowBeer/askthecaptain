@@ -5,6 +5,7 @@ import { Notice } from '../../../components/Notice.tsx';
 import { Page, requireCurrent } from '../../../components/Page.tsx';
 import { api, load, type Commitments } from '../../../lib/api.ts';
 import { NoteForm } from '../NoteForm.tsx';
+import { RequestDiscovery } from '../../../components/RequestDiscovery.tsx';
 import { linksInWords, type Note } from '../notes.ts';
 export const metadata: Metadata = { title: 'Note' };
 export default async function NotePage({ params }: { params: Promise<{ noteId: string }> }) {
@@ -22,6 +23,7 @@ async function One({ me, id }: { me: Awaited<ReturnType<typeof requireCurrent>>;
   {value.archivedAt ? <Notice>This note is archived. It stays readable and citable; it is no longer triaged.</Notice> : null}
   {value.triageSummary ? <section className="card stack"><h2>What Captain read</h2><p><span className="chip">{value.triageCategory}</span> {value.triageSummary}</p><p className="muted">Suggested tasks from this note appear in Commitments.</p></section> : <Notice>Captain has not read this note yet. Notes under a few sentences are not read; longer ones are read within a minute of saving.</Notice>}
   {linksInWords(value).length ? <p className="muted">Linked to: {linksInWords(value).join(' · ')}</p> : null}
-  <section className="card stack">{value.archivedAt ? <><h2>{value.title || 'Note'}</h2><div className="mail-body">{value.body}</div></> : <NoteForm note={value} projects={commitments.ok ? commitments.value.projects : []} tasks={commitments.ok ? commitments.value.tasks : []} />}</section>
+  {value.archivedAt || value.projectId ? null : <section className="card stack"><h2>Project</h2><p className="muted">Not linked to a project. Choose one in the form below, or ask Captain what this note is part of.</p><RequestDiscovery kind="note" id={value.id} /></section>}
+  <section className="card stack">{value.archivedAt ? <><h2>{value.title || 'Note'}</h2><div className="mail-body">{value.body}</div></> : <NoteForm note={value} projects={commitments.ok ? commitments.value.projects.filter(p => p.state === 'active') : []} tasks={commitments.ok ? commitments.value.tasks : []} />}</section>
  </>;
 }

@@ -32,6 +32,8 @@ active until a person accepts it on Commitments.
   thread or note and starts a run (Make this a project on the thread and note pages).
 - `POST /v1/organisations/:id/projects/:projectId/accept` sets a proposal active and its suggested tasks and steps
   open; `…/discard` archives it, cancels its suggested tasks and closes its candidate. Both are audited.
+- Commitments shows each proposal with its brief, linked threads and notes, and the tasks it would open, with
+  **Accept** and **Discard**; an owner or admin has **Find projects now**, which runs the workflow on demand.
 - Proposed projects never count as active: triage does not offer them, tasks cannot be added to them by hand, and
   Commitments shows them as proposals.
 
