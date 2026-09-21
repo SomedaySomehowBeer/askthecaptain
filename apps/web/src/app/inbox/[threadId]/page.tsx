@@ -1,6 +1,7 @@
 import { DraftForm } from '../DraftForm.tsx';
 import { linkThreadProject } from '../actions.ts';
 import { SaveForm } from '../../commitments/SaveForm.tsx';
+import { RequestDiscovery } from '../../../components/RequestDiscovery.tsx';
 import { ThreadActions } from '../ThreadActions.tsx';
 import { TriageFacts } from '../TriageFacts.tsx';
 import type { Metadata } from 'next';
@@ -35,6 +36,7 @@ async function Thread({ me, id }: { me: Awaited<ReturnType<typeof requireCurrent
                         <select name="projectId" defaultValue={thread.projects.find(p => !p.archivedAt)?.id ?? ''}><option value="">No project</option>{thread.projectOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
                         <button className="button button--secondary button--small" type="submit">Save</button></div></SaveForm>
                 : <p className="muted">Create a project on <Link href="/commitments">Commitments</Link> to link this thread to it.</p>}
+            {thread.projects.length === 0 ? <RequestDiscovery kind="mail_thread" id={thread.id} /> : null}
         </section>
         {thread.outbox.map(draft => <DraftForm key={draft.id + draft.body + draft.state + (draft.remindAt ?? '')} draft={draft} connected={thread.connectionStatus === 'connected'} timezone={thread.timezone} />)}
 		{thread.connectionStatus !== 'connected' ? <Notice tone="attention" action={{ href: '/settings/connections', label: 'Reconnect Google' }}>Google access is unavailable. This is the last saved copy; reconnect to receive updates.</Notice> : null}

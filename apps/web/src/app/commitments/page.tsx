@@ -7,6 +7,8 @@ import { Page, requireCurrent } from '../../components/Page.tsx';
 import { api, load, type Commitments, type Project, type ProjectSource, type Series, type Task } from '../../lib/api.ts';
 import { dateIn, describeDue, recurrenceWords, shortDate } from '../../lib/dates.ts';
 import { setProjectArchived, setSeriesPaused, setTaskStatus } from './actions.ts';
+import { decideProject } from './discovery-actions.ts';
+import { FindProjects } from './FindProjects.tsx';
 import { BriefForm, ProjectForm, SeriesForm, StepForm, TaskForm } from './Forms.tsx';
 
 export const metadata: Metadata = { title: 'Commitments' };
@@ -90,6 +92,27 @@ function BriefView({ project }: { project: Project }) {
 	);
 }
 
+/** A proposed project (D22): what Captain found, with its evidence, for a person to accept or discard. Nothing in it is active. */
+function ProposalCard({ project, tasks, links, today, timezone }: { project: Project; tasks: Task[]; links: ProjectSource[]; today: string; timezone: string }) {
+	const top = tasks.filter((t) => !t.parentId); const stepsOf = (id: string) => tasks.filter((t) => t.parentId === id);
+	return (
+		<section className="card card--proposal" aria-labelledby={`proposal-${project.id}`}>
+			<div className="row row--between">
+				<div className="row"><h2 id={`proposal-${project.id}`}>{project.name}</h2><span className="chip">proposed</span>{project.stage === 'idea' ? <span className="chip">idea</span> : null}</div>
+				<div className="row">
+					<SaveForm action={decideProject}><input type="hidden" name="id" value={project.id} /><input type="hidden" name="decision" value="accept" /><button className="button button--primary button--small" type="submit" aria-label={`Accept "${project.name}"`}>Accept</button></SaveForm>
+					<SaveForm action={decideProject}><input type="hidden" name="id" value={project.id} /><input type="hidden" name="decision" value="discard" /><button className="button button--ghost button--small" type="submit" aria-label={`Discard "${project.name}"`}>Discard</button></SaveForm>
+				</div>
+			</div>
+			{project.description ? <p className="secondary">{project.description}</p> : null}
+			<BriefView project={project} />
+			<ProjectSources links={links} timezone={timezone} />
+			{top.length > 0 ? <div className="stack"><h3>Tasks it would open</h3><ul className="bare">{top.map((task) => <TaskLine key={task.id} task={task} steps={stepsOf(task.id)} today={today} timezone={timezone} />)}</ul></div> : <p className="muted">{project.stage === 'idea' ? 'An idea: its whole substance is the brief above.' : 'No tasks yet.'}</p>}
+			<p className="muted">Accept makes it a project with these tasks open. Discard puts it away and Captain will not propose this name again.</p>
+		</section>
+	);
+}
+
 function ProjectCard({ project, tasks, series, links, projects, today, timezone }: { project: Project; tasks: Task[]; series: Series[]; links: ProjectSource[]; projects: Project[]; today: string; timezone: string }) {
 	// Steps sit under their task; only top-level tasks make the lists.
 	const top = tasks.filter((t) => !t.parentId); const stepsOf = (id: string) => tasks.filter((t) => t.parentId === id);
@@ -145,7 +168,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 	}
 	const { projects, tasks, series, links, today, timezone } = loaded.value;
 	// Proposed projects are shown as proposals, never as live ones (D22).
-	const live = projects.filter((p) => p.state === 'active'); const archived = projects.filter((p) => p.state === 'archived');
+	const live = projects.filter((p) => p.state === 'active'); const archived = projects.filter((p) => p.state === 'archived'); const proposed = projects.filter((p) => p.state === 'proposed');
 	const attention = tasks.filter((t) => isOpen(t) && t.due && describeDue(t.due, today).urgency !== 'later' && !projects.find((p) => p.id === t.projectId)?.archivedAt);
 	const nothingYet = tasks.length === 0 && series.length === 0;
 	const byProject = (id: string) => ({ tasks: tasks.filter((t) => t.projectId === id), series: series.filter((s) => s.projectId === id), links: links.filter((l) => l.projectId === id) });
@@ -161,6 +184,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 			) : (
 				<Notice title="Nothing is due this week.">Everything open has a later date or none. The full list is below.</Notice>
 			)}
+			{proposed.map((project) => <ProposalCard key={project.id} project={project} today={today} timezone={timezone} tasks={tasks.filter((t) => t.projectId === project.id)} links={links.filter((l) => l.projectId === project.id)} />)}
 			<section className="card">
 				<h2>Add a task</h2>
 				<TaskForm projects={live} compact />
@@ -170,6 +194,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 				<h2>New project</h2>
 				<p className="secondary">A project is a name for a stream of work: Wholesale, Production, the new taproom. Tasks and duties belong to one.</p>
 				<ProjectForm />
+				{me.organisation.role === 'member' ? null : <FindProjects />}
 			</section>
 			{archived.length > 0 ? (
 				<details className="disclosure"><summary>Archived projects ({archived.length})</summary>
