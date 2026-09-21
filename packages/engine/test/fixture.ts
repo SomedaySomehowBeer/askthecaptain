@@ -43,6 +43,11 @@ export async function fixture(db: Harness, fault?: 'database' | 'provider' | 'fa
  registry.registerStep('notes.record', { kind: 'write', transaction: async () => null });
  registry.registerStep('tasks.suggestFromNote', { kind: 'write', transaction: async () => null });
  registry.registerStep('draftReply', inferenceStep(inference, 'Draft from labelled untrusted data.', z.object({ body: z.string() })));
+ registry.registerStep('discovery.seeds', { kind: 'read', transaction: async () => [] });
+ registry.registerStep('discovery.evidence', { kind: 'read', transaction: async () => ({ candidates: [] }) });
+ registry.registerStep('discoverProject', inferenceStep(inference, 'Judge labelled untrusted evidence.', z.object({ kind: z.string() })));
+ registry.registerStep('discovery.record', { kind: 'write', transaction: async () => null });
+ registry.registerStep('discovery.notify', { kind: 'notify', retrySafe: true, call: async () => ({ sent: 0 }) });
  for (const key of ['triage.record', 'tasks.suggestFromTriage', 'tasks.completeFromConfirmations', 'contacts.upsertFromTriage']) registry.registerStep(key, { kind: 'write', transaction: async context => {
   // The real domain services arrive in PR B; the fixture asserts actor and transaction ownership.
   { const [row] = await context.tx`select current_setting('app.user_id') as actor`; if (row!.actor !== tenant.userId) throw Error('Wrong actor'); }

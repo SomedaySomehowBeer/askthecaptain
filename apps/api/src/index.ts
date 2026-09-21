@@ -7,6 +7,7 @@ import { TriageService } from './triage/service.ts';
 import { NotesService } from './notes/service.ts';
 import { httpEmbedClient } from '@captain/retrieval';
 import { IndexService, startIndexSchedule } from './retrieval/service.ts';
+import { DiscoveryService } from './discovery/service.ts';
 import { OutboxService } from './triage/outbox.ts';
 import { startAttachmentExpiry } from './triage/expiry.ts';
 import { ShopifyConnector } from '@captain/connectors/shopify';
@@ -64,6 +65,7 @@ const engine = new BossEngine(db, env.DATABASE_URL, registry, definitions);
 const stock = new StockService(db, (tx, org, event, data, key) => engine.emit(tx, org, event, data, key));
 const outbox = new OutboxService(db, connections, (tx, org, run, key) => engine.wake(tx, org, run, key));
 const index = new IndexService(db, env.EMBED_URL && env.EMBED_TOKEN ? httpEmbedClient(env.EMBED_URL, env.EMBED_TOKEN) : null);
+const discovery = new DiscoveryService(db, inference, index, push, (tx, org, event, data) => engine.emit(tx, org, event, data)); discovery.register(registry);
 const notes = new NotesService(db, (tx, org, event, data) => engine.emit(tx, org, event, data), org => index.fill(org, { budget: 64, messages: false }));
 const stopIndex = startIndexSchedule(index, env.INDEX_DISABLED === '1' || !index.available);
 const stopAttachmentExpiry = startAttachmentExpiry(db);
@@ -95,7 +97,7 @@ const lifecycle = new OrganisationLifecycle(db, [
 	async (actor, organisationId) => { await inference.remove(actor, organisationId).catch(() => undefined); }
 ]);
 const passkeys = new PasskeyService(db, simpleWebAuthn(env.APP_URL));
-const app = createApp({ stock, triage, notes, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, outbox, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
+const app = createApp({ discovery, stock, triage, notes, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, outbox, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));

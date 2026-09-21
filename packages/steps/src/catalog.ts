@@ -65,6 +65,12 @@ export const catalog: Record<string, CatalogEntry> = {
 	'stock.counted': { kind: 'await', does: 'waits for the counter to enter a count', requires: [], until: 'a count is entered' },
 	// notify
 	'push.owner': { kind: 'notify', does: 'pushes a message to the owner', requires: ['push'] },
+	// discovery (D22)
+	'discovery.seeds': { kind: 'read', does: 'finds what is worth a discovery call: candidate names past their thresholds, suggested duties sharing a reference, a thread or note a person chose, or clusters of the backlog on the first run; at most ten', requires: [] },
+	'discovery.evidence': { kind: 'read', does: 'gathers the threads and notes nearest a seed from the index, widened by counterparty, references, reply chain, subject and dates; at most fifty', requires: [] },
+	'discoverProject': { kind: 'infer', does: 'judges the assembled evidence: a project with its brief and tasks, one task, a relationship, or nothing', requires: ['inference'], schemas: ['discovery'] },
+	'discovery.record': { kind: 'write', does: 'writes a proposed project with its brief, links, suggested tasks and evidence, or one suggested task, or a company link; nothing is active until a person accepts it', requires: [] },
+	'discovery.notify': { kind: 'notify', does: 'tells the enabling person what was proposed, on a subscribed device', requires: [] },
 	'push.taskOwner': { kind: 'notify', does: 'pushes a reminder to the task’s owner', requires: ['push'] },
 	'push.escalate': { kind: 'notify', does: 'escalates an overdue task to the owner', requires: ['push'] },
 	'push.counter': { kind: 'notify', does: 'asks the stock counter to count', requires: ['push'] }

@@ -8,7 +8,7 @@ test('every shipped definition is valid and has a stable digest', () => {
 		assert.deepEqual(validateDefinition(definition), [], definition.key);
 		assert.equal(digestOf(definition), digestOf(structuredClone(definition)), `${definition.key} digest is deterministic`);
 	}
-	assert.deepEqual(definitions.map((d) => d.key), ['inbox-triage', 'morning-brief', 'chase-due', 'calendar-prep', 'stocktake']);
+	assert.deepEqual(definitions.map((d) => d.key), ['inbox-triage', 'morning-brief', 'chase-due', 'calendar-prep', 'stocktake', 'discover-projects']);
 });
 
 test('requirements are collected from every step, including nested ones', () => {

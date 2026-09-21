@@ -29,7 +29,7 @@ export class MailService {
                 exists(select 1 from outbox o where o.thread_id = t.id and o.state = 'drafted') as has_draft,
 				(select count(*)::int from mail_attachments a join mail_messages am on am.id = a.message_id where am.thread_id = t.id) as attachment_count,
 				(select p.name from project_sources ps join projects p on p.organisation_id = ps.organisation_id and p.id = ps.project_id
-					where ps.source_kind = 'mail_thread' and ps.source_id = t.id and p.archived_at is null order by ps.created_at limit 1) as project_name
+					where ps.source_kind = 'mail_thread' and ps.source_id = t.id and p.state = 'active' order by ps.created_at limit 1) as project_name
 				from mail_threads t join lateral (select from_header, subject, snippet, sent_at from mail_messages where thread_id = t.id order by sent_at desc, provider_id desc limit 1) m on true
 				where t.connection_id = ${conn.id} and t.account_email = ${conn.accountEmail} and (${since ?? null}::timestamptz is null or t.last_message_at >= ${since ?? null}::timestamptz)
 				and (${before?.[0] ?? null}::timestamptz is null or (t.last_message_at, t.id) < (${before?.[0] ?? null}::timestamptz, ${before?.[1] ?? null}::uuid))
@@ -53,7 +53,7 @@ export class MailService {
 			// The projects this thread belongs to and who linked each (D22), with the active projects a person may choose instead.
 			const projects = await tx`select p.id, p.name, ps.linked_by, ps.rule, p.archived_at from project_sources ps join projects p on p.organisation_id = ps.organisation_id and p.id = ps.project_id
 				where ps.source_kind = 'mail_thread' and ps.source_id = ${threadId} order by ps.created_at`;
-			const projectOptions = await tx`select id, name from projects where archived_at is null and system_kind is null order by name`;
+			const projectOptions = await tx`select id, name from projects where state = 'active' and system_kind is null order by name`;
 			return { ...thread, projects, projectOptions, triageNotice: (await triageState(tx)) ?? this.runnerProblem(), triage: (await tx`select * from mail_triage where thread_id = ${threadId}`)[0] ?? null, outbox: await tx`select id, thread_id, subject, body, "to", cc, state, send_started_at, outcome, edited, remind_at from outbox where thread_id = ${threadId} order by created_at`, messages: messages.map((m) => ({ ...m, senderContact: senders.get(addresses(m.fromHeader)[0]?.email) ?? null, attachments: attachments.filter((a) => a.messageId === m.id) })) };
 		});
 	}
@@ -65,7 +65,7 @@ export class MailService {
 			const [thread] = await tx`select t.id, t.account_email, array_agg(m.from_header order by m.sent_at, m.provider_id) as from_headers from mail_threads t join mail_messages m on m.thread_id = t.id where t.id = ${threadId} group by t.id`;
 			if (!thread) throw notFound('That mail thread is not available. Return to Inbox and sync again.');
 			if (projectId) {
-				const [project] = await tx`select id from projects where id = ${projectId} and archived_at is null and system_kind is null`;
+				const [project] = await tx`select id from projects where id = ${projectId} and state = 'active' and system_kind is null`;
 				if (!project) throw badRequest('project_unavailable', 'Choose an active project. Obligations holds duties, not mail.');
 			}
 			const replaced = (await tx`delete from project_sources where source_kind = 'mail_thread' and source_id = ${threadId} returning project_id`).map((r) => String(r.projectId));
