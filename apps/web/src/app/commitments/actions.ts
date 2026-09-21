@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { api, ApiError } from '../../lib/api.ts';
+import { api, ApiError, type Brief } from '../../lib/api.ts';
 import { current } from '../../lib/session.ts';
 
 export type Result = { error?: string; ok?: boolean };
@@ -59,5 +59,24 @@ export async function setSeriesPaused(form: FormData): Promise<Result> {
 	const { token, org } = await who();
 	const id = text(form, 'id'); if (!id) return { error: 'That record is not available.' };
 	try { await api(`/v1/organisations/${org}/series/${id}`, { method: 'PATCH', token, body: { paused: text(form, 'paused') === 'true' } }); } catch (error) { return fail(error); }
+	return done();
+}
+
+/** A step is a task under another: its parent's checklist, in its parent's project. */
+export async function createStep(form: FormData): Promise<Result> {
+	const { token, org } = await who();
+	try { await api(`/v1/organisations/${org}/tasks`, { method: 'POST', token, body: { title: text(form, 'title'), parentId: text(form, 'parentId') } }); } catch (error) { return fail(error); }
+	return done();
+}
+
+const briefKeys = ['what', 'standing', 'people', 'questions'] as const;
+/** The brief as four lists, one line per row. A line keeps its evidence while its text is unchanged; new lines cite nothing. */
+export async function saveBrief(form: FormData): Promise<Result> {
+	const { token, org } = await who(); const id = text(form, 'id'); const stage = text(form, 'stage');
+	if (!['idea', 'underway'].includes(stage)) return { error: 'Choose a stage.' };
+	let existing: Partial<Brief> = {}; try { existing = JSON.parse(String(form.get('existing') ?? '{}')) as Partial<Brief>; } catch { existing = {}; }
+	const brief = Object.fromEntries(briefKeys.map((key) => [key, String(form.get(key) ?? '').split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 30)
+		.map((line) => ({ text: line.slice(0, 500), evidence: existing[key]?.find((l) => l.text === line)?.evidence ?? null }))]));
+	try { await api(`/v1/organisations/${org}/projects/${id}`, { method: 'PATCH', token, body: { stage, brief } }); } catch (error) { return fail(error); }
 	return done();
 }

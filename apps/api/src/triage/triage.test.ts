@@ -189,12 +189,14 @@ it('association (D22): rules link a thread before the model, the model links onl
   await f.mail('mystery', 'pat@elsewhere.test', 'Thinking about a taproom in the city. TAP-1');
   await f.tx(sql => sql`insert into companies (organisation_id, name, domain) values (${f.org}, 'Cans Co', 'cans.test') on conflict (organisation_id, domain) do update set name = excluded.name`);
   f.provider.responses.push(
-   result({ ...classification(), tasks: [{ title: 'Send final artwork', reference: 'CAN-77', due: null }], project: { name: 'cans for october', stage: null } }),
+   result({ ...classification(), tasks: [{ title: 'Send final artwork', reference: 'CAN-77', due: null, steps: ['Export the print-ready PDF', 'Send it to CanCo'] }], project: { name: 'cans for october', stage: null } }),
    result({ ...classification(), tasks: [], project: { name: 'City taproom', stage: 'idea' } }));
   const run = await f.start(); await until(() => f.tx(sql => sql`select state from workflow_runs where id = ${run}`), rows => rows[0]?.state === 'succeeded');
   const links = await f.tx(sql => sql`select ps.source_id, ps.linked_by, ps.rule, ps.company_id, t.provider_id from project_sources ps join mail_threads t on t.id = ps.source_id where ps.project_id = ${cans.id}`);
   assert.deepEqual(links.map(l => [l.providerId, l.linkedBy, l.rule]), [['cans-1', 'model', null]]); assert.ok(links[0]!.companyId, 'the counterparty company is kept on the link');
-  const [task] = await f.tx(sql => sql`select project_id from tasks where title = 'Send final artwork'`); assert.equal(task!.projectId, cans.id);
+  const [task] = await f.tx(sql => sql`select id, project_id from tasks where title = 'Send final artwork'`); assert.equal(task!.projectId, cans.id);
+  const steps = await f.tx(sql => sql`select title, status, project_id from tasks where parent_id = ${task!.id} order by created_at`);
+  assert.deepEqual(steps.map(s => [s.title, s.status, s.projectId]), [['Export the print-ready PDF', 'suggested', cans.id], ['Send it to CanCo', 'suggested', cans.id]], 'steps become suggested sub-tasks in the same project');
   const candidates = await f.tx(sql => sql`select c.normalised, c.stage, s.own from project_candidates c join project_candidate_sources s on s.organisation_id = c.organisation_id and s.normalised = c.normalised`);
   assert.deepEqual(candidates.map(c => [c.normalised, c.stage, c.own]), [['city taproom', 'idea', false]]);
   // The model saw the active projects for both threads, never Obligations.

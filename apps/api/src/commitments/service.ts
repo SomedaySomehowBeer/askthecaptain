@@ -5,9 +5,13 @@ import { roleOf, type Actor } from '../tenant.ts';
 import { dueFor, monthsPerPeriod, nextPeriod, periodContaining, titleFor, todayIn, type Recurrence, type SeriesRule } from './series.ts';
 
 export type TaskStatus = 'suggested' | 'open' | 'in_progress' | 'done' | 'cancelled';
-export type Project = { id: string; name: string; description: string; stages: string[]; ownerId: string | null; systemKind: 'obligations' | null;
+/** One line of a brief, citing the thread or note it rests on when it has one (plan §2). */
+export type BriefLine = { text: string; evidence: { kind: 'mail_thread' | 'note'; id: string } | null };
+export type Brief = { what: BriefLine[]; standing: BriefLine[]; people: BriefLine[]; questions: BriefLine[] };
+export const briefSections = ['what', 'standing', 'people', 'questions'] as const;
+export type Project = { id: string; name: string; description: string; stages: string[]; stage: 'idea' | 'underway'; brief: Brief; briefUpdatedAt: Date | null; ownerId: string | null; systemKind: 'obligations' | null;
 	archivedAt: Date | null; createdAt: Date; updatedAt: Date };
-export type Task = { id: string; projectId: string; title: string; body: string; status: TaskStatus; ownerId: string | null; ownerName: string | null;
+export type Task = { id: string; projectId: string; parentId: string | null; title: string; body: string; status: TaskStatus; ownerId: string | null; ownerName: string | null;
 	due: string | null; sourceKind: 'person' | 'mail' | 'series' | 'run'; sourceId: string | null; seriesId: string | null; periodStart: string | null;
 	periodEnd: string | null; evidenceRequired: boolean; completedBy: string | null; completedAt: Date | null; createdAt: Date; updatedAt: Date; evidence: Evidence[] };
 export type Evidence = { id: string; taskId: string; kind: 'mail' | 'file' | 'url'; reference: string; label: string; attachedBy: string | null; attachedAt: Date };
@@ -17,9 +21,9 @@ export type Series = { id: string; projectId: string; title: string; body: strin
 export type ProjectSource = { projectId: string; kind: 'mail_thread' | 'note'; id: string; title: string; at: Date | null; linkedBy: 'rule' | 'model' | 'person'; total: number };
 export type Overview = { projects: Project[]; tasks: Task[]; series: Series[]; links: ProjectSource[]; today: string; timezone: string };
 
-const projectColumns = 'id, name, description, stages, owner_id, system_kind, archived_at, created_at, updated_at';
+const projectColumns = 'id, name, description, stages, stage, brief, brief_updated_at, owner_id, system_kind, archived_at, created_at, updated_at';
 const seriesColumns = 'id, project_id, title, body, owner_id, evidence_required, recurrence, every_months, anchor::text as anchor, due_offset_days, paused_at, created_at, updated_at';
-const taskSelect = `select t.id, t.project_id, t.title, t.body, t.status, t.owner_id, u.name as owner_name, t.due::text as due, t.source_kind, t.source_id, t.series_id,
+const taskSelect = `select t.id, t.project_id, t.parent_id, t.title, t.body, t.status, t.owner_id, u.name as owner_name, t.due::text as due, t.source_kind, t.source_id, t.series_id,
 	t.period_start::text as period_start, t.period_end::text as period_end, coalesce(s.evidence_required, false) as evidence_required, t.completed_by, t.completed_at, t.created_at, t.updated_at
 	from tasks t left join users u on u.id = t.owner_id left join task_series s on s.id = t.series_id`;
 const statuses: TaskStatus[] = ['suggested', 'open', 'in_progress', 'done', 'cancelled'];
@@ -38,8 +42,8 @@ export class CommitmentsService {
    (date_trunc('week', now() at time zone timezone)::date + 7)::text as week_end from organisations where id = ${organisationId}`;
   const today = clock!.today as string;
   const rows = await tx<Pick<Task, 'id' | 'title' | 'status' | 'due' | 'ownerId' | 'ownerName'>[]>`select t.id, left(t.title, 300) as title, t.status, t.due::text, t.owner_id, left(u.name, 200) as owner_name
-   from tasks t left join users u on u.id = t.owner_id where t.status = 'suggested'
-   or (t.status in ('open', 'in_progress') and t.due < ${clock!.weekEnd}::date)
+   from tasks t left join users u on u.id = t.owner_id where t.parent_id is null and (t.status = 'suggested'
+   or (t.status in ('open', 'in_progress') and t.due < ${clock!.weekEnd}::date))
    order by t.due nulls last, t.id limit 101`;
   const tasks = rows.slice(0, 100).map(t => ({ ...t, period: t.status === 'suggested' ? 'suggested' : t.due && t.due < today ? 'overdue' : t.due === today ? 'today' : 'this_week' }));
   return { today, tomorrow: clock!.tomorrow as string, timezone: clock!.timezone as string, tasks, truncated: rows.length > 100 };
@@ -82,7 +86,7 @@ export class CommitmentsService {
 		});
 	}
 
-	async updateProject(actor: Actor, organisationId: string, projectId: string, input: { name?: string; description?: string; stages?: string[]; ownerId?: string | null; archived?: boolean }): Promise<Project> {
+	async updateProject(actor: Actor, organisationId: string, projectId: string, input: { name?: string; description?: string; stages?: string[]; ownerId?: string | null; archived?: boolean; stage?: 'idea' | 'underway'; brief?: Brief }): Promise<Project> {
 		await roleOf(this.#db, actor.userId, organisationId);
 		if (input.name !== undefined && !input.name.trim()) throw badRequest('name_required', 'the project needs a name');
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
@@ -90,30 +94,45 @@ export class CommitmentsService {
 			if (!current) throw notFound('that project does not exist');
 			if (current.systemKind && input.archived) throw badRequest('system_project', 'the Obligations project cannot be archived');
 			if (input.ownerId) await this.#requireMember(tx, organisationId, input.ownerId);
+			if (input.brief) await this.#checkBrief(tx, input.brief);
 			const [project] = await tx<Project[]>`update projects set
 				name = coalesce(${input.name?.trim() ?? null}, name), description = coalesce(${input.description?.trim() ?? null}, description),
 				stages = coalesce(${input.stages ? tx.array(input.stages.map((s) => s.trim()).filter(Boolean)) : null}, stages),
+				stage = coalesce(${input.stage ?? null}, stage),
+				brief = coalesce(${input.brief ? tx.json(input.brief as never) : null}, brief),
+				brief_updated_at = case when ${input.brief !== undefined} then now() else brief_updated_at end,
+				brief_updated_by = case when ${input.brief !== undefined} then ${actor.userId}::uuid else brief_updated_by end,
+				brief_run_id = case when ${input.brief !== undefined} then null else brief_run_id end,
 				owner_id = case when ${input.ownerId === undefined} then owner_id else ${input.ownerId ?? null}::uuid end,
 				archived_at = case when ${input.archived === undefined} then archived_at when ${input.archived === true} then coalesce(archived_at, now()) else null end,
 				updated_at = now()
 				where id = ${projectId} returning ${tx.unsafe(projectColumns)}`;
-			await audit(tx, { organisationId, actor: person(actor), action: 'project.updated', subjectType: 'project', subjectId: projectId, requestId: actor.requestId, detail: input });
+			const { brief, ...rest } = input;
+			await audit(tx, { organisationId, actor: person(actor), action: brief ? 'project.brief_updated' : 'project.updated', subjectType: 'project', subjectId: projectId, requestId: actor.requestId,
+				detail: brief ? { ...rest, lines: Object.fromEntries(briefSections.map((k) => [k, brief[k].length])) } : rest });
 			return project!;
 		});
 	}
 
-	async createTask(actor: Actor, organisationId: string, input: { projectId?: string; title: string; body?: string; ownerId?: string | null; due?: string | null; status?: TaskStatus }): Promise<Task> {
+	/** A task, or with `parentId` a step of one: the parent's checklist, in its project, one level deep (D7). */
+	async createTask(actor: Actor, organisationId: string, input: { projectId?: string; parentId?: string; title: string; body?: string; ownerId?: string | null; due?: string | null; status?: TaskStatus }): Promise<Task> {
 		await roleOf(this.#db, actor.userId, organisationId);
 		const title = input.title.trim(); if (!title) throw badRequest('title_required', 'the task needs a title');
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
-			const projectId = input.projectId ?? (await this.#ensureObligations(tx, organisationId, actor));
+			let projectId = input.projectId ?? (await this.#ensureObligations(tx, organisationId, actor));
+			if (input.parentId) {
+				const [parent] = await tx<{ projectId: string; parentId: string | null }[]>`select project_id, parent_id from tasks where id = ${input.parentId} and organisation_id = ${organisationId}`;
+				if (!parent) throw notFound('that task does not exist');
+				if (parent.parentId) throw badRequest('step_depth', 'a step cannot have steps of its own');
+				projectId = parent.projectId;
+			}
 			await this.#requireProject(tx, organisationId, projectId);
 			if (input.ownerId) await this.#requireMember(tx, organisationId, input.ownerId);
 			const status = input.status ?? 'open';
-			const [row] = await tx<{ id: string }[]>`insert into tasks (organisation_id, project_id, title, body, status, owner_id, due, source_kind, source_id, completed_by, completed_at, created_by)
-				values (${organisationId}, ${projectId}, ${title}, ${input.body?.trim() ?? ''}, ${status}, ${input.ownerId ?? null}, ${input.due ?? null}::date, 'person', ${actor.userId},
+			const [row] = await tx<{ id: string }[]>`insert into tasks (organisation_id, project_id, parent_id, title, body, status, owner_id, due, source_kind, source_id, completed_by, completed_at, created_by)
+				values (${organisationId}, ${projectId}, ${input.parentId ?? null}, ${title}, ${input.body?.trim() ?? ''}, ${status}, ${input.ownerId ?? null}, ${input.due ?? null}::date, 'person', ${actor.userId},
 					${status === 'done' ? actor.userId : null}, ${status === 'done' ? new Date() : null}, ${actor.userId}) returning id`;
-			await audit(tx, { organisationId, actor: person(actor), action: 'task.created', subjectType: 'task', subjectId: row!.id, requestId: actor.requestId, detail: { title, projectId, due: input.due ?? null } });
+			await audit(tx, { organisationId, actor: person(actor), action: 'task.created', subjectType: 'task', subjectId: row!.id, requestId: actor.requestId, detail: { title, projectId, parentId: input.parentId ?? null, due: input.due ?? null } });
 			return (await this.#tasks(tx, organisationId, tx`t.id = ${row!.id}`))[0]!;
 		});
 	}
@@ -122,9 +141,10 @@ export class CommitmentsService {
 		await roleOf(this.#db, actor.userId, organisationId);
 		if (input.title !== undefined && !input.title.trim()) throw badRequest('title_required', 'the task needs a title');
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
-			const [current] = await tx<{ status: TaskStatus; evidenceRequired: boolean; evidenceCount: number }[]>`select t.status, coalesce(s.evidence_required, false) as evidence_required,
+			const [current] = await tx<{ status: TaskStatus; projectId: string; parentId: string | null; evidenceRequired: boolean; evidenceCount: number }[]>`select t.status, t.project_id, t.parent_id, coalesce(s.evidence_required, false) as evidence_required,
 				(select count(*) from evidence e where e.task_id = t.id)::int as evidence_count from tasks t left join task_series s on s.id = t.series_id where t.id = ${taskId} and t.organisation_id = ${organisationId}`;
 			if (!current) throw notFound('that task does not exist');
+			if (input.projectId && input.projectId !== current.projectId && current.parentId) throw badRequest('step_project', "a step stays in its task's project");
 			if (input.projectId) await this.#requireProject(tx, organisationId, input.projectId);
 			if (input.ownerId) await this.#requireMember(tx, organisationId, input.ownerId);
 			const completing = input.status === 'done' && current.status !== 'done';
@@ -139,6 +159,11 @@ export class CommitmentsService {
 				completed_at = case when ${completing} then now() when ${reopening} then null else completed_at end,
 				updated_at = now()
 				where id = ${taskId}`;
+			// Steps follow their task: into its project, done when a person completes it, cancelled with it, accepted with it.
+			if (input.projectId && input.projectId !== current.projectId) await tx`update tasks set project_id = ${input.projectId}, updated_at = now() where parent_id = ${taskId}`;
+			if (completing) await tx`update tasks set status = 'done', completed_by = ${actor.userId}, completed_at = now(), updated_at = now() where parent_id = ${taskId} and status in ('suggested', 'open', 'in_progress')`;
+			else if (input.status === 'cancelled') await tx`update tasks set status = 'cancelled', updated_at = now() where parent_id = ${taskId} and status in ('suggested', 'open', 'in_progress')`;
+			else if (input.status === 'open' && current.status === 'suggested') await tx`update tasks set status = 'open', updated_at = now() where parent_id = ${taskId} and status = 'suggested'`;
 			await audit(tx, { organisationId, actor: person(actor), action: completing ? 'task.completed' : 'task.updated', subjectType: 'task', subjectId: taskId, requestId: actor.requestId, detail: input });
 			return (await this.#tasks(tx, organisationId, tx`t.id = ${taskId}`))[0]!;
 		});
@@ -253,6 +278,16 @@ export class CommitmentsService {
 		if (created) { await audit(tx, { organisationId, actor: { kind: 'system' }, action: 'project.created', subjectType: 'project', subjectId: created.id, detail: { name: 'Obligations', system: true } }); return created.id; }
 		const [again] = await tx<{ id: string }[]>`select id from projects where organisation_id = ${organisationId} and system_kind = 'obligations'`;
 		return again!.id;
+	}
+
+	/** A brief line may cite only a thread or note this tenant holds; the citation is what makes the line checkable. */
+	async #checkBrief(tx: TransactionSql, brief: Brief) {
+		const cited = briefSections.flatMap((k) => brief[k].map((line) => line.evidence)).filter((e): e is NonNullable<BriefLine['evidence']> => e !== null);
+		const threads = cited.filter((e) => e.kind === 'mail_thread').map((e) => e.id), notes = cited.filter((e) => e.kind === 'note').map((e) => e.id);
+		const found = new Set<string>();
+		if (threads.length) for (const r of await tx`select id from mail_threads where id = any(${tx.array(threads)}::uuid[])`) found.add(`mail_thread:${r.id}`);
+		if (notes.length) for (const r of await tx`select id from notes where id = any(${tx.array(notes)}::uuid[])`) found.add(`note:${r.id}`);
+		if (cited.some((e) => !found.has(`${e.kind}:${e.id}`))) throw badRequest('evidence_unknown', 'a brief line cites a thread or note that is not here');
 	}
 
 	async #tasks(tx: TransactionSql, organisationId: string, where: ReturnType<TransactionSql>): Promise<Task[]> {

@@ -103,6 +103,10 @@ input:focus-visible, select:focus-visible, .button:focus-visible, a:focus-visibl
 .due--overdue { color: var(--danger); font-weight: 600; }
 .due--today { color: var(--warn); font-weight: 600; }
 .task__actions { display: flex; gap: 4px; flex: none; }
+.task__steps { margin: 4px 0 0; padding-left: 14px; border-left: 2px solid var(--line); }
+.task__steps .task { padding: 6px 0; border-top: 0; }
+.brief h3 { margin: 0 0 4px; font-size: 14px; }
+.brief ul { gap: 4px; }
 .button--small { min-height: 34px; padding: 0 12px; font-size: 13px; }
 .disclosure > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ink-2); list-style: none; padding: 6px 0; }
 .disclosure > summary::-webkit-details-marker { display: none; }

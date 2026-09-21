@@ -9,7 +9,7 @@ export const projectField = z.object({ name: z.string().max(200).nullable(), sta
 export const triageSchema = z.object({
  category: z.enum(['request', 'confirmation', 'information', 'spam', 'other']), needsOwner: z.boolean(), summary: z.string().max(2000),
  facts: z.object({ counterparty: z.string().max(300).nullable(), amounts: z.array(z.string().max(100)).max(20), dates: z.array(z.string().max(100)).max(20), references: z.array(z.string().max(300)).max(20) }).strict(),
- tasks: z.array(z.object({ title: z.string().min(1).max(300), reference: z.string().max(300), due: z.iso.date().nullable() }).strict()).max(20),
+ tasks: z.array(z.object({ title: z.string().min(1).max(300), reference: z.string().max(300), due: z.iso.date().nullable(), steps: z.array(z.string().min(1).max(300)).max(10).default([]) }).strict()).max(20),
  project: projectField,
  confirmations: z.array(z.object({ title: z.string().min(1).max(300), reference: z.string().min(1).max(300) }).strict()).max(20)
 }).strict();
@@ -17,7 +17,7 @@ export const triageSchema = z.object({
 export const noteTriageSchema = z.object({
  category: z.enum(['plan', 'request', 'information', 'other']), summary: z.string().max(2000),
  facts: z.object({ counterparty: z.string().max(300).nullable(), amounts: z.array(z.string().max(100)).max(20), dates: z.array(z.string().max(100)).max(20), references: z.array(z.string().max(300)).max(20) }).strict(),
- tasks: z.array(z.object({ title: z.string().min(1).max(300), reference: z.string().max(300), due: z.iso.date().nullable() }).strict()).max(20),
+ tasks: z.array(z.object({ title: z.string().min(1).max(300), reference: z.string().max(300), due: z.iso.date().nullable(), steps: z.array(z.string().min(1).max(300)).max(10).default([]) }).strict()).max(20),
  project: projectField
 }).strict();
 export type Note = { id: string; title: string; body: string; digest: string; length: number; updatedAt: string; links: { contact: string | null; company: string | null; project: string | null; task: string | null; event: boolean } };
