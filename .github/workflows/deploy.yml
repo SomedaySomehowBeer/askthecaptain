@@ -57,8 +57,10 @@ jobs:
             flyctl scale count 1 --yes --config infra/embed/fly.toml
           fi
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+      # flyctl enters the working directory before it resolves --config, so run from infra/embed with a relative path.
       - if: steps.app.outputs.exists == 'true'
-        run: flyctl deploy infra/embed --config infra/embed/fly.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
+        working-directory: infra/embed
+        run: flyctl deploy --config fly.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
   e2e-gate:
     needs: [api-staging, web-staging]
