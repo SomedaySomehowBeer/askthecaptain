@@ -9,7 +9,7 @@ export async function suggestFrom(context: Context, source: { kind: 'mail' | 'no
  if (added[0]) await journal(context, 'project.created', 'project', added[0].id);
  let count = 0;
  // Tasks from a linked thread or note go to that project (D22); otherwise to Obligations as before.
- const [linked] = projectId ? await tx`select id from projects where id = ${projectId} and archived_at is null` : [];
+ const [linked] = projectId ? await tx`select id from projects where id = ${projectId} and state = 'active'` : [];
  const [project] = linked ? [linked] : await tx`select id from projects where system_kind = 'obligations'`;
  for (const task of tasks) {
   const [existing] = await tx`select id, project_id from tasks where source_kind = ${source.kind} and source_id = ${source.id} and title = ${task.title} and body = ${task.reference} and parent_id is null`;

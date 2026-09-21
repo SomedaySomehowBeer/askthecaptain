@@ -8,23 +8,23 @@ export async function projectRule(tx: TransactionSql, thread: Thread): Promise<P
 	const [contact] = await tx`select c.company_id from contacts c where c.email = ${sender} and c.archived_at is null and c.company_id is not null limit 1`;
 	const companyId = contact?.companyId ? String(contact.companyId) : null;
 	const [existing] = await tx`select ps.project_id, p.name from project_sources ps join projects p on p.organisation_id = ps.organisation_id and p.id = ps.project_id
-		where ps.source_kind = 'mail_thread' and ps.source_id = ${thread.id} and p.archived_at is null order by ps.created_at limit 1`;
+		where ps.source_kind = 'mail_thread' and ps.source_id = ${thread.id} and p.state = 'active' order by ps.created_at limit 1`;
 	if (existing) return { projectId: String(existing.projectId), projectName: String(existing.name), rule: 'existing_link', companyId };
 	if (companyId) {
 		const projects = await tx`select distinct p.id, p.name from project_sources ps join projects p on p.organisation_id = ps.organisation_id and p.id = ps.project_id
-			where ps.company_id = ${companyId} and p.archived_at is null and p.system_kind is null`;
+			where ps.company_id = ${companyId} and p.state = 'active' and p.system_kind is null`;
 		if (projects.length === 1) return { projectId: String(projects[0]!.id), projectName: String(projects[0]!.name), rule: 'company', companyId };
 	}
 	// A task's reference (its body) quoted in the thread: exact text, no fuzzy matching.
 	const text = thread.messages.map(m => m.body).join('\n');
 	const referenced = await tx`select distinct p.id, p.name from tasks t join projects p on p.organisation_id = t.organisation_id and p.id = t.project_id
-		where p.archived_at is null and p.system_kind is null and t.status <> 'cancelled' and length(t.body) >= 4 and position(t.body in ${text}) > 0`;
+		where p.state = 'active' and p.system_kind is null and t.status <> 'cancelled' and length(t.body) >= 4 and position(t.body in ${text}) > 0`;
 	if (referenced.length === 1) return { projectId: String(referenced[0]!.id), projectName: String(referenced[0]!.name), rule: 'task_reference', companyId };
 	return { projectId: null, projectName: null, rule: null, companyId };
 }
 /** The active projects the model may name: most recently active first, at most fifty, never Obligations. */
 export async function activeProjects(tx: TransactionSql): Promise<{ name: string; description: string }[]> {
-	const rows = await tx`select name, left(description, 300) as description from projects where archived_at is null and system_kind is null order by updated_at desc, name limit 50`;
+	const rows = await tx`select name, left(description, 300) as description from projects where state = 'active' and system_kind is null order by updated_at desc, name limit 50`;
 	return rows.map(r => ({ name: String(r.name), description: String(r.description) }));
 }
 export type Source = { kind: 'mail_thread' | 'note'; id: string; own: boolean; companyId?: string | null };
@@ -41,7 +41,7 @@ export async function recordAssociation(context: Context, source: Source, link: 
 	if (link?.projectId) return write(link.projectId, link.rule === 'person_link' ? 'person' : 'rule', link.rule);
 	const name = project.name?.trim(); if (!name) return null;
 	const normalised = normaliseProjectName(name); if (!normalised) return null;
-	const [match] = await tx`select id from projects where archived_at is null and system_kind is null and lower(regexp_replace(name, '[^[:alnum:]]+', ' ', 'g')) = ${normalised} limit 1`;
+	const [match] = await tx`select id from projects where state = 'active' and system_kind is null and lower(regexp_replace(name, '[^[:alnum:]]+', ' ', 'g')) = ${normalised} limit 1`;
 	if (match) return write(String(match.id), 'model', null);
 	await tx`insert into project_candidates (organisation_id, normalised, name, stage) values (${context.organisationId}, ${normalised}, ${name.slice(0, 200)}, ${project.stage ?? 'underway'})
 		on conflict (organisation_id, normalised) do update set last_seen_at = now(), stage = case when excluded.stage = 'underway' then 'underway' else project_candidates.stage end`;

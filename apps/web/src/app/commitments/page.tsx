@@ -144,7 +144,8 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 		);
 	}
 	const { projects, tasks, series, links, today, timezone } = loaded.value;
-	const live = projects.filter((p) => !p.archivedAt); const archived = projects.filter((p) => p.archivedAt);
+	// Proposed projects are shown as proposals, never as live ones (D22).
+	const live = projects.filter((p) => p.state === 'active'); const archived = projects.filter((p) => p.state === 'archived');
 	const attention = tasks.filter((t) => isOpen(t) && t.due && describeDue(t.due, today).urgency !== 'later' && !projects.find((p) => p.id === t.projectId)?.archivedAt);
 	const nothingYet = tasks.length === 0 && series.length === 0;
 	const byProject = (id: string) => ({ tasks: tasks.filter((t) => t.projectId === id), series: series.filter((s) => s.projectId === id), links: links.filter((l) => l.projectId === id) });

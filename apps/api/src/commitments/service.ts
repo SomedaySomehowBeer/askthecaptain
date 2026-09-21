@@ -315,7 +315,7 @@ export class CommitmentsService {
 	async #today(tx: TransactionSql, organisationId: string): Promise<string> { return todayIn(await this.#timezone(tx, organisationId)); }
 
 	async #requireProject(tx: TransactionSql, organisationId: string, projectId: string): Promise<void> {
-		const [row] = await tx`select 1 from projects where id = ${projectId} and organisation_id = ${organisationId} and archived_at is null`;
+		const [row] = await tx`select 1 from projects where id = ${projectId} and organisation_id = ${organisationId} and state = 'active'`;
 		if (!row) throw badRequest('project_invalid', 'that project does not exist or is archived');
 	}
 

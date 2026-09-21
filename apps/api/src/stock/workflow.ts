@@ -52,7 +52,7 @@ export class StocktakeService {
   if (count === undefined || count === null || item.reorderPoint === null) throw problem('stocktake_count');
   const previous = await receipt(ctx, 'stock.reorder_task_created'); if (previous) return { id: previous.subjectId };
   await ctx.tx`select pg_advisory_xact_lock(hashtextextended(${ctx.organisationId + ':stocktake-project:' + projectName}, 0))`;
-  const matches = await ctx.tx`select id from projects where name = ${projectName} and archived_at is null order by id limit 2 for share`;
+  const matches = await ctx.tx`select id from projects where name = ${projectName} and state = 'active' order by id limit 2 for share`;
   if (matches.length > 1) throw problem('stocktake_project');
   let projectId = matches[0]?.id;
   if (!projectId) {

@@ -19,6 +19,14 @@ export class IndexService {
 		return (await this.#db<{ organisationId: string }[]>`select organisation_id from index_organisations()`).map((row) => String(row.organisationId));
 	}
 	run(organisationId: string) { return this.fill(organisationId, { budget: 4096 }); }
+	/** One text embedded with the live encoder, for a discovery seed; null when the service is absent or down. */
+	async embedText(text: string): Promise<{ vector: number[]; id: EncoderId } | null> {
+		if (!this.#client) return null;
+		try {
+			const id = await this.#client.identity(); const { vectors } = await this.#client.embed([text.slice(0, 8000)]);
+			return vectors[0] ? { vector: vectors[0], id: { encoder: id.encoder, version: id.version } } : null;
+		} catch (error) { if (error instanceof EmbedUnavailable) return null; throw error; }
+	}
 	/** Embeds up to `budget` units for the organisation: messages oldest first (parents before the replies that
 	 *  inherit them), then notes new or edited since they were embedded. Each page commits on its own. A note's
 	 *  save hook asks for notes only, so a mail backlog cannot starve it. */

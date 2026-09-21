@@ -41,7 +41,7 @@ export async function retrieve(db: Sql, tx: TransactionSql, org: string, questio
  if (tasks) {
   scope.push(`Tasks: ${/\boverdue\b/.test(q) && range.label === 'today' ? `overdue as of ${today}` : range.explicit ? `due dates in ${range.from} to ${range.to} (end exclusive)` : 'open, in-progress and suggested tasks unless another status is named'}.`);
   const items = await tx`select t.id, left(t.title, 300) as title, t.status, t.due::text, left(p.name, 200) as project, coalesce(nullif(u.name, ''), u.email) as owner
-   from tasks t join projects p on p.id = t.project_id left join users u on u.id = t.owner_id where p.archived_at is null
+   from tasks t join projects p on p.id = t.project_id left join users u on u.id = t.owner_id where p.state = 'active'
    and (case when ${/\bsuggested\b/.test(q)} then t.status = 'suggested' when ${/\b(done|completed|finished)\b/.test(q)} then t.status = 'done'
     when ${/\bopen\b/.test(q)} then t.status in ('open', 'in_progress') else t.status in ('open', 'in_progress', 'suggested') end)
    and (not ${/\boverdue\b/.test(q)} or t.due < ${today}::date)
