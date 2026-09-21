@@ -45,7 +45,7 @@ async function Inbox({ me, before }: { me: Awaited<ReturnType<typeof requireCurr
 			{items.map((thread) => <li className="mail-row" key={thread.id}><Link className="mail-link" href={`/inbox/${thread.id}`}>
 				<div className="line"><strong>{thread.fromHeader || 'Sender unavailable'}</strong><time dateTime={thread.sentAt}>{mailTime(thread.sentAt, timezone)}</time></div>
 				<h3>{thread.subject || '(No subject)'}</h3>{thread.triage ? <TriageFacts triage={thread.triage} /> : <p className="secondary">{thread.snippet || 'No preview available.'}</p>}
-				<div className="row muted">{thread.attachmentCount > 0 ? <span>{attachmentsInWords(thread.attachmentCount)}</span> : null}{thread.labelNames.map((name) => <span className="chip" key={name}>{name}</span>)}</div>
+				<div className="row muted">{thread.projectName ? <span className="chip chip--project">{thread.projectName}</span> : null}{thread.attachmentCount > 0 ? <span>{attachmentsInWords(thread.attachmentCount)}</span> : null}{thread.labelNames.map((name) => <span className="chip" key={name}>{name}</span>)}</div>
 			</Link></li>)}
 		</ul></section>)}
 		<section className="stack"><h2>Outbox</h2>{outbox.length ? outbox.map(draft => <div key={draft.id}>{draft.threadId ? <Link href={`/inbox/${draft.threadId}`}>Open thread: {draft.subject || '(No subject)'}</Link> : <DraftForm draft={draft} connected={available} timezone={timezone} />}</div>) : <p>No drafts awaiting you.</p>}</section>

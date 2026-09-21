@@ -47,7 +47,9 @@ export type Task = { id: string; projectId: string; title: string; body: string;
 export type Recurrence = 'monthly' | 'quarterly' | 'yearly' | 'weekdays' | 'custom';
 export type Series = { id: string; projectId: string; title: string; body: string; ownerId: string | null; evidenceRequired: boolean; recurrence: Recurrence; everyMonths: number | null;
 	anchor: string; dueOffsetDays: number; pausedAt: string | null; nextDue: string | null; createdAt: string; updatedAt: string };
-export type Commitments = { projects: Project[]; tasks: Task[]; series: Series[]; today: string; timezone: string };
+/** A thread or note linked to a project (D22): at most ten per project, newest link first, with the project's total. */
+export type ProjectSource = { projectId: string; kind: 'mail_thread' | 'note'; id: string; title: string; at: string | null; linkedBy: 'rule' | 'model' | 'person'; total: number };
+export type Commitments = { projects: Project[]; tasks: Task[]; series: Series[]; links: ProjectSource[]; today: string; timezone: string };
 
 // Workflows (D3, D4)
 export type WorkflowParameterSpec = { type: 'text'; description: string; default?: string; required?: boolean; maxLength?: number } | { type: 'boolean'; description: string; default: boolean } | { type: 'number'; description: string; default: number; min?: number; max?: number };

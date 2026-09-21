@@ -74,6 +74,7 @@ a { color: var(--accent-text); }
 .line { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .line:first-child { border-top: 0; }
 .chip { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: var(--radius-chip); background: var(--panel-2); font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.chip--project { background: var(--accent-soft); color: var(--accent-text); }
 
 /* Controls */
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: var(--radius-control); font: inherit; font-size: 15px; font-weight: 500; text-decoration: none; cursor: pointer; border: 1px solid transparent; background: transparent; color: var(--ink); }

@@ -1,9 +1,10 @@
 import { SaveForm } from './SaveForm.tsx';
 import { StockSection } from './Stock.tsx';
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { Notice } from '../../components/Notice.tsx';
 import { Page, requireCurrent } from '../../components/Page.tsx';
-import { api, load, type Commitments, type Project, type Series, type Task } from '../../lib/api.ts';
+import { api, load, type Commitments, type Project, type ProjectSource, type Series, type Task } from '../../lib/api.ts';
 import { dateIn, describeDue, recurrenceWords, shortDate } from '../../lib/dates.ts';
 import { setProjectArchived, setSeriesPaused, setTaskStatus } from './actions.ts';
 import { ProjectForm, SeriesForm, TaskForm } from './Forms.tsx';
@@ -55,7 +56,24 @@ function SeriesLine({ series }: { series: Series }) {
 	);
 }
 
-function ProjectCard({ project, tasks, series, projects, today, timezone }: { project: Project; tasks: Task[]; series: Series[]; projects: Project[]; today: string; timezone: string }) {
+const linkedByWords = (linkedBy: ProjectSource['linkedBy']) => linkedBy === 'person' ? 'chosen by a person' : linkedBy === 'model' ? 'named by triage' : 'linked by a rule';
+/** The mail and notes triage or a person filed under this project (D22): the newest ten, each a link to its page. */
+function ProjectSources({ links, timezone }: { links: ProjectSource[]; timezone: string }) {
+	if (links.length === 0) return null;
+	const total = links[0]!.total;
+	return (
+		<div className="stack">
+			<h3>From mail and notes</h3>
+			<ul className="bare">{links.map((link) => <li key={link.kind + link.id}>
+				<Link href={link.kind === 'mail_thread' ? `/inbox/${link.id}` : `/notes/${link.id}`}>{link.title || (link.kind === 'mail_thread' ? '(No subject)' : 'Untitled note')}</Link>
+				<span className="muted"> — {link.kind === 'mail_thread' ? 'mail' : 'note'}, {linkedByWords(link.linkedBy)}{link.at ? `, ${shortDate(dateIn(link.at, timezone))}` : ''}</span>
+			</li>)}</ul>
+			{total > links.length ? <p className="muted">And {total - links.length} more.</p> : null}
+		</div>
+	);
+}
+
+function ProjectCard({ project, tasks, series, links, projects, today, timezone }: { project: Project; tasks: Task[]; series: Series[]; links: ProjectSource[]; projects: Project[]; today: string; timezone: string }) {
 	const open = tasks.filter(isOpen); const suggested = tasks.filter((t) => t.status === 'suggested'); const done = tasks.filter((t) => t.status === 'done');
 	const deadlineBook = project.systemKind === 'obligations';
 	return (
@@ -69,6 +87,7 @@ function ProjectCard({ project, tasks, series, projects, today, timezone }: { pr
 			</div>
 			{project.description ? <p className="secondary">{project.description}</p> : null}
 			{project.archivedAt ? <p className="muted">Archived {shortDate(dateIn(project.archivedAt, timezone))}. Nothing new can be added until it is restored.</p> : null}
+			<ProjectSources links={links} timezone={timezone} />
 			{suggested.length > 0 ? <ul className="bare">{suggested.map((task) => <TaskLine key={task.id} task={task} today={today} timezone={timezone} />)}</ul> : null}
 			{open.length > 0 ? <ul className="bare">{open.map((task) => <TaskLine key={task.id} task={task} today={today} timezone={timezone} />)}</ul>
 				: <p className="muted">{deadlineBook ? 'Nothing is due. Add a recurring duty below and its next occurrence appears here.' : 'Nothing open here.'}</p>}
@@ -102,11 +121,11 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 			</Page>
 		);
 	}
-	const { projects, tasks, series, today, timezone } = loaded.value;
+	const { projects, tasks, series, links, today, timezone } = loaded.value;
 	const live = projects.filter((p) => !p.archivedAt); const archived = projects.filter((p) => p.archivedAt);
 	const attention = tasks.filter((t) => isOpen(t) && t.due && describeDue(t.due, today).urgency !== 'later' && !projects.find((p) => p.id === t.projectId)?.archivedAt);
 	const nothingYet = tasks.length === 0 && series.length === 0;
-	const byProject = (id: string) => ({ tasks: tasks.filter((t) => t.projectId === id), series: series.filter((s) => s.projectId === id) });
+	const byProject = (id: string) => ({ tasks: tasks.filter((t) => t.projectId === id), series: series.filter((s) => s.projectId === id), links: links.filter((l) => l.projectId === id) });
 	return (
 		<Page title="Commitments" lede={nothingYet ? 'One list of what the business owes: projects, tasks and the duties that come round every period.' : me.organisation.organisationName}>
 			{nothingYet ? (
