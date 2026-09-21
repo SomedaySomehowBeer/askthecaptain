@@ -12,11 +12,17 @@ export async function suggestFrom(context: Context, source: { kind: 'mail' | 'no
  const [linked] = projectId ? await tx`select id from projects where id = ${projectId} and archived_at is null` : [];
  const [project] = linked ? [linked] : await tx`select id from projects where system_kind = 'obligations'`;
  for (const task of tasks) {
-  const [existing] = await tx`select id from tasks where source_kind = ${source.kind} and source_id = ${source.id} and title = ${task.title} and body = ${task.reference}`;
-  if (existing) continue;
-  const [row] = await tx`insert into tasks (organisation_id, project_id, title, body, due, status, source_kind, source_id, created_by)
-   values (${organisationId}, ${project!.id}, ${task.title}, ${task.reference}, ${task.due}::date, 'suggested', ${source.kind}, ${source.id}, ${userId}) returning id`;
-  await journal(context, 'task.suggested', 'task', row!.id); count++;
+  const [existing] = await tx`select id, project_id from tasks where source_kind = ${source.kind} and source_id = ${source.id} and title = ${task.title} and body = ${task.reference} and parent_id is null`;
+  const [row] = existing ? [existing] : await tx`insert into tasks (organisation_id, project_id, title, body, due, status, source_kind, source_id, created_by)
+   values (${organisationId}, ${project!.id}, ${task.title}, ${task.reference}, ${task.due}::date, 'suggested', ${source.kind}, ${source.id}, ${userId}) returning id, project_id`;
+  if (!existing) { await journal(context, 'task.suggested', 'task', row!.id); count++; }
+  // Steps are the task's checklist (D7): suggested sub-tasks in its project, one level deep, never added twice.
+  for (const step of task.steps) {
+   const [have] = await tx`select id from tasks where parent_id = ${row!.id} and title = ${step}`; if (have) continue;
+   const [sub] = await tx`insert into tasks (organisation_id, project_id, parent_id, title, body, status, source_kind, source_id, created_by)
+    values (${organisationId}, ${row!.projectId}, ${row!.id}, ${step}, '', 'suggested', ${source.kind}, ${source.id}, ${userId}) returning id`;
+   await journal(context, 'task.suggested', 'task', sub!.id, { parentId: row!.id }); count++;
+  }
  }
  return { suggested: count };
 }
@@ -28,7 +34,7 @@ export async function complete(context: Context, thread: Thread, triage: Triage)
    && thread.messages.some(m => m.body.includes(confirmation.title) && m.body.includes(confirmation.reference));
   const matches = quoted ? await tx`select id from tasks where title = ${confirmation.title} and body = ${confirmation.reference}
    and status in ('open', 'in_progress') for update` : [];
-  if (matches.length !== 1) { await suggest(context, thread, [{ ...confirmation, due: null }]); continue; }
+  if (matches.length !== 1) { await suggest(context, thread, [{ ...confirmation, due: null, steps: [] }]); continue; }
   const id = matches[0]!.id;
   await tx`insert into evidence (organisation_id, task_id, kind, reference, label, attached_by)
    values (${organisationId}, ${id}, 'mail', ${thread.id}, ${confirmation.reference}, ${userId})`;

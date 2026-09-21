@@ -9,6 +9,8 @@ const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
 const status = z.enum(['suggested', 'open', 'in_progress', 'done', 'cancelled']);
 const recurrence = z.enum(['monthly', 'quarterly', 'yearly', 'weekdays', 'custom']);
 const text = (max: number) => z.string().trim().max(max);
+const briefLine = z.object({ text: text(500).min(1), evidence: z.object({ kind: z.enum(['mail_thread', 'note']), id: uuid }).strict().nullable() }).strict();
+const brief = z.object({ what: z.array(briefLine).max(30), standing: z.array(briefLine).max(30), people: z.array(briefLine).max(30), questions: z.array(briefLine).max(30) }).strict();
 
 /** Commitments under an organisation. Mounted inside the signed-in router; the service checks the
  *  person's membership on every call. */
@@ -24,12 +26,13 @@ export function commitmentsRoutes(commitments: CommitmentsService) {
 		return c.json(await commitments.createProject(actor(c), org(c), input), 201);
 	});
 	routes.patch('/v1/organisations/:id/projects/:projectId', async (c) => {
-		const input = z.object({ name: text(120).min(1).optional(), description: text(2000).optional(), stages: z.array(text(60)).max(20).optional(), ownerId: uuid.nullable().optional(), archived: z.boolean().optional() }).parse(await c.req.json());
+		const input = z.object({ name: text(120).min(1).optional(), description: text(2000).optional(), stages: z.array(text(60)).max(20).optional(), ownerId: uuid.nullable().optional(), archived: z.boolean().optional(),
+			stage: z.enum(['idea', 'underway']).optional(), brief: brief.optional() }).parse(await c.req.json());
 		return c.json(await commitments.updateProject(actor(c), org(c), uuid.parse(c.req.param('projectId')), input));
 	});
 
 	routes.post('/v1/organisations/:id/tasks', async (c) => {
-		const input = z.object({ projectId: uuid.optional(), title: text(200).min(1), body: text(5000).optional(), ownerId: uuid.nullable().optional(), due: date.nullable().optional(), status: status.optional() }).parse(await c.req.json());
+		const input = z.object({ projectId: uuid.optional(), parentId: uuid.optional(), title: text(200).min(1), body: text(5000).optional(), ownerId: uuid.nullable().optional(), due: date.nullable().optional(), status: status.optional() }).parse(await c.req.json());
 		return c.json(await commitments.createTask(actor(c), org(c), input), 201);
 	});
 	routes.patch('/v1/organisations/:id/tasks/:taskId', async (c) => {

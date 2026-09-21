@@ -134,3 +134,14 @@ archived projects cannot be chosen. The Inbox list shows the linked project as a
 project field writes the person's link the same way when the note is saved: a chosen project replaces other links;
 clearing it withdraws only the person's own link. Commitments lists, under each project, the ten most recently
 linked threads and notes with who linked them, and how many more there are.
+
+## Steps and the brief (D7)
+
+A suggested task may carry **steps**: the model returns them only when the mail or note spells out more than one
+concrete step, and each becomes a suggested sub-task under the task, in its project, one level deep (never added
+twice for the same source). A person adds steps under an open task on Commitments. Steps follow their task: into
+its project when it moves, done when a person marks the task done, cancelled with it, accepted with it. A step
+cannot have steps, cannot move to another project on its own, and never has a series. The morning brief counts
+tasks, not their steps. Every project has a **brief** (what this is, where it stands, who is involved, open
+questions; each line may cite a thread or note) and a **stage**, idea or underway; both are editable on
+Commitments and will be written by discovery. A cited thread or note must exist in the organisation.
