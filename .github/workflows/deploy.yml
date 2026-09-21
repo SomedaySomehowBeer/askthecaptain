@@ -49,8 +49,13 @@ jobs:
           if flyctl status --app askthecaptain-embed >/dev/null 2>&1; then echo "exists=true" >> "$GITHUB_OUTPUT";
           else echo "::notice::askthecaptain-embed is not created yet; see docs/runbooks/embedding.md"; echo "exists=false" >> "$GITHUB_OUTPUT"; fi
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
+      # A brand-new app has no machines yet and `scale count` refuses to run on it; the deploy creates the first
+      # machine, so scaling only trims an app that already runs more than one.
       - if: steps.app.outputs.exists == 'true'
-        run: flyctl scale count 1 --yes --config infra/embed/fly.toml
+        run: |
+          if [ "$(flyctl machines list --app askthecaptain-embed --json | jq length)" -gt 1 ]; then
+            flyctl scale count 1 --yes --config infra/embed/fly.toml
+          fi
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
       - if: steps.app.outputs.exists == 'true'
         run: flyctl deploy infra/embed --config infra/embed/fly.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"

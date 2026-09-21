@@ -58,7 +58,7 @@ grant lacks the calendar scopes and the owner must reconnect Google.
 
 ## Validation and references
 
-Run `DATABASE_URL=postgres://postgres@127.0.0.1:32783/postgres flock /tmp/atc-build.lock pnpm test` and
+Run `DATABASE_URL=postgres://postgres@127.0.0.1:32784/postgres flock /tmp/atc-build.lock pnpm test` and
 `flock /tmp/atc-build.lock pnpm check`. Browser checks use local production Next.js, synthetic provider
 responses and throwaway PostgreSQL. `/calendar` and `/settings/connections` must return signed-out 307s.
 
