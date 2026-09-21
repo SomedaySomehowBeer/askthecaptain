@@ -33,7 +33,7 @@ test.describe('workflows', () => {
 		await expect(triage).toContainText('triage needs owner and draft replies is on');
 		await expect(triage).toContainText('Until the draft is sent or discarded, giving up after 7 days.');
 		await expect(triage).toContainText('End of each thread');
-		await expect(triage.getByText('Ask the model', { exact: true })).toHaveCount(2);
+		await expect(triage.getByText('Ask the model', { exact: true })).toHaveCount(4);
 		const chase = page.getByRole('list', { name: 'The steps of Chase what is due' });
 		await expect(chase).toContainText('Each task waits on its own');
 		await expect(chase).toContainText('Only if task active');

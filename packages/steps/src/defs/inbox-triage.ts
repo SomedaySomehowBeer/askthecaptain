@@ -7,9 +7,10 @@ import { awaitStep, boolean, branch, daily, defineWorkflow, each, infer, number,
  *  sender, past drafts to them used), draft a reply into the outbox and wait for a person to send it;
  *  the backlog on a first run gets no drafts and a run drafts at most twenty; keep contacts current
  *  and label the thread as handled either way. Each thread and note is linked to a project by rule or by the
- *  model's choice among the active projects, or its proposed name becomes a candidate (D22). */
+ *  model's choice among the active projects, or its proposed name becomes a candidate (D22). Sent messages with
+ *  enough of the person's own text are read like notes, as own writing (§14). */
 export const inboxTriage = defineWorkflow({
-	key: 'inbox-triage', version: 6, name: 'Inbox triage', job: 1,
+	key: 'inbox-triage', version: 7, name: 'Inbox triage', job: 1,
 	description: 'Reads new mail and notes, says what needs you, drafts the replies you would send, and files the rest.',
 	triggers: [onEvent('mail.synced'), onEvent('note.saved'), daily('06:00')],
 	parameters: {
@@ -47,6 +48,13 @@ export const inboxTriage = defineWorkflow({
 			infer('classifyNote', { schema: 'noteTriage', tier: 'small', args: { note: { ref: 'item' } }, as: 'noteTriage' }),
 			write('notes.record', { args: { note: { ref: 'item' }, triage: { ref: 'noteTriage' } } }),
 			write('tasks.suggestFromNote', { args: { note: { ref: 'item' }, triage: { ref: 'noteTriage' } } })
+		]),
+		// Own writing (§14): a sent message with enough of the person's own text is read like a note; never needs-owner, never drafted.
+		read('mail.newSent', { as: 'sent' }),
+		each('sent', [
+			infer('classifySent', { schema: 'noteTriage', tier: 'small', args: { message: { ref: 'item' } }, as: 'sentTriage' }),
+			write('sent.record', { args: { message: { ref: 'item' }, triage: { ref: 'sentTriage' } } }),
+			write('tasks.suggestFromSent', { args: { message: { ref: 'item' }, triage: { ref: 'sentTriage' } } })
 		])
 	]
 });

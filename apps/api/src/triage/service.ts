@@ -1,7 +1,8 @@
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { GmailClient } from '@captain/connectors/gmail';
 import { Registry, type HandlerContext } from '@captain/engine';
-import { classifyNoteInstruction, classifyThreadInstruction, draftReplyInstruction } from '@captain/steps';
+import { classifyNoteInstruction, classifySentInstruction, classifyThreadInstruction, draftReplyInstruction } from '@captain/steps';
+import { MIN_OWN_TOKENS, PARENT_CONTEXT_TOKENS, quotedText, tokens } from '@captain/retrieval';
 import { activeProjects, projectRule, recordAssociation } from './association.ts';
 import type { InferenceService } from '../inference/service.ts';
 import type { ConnectionService } from '../connections/service.ts';
@@ -15,9 +16,9 @@ import { addresses } from '../contacts/addresses.ts';
 import { upkeepContacts } from '../contacts/upkeep.ts';
 import { suggest, suggestFrom, complete } from '../commitments/triage.ts';
 import { DRAFT_TTL_MS, expireDraft, noReplyWanted, remindAt, workflowDraft } from './outbox.ts';
-import { draftSchema, noteTriageSchema, triageSchema, journal, type Context, type Note, type Thread, type ProjectLink } from './data.ts';
+import { draftSchema, noteTriageSchema, triageSchema, journal, type Context, type Note, type SentMessage, type Thread, type ProjectLink } from './data.ts';
 import { drafting, gate, ruleWords, type DraftPrior, type Prior, type Rule } from './gate.ts';
-import { trimmedMessages } from './text.ts';
+import { ownText, trimmedMessages } from './text.ts';
 
 /** One thread as the workflow and the person see it: the latest incoming message's signals, the sender, and the
  *  messages trimmed to their own text. Null when the latest message is the mailbox's own (nothing to answer). */
@@ -59,6 +60,27 @@ export class TriageService {
    const thread = await loadThread(tx, conn, threadId); if (thread) threads.push(thread);
   }
   return threads;
+ }
+ /** Sent messages since the cursor with at least about 40 tokens of the person's own text (the index's floor, §14), each
+  *  with the parent's own text, or the quoted block when the parent is not stored, as context. Acknowledgements cost nothing. */
+ async newSent(tx: TransactionSql, enablementId: string): Promise<SentMessage[]> {
+  const conn = await connection(tx); if (!conn || conn.status !== 'connected') return [];
+  const [e] = await tx`select sent_cursor from workflow_enablements where id = ${enablementId} for update`;
+  const batch = await tx`select m.id, m.thread_id, m.subject, m.body, m.to_header, m.sent_at, p.body as parent_body,
+    (select pr.name from project_sources ps join projects pr on pr.organisation_id = ps.organisation_id and pr.id = ps.project_id where ps.source_kind = 'mail_thread' and ps.source_id = m.thread_id and pr.state = 'active' order by ps.created_at limit 1) as linked_project
+   from mail_messages m join mail_threads t on t.id = m.thread_id
+   left join lateral (select body from mail_messages p where p.organisation_id = m.organisation_id and m.in_reply_to <> '' and p.rfc_message_id = m.in_reply_to and p.id <> m.id order by p.sent_at limit 1) p on true
+   where t.connection_id = ${conn.id} and t.account_email = ${conn.accountEmail} and not m.body_unavailable
+   and ('SENT' = any(m.label_ids) or lower(m.from_header) like ${'%' + conn.accountEmail.toLowerCase() + '%'})
+   and (${e!.sentCursor ?? null}::uuid is null or m.id > ${e!.sentCursor ?? null}::uuid) order by m.id limit 50`;
+  if (!batch.length) return [];
+  await tx`update workflow_enablements set sent_cursor = ${batch.at(-1)!.id} where id = ${enablementId}`;
+  const clip = (text: string) => text.trim().slice(0, PARENT_CONTEXT_TOKENS * 4);
+  return batch.flatMap((m): SentMessage[] => {
+   const own = ownText(String(m.body)); if (tokens(own) < MIN_OWN_TOKENS) return [];
+   const context = m.parentBody ? clip(ownText(String(m.parentBody))) : clip(quotedText(String(m.body)));
+   return [{ id: String(m.id), threadId: String(m.threadId), subject: String(m.subject), to: String(m.toHeader), sentAt: new Date(m.sentAt).toISOString(), ownText: own.slice(0, 20000), context, linkedProject: m.linkedProject ? String(m.linkedProject) : null }];
+  });
  }
  /** The person asked for a reply on a needs-you thread we did not draft: the strongest up signal for the sender's
   *  draft score (plan §6). Drafted on the large tier against the same instruction and style as the workflow, then
@@ -235,6 +257,31 @@ export class TriageService {
   registry.registerStep('tasks.suggestFromNote', { kind: 'write', transaction: async (ctx, args) => {
    const note = args.note as Note; const [linked] = await ctx.tx`select project_id from project_sources where source_kind = 'note' and source_id = ${note.id} order by created_at limit 1`;
    return suggestFrom(ctx, { kind: 'note', id: note.id }, noteTriageSchema.parse(args.triage).tasks, linked ? String(linked.projectId) : null);
+  } });
+  // Own writing (§14): the person's sent messages with at least about 40 tokens of their own text, read like notes.
+  registry.registerStep('mail.newSent', { kind: 'read', transaction: ({ tx, enablementId }) => this.newSent(tx, enablementId) });
+  registry.registerStep('classifySent', { kind: 'infer', retrySafe: true, call: async (ctx, args) => { const message = args.message as SentMessage;
+   const projects = message.linkedProject ? [] : await this.tx(ctx, tx => activeProjects(tx));
+   return this.inference.infer({ userId: ctx.userId, requestId: ctx.runId }, {
+   organisationId: ctx.organisationId, runId: ctx.runId, step: ctx.step.key, tier: 'small', instruction: classifySentInstruction, schema: noteTriageSchema,
+   input: { untrustedMessage: { subject: message.subject, to: message.to, sentAt: message.sentAt, context: message.context, body: message.ownText, linkedProject: message.linkedProject }, projects } }); } });
+  registry.registerStep('sent.record', { kind: 'write', transaction: async (ctx, args) => {
+   const message = args.message as SentMessage; const triage = noteTriageSchema.parse(args.triage); const { tx } = ctx;
+   const [usage] = await tx`select model from model_usage where run_id = ${ctx.runId} and step_key = 'classifySent' order by created_at desc, id desc limit 1`;
+   await tx`insert into sent_triage (organisation_id, message_id, thread_id, category, summary, facts, produced_by, model)
+    values (${ctx.organisationId}, ${message.id}, ${message.threadId}, ${triage.category}, ${triage.summary}, ${tx.json(triage.facts)}, ${ctx.runId}, ${usage?.model ?? 'unknown'})
+    on conflict (organisation_id, message_id) do update set category = excluded.category, summary = excluded.summary, facts = excluded.facts, produced_by = excluded.produced_by, model = excluded.model, updated_at = now()`;
+   // The thread's existing link stands; otherwise the model's name links or becomes a candidate, marked as the person's own writing.
+   const [linked] = await tx`select ps.project_id, p.name, ps.company_id from project_sources ps join projects p on p.organisation_id = ps.organisation_id and p.id = ps.project_id
+    where ps.source_kind = 'mail_thread' and ps.source_id = ${message.threadId} and p.state = 'active' order by ps.created_at limit 1`;
+   const [recipient] = await tx`select c.company_id from contacts c where c.email = any(${tx.array(addresses(message.to).map(a => a.email))}::text[]) and c.archived_at is null and c.company_id is not null limit 1`;
+   const link = linked ? { projectId: String(linked.projectId), projectName: String(linked.name), rule: 'existing_link', companyId: linked.companyId ? String(linked.companyId) : null } : null;
+   const projectId = await recordAssociation(ctx, { kind: 'mail_thread', id: message.threadId, own: true, companyId: link?.companyId ?? (recipient?.companyId ? String(recipient.companyId) : null) }, link, triage.project);
+   await journal(ctx, 'mail.sent_triaged', 'mail_message', message.id, { threadId: message.threadId }); return { projectId };
+  } });
+  registry.registerStep('tasks.suggestFromSent', { kind: 'write', transaction: async (ctx, args) => {
+   const message = args.message as SentMessage; const [linked] = await ctx.tx`select project_id from project_sources where source_kind = 'mail_thread' and source_id = ${message.threadId} order by created_at limit 1`;
+   return suggestFrom(ctx, { kind: 'mail', id: message.threadId }, noteTriageSchema.parse(args.triage).tasks, linked ? String(linked.projectId) : null);
   } });
   registry.registerStep('gmail.label', { kind: 'write', retrySafe: true, call: async (ctx, args) => {
    const thread = args.thread as Thread; await this.gmail.label(await this.token(ctx, thread), thread.providerId, 'Captain/Handled');
