@@ -1,6 +1,7 @@
 import { addresses } from '../contacts/addresses.ts';
 import { withTenant, type Sql } from '@captain/db';
-import { forbidden, HttpError, notFound } from '../errors.ts';
+import { audit } from '../audit.ts';
+import { badRequest, forbidden, HttpError, notFound } from '../errors.ts';
 import { connection, requireMember } from './store.ts';
 import type { MailSync } from './sync.ts';
 async function triageState(tx: import('@captain/db').TransactionSql) {
@@ -26,7 +27,9 @@ export class MailService {
 			const threads = !conn || conn.status === 'disconnected' ? [] : await tx`select t.id, m.from_header, m.subject, m.snippet, m.sent_at, t.label_names,
                 (select to_jsonb(mt) from mail_triage mt where mt.thread_id = t.id) as triage,
                 exists(select 1 from outbox o where o.thread_id = t.id and o.state = 'drafted') as has_draft,
-				(select count(*)::int from mail_attachments a join mail_messages am on am.id = a.message_id where am.thread_id = t.id) as attachment_count
+				(select count(*)::int from mail_attachments a join mail_messages am on am.id = a.message_id where am.thread_id = t.id) as attachment_count,
+				(select p.name from project_sources ps join projects p on p.organisation_id = ps.organisation_id and p.id = ps.project_id
+					where ps.source_kind = 'mail_thread' and ps.source_id = t.id and p.archived_at is null order by ps.created_at limit 1) as project_name
 				from mail_threads t join lateral (select from_header, subject, snippet, sent_at from mail_messages where thread_id = t.id order by sent_at desc, provider_id desc limit 1) m on true
 				where t.connection_id = ${conn.id} and t.account_email = ${conn.accountEmail} and (${since ?? null}::timestamptz is null or t.last_message_at >= ${since ?? null}::timestamptz)
 				and (${before?.[0] ?? null}::timestamptz is null or (t.last_message_at, t.id) < (${before?.[0] ?? null}::timestamptz, ${before?.[1] ?? null}::uuid))
@@ -47,7 +50,34 @@ export class MailService {
 			const attachments = await tx`select a.id, a.message_id, a.filename, a.media_type, a.size, a.provider_attachment_id from mail_attachments a
 				join mail_messages m on m.id = a.message_id where m.thread_id = ${threadId} order by a.part_id`;
 			const senders = new Map((await tx`select id, email, name from contacts where email = any(${tx.array(messages.flatMap((m) => addresses(m.fromHeader).map((a) => a.email)))}::text[])`).map((c) => [c.email, c]));
-			return { ...thread, triageNotice: (await triageState(tx)) ?? this.runnerProblem(), triage: (await tx`select * from mail_triage where thread_id = ${threadId}`)[0] ?? null, outbox: await tx`select id, thread_id, subject, body, "to", cc, state, send_started_at, outcome, edited, remind_at from outbox where thread_id = ${threadId} order by created_at`, messages: messages.map((m) => ({ ...m, senderContact: senders.get(addresses(m.fromHeader)[0]?.email) ?? null, attachments: attachments.filter((a) => a.messageId === m.id) })) };
+			// The projects this thread belongs to and who linked each (D22), with the active projects a person may choose instead.
+			const projects = await tx`select p.id, p.name, ps.linked_by, ps.rule, p.archived_at from project_sources ps join projects p on p.organisation_id = ps.organisation_id and p.id = ps.project_id
+				where ps.source_kind = 'mail_thread' and ps.source_id = ${threadId} order by ps.created_at`;
+			const projectOptions = await tx`select id, name from projects where archived_at is null and system_kind is null order by name`;
+			return { ...thread, projects, projectOptions, triageNotice: (await triageState(tx)) ?? this.runnerProblem(), triage: (await tx`select * from mail_triage where thread_id = ${threadId}`)[0] ?? null, outbox: await tx`select id, thread_id, subject, body, "to", cc, state, send_started_at, outcome, edited, remind_at from outbox where thread_id = ${threadId} order by created_at`, messages: messages.map((m) => ({ ...m, senderContact: senders.get(addresses(m.fromHeader)[0]?.email) ?? null, attachments: attachments.filter((a) => a.messageId === m.id) })) };
+		});
+	}
+	/** A person links a thread to one project, or to none. Their choice replaces whatever the rules or the model decided (D22):
+	 *  the next triage of this thread reads it as the existing link, and Commitments lists the thread under the project. */
+	async linkProject(actor: Actor, organisationId: string, threadId: string, projectId: string | null) {
+		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
+			await requireMember(tx, actor.userId, organisationId);
+			const [thread] = await tx`select t.id, t.account_email, array_agg(m.from_header order by m.sent_at, m.provider_id) as from_headers from mail_threads t join mail_messages m on m.thread_id = t.id where t.id = ${threadId} group by t.id`;
+			if (!thread) throw notFound('That mail thread is not available. Return to Inbox and sync again.');
+			if (projectId) {
+				const [project] = await tx`select id from projects where id = ${projectId} and archived_at is null and system_kind is null`;
+				if (!project) throw badRequest('project_unavailable', 'Choose an active project. Obligations holds duties, not mail.');
+			}
+			const replaced = (await tx`delete from project_sources where source_kind = 'mail_thread' and source_id = ${threadId} returning project_id`).map((r) => String(r.projectId));
+			if (projectId) {
+				// The counterparty is the first sender who is not this mailbox; its company lets the company rule read this link later.
+				const counterparty = (thread.fromHeaders as string[]).map((h) => addresses(h)[0]?.email).find((e) => e && e !== thread.accountEmail) ?? null;
+				const [contact] = counterparty ? await tx`select company_id from contacts where email = ${counterparty} and archived_at is null and company_id is not null limit 1` : [];
+				await tx`insert into project_sources (organisation_id, project_id, source_kind, source_id, linked_by, linked_by_id, rule, company_id)
+					values (${organisationId}, ${projectId}, 'mail_thread', ${threadId}, 'person', ${actor.userId}, null, ${contact?.companyId ?? null})`;
+			}
+			await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, action: projectId ? 'project.linked' : 'project.unlinked', subjectType: 'mail_thread', subjectId: threadId, requestId: actor.requestId, detail: { projectId, replaced } });
+			return { projectId, replaced };
 		});
 	}
 	async sync(actor: Actor, organisationId: string) {

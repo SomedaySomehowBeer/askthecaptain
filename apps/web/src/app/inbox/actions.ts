@@ -30,3 +30,11 @@ export async function threadAction(_state: { error?: string; ok?: boolean; messa
  revalidatePath('/inbox', 'layout');
  return { ok: true, message: action === 'draft' ? 'The draft is below. Review it; only you can send it.' : action === 'remind' ? 'Reminder set.' : 'Marked as no reply wanted.' };
 }
+
+/** Link a thread to one project, or to none; the person's choice replaces the rules' and the model's (D22). */
+export async function linkThreadProject(form: FormData): Promise<{ error?: string } | void> {
+ const me = await requireCurrent('/inbox'); const id = String(form.get('threadId')); const projectId = String(form.get('projectId') ?? '');
+ try { await api(`/v1/organisations/${me.organisation.organisationId}/mail/threads/${encodeURIComponent(id)}/project`, { method: 'POST', token: me.token, body: { projectId: projectId || null } }); }
+ catch (error) { return { error: error instanceof ApiError ? error.message : 'The project could not be changed. Try again.' }; }
+ revalidatePath('/inbox', 'layout'); revalidatePath('/commitments');
+}

@@ -11,6 +11,10 @@ export function mailRoutes(mail: MailService) {
 		return c.json(await mail.list(actor(c), uuid.parse(c.req.param('id')), since, limit, before ? z.tuple([z.string().datetime({ offset: true }), uuid]).parse(before.split('|')) : undefined));
 	});
 	routes.get('/v1/organisations/:id/mail/threads/:threadId', async (c) => c.json(await mail.thread(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('threadId')))));
+	routes.post('/v1/organisations/:id/mail/threads/:threadId/project', async (c) => {
+		const { projectId } = z.object({ projectId: uuid.nullable() }).parse(await c.req.json());
+		return c.json(await mail.linkProject(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('threadId')), projectId));
+	});
 	routes.post('/v1/organisations/:id/mail/sync', async (c) => c.json(await mail.sync(actor(c), uuid.parse(c.req.param('id')))));
 	return routes;
 }

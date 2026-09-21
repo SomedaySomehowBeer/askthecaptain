@@ -13,7 +13,9 @@ export type Task = { id: string; projectId: string; title: string; body: string;
 export type Evidence = { id: string; taskId: string; kind: 'mail' | 'file' | 'url'; reference: string; label: string; attachedBy: string | null; attachedAt: Date };
 export type Series = { id: string; projectId: string; title: string; body: string; ownerId: string | null; evidenceRequired: boolean; recurrence: Recurrence;
 	everyMonths: number | null; anchor: string; dueOffsetDays: number; pausedAt: Date | null; nextDue: string | null; createdAt: Date; updatedAt: Date };
-export type Overview = { projects: Project[]; tasks: Task[]; series: Series[]; today: string; timezone: string };
+/** A thread or note that belongs to a project (D22): the ten most recent links per project, with the project's total. */
+export type ProjectSource = { projectId: string; kind: 'mail_thread' | 'note'; id: string; title: string; at: Date | null; linkedBy: 'rule' | 'model' | 'person'; total: number };
+export type Overview = { projects: Project[]; tasks: Task[]; series: Series[]; links: ProjectSource[]; today: string; timezone: string };
 
 const projectColumns = 'id, name, description, stages, owner_id, system_kind, archived_at, created_at, updated_at';
 const seriesColumns = 'id, project_id, title, body, owner_id, evidence_required, recurrence, every_months, anchor::text as anchor, due_offset_days, paused_at, created_at, updated_at';
@@ -56,7 +58,14 @@ export class CommitmentsService {
 				order by system_kind is null, archived_at is not null, name`;
 			const tasks = await this.#tasks(tx, organisationId, tx`t.status <> 'cancelled'`);
 			const series = await this.#series(tx, organisationId, today);
-			return { projects, tasks, series, today, timezone };
+			const links = await tx<ProjectSource[]>`select project_id, kind, id, title, at, linked_by, total::int as total from (
+				select ps.project_id, ps.source_kind as kind, ps.source_id as id, ps.linked_by,
+					case ps.source_kind when 'mail_thread' then coalesce((select m.subject from mail_messages m where m.thread_id = ps.source_id order by m.sent_at desc, m.provider_id desc limit 1), '')
+						else coalesce((select n.title from notes n where n.id = ps.source_id), '') end as title,
+					case ps.source_kind when 'mail_thread' then (select t.last_message_at from mail_threads t where t.id = ps.source_id) else (select n.updated_at from notes n where n.id = ps.source_id) end as at,
+					row_number() over (partition by ps.project_id order by ps.created_at desc) as rank, count(*) over (partition by ps.project_id) as total
+				from project_sources ps where ps.organisation_id = ${organisationId}) s where rank <= 10 order by project_id, at desc nulls last`;
+			return { projects, tasks, series, links, today, timezone };
 		});
 	}
 

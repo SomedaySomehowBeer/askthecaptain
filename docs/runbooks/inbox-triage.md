@@ -125,3 +125,12 @@ or null. Code links only to a name that exists (`linked_by = model`); a proposed
 person linked to a project keeps that link (`linked_by = person`). Suggested tasks from a linked
 thread or note go to that project, otherwise to Obligations as before. Candidates become discovery
 seeds by the §6 thresholds, never projects directly. Inbox triage is version 6: Save parameters once.
+
+**Where links show, and the person's say.** The thread page has a Project section naming each project the thread
+belongs to and who linked it (the company rule, a task reference, triage's model, or a person), with a select to
+choose one project or none; the choice replaces the rules' and the model's links, is audited as `project.linked` or
+`project.unlinked` on the thread, and is what the existing-link rule reads at the next triage. Obligations and
+archived projects cannot be chosen. The Inbox list shows the linked project as a chip on each thread. A note's
+project field writes the person's link the same way when the note is saved: a chosen project replaces other links;
+clearing it withdraws only the person's own link. Commitments lists, under each project, the ten most recently
+linked threads and notes with who linked them, and how many more there are.

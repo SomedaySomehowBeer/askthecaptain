@@ -47,12 +47,22 @@ export class NotesService {
    if (!found) throw badRequest('link_missing', `The linked ${table.replace('calendar_events', 'event').replace(/s$/, '')} was not found.`);
   }
  }
+ /** The note's project is the person's statement of where it belongs (D22): a chosen project replaces any link the rules
+  *  or the model made and is recorded as theirs; no project withdraws only their own link, so triage's links stand. */
+ private static async linkProject(tx: TransactionSql, organisationId: string, actor: Actor, noteId: string, projectId: string | null) {
+  if (projectId) {
+   await tx`delete from project_sources where source_kind = 'note' and source_id = ${noteId} and project_id <> ${projectId}`;
+   await tx`insert into project_sources (organisation_id, project_id, source_kind, source_id, linked_by, linked_by_id, rule)
+    values (${organisationId}, ${projectId}, 'note', ${noteId}, 'person', ${actor.userId}, 'person_link') on conflict do nothing`;
+  } else await tx`delete from project_sources where source_kind = 'note' and source_id = ${noteId} and linked_by = 'person'`;
+ }
  async create(actor: Actor, organisationId: string, value: unknown) {
   const input = noteInput.parse(value);
   return this.saved(organisationId, this.tx(actor, organisationId, async tx => {
    await NotesService.checkLinks(tx, input);
    const [row] = await tx`insert into notes (organisation_id, author_id, title, body, event_id, contact_id, company_id, project_id, task_id)
     values (${organisationId}, ${actor.userId}, ${input.title}, ${input.body}, ${input.eventId}, ${input.contactId}, ${input.companyId}, ${input.projectId}, ${input.taskId}) returning id`;
+   await NotesService.linkProject(tx, organisationId, actor, String(row!.id), input.projectId ?? null);
    await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId, action: 'note.created', subjectType: 'note', subjectId: String(row!.id) });
    await this.emit?.(tx, organisationId, 'note.saved', { noteId: String(row!.id) });
    return (await NotesService.select(tx, tx`n.id = ${row!.id}`, 1))[0]!;
@@ -64,6 +74,7 @@ export class NotesService {
    const [existing] = await tx`select id from notes where id = ${id} and archived_at is null for update`; if (!existing) throw notFound();
    await NotesService.checkLinks(tx, input);
    await tx`update notes set title = ${input.title}, body = ${input.body}, event_id = ${input.eventId}, contact_id = ${input.contactId}, company_id = ${input.companyId}, project_id = ${input.projectId}, task_id = ${input.taskId}, updated_at = now() where id = ${id}`;
+   await NotesService.linkProject(tx, organisationId, actor, id, input.projectId ?? null);
    await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId, action: 'note.updated', subjectType: 'note', subjectId: id });
    await this.emit?.(tx, organisationId, 'note.saved', { noteId: id });
    return (await NotesService.select(tx, tx`n.id = ${id}`, 1))[0]!;
