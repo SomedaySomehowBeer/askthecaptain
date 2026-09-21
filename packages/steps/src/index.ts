@@ -15,7 +15,7 @@ export { digestOf, requirementsOf, resolveParameters, validateDefinition, type P
 export const definitions: WorkflowDefinition[] = [inboxTriage, morningBrief, chaseDue, calendarPrep, stocktake, discoverProjects];
 export const definitionByKey = (key: string): WorkflowDefinition | undefined => definitions.find((d) => d.key === key);
 
-export { classifyNoteInstruction, classifyThreadInstruction, draftReplyInstruction } from './instructions/inbox-triage.ts';
+export { classifyNoteInstruction, classifySentInstruction, classifyThreadInstruction, draftReplyInstruction } from './instructions/inbox-triage.ts';
 export { discoverProjectInstruction } from './instructions/discover-projects.ts';
 
 export { morningBriefInstruction } from './instructions/morning-brief.ts';

@@ -145,3 +145,14 @@ cannot have steps, cannot move to another project on its own, and never has a se
 tasks, not their steps. Every project has a **brief** (what this is, where it stands, who is involved, open
 questions; each line may cite a thread or note) and a **stage**, idea or underway; both are editable on
 Commitments and will be written by discovery. A cited thread or note must exist in the organisation.
+
+## Own writing: sent mail (§14)
+
+Inbox triage is version 7: it also reads the messages the person **sent** since the last run (`mail.newSent`, its
+own cursor on the enablement) and classifies each that carries at least about 40 tokens of the person's own text,
+the index's floor, so acknowledgements cost nothing. The model sees the message's own words with the parent's own
+text (or the quoted block when the parent is not stored) as context, and answers in the note shape: category,
+summary, facts, tasks with steps, and a project. Nothing needs the owner and nothing is drafted. The result is kept
+in `sent_triage`; the thread's existing link stands, otherwise the model's name links the thread or becomes a
+candidate marked as the person's own writing, which counts towards discovery's two-own-items rule. Suggested tasks
+go to the linked project or Obligations. Save parameters once after the upgrade.

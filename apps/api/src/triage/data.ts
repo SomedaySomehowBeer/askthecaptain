@@ -20,6 +20,8 @@ export const noteTriageSchema = z.object({
  tasks: z.array(z.object({ title: z.string().min(1).max(300), reference: z.string().max(300), due: z.iso.date().nullable(), steps: z.array(z.string().min(1).max(300)).max(10).default([]) }).strict()).max(20),
  project: projectField
 }).strict();
+/** A sent message as own writing (§14): its own words with the parent's context, at least about 40 tokens of its own. */
+export type SentMessage = { id: string; threadId: string; subject: string; to: string; sentAt: string; ownText: string; context: string; linkedProject: string | null };
 export type Note = { id: string; title: string; body: string; digest: string; length: number; updatedAt: string; links: { contact: string | null; company: string | null; project: string | null; task: string | null; event: boolean } };
 /** What the rules decided before the model saw a thread (D22): the project it already belongs to, or none. */
 export type ProjectLink = { projectId: string | null; projectName: string | null; rule: string | null; companyId: string | null };

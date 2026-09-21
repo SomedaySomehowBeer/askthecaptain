@@ -223,3 +223,29 @@ it('association (D22): rules link a thread before the model, the model links onl
   assert.equal((await f.tx(sql => sql`select 1 from project_sources ps join mail_threads t on t.id = ps.source_id where t.provider_id = 'cans-2'`)).length, 0);
  } finally { await f.engine.close(); }
 });
+
+it('a sent message with enough of the person’s own words is read as own writing: classified, linked or proposed as own, its tasks suggested; a short one is skipped', async () => {
+ const f = await triageFixture(db); try {
+  const thread = await f.mail('quote-1', 'sam@canco.test', 'Here is our quote for 2,000 cans.');
+  const reply = (body: string, id: string) => f.tx(sql => sql`insert into mail_messages (organisation_id, connection_id, thread_id, provider_id, from_header, to_header, cc_header, subject, date_header, sent_at, snippet, in_reply_to, body, rfc_message_id, label_ids)
+   values (${f.org}, ${f.conn.id}, ${thread}, ${id}, ${f.conn.accountEmail}, 'sam@canco.test', '', 'Re: Delivery update', '', now(), '', '<quote-1@supplier.test>', ${body}, ${'<' + id + '@business.test>'}, '{SENT}')`);
+  await reply('Thanks, noted.', 'ack');
+  await reply('Thanks Sam. We will go ahead with the 2,000 cans for the October run. I will send the final artwork by Friday and book the canning line for the fourteenth once you confirm the blanks have shipped. Please hold the price until then.', 'go');
+  // The incoming thread's latest message is ours, so it is not triaged; only the sent message with enough own text is read.
+  f.provider.responses.push(result({ category: 'plan', summary: 'Going ahead with cans.', facts: { counterparty: 'Sam', amounts: ['2,000 cans'], dates: ['Friday'], references: [] },
+   tasks: [{ title: 'Send final artwork', reference: '', due: null, steps: [] }], project: { name: 'Cans for October', stage: 'underway' } }));
+  const run = await f.start(); await until(() => f.tx(sql => sql`select state, reason from workflow_runs where id = ${run}`), rows => ['succeeded', 'failed'].includes(String(rows[0]?.state)));
+  assert.equal((await f.tx(sql => sql`select state from workflow_runs where id = ${run}`))[0]!.state, 'succeeded');
+  const rows = await f.tx(sql => sql`select category from sent_triage`); assert.deepEqual(rows.map(r => r.category), ['plan'], 'one sent message read, the acknowledgement skipped');
+  const reads = () => f.provider.requests.filter(r => JSON.stringify(r).includes('sent by the business'));
+  assert.equal(reads().length, 1); assert.ok(JSON.stringify(reads()[0]).includes('2,000 cans')); assert.ok(!JSON.stringify(reads()[0]).includes('needsOwner'));
+  const [candidate] = await f.tx(sql => sql`select s.own, s.source_id from project_candidate_sources s where s.normalised = 'cans for october'`);
+  assert.deepEqual([candidate!.own, candidate!.sourceId], [true, thread], 'the proposed name is the person’s own writing');
+  const [task] = await f.tx(sql => sql`select t.status, t.source_id, p.system_kind from tasks t join projects p on p.id = t.project_id where t.title = 'Send final artwork'`);
+  assert.deepEqual([task!.status, task!.sourceId, task!.systemKind], ['suggested', thread, 'obligations']);
+  assert.equal((await f.tx(sql => sql`select 1 from mail_triage`)).length, 0, 'nothing needs the owner');
+  // A second run reads nothing new.
+  const again = await f.start(); await until(() => f.tx(sql => sql`select state from workflow_runs where id = ${again}`), rows => ['succeeded', 'failed'].includes(String(rows[0]?.state)));
+  assert.equal(reads().length, 1);
+ } finally { await f.engine.close(); }
+});

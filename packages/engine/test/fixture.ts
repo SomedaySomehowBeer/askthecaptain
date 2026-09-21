@@ -43,6 +43,10 @@ export async function fixture(db: Harness, fault?: 'database' | 'provider' | 'fa
  registry.registerStep('notes.record', { kind: 'write', transaction: async () => null });
  registry.registerStep('tasks.suggestFromNote', { kind: 'write', transaction: async () => null });
  registry.registerStep('draftReply', inferenceStep(inference, 'Draft from labelled untrusted data.', z.object({ body: z.string() })));
+ registry.registerStep('mail.newSent', { kind: 'read', transaction: async () => [] });
+ registry.registerStep('classifySent', inferenceStep(inference, 'Classify labelled untrusted sent mail.', z.object({ summary: z.string() })));
+ registry.registerStep('sent.record', { kind: 'write', transaction: async () => null });
+ registry.registerStep('tasks.suggestFromSent', { kind: 'write', transaction: async () => null });
  registry.registerStep('discovery.seeds', { kind: 'read', transaction: async () => [] });
  registry.registerStep('discovery.evidence', { kind: 'read', transaction: async () => ({ candidates: [] }) });
  registry.registerStep('discoverProject', inferenceStep(inference, 'Judge labelled untrusted evidence.', z.object({ kind: z.string() })));
