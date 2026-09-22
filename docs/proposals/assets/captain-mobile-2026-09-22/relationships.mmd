@@ -1,0 +1,24 @@
+flowchart LR
+  subgraph perspectives["Choose a perspective"]
+    day["My work"]
+    area["Business area"]
+    person["Person"]
+    project["Project"]
+  end
+  day -->|"My assignments"| task["Same task"]
+  area -->|"Area work"| task
+  person -->|"Their assignments"| task
+  project -->|"Project work"| task
+  task <-->|"Discussion links"| discussion["Same conversation"]
+  project <-->|"Project discussion"| discussion
+  task <-->|"File references"| asset["Same asset and version"]
+  project <-->|"Project files"| asset
+  task <-->|"Scheduled work"| booking["Same equipment booking"]
+  project <-->|"Project schedule"| booking
+  discussion --- chat["Chat"]
+  asset --- library["Asset library"]
+  booking --- timeline["Equipment timeline"]
+
+  style perspectives fill:#f3ecdf,stroke:#d9d0bf
+  classDef shared fill:#CDF4D3,stroke:#66D575
+  class task,discussion,asset,booking shared

@@ -4,6 +4,9 @@
 All names, assignments, dates, quantities and conversations shown here are illustrative.
 These are documentation artifacts, not implemented application routes or adopted navigation.
 
+[View map: navigation and shared records](views.md) explains how the screens and proposed
+destinations fit together, with editable Mermaid sources and SVG/PNG diagrams.
+
 ![Four mobile screens: My work, Marketing, Summer lager launch and equipment timeline](overview.png)
 
 | Screen | Preview | What to review |

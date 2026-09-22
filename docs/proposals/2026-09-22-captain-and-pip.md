@@ -99,6 +99,8 @@ equipment timeline across projects. Compact headers put the date or breadcrumb a
 search and the account avatar, with no logo/wordmark and smaller screen headings. They are
 an editable HTML prototype with PNG previews, using fictional data. They propose a replacement
 for D11's navigation; no application routes or design-system mirror files are changed.
+The accompanying [view map](assets/captain-mobile-2026-09-22/views.md) shows the navigation
+hierarchy and the links between views of the same tasks, conversations, assets and bookings.
 
 ## 3. Correspondence enters Captain through its API
 
