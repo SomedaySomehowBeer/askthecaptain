@@ -203,7 +203,14 @@ If native notification input is insufficient, a provider delivering voicemail th
 or an API is a separate option, subject to actual provider support. Running a telephone service,
 call forwarding or a receptionist backend is not part of the agreed initial scope.
 
-## 8. Notification buttons control the underlying activity
+## 8. Scheduled activities, Siri and actionable notifications
+
+Lunch is only an example. Pip should support personal scheduled activities such as a break,
+walk, exercise session or concentrated work period, with an optional catch-up and an explicit
+notification/Focus preference. These are personal assistant sessions, not configurable business
+process definitions. An activity can start at its planned time or early by voice or a button.
+Starting a session must not silently reschedule a calendar event, change a business deadline or
+move the person's other appointments.
 
 Pip should use native actionable notifications on Mac and iPhone. Apple's notification actions
 can invoke an app handler without bringing its UI to the foreground. macOS may expose actions
@@ -211,6 +218,8 @@ on hover or under Options rather than show every button permanently. Notificatio
 Focus and system presentation settings still govern visibility. This does not require an
 Illustrator integration. [Notification actions][actions], [handling actions][action-handler],
 [Mac presentation][mac-notifications]
+
+### Starting, postponing and ending a session
 
 Worked example, with proposed timing semantics for review:
 
@@ -256,6 +265,60 @@ banners. Define the scheduling device and stale-action/conflict policy in the im
 design, and show pending sync instead of promising immediate cancellation everywhere. These
 controls are deterministic writes; the snooze handler does not need model inference.
 
+### A timed break with an advance warning and extension
+
+An activity has a start, an expected end and a configurable warning lead time (five minutes by
+default). During a break, the requested policy may be Focus off; a different activity may use
+a different policy. The proposed user experience is:
+
+1. Start a thirty-minute break at 12:30. Record the expected end as 13:00 and request that the
+   work session's Focus turn off through the configured system integration.
+2. At 12:55, show “Your break ends in 5 minutes,” with **Extend 15 minutes** and **Resume now**.
+   The extension duration is an example, not a fixed product limit.
+3. Extend moves the end to 13:15, the warning to 13:10 and the intended Focus restoration to
+   13:15. It invalidates the old end/restore action, including an already queued action. It does
+   not replay the catch-up already delivered at the start of the break.
+4. Resume now ends the activity early, cancels the warning/end work and requests restoration
+   of the session's Focus, unless the person has manually changed their Focus policy.
+
+Postponing an activity before it starts and extending an active activity are different actions.
+Both notification buttons and voice requests update the same durable session state; action
+identity and revision checks prevent stale buttons or retries from extending the wrong session.
+If the activity is shorter than the warning lead time, avoid scheduling a warning in the past;
+the short-session warning policy must be decided and tested.
+
+Timed Focus **on** has system duration options. The reviewed documentation does not establish
+a symmetric public app API for “Focus off for thirty minutes, then restore the previous Focus.”
+Treat that as two coordinated operations through a user-configured Shortcut/system schedule,
+not as a proven atomic OS primitive. A local end-warning notification is supported; it does not
+by itself execute the later Focus restoration. Do not depend on a long-running Shortcut Wait
+or an iOS background timer to guarantee restoration. Until the scheduling integration is proven,
+the supported fallback is an actionable **Resume work** reminder. Report incomplete Focus
+changes separately from a successfully saved session extension. [Mac Focus control][mac-focus],
+[background execution][background], [local notifications][local]
+
+### Siri as an entry point
+
+Expose a small set of typed App Intents/App Shortcuts: start a named activity, extend the active
+activity and resume work. They call the same session operations as Pip's UI and notification
+actions. Apple's App Intents support Siri invocation and parameters; App Shortcut phrases can
+include the app's name and supported variations. [App Intents][app-intents],
+[App Shortcut phrases][app-shortcuts]
+
+“Tell Pip, I'm going to lunch now” is the desired conversational phrasing. Test that exact phrase
+on the target OS and language rather than promise arbitrary speech is forwarded verbatim to Pip.
+Also provide short, discoverable phrases such as “Start lunch in Pip,” “Extend my break in Pip”
+and “Resume work in Pip,” with prompts for missing required details. If the activity's duration
+is known from the selected schedule or the person's preference, use it and report the end time;
+otherwise ask how long. For example, after successful execution: “Your break ends at 1. I'll
+remind you five minutes before.” Confirm Focus state only when the system integration succeeds.
+
+A native Pip intent does not acquire permission to change Focus simply because Siri invoked
+it. Compose the configured Shortcut with Pip's intent and the system Focus action, and prove
+the complete handoff, cancellation and manual-override behaviour. Starting early should cancel
+the obsolete scheduled-start reminder and establish the actual session timing without creating
+a duplicate. Later appointments stay fixed; surface a conflict rather than quietly move them.
+
 ## 9. Plan impact and migration questions
 
 This proposal does not silently redefine the existing implementation. Before changing it, a
@@ -291,6 +354,7 @@ production workflows as a consequence of opening or merging a discussion proposa
 | Apple inference | Test required models, schemas, quotas, unavailable states and real device background behaviour. Do not assume PCC eligibility. |
 | Phone bridge | On the target iOS version, test real missed calls and voicemails from known/unknown numbers with Focus active, locked/unlocked, previews hidden/shown and no message. Inspect exact Shortcut inputs and ability to call a Pip action without unlocking. |
 | Actionable catch-up and break | From Illustrator, snooze without opening Pip. Verify reminder, catch-up and Focus-off transition all move, routine items remain queued and urgent policy still applies. At the break, verify Focus off, access to OS Notification Centre, and restoration when work resumes. Test manual Focus overrides, dismissal, duplicate/stale button presses, restart, unavailable inference and delayed cross-device sync. |
+| Timed activities and Siri | Test a non-lunch activity as well as lunch. Start early by voice; confirm duration resolution and no duplicate scheduled start. Verify the five-minute end warning, extension and early resume all update the same session and invalidate obsolete Focus restoration. Test exact/alternative Siri phrases, locked devices, short sessions, manual Focus changes, fixed-calendar conflicts and the fallback when automatic restoration is unavailable. |
 
 The first implementation plan should follow the product walkthrough and these bounded proofs,
 not a wholesale rewrite. Keep undocumented phone access outside the critical path. No package,
@@ -329,3 +393,5 @@ claimed by this proposal. No runtime or web route is changed.
 [mac-notifications]: https://support.apple.com/guide/mac-help/get-notifications-mchle7f8a9b0/27/mac/27
 [mac-focus]: https://support.apple.com/en-au/guide/mac-help/-mchl999b7c1a/mac
 [notification-centre]: https://support.apple.com/en-ng/guide/mac-help/mchl2fb1258f/mac
+[app-intents]: https://developer.apple.com/documentation/AppIntents/AppIntent
+[app-shortcuts]: https://developer.apple.com/documentation/appintents/acceleratingappinteractionswithappintents/
