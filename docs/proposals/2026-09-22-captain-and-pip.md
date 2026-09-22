@@ -82,6 +82,13 @@ Sending correspondence remains a person's action, not a workflow's autonomous ex
 
 ## 4. Inference and execution
 
+The new Siri AI experience and Apple inference are hard requirements for Pip. Target supported
+Apple hardware, OS versions and languages rather than make memorised command phrases the
+primary interaction for older systems. Siri's system-level interpretation and action routing
+use App Intents; inference requested inside Pip uses the Foundation Models framework. These
+are separate integrations: choosing the Apple model does not automatically expose Pip's
+actions to Siri. [Apple Intelligence integration][apple-intelligence]
+
 Pip is **device-run**, not necessarily offline-only. Apple inference may execute locally or,
 where the app and device qualify, through Private Cloud Compute (PCC). Apple's documented
 interface still requires a supported device to issue the request, and PCC has availability and
@@ -299,19 +306,29 @@ changes separately from a successfully saved session extension. [Mac Focus contr
 
 ### Siri as an entry point
 
-Expose a small set of typed App Intents/App Shortcuts: start a named activity, extend the active
-activity and resume work. They call the same session operations as Pip's UI and notification
-actions. Apple's App Intents support Siri invocation and parameters; App Shortcut phrases can
-include the app's name and supported variations. [App Intents][app-intents],
-[App Shortcut phrases][app-shortcuts]
+Natural conversation is the required experience. People should be able to say “Tell Pip, I'm
+going to lunch now,” express the same intention in other words, and follow up with “Give me
+another ten minutes” when the active activity is clear. These are acceptance examples, not
+activation phrases to memorise. Apple's new Siri integration uses App Intents schemas to make
+supported actions available through natural language without defining specific phrases.
+[Apple Intelligence integration][apple-intelligence]
 
-“Tell Pip, I'm going to lunch now” is the desired conversational phrasing. Test that exact phrase
-on the target OS and language rather than promise arbitrary speech is forwarded verbatim to Pip.
-Also provide short, discoverable phrases such as “Start lunch in Pip,” “Extend my break in Pip”
-and “Resume work in Pip,” with prompts for missing required details. If the activity's duration
-is known from the selected schedule or the person's preference, use it and report the end time;
-otherwise ask how long. For example, after successful execution: “Your break ends at 1. I'll
-remind you five minutes before.” Confirm Focus state only when the system integration succeeds.
+Expose typed actions for starting a named activity, extending the active activity and resuming
+work. They call the same session operations as Pip's UI and notification actions. Adopt matching
+system schemas where their semantics fit and expose the relevant activity context through
+supported entity/context APIs. Determine schema coverage during the proof; custom capabilities
+may need App Shortcuts. Typed actions describe what Pip can do internally, not a required spoken
+syntax. Siri interprets the request and resolves parameters before calling an action; do not
+assume Pip receives every utterance verbatim. Test natural paraphrases, conversational follow-ups
+and routing to Pip on the target devices. If an action cannot support the required interaction,
+record that limitation and revisit the integration rather than declare an exact-phrase demo
+sufficient. [App Intents][app-intents], [App Shortcuts][app-shortcuts],
+[Siri responses and context][siri-context]
+
+Ask only when context leaves a meaningful ambiguity. If the activity's duration is known from
+the selected schedule or the person's preference, use it and report the end time; otherwise ask
+how long. For example, after successful execution: “Your break ends at 1. I'll remind you five
+minutes before.” Confirm Focus state only when the system integration succeeds.
 
 A native Pip intent does not acquire permission to change Focus simply because Siri invoked
 it. Compose the configured Shortcut with Pip's intent and the system Focus action, and prove
@@ -354,7 +371,7 @@ production workflows as a consequence of opening or merging a discussion proposa
 | Apple inference | Test required models, schemas, quotas, unavailable states and real device background behaviour. Do not assume PCC eligibility. |
 | Phone bridge | On the target iOS version, test real missed calls and voicemails from known/unknown numbers with Focus active, locked/unlocked, previews hidden/shown and no message. Inspect exact Shortcut inputs and ability to call a Pip action without unlocking. |
 | Actionable catch-up and break | From Illustrator, snooze without opening Pip. Verify reminder, catch-up and Focus-off transition all move, routine items remain queued and urgent policy still applies. At the break, verify Focus off, access to OS Notification Centre, and restoration when work resumes. Test manual Focus overrides, dismissal, duplicate/stale button presses, restart, unavailable inference and delayed cross-device sync. |
-| Timed activities and Siri | Test a non-lunch activity as well as lunch. Start early by voice; confirm duration resolution and no duplicate scheduled start. Verify the five-minute end warning, extension and early resume all update the same session and invalidate obsolete Focus restoration. Test exact/alternative Siri phrases, locked devices, short sessions, manual Focus changes, fixed-calendar conflicts and the fallback when automatic restoration is unavailable. |
+| Timed activities and Siri | Require the new Siri AI experience on supported devices. Test a non-lunch activity as well as lunch. Start early using natural paraphrases; resolve contextual follow-ups such as “Give me another ten minutes,” asking only when ambiguous. Confirm schema/custom-action coverage, duration resolution and no duplicate scheduled start. Verify the five-minute end warning, extension and early resume all update the same session and invalidate obsolete Focus restoration. Test locked devices, short sessions, manual Focus changes, fixed-calendar conflicts and the fallback when automatic restoration is unavailable. Memorised activation phrases alone do not pass. |
 
 The first implementation plan should follow the product walkthrough and these bounded proofs,
 not a wholesale rewrite. Keep undocumented phone access outside the critical path. No package,
@@ -395,3 +412,5 @@ claimed by this proposal. No runtime or web route is changed.
 [notification-centre]: https://support.apple.com/en-ng/guide/mac-help/mchl2fb1258f/mac
 [app-intents]: https://developer.apple.com/documentation/AppIntents/AppIntent
 [app-shortcuts]: https://developer.apple.com/documentation/appintents/acceleratingappinteractionswithappintents/
+[apple-intelligence]: https://developer.apple.com/wwdc26/guides/apple-intelligence/
+[siri-context]: https://developer.apple.com/videos/play/wwdc2026/343/
