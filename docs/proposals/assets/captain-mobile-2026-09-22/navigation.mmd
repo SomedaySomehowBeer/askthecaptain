@@ -3,28 +3,30 @@ flowchart TD
   mobile --> home["Home"]
   mobile --> work["Work"]
   mobile --> chat["Chat"]
-  mobile --> browse["Browse"]
+  mobile --> browse["Browse - mockup"]
 
   home --> day["My work - mockup"]
 
-  work --> tasks["Task list"]
-  tasks --> taskDetail["Task detail"]
+  work --> tasks["Task list - mockup"]
+  tasks --> taskDetail["Task detail - mockup"]
   work --> projects["Project list"]
   projects --> project["Project detail - mockup"]
   work --> modes["List / Board / Calendar / Timeline"]
 
-  chat --> conversations["Team and work discussions"]
+  chat --> conversations["Chat list - mockup"]
+  conversations --> discussion["Discussion - mockup"]
 
   browse --> areas["Business areas"]
-  areas --> production["Production"]
+  areas --> production["Production - mockup"]
   areas --> marketing["Marketing - mockup"]
   areas --> sales["Sales"]
   areas --> admin["Admin and reporting"]
 
   browse --> shared["Shared resources"]
   shared --> equipment["Equipment timeline - mockup"]
-  shared --> assets["Asset library"]
-  shared --> inventory["Inventory"]
+  shared --> assets["Asset library - mockup"]
+  assets --> assetDetail["Asset detail - mockup"]
+  shared --> inventory["Inventory - mockup"]
   shared --> people["People"]
   shared --> reports["Reports"]
 
@@ -33,4 +35,4 @@ flowchart TD
   project -.->|"Opens schedule"| equipment
 
   classDef mocked fill:#CDF4D3,stroke:#66D575
-  class day,project,marketing,equipment mocked
+  class day,project,marketing,equipment,tasks,taskDetail,conversations,discussion,browse,production,assets,assetDetail,inventory mocked

@@ -1,7 +1,7 @@
 # How Captain's mobile views fit together
 
-**Proposed navigation, 22 September 2026.** Advances **own commitments** and **brief and answer**.
-This maps the Captain/Pip discussion and the four mobile mockups. It is not the live app's
+**Proposed navigation, updated 23 September 2026.** Advances **own commitments** and **brief and answer**.
+This maps the Captain/Pip discussion and the thirteen mobile mockups. It is not the live app's
 navigation or an adopted replacement for D11.
 
 ## Where views live
@@ -10,7 +10,7 @@ navigation or an adopted replacement for D11.
 
 [Zoomable SVG](navigation.svg) · [Editable Mermaid source](navigation.mmd) · [Screen mockups](README.md)
 
-Green nodes, also labelled **mockup**, are the four screens already drawn. The other nodes
+Green nodes, also labelled **mockup**, are the screens already drawn. The other nodes
 describe proposed destinations or view choices, not implemented or fully designed screens.
 Solid arrows show the main navigation hierarchy; dotted arrows show additional routes into
 the same destination. They do not create additional copies of the data. The map omits ordinary
@@ -21,11 +21,11 @@ back navigation to keep the hierarchy readable.
 | Home → My work | The person's assignments across areas/projects, relevant equipment bookings and conversations needing a reply. Open those items in their task, project, schedule or conversation context. |
 | Work | Task and project lists. List, Board, Calendar and Timeline are presentations, with area/project/person filters where relevant. A work timeline and an equipment timeline have different lanes, while linking the same scheduled work. |
 | Project detail | Overview, Tasks, Schedule, Files and Chat. These are views within one project; the project can span every area. The Schedule summary opens the shared equipment timeline to inspect availability/conflicts across projects. |
-| Task detail | Owner, area, optional project, dates/status, supporting files, linked discussion and relevant equipment reservations. This screen is still to design. Standalone and recurring tasks do not require a project. |
-| Chat | Team conversations and discussions about work. Project/task discussion links open the same conversation from either side. The activity log remains separate. |
+| Task detail | Owner, area, optional project, dates/status, supporting files, linked discussion and relevant equipment reservations. Packaging and artwork task variants are mocked up. Standalone and recurring tasks do not require a project. |
+| Chat | Conversation list and discussion detail mockups cover team conversations and discussions about work. Project/task discussion links open the same conversation from either side. The activity log remains separate. |
 | Browse → Areas | Production, Marketing, Sales and Admin/reporting. Each gathers relevant work across projects. People can work in several areas; area selection is not a workspace or permission change. |
 | Marketing | Overview, Work, Assets and Calendar. Assets opens the shared DAM; a campaign/project link opens the whole project, including the work outside Marketing. |
-| Production | Relevant work and equipment scheduling, with access to stock information. Only the equipment timeline has a full-screen mockup so far; the Production area landing view remains to design. |
+| Production | Relevant work and equipment scheduling, with access to stock information. The area overview and equipment timeline are both mocked up. |
 | Sales; Admin/reporting | Sales work/customer follow-ups; recurring obligations and reporting/Xero-linked evidence. Their detailed area views remain to design. Xero remains accounting authority. |
 | Browse → Shared resources | Equipment schedule, Asset library, Inventory, People and Reports. These remain available across areas; area-specific shortcuts open these same resources. |
 | People | Find a person and their assigned work across areas/projects. Their work uses the same task records seen under Work and in projects. Detailed people/availability views remain to design. |
