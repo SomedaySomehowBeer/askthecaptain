@@ -54,6 +54,50 @@ a chaser. This does not introduce accounting, a complete email client or a confi
 model into Captain. Existing stock/Shopify capabilities require an explicit scope decision
 before any removal or reassignment.
 
+### Captain's workspace and required equipment scheduling
+
+Captain has one shared set of work, viewed by business area, project and person. The initial
+areas are Production, Marketing, Sales and Admin/reporting. A project can span all four;
+people can own tasks across all four. A task has an accountable owner, an area and an optional
+project. Recurring and standalone work need no artificial project. Areas organise work and
+navigation; they do not automatically create permission boundaries or duplicate records.
+
+**Equipment scheduling is a hard requirement.** Captain must represent named equipment,
+availability and dated reservations linked to tasks/projects and responsible people. The
+same reservations appear in the Production schedule, project schedule and relevant personal
+work views. Include equipment unavailable for maintenance/cleaning, time needed between uses,
+and the organisation's timezone. For exclusive equipment, overlapping confirmed reservations
+must be prevented, including concurrent booking attempts; a conflicting request stays visibly
+unconfirmed until resolved. Changes/cancellations update the same reservation everywhere and
+make affected work visible. Do not automatically move other people's bookings to make space.
+The first implementation needs a resource timeline and availability/rescheduling controls.
+This introduces a fixed equipment/reservation model, not custom production processes, recipes,
+stock conversions or an inventory ledger; the data model and services need a reviewed amendment.
+
+The mobile navigation proposal is **Home, Work, Chat, Browse**, with areas and shared resources
+under Browse. Work offers different presentations of the same tasks/projects; projects bring
+together work, schedules, files and discussion. Marketing provides a home for the shared asset
+library (the DAM direction previously explored through Embrace), while Production and Sales
+can reference the same assets and versions. The files-in-place proposal remains the starting
+point for provider-held originals, previews, version review and preservation.
+
+Team chat is now proposed scope: team conversations and project/task discussions with
+bidirectional links. A message can link a task or project; that record links back to the same
+conversation. Creating a task from a message retains that source link. Do not duplicate threads
+between Chat and project pages or treat activity logs as conversation. A link must not expose
+private conversation content to someone lacking access. The current plan's exclusion of chat
+must be explicitly amended before implementation.
+
+Inventory remains a simple counted list for ingredients, consumables and finished product,
+with an explicit authority where a commerce provider supplies a quantity. Equipment reservations
+do not imply automatic stock consumption. D15's ledger exclusion remains until separately
+reviewed. Products, launch projects and individual production activities remain distinct.
+
+[Three mobile mockups and review notes](assets/captain-mobile-2026-09-22/README.md) explore a
+person's working day, Marketing across projects, and a launch across all four areas. They are
+an editable HTML prototype with PNG previews, using fictional data. They propose a replacement
+for D11's navigation; no application routes or design-system mirror files are changed.
+
 ## 3. Correspondence enters Captain through its API
 
 Start with an authenticated operation to attach correspondence to a project or task. Pip uses
@@ -345,10 +389,10 @@ reviewed amendment must reconcile the following:
 |---|---|
 | D1 and the six jobs | Redefine Captain's shared project-system scope and Pip's personal assistant scope. |
 | D2–D6 | Preserve data-only inference, typed workflows, person-scoped writes, person-sent correspondence and tenant isolation; specify Pip's local equivalents and provider drafts. |
-| D7 / D22 / D23 | Keep Captain's business task/project/evidence authority; define how Pip suggestions and shared correspondence enter it without duplicating state. |
+| D7 / D22 / D23 | Keep Captain's business task/project/evidence authority; define areas, required equipment reservations, chat/backlinks, and how Pip suggestions and shared correspondence enter without duplicating state. Amend the chat exclusion explicitly. |
 | D8 and connector ownership | Specify business connections in Captain and personal connections in Pip, scopes and revocation. |
 | D9 / D18 / D19 | Retain the current server runtime until explicitly amended; document Pip's Apple model adapter and device execution limits separately. |
-| D11 / D14 and mobile architecture | Review navigation, native Apple clients and design authority before building screens or changing tabs. |
+| D11 / D14 and mobile architecture | Review the Home/Work/Chat/Browse mobile mockups, native Apple clients and design authority before building application screens or changing tabs. |
 | D13 / D21 and mail tables | Separate transient Pip processing and iCloud-derived index from today's Captain mailbox/vector store. Plan retention, exports and removal before retiring any current data. |
 | D12 / D16 / D17 | Review deployment and personal/business secret boundaries; no hosting or production changes in this proposal. |
 | D15 and earlier files proposal | Explicitly retain, relocate or retire existing capabilities in later slices; no assumed adoption or deletion. |
@@ -366,6 +410,8 @@ production workflows as a consequence of opening or merging a discussion proposa
 | Proof | Acceptance evidence |
 |---|---|
 | Product split | Walk through email-to-project, a personal reminder, a recurring business obligation and a daily brief; identify one authority and fewer user decisions in each. |
+| Captain mobile workspace | Walk My work → Marketing → launch project using the three mockups. Verify area/project/person scope, access to shared assets and bidirectional conversation links without duplicate tasks or messages. |
+| Equipment scheduling | Required: show a resource timeline, available and unavailable periods, and reservations linked to work/people. Prove overlap prevention under concurrent writes, maintenance/turnaround blocking, timezone handling, changes and cancellation. Conflicting requests must never appear confirmed. |
 | Reminders | Create/edit/complete in both apps; verify selected-list scope, denied permission, recurrence and cross-device identity after resync. |
 | Shared search | Find real sent/received attachments from vague descriptions on two devices; measure retrieval quality, backfill, index size and sync conflicts without retained bodies/files/text. Test deletion, disconnect and an offline device returning. |
 | Apple inference | Test required models, schemas, quotas, unavailable states and real device background behaviour. Do not assume PCC eligibility. |
@@ -381,8 +427,10 @@ table, dependency, background service or screen is added by this documentation P
 
 Apple and Google documentation checked on 22 September 2026. This is a documentation review,
 not an on-device proof; framework availability, entitlements, region and the target OS version
-must be checked during the spikes. No build, Postgres integration suite or Playwright run is
-claimed by this proposal. No runtime or web route is changed.
+must be checked during the spikes. The mobile HTML mockups were rendered and checked with
+Playwright at three phone widths; their README records the checks. No application build,
+Postgres integration suite or production-route Playwright run is claimed. No runtime or
+application route is changed.
 
 [pcc]: https://developer.apple.com/documentation/FoundationModels/adding-server-side-intelligence-with-private-cloud-compute/
 [background]: https://developer.apple.com/documentation/BackgroundTasks/choosing-background-strategies-for-your-app
