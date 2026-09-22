@@ -93,8 +93,10 @@ with an explicit authority where a commerce provider supplies a quantity. Equipm
 do not imply automatic stock consumption. D15's ledger exclusion remains until separately
 reviewed. Products, launch projects and individual production activities remain distinct.
 
-[Three mobile mockups and review notes](assets/captain-mobile-2026-09-22/README.md) explore a
-person's working day, Marketing across projects, and a launch across all four areas. They are
+[Four mobile mockups and review notes](assets/captain-mobile-2026-09-22/README.md) explore a
+person's working day, Marketing across projects, a launch across all four areas, and an
+equipment timeline across projects. Compact headers put the date or breadcrumb alongside
+search and the account avatar, with no logo/wordmark and smaller screen headings. They are
 an editable HTML prototype with PNG previews, using fictional data. They propose a replacement
 for D11's navigation; no application routes or design-system mirror files are changed.
 
@@ -410,7 +412,7 @@ production workflows as a consequence of opening or merging a discussion proposa
 | Proof | Acceptance evidence |
 |---|---|
 | Product split | Walk through email-to-project, a personal reminder, a recurring business obligation and a daily brief; identify one authority and fewer user decisions in each. |
-| Captain mobile workspace | Walk My work → Marketing → launch project using the three mockups. Verify area/project/person scope, access to shared assets and bidirectional conversation links without duplicate tasks or messages. |
+| Captain mobile workspace | Walk My work → Marketing → launch project → equipment timeline using the four mockups. Verify area/project/person scope, access to shared assets and bidirectional conversation links without duplicate tasks or messages. |
 | Equipment scheduling | Required: show a resource timeline, available and unavailable periods, and reservations linked to work/people. Prove overlap prevention under concurrent writes, maintenance/turnaround blocking, timezone handling, changes and cancellation. Conflicting requests must never appear confirmed. |
 | Reminders | Create/edit/complete in both apps; verify selected-list scope, denied permission, recurrence and cross-device identity after resync. |
 | Shared search | Find real sent/received attachments from vague descriptions on two devices; measure retrieval quality, backfill, index size and sync conflicts without retained bodies/files/text. Test deletion, disconnect and an offline device returning. |

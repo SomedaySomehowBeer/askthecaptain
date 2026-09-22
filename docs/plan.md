@@ -684,7 +684,7 @@ client in Phase 2 can proceed in parallel.
   task ownership, correspondence through the API, inference boundaries, private iCloud search,
   Focus and actionable notifications, and the Apple integrations that still need device tests.
   It also proposes Captain's area/project/person views, required equipment scheduling, shared
-  assets and linked team chat, with three mobile mockups for navigation review.
+  assets and linked team chat, with four mobile mockups including an equipment timeline.
 - Model tiers: which models sit behind `small` and `large` at launch, and whether drafting starts
   on the large tier or is measured first.
 - Whether the first customer's printable production records belong in Captain or in its asset
