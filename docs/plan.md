@@ -678,6 +678,11 @@ client in Phase 2 can proceed in parallel.
 
 ## 14. Open questions
 
+- Product split: [Ask The Captain and Pip](proposals/2026-09-22-captain-and-pip.md)
+  proposes Captain as the shared business project system and Pip as a device-run personal
+  assistant. This is a proposal for review, not an adopted replacement for D1–D23. It records
+  task ownership, correspondence through the API, inference boundaries, private iCloud search,
+  Focus and actionable notifications, and the Apple integrations that still need device tests.
 - Model tiers: which models sit behind `small` and `large` at launch, and whether drafting starts
   on the large tier or is measured first.
 - Whether the first customer's printable production records belong in Captain or in its asset
