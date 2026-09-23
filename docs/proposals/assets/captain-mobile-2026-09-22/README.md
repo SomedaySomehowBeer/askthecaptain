@@ -115,6 +115,8 @@ it does not persist preferences.
 The Slack App Store screenshot supplied for this review informs the single left-aligned message
 stream, compact avatars, names/timestamps, reaction chips, reply links and composer. Captain's
 palette and three-tab navigation remain. Both own and other messages use the same layout.
+Alternating message rows have a subtle white tint (35%), starting with the first row in each
+full or inline chat list.
 
 The old file **comments** section is replaced by **Chat**. Tasks, projects and files show the
 conversation summary, **Pinned for everyone**, then the latest six messages (or all messages

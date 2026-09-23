@@ -196,7 +196,9 @@ never grants access or broadens the conversation's audience. Unpinning leaves th
 **Full chat follows the supplied Slack screenshot's layout:** one left-aligned message stream,
 compact avatars, sender names and timestamps, date separators, reaction chips, thread-reply links,
 a record backlink and a compact composer with file/record links, formatting, mentions and emoji.
-Own messages use the same alignment as everyone else's. Keep Captain's palette, type and three
+Own messages use the same alignment as everyone else's.
+Alternating message rows have a subtle white tint (35%), starting with the first row in each
+full or inline chat list. Keep Captain's palette, type and three
 tabs. The mockup's reaction, reply, pin and send controls describe intended actions without
 saving anything; typing in a composer is only local preview state. Detailed reply-thread design
 and implementation remain follow-up work.
