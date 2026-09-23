@@ -109,7 +109,8 @@ is narrowed to one person, project or tag. A filtered task list must never imply
 equipment is free.
 
 The bottom bar follows the supplied Taildrop reference: a floating rounded capsule inset from
-the screen edges, with a soft selected pill encompassing icon and label. Rounded briefcase,
+the screen edges, sized to about 80% of the initial capsule by reducing spacing more than
+icons or text. A darker grey-green selected pill uses green icon and label. Rounded briefcase,
 conversation and folder icons identify Work, Chat and Resources, using Captain's forest/paper/
 mint palette. Labels remain visible, tap targets are at least 44 CSS pixels, and content has
 bottom space so the bar does not cover the last item. The compact header keeps the breadcrumb,

@@ -1,16 +1,18 @@
 /* Floating capsule inspired by the supplied tab-bar reference, in Captain's palette. */
 .bottom-nav {
-  left: 14px;
-  right: 14px;
+  left: 50%;
+  right: auto;
+  width: calc(80% - 22.4px);
+  transform: translateX(-50%);
   bottom: 19px;
-  height: 68px;
-  padding: 5px;
+  height: 54px;
+  padding: 3px;
   border: 1px solid #ffffffcc;
-  border-radius: 38px;
+  border-radius: 30px;
   background: #fffdf7ed;
   backdrop-filter: blur(18px);
   box-shadow: 0 3px 8px #1426190a, 0 8px 26px #1426191a, inset 0 1px 0 #fff;
-  gap: 3px;
+  gap: 1px;
 }
 .bottom-nav a {
   width: auto;
@@ -18,16 +20,16 @@
   min-width: 44px;
   min-height: 44px;
   border-radius: 30px;
-  gap: 3px;
+  gap: 1px;
   font-size: 11px;
   font-weight: 650;
   color: #647367;
 }
-.bottom-nav svg { width: 24px; height: 24px; stroke-width: 1.65; }
-.bottom-nav .active { background: #dcebd8; color: #1f3a2c; }
+.bottom-nav svg { width: 22px; height: 22px; stroke-width: 1.65; }
+.bottom-nav .active { background: #d9ded6; color: #197334; }
 .bottom-nav .active::before { content: none; }
 .bottom-nav .badge { top: 3px; left: calc(50% + 7px); }
-.content { height: 800px; padding-bottom: 112px; scroll-padding-bottom: 112px; }
+.content { height: 800px; padding-bottom: 98px; scroll-padding-bottom: 98px; }
 .single .content { height: calc(100dvh - 74px); min-height: 606px; }
 .app-header .crumb { min-height: 44px; margin-bottom: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }

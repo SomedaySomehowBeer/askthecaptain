@@ -44,6 +44,8 @@ consume stock. Xero remains accounting authority, with links from business recor
 Search and account/settings belong in the header, outside the three-tab bar. Their detailed
 screens are still to design. The bar uses a floating capsule, rounded icons and a soft selected
 pill based on the supplied Taildrop reference, with Captain's colours and visible labels.
+The compact bar is about 80% of its initial width and height; the selected pill is darker than
+the bar, with green icon and text.
 
 ![Tag, person and project filters select the same task and linked records](relationships.png)
 

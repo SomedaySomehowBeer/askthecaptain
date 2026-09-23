@@ -69,7 +69,10 @@ and the other presentation layouts remain to implement.
 ## Visual direction
 
 The supplied Taildrop tab-bar example informs the floating capsule, rounded corners, subtle
-shadow and soft selected pill around both icon and label. The three rounded icons are a
+shadow and selected pill around both icon and label. The compact bar is about 80% of the
+previous width and height (about 290 × 54px on a 390px phone), with most of the reduction
+coming from spacing. Icons are 22px and labels remain 11px. The selected pill uses a darker
+grey-green background with green icon and text. The three rounded icons are a
 briefcase, conversation bubble and folder, freshly authored for the prototype. Labels stay
 visible and each tab target exceeds 44 CSS pixels. Scroll content reserves bottom space so
 its final controls can clear the floating bar.
