@@ -32,6 +32,6 @@ function sectionViews({icon,link,head}) {
     // No visible page title: section identity is carried by the selected bottom tab.
     breadcrumb:'<span></span>',title:section[0].toUpperCase()+section.slice(1)+' · View list',
     caption:'One page to the left of the selected view; choose a group or saved filter.',
-    content:`<h1 class="sr-only">${section} views</h1>${content[section]}`
+    content:`<h1 class="sr-only">${section} views</h1>${content[section].replace('</h2>',`</h2><button class="plus" data-sheet="${section==='work'?'new-work':section==='chat'?'new-chat':'new-resource'}" aria-label="${section==='work'?'Add work':section==='chat'?'New conversation':'Add resource'}">${icon('plus')}</button>`)}`
   }));
 }

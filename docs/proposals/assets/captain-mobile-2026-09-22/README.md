@@ -61,7 +61,7 @@ and the other presentation layouts remain to implement.
 | Production | [Saved tag view](production.png) | Anyone · Tag: Production · Open, including a task also tagged Sales. Related equipment and stock links. |
 | Inventory | [Counted stock](inventory.png) | Material observations, missing count, reorder threshold and separately sourced Shopify stock. |
 | Files & assets | [Shared collection](files.png) | Working and ready-to-use versions in one shared library. |
-| Asset | [Can artwork v3](asset.png) · [Trade pack v2](asset-trade.png) | Version-specific review and backlinks; provider-held original. |
+| Asset | [Can artwork v3](asset.png) · [Trade pack v2](asset-trade.png) | Version-specific chat with shared pins and recent messages; provider-held original. |
 | View lists | [Work](work-views.png) · [Chat](chat-views.png) · [Resources](resource-views.png) | Grouped navigation with no visible page title. |
 
 [Files and review gallery](files-overview.png) · [Lower content of the first four screens](overview-scrolled.png).
@@ -89,7 +89,11 @@ The green plus opens the current view's primary editor: **New task** in Work, **
 in Chat, **Link file** in Files, **Record count** in Inventory and **Reserve equipment** on the
 timeline. My work suggests you as owner; a saved tag view suggests its tag. Defaults remain
 editable; these previews describe the editor and do not write data. The full mapping and save
-behaviour are specified in the main proposal.
+behaviour are specified in the main proposal. The plus also appears on project detail (new task)
+and all three grouped view lists (contextual choices for Work/Resources, new conversation for
+Chat). Individual tasks, files and conversations have no green creation plus; their specific
+actions and composer remain. Settings, read-only reports and other pages without a meaningful
+creation action are further proposed exceptions.
 
 Conversation links show a shared summary of decisions, unresolved questions and next actions,
 with a source cut-off time. This is illustrated in My work, project, task, Chat and its grouped
@@ -100,6 +104,35 @@ states before implementation.
 **Starred** replaces Following. Participation means following by default; a star is your own
 bookmark, independent of membership or notifications. The Star conversation action is a preview;
 it does not persist preferences.
+
+## Shared item chat and the conversation layout
+
+![Full chat and the same messages embedded on task and file](shared-chat-overview.png)
+
+[Full artwork conversation](conversation-artwork.png) · [File chat](asset-chat.png) ·
+[Task chat](task-chat.png) · [Project chat](project-chat.png) · [Trade-pack conversation](conversation-trade.png)
+
+The Slack App Store screenshot supplied for this review informs the single left-aligned message
+stream, compact avatars, names/timestamps, reaction chips, reply links and composer. Captain's
+palette and three-tab navigation remain. Both own and other messages use the same layout.
+
+The old file **comments** section is replaced by **Chat**. Tasks, projects and files show the
+conversation summary, **Pinned for everyone**, then the latest six messages (or all messages
+when fewer than six exist). Open chat leads to the same history. Pins are additional to the
+six-message window: the example pin is older than the six recent messages and remains included.
+They link to original messages; full and inline chat render a single shared fixture by ID.
+
+Pins are shared with everyone who can access that chat, while starred conversations remain
+personal bookmarks. Pin/unpin actions require chat-write permission and auditing in the intended
+application. Deletion, edits and access changes must update pins rather than leave leaked or
+stale copies. The persistent pin section is part of the scrolling page, not an overlay.
+
+Artwork v3 chat is the same conversation on the artwork task, file and full-chat screens. Trade
+pack v2 has its own chat and ready state. Version history remains a separate audit, not a chat
+message. A message or reaction does not change review/task/booking state. The send, reaction,
+pin and thread controls open honest preview notes; no messages or preferences are saved. Thread
+detail and complete empty/loading/error/permission states remain to design. Composer text is
+local to the current page and is not retained.
 
 ## Equipment planning and time zoom
 
@@ -133,12 +166,13 @@ never look free in the application.
 [additional-views.js](additional-views.js) and [additional-views.css](additional-views.css) contain
 the record screens. [conversation-previews.js](conversation-previews.js) supplies shared summary fixtures.
 [equipment-timeline.js](equipment-timeline.js) and [equipment-timeline.css](equipment-timeline.css)
-contain the scrollable timeline and time zoom. [navigation.js](navigation.js) defines the grouped lists and saved tag
+contain the scrollable timeline and time zoom. [chat-interface.js](chat-interface.js) and
+[chat-interface.css](chat-interface.css) provide shared message fixtures, inline/full chat and styling. [navigation.js](navigation.js) defines the grouped lists and saved tag
 views; [navigation.css](navigation.css) styles the floating bar and lists.
 
 Serve the repository root, for example with `python3 -m http.server 8769 --bind 127.0.0.1`, then
 open `/docs/proposals/assets/captain-mobile-2026-09-22/index.html`. The default URL opens My work.
-Use `?group=navigation`, `?group=original`, `?group=work`, `?group=resources` or `?group=files`
+Use `?group=navigation`, `?group=original`, `?group=work`, `?group=resources`, `?group=files` or `?group=discussion&item=artwork&thread=artwork`
 for review galleries. Single-screen URLs use `?screen=` with:
 
 ```text
@@ -180,7 +214,8 @@ pixels, including overflow, three-tab labels/targets, scroll clearance, hidden l
 and compact record headings. Timeline checks include horizontal navigation, time-scale anchoring,
 conflict drill-down, continuous bar positions/durations at all three scales and phone widths,
 and Chromium touch pinch in both directions; physical-device testing remains
-outstanding. Contextual plus sheets and source-linked summary cards are also checked. Connected list/view/filter/task/chat/asset/equipment flows and
+outstanding. Contextual plus coverage/exclusions, shared pinned-message links, exact latest-six IDs,
+file-version backlinks and flat message layouts are checked alongside the summary cards. Connected list/view/filter/task/chat/asset/equipment flows and
 preview sheets are exercised, and PNG exports inspected. Screen PNGs are 390 × 874; variants
 and galleries are captured separately. Both Mermaid maps are parsed and exported as SVG/PNG.
 

@@ -1,0 +1,53 @@
+/* Slack-inspired message structure, authored in Captain's existing visual system. */
+.chat-title{display:flex;align-items:center;gap:8px;margin-top:6px}
+.chat-title h1{flex:1;font-size:24px;line-height:29px}
+.channel-symbol{font-size:27px;font-weight:500;color:#5f7763}
+.conversation-star{width:38px;height:44px;font-size:25px;flex-shrink:0}
+.chat-record-link{display:flex;align-items:center;gap:7px;min-height:38px;font-size:11px;font-weight:600;margin:10px 0;color:#37684a}
+.chat-record-link svg{width:16px;height:16px}
+.chat-record-link svg:last-child{margin-left:auto;width:13px}
+.shared-pins{background:#eeeadc;border:1px solid #dcd6c4;border-radius:12px;padding:10px 12px;margin:13px 0}
+.pin-heading{font-size:11px;font-weight:700;display:flex;gap:7px;color:#796038}
+.pin-heading span{font-weight:500;margin-left:auto}
+.shared-pins a{display:block;margin-top:7px;font-size:11px;line-height:16px}
+.shared-pins a strong{font-size:10px}
+.shared-pins p{margin:3px 0}
+.shared-pins small{font-size:9px;color:#5f6b62}
+.chat-date-divider{display:flex;align-items:center;gap:10px;color:#5f6b62;font-size:10px;font-weight:650;margin:20px 0 8px}
+.chat-date-divider:before,.chat-date-divider:after{content:'';height:1px;background:#d9d0bf;flex:1}
+.chat-message{display:flex;gap:9px;padding:10px 0;scroll-margin-top:12px}
+.chat-avatar{width:31px;height:31px;display:grid;place-items:center;background:#dbe6d4;color:#31523a;border-radius:8px;font-size:10px;font-weight:750;flex-shrink:0}
+.chat-message-body{flex:1;min-width:0}
+.chat-message-meta{display:flex;gap:7px;align-items:center;min-height:19px;flex-wrap:wrap}
+.chat-message-meta strong{font-size:12px;font-weight:750}
+.chat-message-meta time{font-size:9px;color:#6a766d}
+.chat-message-meta button{margin-left:auto;padding:0 3px;min-width:24px;font-size:16px;line-height:19px}
+.chat-message p{font-size:13px;line-height:19px;margin-top:3px}
+.message-feedback{display:flex;align-items:center;gap:10px;margin-top:7px}
+.reaction{border:1px solid #bbcfb2;border-radius:12px;background:#e5eddd;min-height:26px;padding:2px 8px;font-size:11px}
+.thread-replies{font-size:11px;font-weight:650;color:#377654}
+.chat-compose{background:#fffdf7;border:1px solid #cfc7b6;border-radius:14px;padding:10px;margin:16px 0 0}
+.chat-compose textarea{font:inherit;font-size:12px;line-height:18px;resize:vertical;width:100%;min-height:40px;max-height:150px;border:0;background:none;color:inherit;outline-offset:2px}
+.chat-compose textarea::placeholder{color:#748076}
+.compose-tools{display:flex;gap:2px;align-items:center;margin-top:4px}
+.compose-tools button{height:30px;min-width:30px;padding:4px;font-size:14px;display:grid;place-items:center}
+.compose-tools svg{width:17px;height:17px}
+.compose-tools .send-message{margin-left:auto;border-radius:9px;background:#276744;color:white;width:34px}
+.item-chat{margin-top:22px;border-top:1px solid #d9d0bf;padding-top:2px}
+.chat-context{font-size:11px;color:#5f6b62;margin-bottom:8px}
+.recent-heading{font-size:11px;font-weight:650;color:#5f6b62;margin:17px 0 3px}
+.item-chat .discussion-preview{margin-top:10px}
+.item-chat .chat-message{padding:9px 0}
+.sheet-choice{display:block;width:100%;min-height:48px;text-align:left;border-bottom:1px solid #d9d0bf;font-weight:600}
+.project-heading .title-row{gap:12px;align-items:flex-start}
+.project-heading .plus{flex-shrink:0}
+.project-heading h1{flex:1}
+.version-event{font-size:11px;line-height:18px;padding:10px 0;color:#5f6b62}
+.channel-prefix{color:#5c7563;font-weight:750;margin-right:5px}
+.screen-conversation .chat-compose{position:absolute;left:20px;right:20px;bottom:84px;margin:0;z-index:4;box-shadow:0 -5px 18px #f3ecdfb3}
+.screen-conversation .content{padding-bottom:220px;scroll-padding-bottom:220px}
+.screen-conversation::after{content:'';position:absolute;left:0;right:0;bottom:0;height:190px;background:linear-gradient(to bottom,#f3ecdf00,#f3ecdf 12px);z-index:2;pointer-events:none}
+.pin-heading svg{width:13px;height:13px;flex-shrink:0}
+.item-chat .chat-message{padding:7px 0}
+.item-chat .chat-message p{font-size:12px;line-height:18px}
+.item-chat .discussion-preview.compact p{font-size:11px;line-height:16px}

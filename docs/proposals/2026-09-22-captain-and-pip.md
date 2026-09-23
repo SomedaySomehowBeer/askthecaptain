@@ -142,13 +142,21 @@ search and avatar, without a logo or wordmark. Search and account/settings remai
 controls, not additional tabs.
 
 **The green plus performs the primary creation action for its current view.** It opens a
-small editor with clear fields; it does not immediately write or infer an action.
+small editor with clear fields; it does not immediately write or infer an action. Show it on
+collection, planning, project and grouped view-list pages. Individual tasks, individual files/
+versions and individual conversations omit the green creation plus: they expose specific record
+actions and, where appropriate, a chat composer. Settings, search-only results, read-only reports,
+permission-restricted pages and editors are further exceptions when no meaningful creation action
+exists. Consistency means a predictable action, not a decorative plus on every screen.
 
 | Current view | Plus action | Starting context |
 |---|---|---|
+| Work view list | Choose New task or New project | No hidden selection; the sheet names each action. |
+| Resources view list | Choose Link file, Reserve equipment or Record count | There is no generic resource record. |
+| Chat view list | New conversation | Choose participants and an optional work link. |
 | My work | New task | Owner: you; title, due date, project and tags editable. |
 | All tasks / saved tag view | New task | Apply an unambiguous tag/project/owner filter as an editable suggestion; choose an owner when none is selected. Do not copy status/date filters blindly. |
-| Projects list / project tasks | New project / new task | The view determines the record type; tasks opened inside a project start linked to it. These editors remain to design. |
+| Projects list / project detail | New project / new task | The view determines the record type; project detail starts a task linked to that project. Editors remain previews. |
 | Chat | New conversation | Choose participants and an optional task/project link. |
 | Files & assets | Link file | Choose a provider-held file and collection; no attachment-byte upload into Captain. |
 | Inventory | Record count | Select an existing material, quantity and observation time. Adding an item is a separate explicit action; provider-owned stock cannot be overwritten. |
@@ -166,8 +174,41 @@ between Chat and project pages or treat activity logs as conversation. A link mu
 private conversation content to someone lacking access. The current plan's exclusion of chat
 must be explicitly amended before implementation.
 
+**Item discussion is chat, not a separate comments system.** Tasks, projects and file/version
+pages show a summary, shared pinned messages, then the latest **six** messages from the linked
+conversation in chronological order, with an inline composer and an Open chat link. Show fewer
+than six when fewer exist; show a count and a route to the full history when older messages are
+omitted. Pins are additional to this six-message window, so an older important message stays
+present on the item. These are references to the same message IDs and conversation shown in
+Chat; replies from the item must join that conversation rather than create a parallel thread.
+For items with several linked discussions, retain each discussion's identity and summary rather
+than mixing messages into one unlabelled stream. The mockup shows one selected linked chat.
+
+**Pins are shared with everyone who can access the conversation.** They are not personal stars.
+Participants with chat-write permission can pin or unpin; these ordinary writes are role checked
+and audited. Pinning keeps a message in a persistent section above recent messages on the item
+and in full chat, even after it leaves the recent window. “Always visible” means always included
+in that section, not a floating overlay that covers the conversation as the page scrolls. Pins
+reference the original message and link to it. Edits update the same content, deletion removes
+or tombstones the reference, and access changes remove inaccessible pins immediately. A pin
+never grants access or broadens the conversation's audience. Unpinning leaves the message intact.
+
+**Full chat follows the supplied Slack screenshot's layout:** one left-aligned message stream,
+compact avatars, sender names and timestamps, date separators, reaction chips, thread-reply links,
+a record backlink and a compact composer with file/record links, formatting, mentions and emoji.
+Own messages use the same alignment as everyone else's. Keep Captain's palette, type and three
+tabs. The mockup's reaction, reply, pin and send controls describe intended actions without
+saving anything; typing in a composer is only local preview state. Detailed reply-thread design
+and implementation remain follow-up work.
+
+File review messages replace the old comments section and retain a reference to the file version
+being discussed. Opening artwork v3 from a task or from Files reaches that same version-scoped
+chat. Messages and pins must not silently move to v4; switching versions selects the corresponding
+context. Version history remains an audit of changes, separate from conversational messages.
+A message, pin or reaction does not approve a version, complete a task or confirm equipment.
+
 **Conversation summaries appear wherever content links to a discussion**: Chat rows,
-project/task discussion cards, personal-work previews and discussion entries in view lists.
+project/task/file chat panels, personal-work previews and discussion entries in view lists.
 A generic Chat tab or navigation label does not need a summary. Use a short account of the
 current decision, unresolved question and next action, not just the last message. Show a
 “Summary · Through [message time]” label and open the source conversation on selection.
@@ -516,7 +557,7 @@ production workflows as a consequence of opening or merging a discussion proposa
 | Product split | Walk through email-to-project, a personal reminder, a recurring business obligation and a daily brief; identify one authority and fewer user decisions in each. |
 | Captain mobile workspace | Start at Work filtered to you, return left to its grouped view list, and select Marketing by tag. Repeat the list-to-view path for Chat and Resources; follow project → equipment, task ↔ conversation and asset ↔ task. Verify visible tag/project/person scope, the three-tab bar, conflict visibility and shared record identity. Prove native back navigation and per-tab state restoration before implementation is accepted. |
 | Equipment scheduling | Required: show a multi-day resource timeline with horizontal equipment navigation, midpoint-preserving pinch and button zoom across hours/days/weeks, continuous interval bars at every scale, long bookings and conflict visibility at every scale. Prove overlap prevention under concurrent writes, maintenance/turnaround blocking, timezone handling, changes and cancellation. Conflicting requests must never appear confirmed. |
-| Conversation summaries and stars | Verify summary/source links from every discussion entry, source cut-off times, invalidation after edits/deletion/access changes, unavailable/stale states, participant following and private stars independent of notifications. |
+| Conversation summaries, pins and stars | Verify the same message IDs from item and full chat, latest-six windows, older shared pins and source links; file-version scope; summary cut-off times and invalidation after edits/deletion/access changes; unavailable/stale states, participant following, private conversation stars and shared pin permissions/auditing. No message or reaction performs a record action. |
 | Reminders | Create/edit/complete in both apps; verify selected-list scope, denied permission, recurrence and cross-device identity after resync. |
 | Shared search | Find real sent/received attachments from vague descriptions on two devices; measure retrieval quality, backfill, index size and sync conflicts without retained bodies/files/text. Test deletion, disconnect and an offline device returning. |
 | Apple inference | Test required models, schemas, quotas, unavailable states and real device background behaviour. Do not assume PCC eligibility. |

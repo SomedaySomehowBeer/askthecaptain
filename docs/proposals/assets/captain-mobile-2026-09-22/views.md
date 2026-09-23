@@ -55,8 +55,12 @@ exactly halfway toward the visible bar background.
 [Zoomable SVG](relationships.svg) · [Editable Mermaid](relationships.mmd)
 
 Discussion cards and rows include a shared, source-linked summary with a cut-off time. Starred
-is a personal bookmark view; everyone follows conversations they participate in. The green plus
-opens the editor relevant to the view, with editable context defaults (see the main proposal).
+is a personal bookmark view; everyone follows conversations they participate in. Shared message
+pins stay above the latest six messages on linked tasks, projects and file
+versions, and open the original message in full chat. File chat replaces comments while keeping
+version context; version history remains separate. The Slack-inspired full chat uses one
+left-aligned stream. The green plus appears on collections, planning, project and grouped view-list
+pages; task, file and conversation detail use specific actions and composers instead.
 
 This second panel maps record identity, not database tables or required relationships. A task
 need not have a project, file, booking or discussion. Bidirectional links preserve access checks;

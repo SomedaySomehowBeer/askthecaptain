@@ -2,6 +2,7 @@
 const discussionPreviews={
   packaging:{title:'Packaging slot',summary:'Morning slot clashes with Pale ale. An afternoon slot after cleaning is proposed; no new booking is confirmed.',through:'22 Sep · 09:36'},
   artwork:{title:'Artwork for samples',summary:'Version 3 needs review, including the small text. Hold the sample pack until a version is marked ready.',through:'22 Sep · 09:36'},
+  trade:{title:'Trade pack review',summary:'Version 2 has been reviewed and marked ready for the trade pack.',through:'21 Sep · 14:35'},
   general:{title:'General',summary:'Material counts are ready for review. No decision has been recorded in this sample.',through:'21 Sep · 16:20'}
 };
 function discussionPreview(key,{icon,link},compact=false){
