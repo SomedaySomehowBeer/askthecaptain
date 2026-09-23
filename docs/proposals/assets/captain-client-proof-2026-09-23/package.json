@@ -1,0 +1,32 @@
+{
+  "name": "captain-client-proof",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "web": "expo start --web --localhost",
+    "check": "tsc --noEmit",
+    "test": "node --import tsx --test src/model.test.ts",
+    "export": "expo export --platform all --max-workers 1",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "~57.0.16",
+    "expo": "57.0.24",
+    "expo-dev-client": "~57.0.19",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.0",
+    "typescript": "~5.9.2",
+    "@types/react": "~19.2.4",
+    "@types/node": "^22.0.0"
+  }
+}

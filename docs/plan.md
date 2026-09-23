@@ -686,6 +686,13 @@ client in Phase 2 can proceed in parallel.
   It also proposes Captain's tag/project/person views and Work/Chat/Resources navigation,
   required equipment scheduling, shared assets and linked team chat, with a connected mobile
   mockup set including grouped view lists, an equipment timeline and a view map.
+  The [delivery plan](plans/captain-workspace-delivery-2026-09.md) sequences the first usable
+  release and proposes an isolated, fictional client proof under
+  `docs/proposals/assets/captain-client-proof-2026-09-23`. That proof may use its own locked
+  Expo, React/React Native, React Native Web, development-client, safe-area and TypeScript/tsx
+  dependencies outside the production workspace. It adds no production package, service,
+  table or route; successful exports are not native-device acceptance. Architecture adoption
+  and runtime changes still require the reviewed amendments listed in the delivery plan.
 - Model tiers: which models sit behind `small` and `large` at launch, and whether drafting starts
   on the large tier or is measured first.
 - Whether the first customer's printable production records belong in Captain or in its asset

@@ -223,3 +223,10 @@ and galleries are captured separately. Both Mermaid maps are parsed and exported
 
 No application typecheck, Postgres tests or production-route checks are claimed for these
 documentation-only changes. The operative plan's D11 stays unchanged pending review.
+
+## From mockups to implementation
+
+The [delivery plan](../../../plans/captain-workspace-delivery-2026-09.md) sequences the reviewed
+amendments, first usable web/iOS workflow and later Android release. A separate
+[Expo client proof](../captain-client-proof-2026-09-23/README.md) tests timeline/chat behaviour
+with fictional data. Its technical harness does not replace these visual designs.

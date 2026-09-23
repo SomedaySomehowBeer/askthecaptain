@@ -25,7 +25,10 @@ without Pip. Initial integration effort assumes they are used together, without 
 alternative ingestion systems just to make every assistant action equally easy without Pip.
 
 This is a product boundary first. Repository layout, deployment separation and the native
-application stack need a subsequent implementation decision; this proposal creates none.
+application stack need a subsequent implementation decision. The
+[delivery plan](../plans/captain-workspace-delivery-2026-09.md) now sequences that decision,
+a bounded client proof and the first usable release. Expo mobile plus the existing Next.js web
+app is the working recommendation, subject to the proof; this proposal does not adopt it.
 
 ## 2. Ownership
 
