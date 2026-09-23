@@ -4,7 +4,7 @@ function taggedWork(name,{icon,link,task,head}) {
   const rows=production
     ?task('Confirm packaging slot','production','Production','Summer lager','Today',true)+task('Prepare distributor samples','production','Production · Sales','Summer lager','Thu 24')
     :task('Approve can artwork','marketing','Marketing','Summer lager','Today')+task('Plan October content','marketing','Marketing','October content','Fri 25');
-  return `<div class="title-row"><h1>${name}</h1><button class="plus" data-sheet="new" aria-label="Add work">${icon('plus')}</button></div>
+  return `<div class="title-row"><h1>${name}</h1><button class="plus" data-sheet="new" aria-label="Add task">${icon('plus')}</button></div>
     <p class="subtitle">A saved view of shared work.</p>
     <div class="filter-row"><button class="selected" data-sheet="work-filter">Tag: ${name} ${icon('down')}</button><button data-sheet="work-filter">Anyone ${icon('down')}</button><button data-sheet="work-filter">Open ${icon('down')}</button><button data-sheet="work-mode">List ${icon('down')}</button></div>
     ${head('Open tasks','<span class="count">2 tasks</span>')}<div class="card">${rows}</div>
@@ -20,9 +20,9 @@ function sectionViews({icon,link,head}) {
     work:group('For you',row('My work','Assigned to you · Open','work','work',true)+row('Upcoming','Your work by date',null,'calendar'))+
       group('Across the business',row('All tasks','Anyone · All tags · Open','all-work')+row('Projects','Shared outcomes across the team',null,'work',false,'project-list'))+
       group('Saved views',row('Production','Tag: Production · Anyone','production','tank')+row('Marketing','Tag: Marketing · Anyone','marketing','megaphone')+row('Sales','Tag: Sales · Anyone',null,'sales')+row('Admin & reporting','Tag: Admin · Anyone',null,'admin')),
-    chat:group('Inbox',row('All conversations','Team and linked work discussions','chat','chat',true)+row('Unread','2 conversations',null,'chat')+row('Following','Discussions you follow',null,'chat'))+
-      group('Projects',row('Summer lager launch','Project discussion','conversation','work'))+
-      group('Team',row('General','Updates across the business',null,'chat')),
+    chat:group('Inbox',row('All conversations','Team and linked work discussions','chat','chat',true)+row('Unread','2 conversations',null,'chat')+row('Starred','Your bookmarked conversations',null,'chat'))+
+      group('Projects',row('Packaging slot',`Summary: ${discussionPreviews.packaging.summary} Through ${discussionPreviews.packaging.through}.`,'conversation','work'))+
+      group('Team',row('General',`Summary: ${discussionPreviews.general.summary} Through ${discussionPreviews.general.through}.`,null,'chat')),
     resources:group('Libraries',row('Files & assets','Collections, versions and review','files','resources',true)+row('Inventory','Ingredients, consumables and finished stock','inventory','sales'))+
       group('Planning',row('Equipment schedule','Bookings, availability and maintenance','timeline','calendar'))+
       group('Business',row('People','People and their assigned work',null,'work')+row('Reports','Business performance and evidence',null,'admin'))

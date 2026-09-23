@@ -22,7 +22,7 @@ prototype demonstrates explicit links, not native gestures or state restoration.
 | Section | Groups in the list | Views and details |
 |---|---|---|
 | Work | For you; Across the business; Saved views | My work by default; All tasks; Projects; saved tag filters. Task and project detail open from these views. Upcoming, Sales and Admin entries are scope previews. |
-| Chat | Inbox; Projects; Team | All conversations by default; Unread and Following are proposed filters. A linked discussion opens the same conversation from Chat, task or project. General has no detail mockup yet. |
+| Chat | Inbox; Projects; Team | All conversations by default; Unread and Starred are proposed filters. A linked discussion opens the same conversation from Chat, task or project. General has no detail mockup yet. |
 | Resources | Libraries; Planning; Business | Files & assets by default in this concept; Inventory; Equipment schedule; People and Reports. Asset detail preserves the selected version. People and Reports remain to design. |
 
 Green nodes in the diagram have full-screen mockups. The neutral node describes the shell.
@@ -38,18 +38,25 @@ Opening a project shows the whole project unless an explicit local filter is app
 Marketing's related Files link opens the shared DAM under Resources. Production's Equipment
 and Inventory links open those shared resources. Availability continues to show other people's
 and projects' reservations, cleaning and maintenance; task filters cannot hide a clash.
-A conflicting request remains unconfirmed. Inventory stays a counted list; bookings do not
+The timeline opens across days; equipment scrolls horizontally with header arrows and a visible
+next-column hint. Pinch or Hours/Days/Weeks controls change time detail around the current date.
+Day/week aggregates drill into exact intervals; a conflicting request remains unconfirmed. Inventory stays a counted list; bookings do not
 consume stock. Xero remains accounting authority, with links from business records.
 
 Search and account/settings belong in the header, outside the three-tab bar. Their detailed
 screens are still to design. The bar uses a floating capsule, rounded icons and a soft selected
 pill based on the supplied Taildrop reference, with Captain's colours and visible labels.
 The compact bar is about 80% of its initial width and height; the selected pill is darker than
-the bar, with green icon and text.
+the bar, with green icon and text. Its highlight is now the former grey-green at 50% opacity,
+exactly halfway toward the visible bar background.
 
 ![Tag, person and project filters select the same task and linked records](relationships.png)
 
 [Zoomable SVG](relationships.svg) · [Editable Mermaid](relationships.mmd)
+
+Discussion cards and rows include a shared, source-linked summary with a cut-off time. Starred
+is a personal bookmark view; everyone follows conversations they participate in. The green plus
+opens the editor relevant to the view, with editable context defaults (see the main proposal).
 
 This second panel maps record identity, not database tables or required relationships. A task
 need not have a project, file, booking or discussion. Bidirectional links preserve access checks;

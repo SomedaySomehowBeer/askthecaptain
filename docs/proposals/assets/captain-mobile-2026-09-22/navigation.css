@@ -26,7 +26,7 @@
   color: #647367;
 }
 .bottom-nav svg { width: 22px; height: 22px; stroke-width: 1.65; }
-.bottom-nav .active { background: #d9ded6; color: #197334; }
+.bottom-nav .active { background: rgb(217 222 214 / 50%); color: #197334; }
 .bottom-nav .active::before { content: none; }
 .bottom-nav .badge { top: 3px; left: calc(50% + 7px); }
 .content { height: 800px; padding-bottom: 98px; scroll-padding-bottom: 98px; }

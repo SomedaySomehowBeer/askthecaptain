@@ -71,7 +71,28 @@ and the organisation's timezone. For exclusive equipment, overlapping confirmed 
 must be prevented, including concurrent booking attempts; a conflicting request stays visibly
 unconfirmed until resolved. Changes/cancellations update the same reservation everywhere and
 make affected work visible. Do not automatically move other people's bookings to make space.
-The first implementation needs a resource timeline and availability/rescheduling controls.
+The resource timeline is a core planning surface, not an optional report. It defaults to a
+multi-day span with equipment columns across the top and time running down the page. Horizontal
+swiping exposes more equipment; arrows flank the equipment header controls and a partially
+visible next column signals overflow. Equipment headers stay visible while time scrolls, and
+the time axis stays visible while equipment scrolls.
+
+Pinch apart to see finer time detail (hours); pinch together to see days, weeks and eventually
+longer planning periods. Explicit Hours/Days/Weeks controls provide the same choices without a
+gesture. Zoom keeps the date under the gesture midpoint in place, subject to the loaded range
+boundaries; it never changes bookings. Preserve the equipment position and selected reservation.
+Day/week cells summarise the underlying intervals rather than pretending an entire day is
+occupied or free. Selecting a period drills into hours; conflict links focus the relevant
+equipment and date. Exact start/end times, setup/cleaning/maintenance and unconfirmed requests
+remain inspectable at every scale. Unknown or unloaded periods must never look available.
+
+The first implementation requires availability and rescheduling controls with overlap prevention
+under concurrent saves. Resource allocation must work for long reservations spanning days as
+well as short reservations; a zoomed-out view cannot conceal a conflict. Show actual duration
+and timezone in detail, keep selection stable when zooming and test daylight/date boundaries.
+The mockup demonstrates five equipment columns and a bounded 28-day fictional dataset, with
+Day as the initial scale; larger equipment sets, range loading, native gestures and live edits
+still need implementation and device testing.
 This introduces a fixed equipment/reservation model, not custom production processes, recipes,
 stock conversions or an inventory ledger; the data model and services need a reviewed amendment.
 
@@ -96,7 +117,7 @@ an explicit entry to return to later.
 | Section | Grouped view list | Initial main view |
 |---|---|---|
 | Work | For you: My work, Upcoming. Across the business: All tasks, Projects. Saved views: Production, Marketing, Sales, Admin/reporting tag filters. | My work, assigned to you. |
-| Chat | Inbox: All conversations, Unread, Following. Projects: linked discussions. Team: team conversations. | All conversations. |
+| Chat | Inbox: All conversations, Unread, Starred. Projects: linked discussions. Team: team conversations. | All conversations. |
 | Resources | Libraries: Files & assets, Inventory. Planning: Equipment schedule. Business: People, Reports. | Files & assets in the mockup; review this default before implementation. |
 
 Marketing and Production are saved Work views, with their tag filters visible, and can offer
@@ -110,12 +131,31 @@ equipment is free.
 
 The bottom bar follows the supplied Taildrop reference: a floating rounded capsule inset from
 the screen edges, sized to about 80% of the initial capsule by reducing spacing more than
-icons or text. A darker grey-green selected pill uses green icon and label. Rounded briefcase,
+icons or text. The selected pill uses the previous grey-green (`#d9ded6`) at 50% opacity over
+the bar, placing it exactly halfway toward the visible bar background; icon and label stay green. Rounded briefcase,
 conversation and folder icons identify Work, Chat and Resources, using Captain's forest/paper/
 mint palette. Labels remain visible, tap targets are at least 44 CSS pixels, and content has
 bottom space so the bar does not cover the last item. The compact header keeps the breadcrumb,
 search and avatar, without a logo or wordmark. Search and account/settings remain header
 controls, not additional tabs.
+
+**The green plus performs the primary creation action for its current view.** It opens a
+small editor with clear fields; it does not immediately write or infer an action.
+
+| Current view | Plus action | Starting context |
+|---|---|---|
+| My work | New task | Owner: you; title, due date, project and tags editable. |
+| All tasks / saved tag view | New task | Apply an unambiguous tag/project/owner filter as an editable suggestion; choose an owner when none is selected. Do not copy status/date filters blindly. |
+| Projects list / project tasks | New project / new task | The view determines the record type; tasks opened inside a project start linked to it. These editors remain to design. |
+| Chat | New conversation | Choose participants and an optional task/project link. |
+| Files & assets | Link file | Choose a provider-held file and collection; no attachment-byte upload into Captain. |
+| Inventory | Record count | Select an existing material, quantity and observation time. Adding an item is a separate explicit action; provider-owned stock cannot be overwritten. |
+| Equipment timeline | Reserve equipment | Equipment, start/end, responsible person, optional task/project and turnaround; current selection supplies editable defaults. Recheck all conflicts on save. |
+
+Use an accessible action label even when the visible control is only a plus. If filters do
+not imply one clear default, let the person choose. Saving a record that falls outside the
+current filter should link to the created record and explain why it is not in the list.
+The prototype opens descriptive editor previews; it does not save records.
 
 Team chat is now proposed scope: team conversations and project/task discussions with
 bidirectional links. A message can link a task or project; that record links back to the same
@@ -123,6 +163,28 @@ conversation. Creating a task from a message retains that source link. Do not du
 between Chat and project pages or treat activity logs as conversation. A link must not expose
 private conversation content to someone lacking access. The current plan's exclusion of chat
 must be explicitly amended before implementation.
+
+**Conversation summaries appear wherever content links to a discussion**: Chat rows,
+project/task discussion cards, personal-work previews and discussion entries in view lists.
+A generic Chat tab or navigation label does not need a summary. Use a short account of the
+current decision, unresolved question and next action, not just the last message. Show a
+“Summary · Through [message time]” label and open the source conversation on selection.
+The same summary/version is reused across views; it does not create a second conversation.
+
+Summaries are proposed server-side, data-only `infer` steps (D2), with validated output and
+source message IDs/range. Access checks must cover both the conversation and every source
+message represented; invalidate summaries after relevant deletion or access changes. New
+messages make the summary visibly out of date until refreshed. A missing or failed summary
+must say “Summary unavailable” or “Updating summary”, with access to the discussion; a latest
+message excerpt may be shown only when labelled as an excerpt. Summary text cannot create a
+task, commit a decision or confirm a reservation. The prototype contains hand-authored,
+labelled illustrative summaries; no live inference or refresh is implemented.
+
+**Starred conversations replaces Following.** People follow every conversation they participate
+in by default. Starring is an individual bookmark for quick access, not membership, a shared
+priority or a notification setting. Unstarring does not leave or mute a conversation; muting
+and leaving are separate actions. Unread and Starred filter the same accessible conversations.
+The prototype shows Starred and a Star conversation action; persistence remains to implement.
 
 Inventory remains a simple counted list for ingredients, consumables and finished product,
 with an explicit authority where a commerce provider supplies a quantity. Equipment reservations
@@ -451,7 +513,8 @@ production workflows as a consequence of opening or merging a discussion proposa
 |---|---|
 | Product split | Walk through email-to-project, a personal reminder, a recurring business obligation and a daily brief; identify one authority and fewer user decisions in each. |
 | Captain mobile workspace | Start at Work filtered to you, return left to its grouped view list, and select Marketing by tag. Repeat the list-to-view path for Chat and Resources; follow project → equipment, task ↔ conversation and asset ↔ task. Verify visible tag/project/person scope, the three-tab bar, conflict visibility and shared record identity. Prove native back navigation and per-tab state restoration before implementation is accepted. |
-| Equipment scheduling | Required: show a resource timeline, available and unavailable periods, and reservations linked to work/people. Prove overlap prevention under concurrent writes, maintenance/turnaround blocking, timezone handling, changes and cancellation. Conflicting requests must never appear confirmed. |
+| Equipment scheduling | Required: show a multi-day resource timeline with horizontal equipment navigation, midpoint-preserving pinch and button zoom across hours/days/weeks, source intervals behind aggregates, long bookings and conflict visibility at every scale. Prove overlap prevention under concurrent writes, maintenance/turnaround blocking, timezone handling, changes and cancellation. Conflicting requests must never appear confirmed. |
+| Conversation summaries and stars | Verify summary/source links from every discussion entry, source cut-off times, invalidation after edits/deletion/access changes, unavailable/stale states, participant following and private stars independent of notifications. |
 | Reminders | Create/edit/complete in both apps; verify selected-list scope, denied permission, recurrence and cross-device identity after resync. |
 | Shared search | Find real sent/received attachments from vague descriptions on two devices; measure retrieval quality, backfill, index size and sync conflicts without retained bodies/files/text. Test deletion, disconnect and an offline device returning. |
 | Apple inference | Test required models, schemas, quotas, unavailable states and real device background behaviour. Do not assume PCC eligibility. |

@@ -72,7 +72,8 @@ The supplied Taildrop tab-bar example informs the floating capsule, rounded corn
 shadow and selected pill around both icon and label. The compact bar is about 80% of the
 previous width and height (about 290 × 54px on a 390px phone), with most of the reduction
 coming from spacing. Icons are 22px and labels remain 11px. The selected pill uses a darker
-grey-green background with green icon and text. The three rounded icons are a
+grey-green at 50% opacity over the bar: exactly halfway between the previous highlight
+and the visible bar background, keeping the green icon and text. The three rounded icons are a
 briefcase, conversation bubble and folder, freshly authored for the prototype. Labels stay
 visible and each tab target exceeds 44 CSS pixels. Scroll content reserves bottom space so
 its final controls can clear the floating bar.
@@ -82,11 +83,55 @@ no design mirror files change. Compact headers contain a breadcrumb, search and 
 no logo/wordmark. Screen headings are 26px, or 25px for the project at narrow widths. Search
 and account/settings remain header controls, outside the three-tab navigation.
 
+## Contextual creation, summaries and stars
+
+The green plus opens the current view's primary editor: **New task** in Work, **New conversation**
+in Chat, **Link file** in Files, **Record count** in Inventory and **Reserve equipment** on the
+timeline. My work suggests you as owner; a saved tag view suggests its tag. Defaults remain
+editable; these previews describe the editor and do not write data. The full mapping and save
+behaviour are specified in the main proposal.
+
+Conversation links show a shared summary of decisions, unresolved questions and next actions,
+with a source cut-off time. This is illustrated in My work, project, task, Chat and its grouped
+view list. Summaries open the same discussion and are hand-authored fixtures, not live model
+output. The proposal requires source references, access checks and honest stale/unavailable
+states before implementation.
+
+**Starred** replaces Following. Participation means following by default; a star is your own
+bookmark, independent of membership or notifications. The Star conversation action is a preview;
+it does not persist preferences.
+
+## Equipment planning and time zoom
+
+![Multi-day equipment timeline](timeline.png)
+
+[Hourly conflict inspection](timeline-hours.png) · [Week scale](timeline-weeks.png)
+
+Time runs vertically; equipment runs horizontally. The default Days view spans several days.
+Header arrows and a partially visible next column show that more equipment is available. The
+five example resources are FV-02, BBT-01, Packaging, Cold room and Delivery van. The header and
+time axis stay visible while scrolling the other dimension.
+
+Pinch apart to zoom into Hours, pinch together to zoom out through Days to Weeks. Buttons offer
+the same choices. The prototype anchors zoom to the date under the gesture midpoint (or viewport
+centre for buttons), clamped to its loaded range, and preserves horizontal equipment position.
+Day/week cells aggregate the same reservations; selecting one drills into its hourly context.
+The conflict link focuses Packaging on 1 October. No gesture moves or creates a reservation.
+
+The prototype supports two-finger pinch and one-finger chart panning, horizontal arrow controls,
+mouse/trackpad scrolling and keyboard focus/scrolling. Page zoom remains available outside the
+chart. Native-device gesture behaviour, selection persistence, loading more dates/equipment and
+live scheduling remain acceptance work. The 28-day dataset is explicitly fictional; its “No
+bookings” cells describe only that sample, not live availability. Unknown/unloaded data must
+never look free in the application.
+
 ## Editable prototype
 
 [index.html](index.html) contains the shared shell and original record layouts.
 [additional-views.js](additional-views.js) and [additional-views.css](additional-views.css) contain
-the record screens. [navigation.js](navigation.js) defines the grouped lists and saved tag
+the record screens. [conversation-previews.js](conversation-previews.js) supplies shared summary fixtures.
+[equipment-timeline.js](equipment-timeline.js) and [equipment-timeline.css](equipment-timeline.css)
+contain the scrollable timeline and time zoom. [navigation.js](navigation.js) defines the grouped lists and saved tag
 views; [navigation.css](navigation.css) styles the floating bar and lists.
 
 Serve the repository root, for example with `python3 -m http.server 8769 --bind 127.0.0.1`, then
@@ -130,7 +175,9 @@ process model. Inventory remains a counted list, with no ledger or unrelated-uni
 
 The fifteen layouts are checked in shared Chromium with Playwright at 360, 390 and 430 CSS
 pixels, including overflow, three-tab labels/targets, scroll clearance, hidden list headings
-and compact record headings. Connected list/view/filter/task/chat/asset/equipment flows and
+and compact record headings. Timeline checks include horizontal navigation, time-scale anchoring,
+conflict drill-down and Chromium touch pinch in both directions; physical-device testing remains
+outstanding. Contextual plus sheets and source-linked summary cards are also checked. Connected list/view/filter/task/chat/asset/equipment flows and
 preview sheets are exercised, and PNG exports inspected. Screen PNGs are 390 × 874; variants
 and galleries are captured separately. Both Mermaid maps are parsed and exported as SVG/PNG.
 
