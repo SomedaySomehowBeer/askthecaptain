@@ -40,7 +40,7 @@ and Inventory links open those shared resources. Availability continues to show 
 and projects' reservations, cleaning and maintenance; task filters cannot hide a clash.
 The timeline opens across days; equipment scrolls horizontally with header arrows and a visible
 next-column hint. Pinch or Hours/Days/Weeks controls change time detail around the current date.
-Day/week aggregates drill into exact intervals; a conflicting request remains unconfirmed. Inventory stays a counted list; bookings do not
+Continuous bars span their actual intervals at every scale; selecting one shows its exact times; a conflicting request remains unconfirmed. Inventory stays a counted list; bookings do not
 consume stock. Xero remains accounting authority, with links from business records.
 
 Search and account/settings belong in the header, outside the three-tab bar. Their detailed

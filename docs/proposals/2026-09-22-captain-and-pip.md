@@ -81,8 +81,10 @@ Pinch apart to see finer time detail (hours); pinch together to see days, weeks 
 longer planning periods. Explicit Hours/Days/Weeks controls provide the same choices without a
 gesture. Zoom keeps the date under the gesture midpoint in place, subject to the loaded range
 boundaries; it never changes bookings. Preserve the equipment position and selected reservation.
-Day/week cells summarise the underlying intervals rather than pretending an entire day is
-occupied or free. Selecting a period drills into hours; conflict links focus the relevant
+Hours, days and weeks all use the same continuous booking bars, positioned and sized by their
+actual start/end times. A reservation spanning days remains one bar across the date lines. Short
+reservations become thin marks as you zoom out; labels appear when space permits and exact
+intervals remain accessible by selecting the bar or zooming in. Conflict markers focus the relevant
 equipment and date. Exact start/end times, setup/cleaning/maintenance and unconfirmed requests
 remain inspectable at every scale. Unknown or unloaded periods must never look available.
 
@@ -513,7 +515,7 @@ production workflows as a consequence of opening or merging a discussion proposa
 |---|---|
 | Product split | Walk through email-to-project, a personal reminder, a recurring business obligation and a daily brief; identify one authority and fewer user decisions in each. |
 | Captain mobile workspace | Start at Work filtered to you, return left to its grouped view list, and select Marketing by tag. Repeat the list-to-view path for Chat and Resources; follow project → equipment, task ↔ conversation and asset ↔ task. Verify visible tag/project/person scope, the three-tab bar, conflict visibility and shared record identity. Prove native back navigation and per-tab state restoration before implementation is accepted. |
-| Equipment scheduling | Required: show a multi-day resource timeline with horizontal equipment navigation, midpoint-preserving pinch and button zoom across hours/days/weeks, source intervals behind aggregates, long bookings and conflict visibility at every scale. Prove overlap prevention under concurrent writes, maintenance/turnaround blocking, timezone handling, changes and cancellation. Conflicting requests must never appear confirmed. |
+| Equipment scheduling | Required: show a multi-day resource timeline with horizontal equipment navigation, midpoint-preserving pinch and button zoom across hours/days/weeks, continuous interval bars at every scale, long bookings and conflict visibility at every scale. Prove overlap prevention under concurrent writes, maintenance/turnaround blocking, timezone handling, changes and cancellation. Conflicting requests must never appear confirmed. |
 | Conversation summaries and stars | Verify summary/source links from every discussion entry, source cut-off times, invalidation after edits/deletion/access changes, unavailable/stale states, participant following and private stars independent of notifications. |
 | Reminders | Create/edit/complete in both apps; verify selected-list scope, denied permission, recurrence and cross-device identity after resync. |
 | Shared search | Find real sent/received attachments from vague descriptions on two devices; measure retrieval quality, backfill, index size and sync conflicts without retained bodies/files/text. Test deletion, disconnect and an offline device returning. |

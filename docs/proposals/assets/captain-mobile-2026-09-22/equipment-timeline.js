@@ -21,7 +21,7 @@ function equipmentTimeline({icon,link}){
     <div class="allocation-range"><strong data-range>28 Sep–4 Oct</strong><span>Pinch to zoom time</span></div>
     <div class="equipment-navigation"><button data-equipment-shift="-1" aria-label="Previous equipment">${icon('back')}</button><span>Equipment <small>Swipe sideways for more</small></span><button data-equipment-shift="1" aria-label="Next equipment">${icon('chevron')}</button></div>
     <div class="allocation-scroll" tabindex="0" role="region" aria-label="Equipment timeline; scroll sideways for equipment and vertically for time"><div class="allocation-canvas"></div></div>
-    <p class="allocation-note">Day and week cells summarise bookings. Zoom to Hours for exact times.</p>
+    <p class="allocation-note">Bookings span their actual time. Zoom in to inspect short reservations.</p>
     <div class="request-alert">${icon('alert')}<div><strong>Summer lager · Request unconfirmed</strong><p>1 Oct, 09:00–12:00 · Packaging overlaps Pale ale.</p><button class="timeline-detail-link" data-focus-conflict>Inspect 1 Oct by hour ${icon('arrow')}</button><a href="${link('task')}">Open linked task ${icon('arrow')}</a></div></div>`;
 }
 function mountEquipmentTimeline(phone,{icon}){
@@ -46,10 +46,13 @@ function mountEquipmentTimeline(phone,{icon}){
     const ticks=scale==='hours'?Array.from({length:28*24},(_,i)=>`<span style="top:${i*24}px">${i%24===0?date(i/24):String(i%24).padStart(2,'0')+':00'}</span>`).join(''):Array.from({length:28/step},(_,i)=>`<span style="top:${i*step*h}px">${date(i*step)}${scale==='weeks'?'<small>7 days</small>':''}</span>`).join('');
     const lanes=equipmentFixture.names.map((_,r)=>{
       const entries=equipmentFixture.bookings.map((b,i)=>({...b,id:i})).filter(b=>b.resource===r);
-      const blocks=scale==='hours'?entries.map(b=>`<button class="allocation-booking ${b.kind}" data-booking="${b.id}" style="top:${b.start*h}px;height:${Math.max(22,(b.end-b.start)*h)}px" aria-label="${equipmentFixture.names[r]} · ${bookingLabel(b)}"><strong>${b.title}</strong>${(b.end-b.start)*h>=36?`<small>${Math.floor(b.end)>Math.floor(b.start)?date(b.start)+'–'+date(b.end):clock(b.start)+'–'+clock(b.end)}</small>`:''}</button>`).join(''):
-        Array.from({length:28/step},(_,i)=>{const start=i*step,end=start+step;const busy=entries.filter(b=>b.start<end&&b.end>start);return `<button class="allocation-cell ${busy.length?'busy':'empty'} ${r===2&&start<=3&&end>3?'has-conflict':''}" data-period="${start}" data-resource="${r}" aria-label="${equipmentFixture.names[r]} · ${date(start)}${step>1?'–'+date(end-1):''} · ${busy.length} bookings${r===2&&start<=3&&end>3?' · Unconfirmed clash':''}; inspect hourly" style="top:${start*h}px;height:${step*h}px"><strong>${busy.length?busy.length+' booking'+(busy.length>1?'s':''):'No bookings'}</strong><small>${busy.length?[...new Set(busy.map(b=>b.title))].join(' · '):'In this sample'}</small>${r===2&&start<=3&&end>3?'<span class="blocked-mark">Unconfirmed clash</span>':busy.some(b=>b.kind==='blocked')?'<span class="blocked-mark">Includes blocked time</span>':''}</button>`;}).join('');
+      const blocks=entries.map(b=>{
+        const height=(b.end-b.start)*h;
+        return `<button class="allocation-booking ${b.kind}${height<18?' brief':''}" data-booking="${b.id}" style="top:${b.start*h}px;height:${height}px" aria-label="${equipmentFixture.names[r]} · ${bookingLabel(b)}" title="${bookingLabel(b)}">${height>=18?`<strong>${b.title}</strong>`:''}${height>=36?`<small>${Math.floor(b.end)>Math.floor(b.start)?date(b.start)+'–'+date(b.end):clock(b.start)+'–'+clock(b.end)}</small>`:''}</button>`;
+      }).join('');
+      const conflict=r===2?`<button class="allocation-conflict" data-conflict-marker style="top:${(3+9/24)*h}px" aria-label="Unconfirmed Summer lager request clashes on 1 October; inspect by hour" title="Unconfirmed request · 1 Oct, 09:00–12:00">!</button>`:'';
       const available=r===2&&scale==='hours'?`<button class="allocation-booking free" data-sheet="available-slot" style="top:${(3+13/24)*h}px;height:${3/24*h}px"><strong>Available</strong><small>13:00–16:00</small></button>`:'';
-      return `<div class="allocation-lane">${blocks}${available}</div>`;
+      return `<div class="allocation-lane">${blocks}${available}${conflict}</div>`;
     }).join('');
     canvas.innerHTML=header+`<div class="allocation-body" style="height:${28*h}px;--tick:${scale==='hours'?24:step*h}px"><div class="allocation-axis">${ticks}</div>${lanes}</div>`;
     phone.querySelectorAll('[data-scale]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scale===scale)));
@@ -65,11 +68,12 @@ function mountEquipmentTimeline(phone,{icon}){
   }
   phone.querySelectorAll('[data-scale]').forEach(b=>b.addEventListener('click',()=>zoom(b.dataset.scale)));
   phone.querySelectorAll('[data-equipment-shift]').forEach(b=>b.addEventListener('click',()=>{viewport.scrollLeft+=Number(b.dataset.equipmentShift)*108;updateRange();}));
-  phone.querySelector('[data-focus-conflict]').addEventListener('click',()=>{scale='hours';render();viewport.scrollTop=(3+8/24)*dayHeights.hours;viewport.scrollLeft=216;updateRange();});
+  function focusConflict(){scale='hours';render();viewport.scrollTop=(3+8/24)*dayHeights.hours;viewport.scrollLeft=216;updateRange();}
+  phone.querySelector('[data-focus-conflict]').addEventListener('click',focusConflict);
   viewport.addEventListener('click',e=>{
     if(dragged){e.preventDefault();e.stopImmediatePropagation();dragged=false;return;}
     const booking=e.target.closest('[data-booking]');if(booking)showBooking(bookingLabel(equipmentFixture.bookings[Number(booking.dataset.booking)]));
-    const period=e.target.closest('[data-period]');if(period){const start=Number(period.dataset.period),r=Number(period.dataset.resource);scale='hours';render();viewport.scrollTop=(start+8/24)*dayHeights.hours;viewport.scrollLeft=Math.min(r*108,viewport.scrollWidth-viewport.clientWidth);updateRange();}
+    if(e.target.closest('[data-conflict-marker]'))focusConflict();
   },true);
   viewport.addEventListener('scroll',()=>{if(!scheduled){scheduled=true;requestAnimationFrame(()=>{updateRange();scheduled=false;});}});
   // Touch pan and pinch apply only inside this chart; page zoom elsewhere is unaffected.

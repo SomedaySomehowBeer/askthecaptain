@@ -115,14 +115,16 @@ time axis stay visible while scrolling the other dimension.
 Pinch apart to zoom into Hours, pinch together to zoom out through Days to Weeks. Buttons offer
 the same choices. The prototype anchors zoom to the date under the gesture midpoint (or viewport
 centre for buttons), clamped to its loaded range, and preserves horizontal equipment position.
-Day/week cells aggregate the same reservations; selecting one drills into its hourly context.
+Every scale uses continuous booking bars: a multi-day reservation spans date lines as one bar,
+with the same colours and hatched blocked time as Hours. Start position and length follow the
+actual interval; short reservations become thin marks when zoomed out. Selecting a bar opens
+its exact dates/times, and zooming in reveals the smaller labels.
 The conflict link focuses Packaging on 1 October. No gesture moves or creates a reservation.
 
 The prototype supports two-finger pinch and one-finger chart panning, horizontal arrow controls,
 mouse/trackpad scrolling and keyboard focus/scrolling. Page zoom remains available outside the
 chart. Native-device gesture behaviour, selection persistence, loading more dates/equipment and
-live scheduling remain acceptance work. The 28-day dataset is explicitly fictional; its “No
-bookings” cells describe only that sample, not live availability. Unknown/unloaded data must
+live scheduling remain acceptance work. The 28-day dataset is explicitly fictional; gaps describe only that sample, not live availability. Unknown/unloaded data must
 never look free in the application.
 
 ## Editable prototype
@@ -176,7 +178,8 @@ process model. Inventory remains a counted list, with no ledger or unrelated-uni
 The fifteen layouts are checked in shared Chromium with Playwright at 360, 390 and 430 CSS
 pixels, including overflow, three-tab labels/targets, scroll clearance, hidden list headings
 and compact record headings. Timeline checks include horizontal navigation, time-scale anchoring,
-conflict drill-down and Chromium touch pinch in both directions; physical-device testing remains
+conflict drill-down, continuous bar positions/durations at all three scales and phone widths,
+and Chromium touch pinch in both directions; physical-device testing remains
 outstanding. Contextual plus sheets and source-linked summary cards are also checked. Connected list/view/filter/task/chat/asset/equipment flows and
 preview sheets are exercised, and PNG exports inspected. Screen PNGs are 390 × 874; variants
 and galleries are captured separately. Both Mermaid maps are parsed and exported as SVG/PNG.
