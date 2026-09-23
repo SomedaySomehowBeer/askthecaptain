@@ -1,149 +1,135 @@
 # Captain mobile workspace mockups
 
-**Review concept, updated 23 September 2026.** Thirteen proposed screens for the Captain/Pip split.
-The fictional reference day remains 22 September so assignments and conversations stay consistent.
-All names, assignments, dates, quantities and conversations shown here are illustrative.
-These are documentation artifacts, not implemented application routes or adopted navigation.
+**Review concept, updated 23 September 2026.** Fifteen screens for the Captain/Pip split,
+advancing **own commitments** and **brief and answer**. All data is fictional; the reference day
+remains 22 September. These are documentation artifacts, not implemented application routes.
 
-[View map: navigation and shared records](views.md) explains how the screens and proposed
-destinations fit together, with editable Mermaid sources and SVG/PNG diagrams.
+## Three sections and their view lists
 
-![Four mobile screens: My work, Marketing, Summer lager launch and equipment timeline](overview.png)
+The bottom bar is **Work · Chat · Resources**. Work opens at **My work**, filtered to **Assigned
+to you**, across all tags. There is no Home destination. Each section has a grouped list of
+views one page to the left of its main page, opened by the header's back chevron. These pages
+need no visible title: their groups, rows and selected bottom tab carry context. They have
+accessible headings. Choose a row to open a view to the right.
 
-| Screen | Preview | What to review |
+![Grouped view lists for Work, Chat and Resources](navigation-overview.png)
+
+| Section | Groups | Main view in this concept |
 |---|---|---|
-| A person's working day | [My work](day.png) | Assignments across all four areas, the next equipment booking and a message linked to a task. |
-| A business area | [Marketing](marketing.png) | Campaign work across projects, and access to a shared asset library with explicit versions and review states. |
-| A project spanning the business | [Summer lager launch](project.png) | Production, Marketing, Sales and Admin together; a confirmed equipment booking, an unconfirmed conflicting request, and a linked discussion. |
-| Equipment across projects | [Timeline](timeline.png) | A day with equipment columns and an hourly time axis; confirmed reservations, cleaning, maintenance and an open slot, with a conflicting request kept unconfirmed. |
+| Work | For you; Across the business; Saved views | My work, assigned to you. All tasks removes the assignee filter; Marketing and Production are tag-filtered views. |
+| Chat | Inbox; Projects; Team | All conversations. Task/project links open the same discussion. |
+| Resources | Libraries; Planning; Business | Files & assets. Inventory and Equipment schedule are sibling views; People and Reports remain to design. |
 
-## New screens: work and conversations
+The intended native client preserves each tab's view and scroll position, supports the normal
+back gesture and returns details to the originating view. This static prototype demonstrates
+explicit navigation links; tab switches reopen their defaults, detail breadcrumbs use fixed
+parent examples, and native transitions/state restoration are not implemented.
 
-![Work, task detail, Chat and conversation](work-overview.png)
+Production, Marketing, Sales and Admin/reporting are **tags**, not areas or workspaces. Tasks
+can carry multiple tags; people and projects span them. Filter controls cover assignee, tags,
+project, status and date. Different filter types combine with AND; multiple selected tags match
+any selected tag by default. Active filters remain visible. Presentation choices (List, Board,
+Calendar, Timeline) do not create separate task records. Arbitrary combinations, saving filters
+and the other presentation layouts remain to implement.
 
-| Screen | Preview | What to review |
+[View map and shared-record relationships](views.md) show the navigation and shared identities.
+
+## Screen previews
+
+![My work, Marketing by tag, project and equipment timeline](overview.png)
+
+| Screen | Preview | Scope |
 |---|---|---|
-| Work | [Task list](work.png) | Tasks across areas, projects and recurring duties; shared list with proposed filters/view controls. |
-| Task detail | [Packaging task](task.png) · [Artwork variant](task-artwork.png) | Ownership, checklist, supporting record and linked conversation; completing a task does not implicitly confirm a booking or approve a file. |
-| Chat | [Conversation list](chat.png) | Work discussions and team conversations, with their task links visible. |
-| Conversation | [Packaging discussion](conversation.png) | The same discussion reached from Chat, task or project, with a backlink to work and the equipment schedule. |
+| My work | [Default Work view](work.png) | Assigned to you across tags, today's work, next equipment booking and a linked conversation. |
+| Marketing | [Saved tag view](marketing.png) | Anyone · Tag: Marketing · Open; links to the whole project and shared files. |
+| Project | [Summer lager launch](project.png) | Tasks across tags, shared bookings and discussion. |
+| Equipment | [Timeline](timeline.png) | Reservations across projects, cleaning/maintenance and a conflicting request kept unconfirmed. |
 
-## New screens: areas and inventory
+![All tasks, task detail, Chat and conversation](work-overview.png)
 
-![Browse, Production and Inventory](areas-overview.png)
-
-| Screen | Preview | What to review |
+| Screen | Preview | Scope |
 |---|---|---|
-| Browse | [Areas and shared resources](browse.png) | One home for the four business areas and shared resources; no workspace switching. |
-| Production | [Production overview](production.png) | Scheduled equipment, a reservation conflict, related work and a counted-stock shortage. No live telemetry is implied. |
-| Inventory | [Counted stock](inventory.png) | Ingredient/consumable observations, missing counts, reorder threshold and separately sourced Shopify sellable stock. No ledger or unit aggregation. |
+| All tasks | [Task list](all-work.png) | Anyone · All tags · Open, across projects and recurring work. |
+| Task | [Packaging](task.png) · [Artwork](task-artwork.png) | Owner, next decision, supporting record and discussion. Completion does not implicitly confirm equipment or approve a file. |
+| Chat | [Conversation list](chat.png) | Team and work discussions with task links. |
+| Conversation | [Packaging discussion](conversation.png) | One thread shared by Chat, task and project contexts. |
 
-## New screens: files and review
+![Production by tag, Inventory and Files](resources-overview.png)
 
-![Shared asset library and asset detail](files-overview.png)
-
-| Screen | Preview | What to review |
+| Screen | Preview | Scope |
 |---|---|---|
-| Files & assets | [Shared collection](files.png) | Working and ready-to-use files linked to the same launch, available across areas. |
-| Asset detail | [Can artwork v3](asset.png) · [Trade pack v2](asset-trade.png) | Version-specific preview, review comments and linked task/project; original stays with its provider. |
+| Production | [Saved tag view](production.png) | Anyone · Tag: Production · Open, including a task also tagged Sales. Related equipment and stock links. |
+| Inventory | [Counted stock](inventory.png) | Material observations, missing count, reorder threshold and separately sourced Shopify stock. |
+| Files & assets | [Shared collection](files.png) | Working and ready-to-use versions in one shared library. |
+| Asset | [Can artwork v3](asset.png) · [Trade pack v2](asset-trade.png) | Version-specific review and backlinks; provider-held original. |
+| View lists | [Work](work-views.png) · [Chat](chat-views.png) · [Resources](resource-views.png) | Grouped navigation with no visible page title. |
 
-The original four screens have also been recaptured with the connected navigation.
-[Scroll continuation of those screens](overview-scrolled.png) shows their lower content.
+[Files and review gallery](files-overview.png) · [Lower content of the first four screens](overview-scrolled.png).
 
-## Navigation being proposed
+## Visual direction
 
-The same four mobile destinations stay in place: **Home, Work, Chat, Browse**.
-Home shows the person's working day; Work contains tasks and projects with list, board,
-calendar and timeline views; Chat gathers conversations; Browse exposes the business areas
-and shared resources. Marketing is reached through Browse; a launch belongs under Work.
-Settings is reached from the account surface in the eventual design.
+The supplied Taildrop tab-bar example informs the floating capsule, rounded corners, subtle
+shadow and soft selected pill around both icon and label. The three rounded icons are a
+briefcase, conversation bubble and folder, freshly authored for the prototype. Labels stay
+visible and each tab target exceeds 44 CSS pixels. Scroll content reserves bottom space so
+its final controls can clear the floating bar.
 
-Area, project and person are different ways to select shared records. Projects span areas;
-people work across areas. Opening a project shows the whole project, with area filtering an
-explicit choice. Equipment scheduling is a required shared capability, available through
-Production, a project's schedule and the person's relevant bookings.
+Captain's forest/paper/mint colours and Fraunces/Inter type come from `packages/ui/design`;
+no design mirror files change. Compact headers contain a breadcrumb, search and avatar, with
+no logo/wordmark. Screen headings are 26px, or 25px for the project at narrow widths. Search
+and account/settings remain header controls, outside the three-tab navigation.
 
-All layouts use Captain's existing forest/paper/mint palette and Fraunces/Inter type
-from `packages/ui/design`. The app header omits the logo and wordmark: a breadcrumb or date
-occupies that space, with search and the account avatar alongside it. Screen headings are
-26px (25px for the project at narrow widths), and the project title no longer has a forced
-line break. Small navigation icons and illustrative asset thumbnails
-are authored in this prototype. No Embrace or BrewPlan code, designs or artwork is imported.
-The supplied BrewPlan mockups informed the discussion about project context and equipment
-timelines; these screens explore Captain's own navigation and visual system.
+## Editable prototype
 
-## Review the editable source
-
-[index.html](index.html) contains the original layouts and shared shell.
+[index.html](index.html) contains the shared shell and original record layouts.
 [additional-views.js](additional-views.js) and [additional-views.css](additional-views.css) contain
-the new screens and styles. All data is local illustrative content.
-Serve the repository root, then open:
+the record screens. [navigation.js](navigation.js) defines the grouped lists and saved tag
+views; [navigation.css](navigation.css) styles the floating bar and lists.
+
+Serve the repository root, for example with `python3 -m http.server 8769 --bind 127.0.0.1`, then
+open `/docs/proposals/assets/captain-mobile-2026-09-22/index.html`. The default URL opens My work.
+Use `?group=navigation`, `?group=original`, `?group=work`, `?group=resources` or `?group=files`
+for review galleries. Single-screen URLs use `?screen=` with:
 
 ```text
-/docs/proposals/assets/captain-mobile-2026-09-22/index.html
-/docs/proposals/assets/captain-mobile-2026-09-22/index.html?screen=day
-/docs/proposals/assets/captain-mobile-2026-09-22/index.html?screen=marketing
-/docs/proposals/assets/captain-mobile-2026-09-22/index.html?screen=project
-/docs/proposals/assets/captain-mobile-2026-09-22/index.html?screen=timeline
-/docs/proposals/assets/captain-mobile-2026-09-22/index.html?group=work
-/docs/proposals/assets/captain-mobile-2026-09-22/index.html?group=areas
-/docs/proposals/assets/captain-mobile-2026-09-22/index.html?group=files
+work, all-work, marketing, production, project, timeline, task,
+chat, conversation, inventory, files, asset,
+work-views, chat-views, resource-views
 ```
 
-For example, run `python3 -m http.server 8769 --bind 127.0.0.1` from the repository root.
-The PNGs need no server. The HTML uses repository-relative design tokens and the existing
-Google Fonts stylesheet; system serif/sans fallbacks apply when fonts cannot be fetched.
-
-The gallery links switch between the original set, Work & conversations, Areas & inventory,
-and Files & review. A single-screen URL uses `?screen=` with `day`, `marketing`, `project`,
-`timeline`, `work`, `task`, `chat`, `conversation`, `browse`, `production`, `inventory`, `files`
-or `asset`. Variant URLs use `?screen=task&item=artwork`, `?screen=asset&item=trade`, or
-`?screen=conversation&thread=artwork`.
+Variant URLs use `?screen=task&item=artwork`, `?screen=asset&item=trade` and
+`?screen=conversation&thread=artwork`. Old `day` and `browse` URLs redirect within the prototype
+to My work and the Resources view list respectively. PNGs need no server. Existing font
+stylesheets use Google Fonts; local serif/sans fallbacks apply if fonts cannot load.
 
 Connected review paths:
 
-- Home → Work → Confirm packaging slot → Packaging slot discussion → linked task → equipment timeline.
-- Browse → Production → Inventory → item count/source explanation.
-- Marketing → Can artwork v3 → Approve can artwork → Artwork discussion → Can artwork v3.
-- Browse → Files & assets → Trade pack v2; the selected version remains explicitly ready to use.
-- Chat → Packaging discussion → linked task; project Chat opens that same discussion.
+- My work → Views → Marketing → shared files → Can artwork → artwork task → discussion.
+- My work → filter control → All tasks → packaging task → discussion → task → equipment timeline.
+- Chat → Views → All conversations → packaging discussion → linked task.
+- Files → Views → Equipment schedule or Inventory; inventory opens honest count/source explanations.
+- Work view list → Production → whole project or shared equipment and stock.
 
-Top-level Home/Work/Chat/Browse now open their actual mockup screens. Existing task rows,
-project work areas and asset links route to the matching detail or an explicit scope note.
-Only the packaging and artwork tasks have detail variants; other tasks are illustrative rows.
-Project-list selection is a sheet, not a full project-list screen. Filters, dates, view switches,
-counts, review actions and message composition explain the intended action without saving
-anything, contacting providers, posting messages or pretending an unavailable screen exists.
-The content scrolls independently above the persistent bottom navigation.
+The filter sheet offers links to the illustrated combinations (My work, All tasks, Marketing,
+Production). Other choices, project-list selection, dates, composition, counts and review actions
+are explicit scope notes or preview sheets. They do not save data, contact providers or send
+messages. Sales, Admin, Upcoming, People, Reports, Search, Settings, Board, work Calendar and the
+full project list remain to design. Complete empty/loading/failed/disabled/permission states
+are required before implementation.
 
-The equipment preview distinguishes a confirmed tank reservation from a conflicting packaging
-request. “Review available times” opens the 1 October timeline: confirmed Pale ale packaging
-occupies 09:00–12:00, cleaning blocks 12:00–13:00, the illustrative open slot is 13:00–16:00,
-and maintenance blocks 16:00–17:00. Viewing that slot does not confirm or move a reservation.
-The hour scale is consistent across equipment columns. Project colours identify reservations;
-hatched blocks identify unavailable time, with text labels so colour is not the only cue.
-The example shows three resources; switching dates, day/week scale, filters and additional
-resources still need design and implementation. Production process tracking, recipe models and stock deductions are not
-implied by an equipment reservation.
-
-Asset thumbnails are neutral illustrative artwork. Version review, project/task backlinks and
-shared-library access are proposed; provider storage, preview and version preservation still
-follow the separate files proposal. Chat links should reference one discussion, with access
-checks in both directions, rather than duplicate message contents into each view.
+Equipment availability includes other people and projects even when Work is filtered. On
+1 October, Pale ale packaging occupies 09:00–12:00, cleaning blocks 12:00–13:00, the illustrative
+open slot is 13:00–16:00 and maintenance starts at 16:00. Viewing availability does not confirm
+or move a booking. An equipment reservation does not consume stock or imply a production
+process model. Inventory remains a counted list, with no ledger or unrelated-unit totals.
 
 ## Validation
 
-- Rendered in the shared Chromium browser using Playwright at 360, 390 and 430 CSS pixels wide.
-- Checked all thirteen screens for horizontal overflow, vertical scroll access and persistent navigation.
-- Checked that the branding is removed and screen headings use the compact type size.
-- Exercised task ↔ conversation, task → equipment, area → inventory, asset ↔ task ↔ conversation, ready-version selection, missing-count/provider-stock explanations and dismissal.
-- Checked JavaScript errors and visually inspected the captured previews.
-- PNG screen captures are 390 × 874; each gallery shows its screens at the same scale. Artwork-task and trade-pack variants are captured separately.
+The fifteen layouts are checked in shared Chromium with Playwright at 360, 390 and 430 CSS
+pixels, including overflow, three-tab labels/targets, scroll clearance, hidden list headings
+and compact record headings. Connected list/view/filter/task/chat/asset/equipment flows and
+preview sheets are exercised, and PNG exports inspected. Screen PNGs are 390 × 874; variants
+and galleries are captured separately. Both Mermaid maps are parsed and exported as SVG/PNG.
 
-This is a visual proposal with illustrative populated/conflict states. Complete empty, loading,
-failed, disabled and permission states must be designed before application implementation.
-No application typecheck, Postgres tests or production-route checks are claimed for these docs.
-
-Remaining full-screen designs include Sales, Admin/reporting, People, Reports, Search, Settings,
-the project list, Board and work Calendar. Their existing entry points remain labelled preview
-placeholders; this set does not imply those screens or any runtime capability have shipped.
+No application typecheck, Postgres tests or production-route checks are claimed for these
+documentation-only changes. The operative plan's D11 stays unchanged pending review.

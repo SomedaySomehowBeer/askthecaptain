@@ -683,8 +683,9 @@ client in Phase 2 can proceed in parallel.
   assistant. This is a proposal for review, not an adopted replacement for D1–D23. It records
   task ownership, correspondence through the API, inference boundaries, private iCloud search,
   Focus and actionable notifications, and the Apple integrations that still need device tests.
-  It also proposes Captain's area/project/person views, required equipment scheduling, shared
-  assets and linked team chat, with a connected mobile mockup set including an equipment timeline and a view map.
+  It also proposes Captain's tag/project/person views and Work/Chat/Resources navigation,
+  required equipment scheduling, shared assets and linked team chat, with a connected mobile
+  mockup set including grouped view lists, an equipment timeline and a view map.
 - Model tiers: which models sit behind `small` and `large` at launch, and whether drafting starts
   on the large tier or is measured first.
 - Whether the first customer's printable production records belong in Captain or in its asset

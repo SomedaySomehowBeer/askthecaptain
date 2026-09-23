@@ -56,11 +56,12 @@ before any removal or reassignment.
 
 ### Captain's workspace and required equipment scheduling
 
-Captain has one shared set of work, viewed by business area, project and person. The initial
-areas are Production, Marketing, Sales and Admin/reporting. A project can span all four;
-people can own tasks across all four. A task has an accountable owner, an area and an optional
-project. Recurring and standalone work need no artificial project. Areas organise work and
-navigation; they do not automatically create permission boundaries or duplicate records.
+Captain has one shared set of work, selected by tags, project and person. Production,
+Marketing, Sales and Admin/reporting are **tags**, not separate areas or workspaces. A task
+has an accountable owner, zero or more tags and an optional project. Projects and people can
+span any tags; recurring and standalone work need no artificial project. Tags do not create
+permission boundaries or duplicate records. For example, distributor samples can carry both
+Production and Sales tags while remaining one task.
 
 **Equipment scheduling is a hard requirement.** Captain must represent named equipment,
 availability and dated reservations linked to tasks/projects and responsible people. The
@@ -74,12 +75,46 @@ The first implementation needs a resource timeline and availability/rescheduling
 This introduces a fixed equipment/reservation model, not custom production processes, recipes,
 stock conversions or an inventory ledger; the data model and services need a reviewed amendment.
 
-The mobile navigation proposal is **Home, Work, Chat, Browse**, with areas and shared resources
-under Browse. Work offers different presentations of the same tasks/projects; projects bring
-together work, schedules, files and discussion. Marketing provides a home for the shared asset
-library (the DAM direction previously explored through Embrace), while Production and Sales
-can reference the same assets and versions. The files-in-place proposal remains the starting
-point for provider-held originals, previews, version review and preservation.
+The mobile navigation proposal has exactly three bottom tabs: **Work, Chat, Resources**.
+There is no Home tab. Work opens at **My work**, the working-day view filtered by **Assigned
+to you**, with all tags included and open tasks. The same Work section supports all tasks,
+projects and saved filter combinations. Filters include assignee, tags, project, status and
+date; List, Board, Calendar and Timeline change the presentation rather than the records.
+Different filter types combine with AND; multiple selected tags match any selected tag by
+default. Active filters must stay visible. Opening a project shows the whole project unless
+a project-local filter is explicitly applied.
+
+Each section has a **grouped list of views one page to the left of its selected main view**.
+This is a navigation page, not another bottom tab or an extra dashboard. It needs no visible
+page title: group headings, row labels and the selected tab provide context; an accessible
+heading still identifies the page. A back chevron from the main view returns to this list;
+the intended native interaction also supports the usual back gesture. Selecting an entry
+opens it to the right. Deeper records return to the originating context. Switching tabs should
+preserve each section's selected view and position; My work is Work's first-use default and
+an explicit entry to return to later.
+
+| Section | Grouped view list | Initial main view |
+|---|---|---|
+| Work | For you: My work, Upcoming. Across the business: All tasks, Projects. Saved views: Production, Marketing, Sales, Admin/reporting tag filters. | My work, assigned to you. |
+| Chat | Inbox: All conversations, Unread, Following. Projects: linked discussions. Team: team conversations. | All conversations. |
+| Resources | Libraries: Files & assets, Inventory. Planning: Equipment schedule. Business: People, Reports. | Files & assets in the mockup; review this default before implementation. |
+
+Marketing and Production are saved Work views, with their tag filters visible, and can offer
+shortcuts to related resources. The shared Files & assets library holds the DAM direction
+previously explored through Embrace; it lives under Resources and is available throughout the
+business. Projects bring together work, schedules, files and discussion. Provider-held originals,
+previews, version review and preservation follow the files-in-place proposal. Equipment
+availability must show competing reservations, cleaning and maintenance even when a work view
+is narrowed to one person, project or tag. A filtered task list must never imply occupied
+equipment is free.
+
+The bottom bar follows the supplied Taildrop reference: a floating rounded capsule inset from
+the screen edges, with a soft selected pill encompassing icon and label. Rounded briefcase,
+conversation and folder icons identify Work, Chat and Resources, using Captain's forest/paper/
+mint palette. Labels remain visible, tap targets are at least 44 CSS pixels, and content has
+bottom space so the bar does not cover the last item. The compact header keeps the breadcrumb,
+search and avatar, without a logo or wordmark. Search and account/settings remain header
+controls, not additional tabs.
 
 Team chat is now proposed scope: team conversations and project/task discussions with
 bidirectional links. A message can link a task or project; that record links back to the same
@@ -93,16 +128,14 @@ with an explicit authority where a commerce provider supplies a quantity. Equipm
 do not imply automatic stock consumption. D15's ledger exclusion remains until separately
 reviewed. Products, launch projects and individual production activities remain distinct.
 
-[Mobile mockups and review notes](assets/captain-mobile-2026-09-22/README.md) explore a
-person's working day, Marketing across projects, a launch across all four areas, and an
-equipment timeline across projects. The 23 September continuation adds Work, task detail,
-Chat, conversation, Browse, Production, Inventory, Files and asset detail, with connected
-paths and version-specific variants. Thirteen screens are now mocked up. Compact headers put the date or breadcrumb alongside
-search and the account avatar, with no logo/wordmark and smaller screen headings. They are
-an editable HTML prototype with PNG previews, using fictional data. They propose a replacement
-for D11's navigation; no application routes or design-system mirror files are changed.
-The accompanying [view map](assets/captain-mobile-2026-09-22/views.md) shows the navigation
-hierarchy and the links between views of the same tasks, conversations, assets and bookings.
+[Mobile mockups and review notes](assets/captain-mobile-2026-09-22/README.md) include
+fifteen screens: My work, All tasks, two saved tag views, project, equipment timeline, task,
+Chat, conversation, inventory, files, asset detail and the three grouped view lists. Connected
+paths and version-specific variants use fictional data. The editable HTML and PNG previews
+propose a replacement for D11; no application routes or design-system mirror files change.
+The accompanying [view map](assets/captain-mobile-2026-09-22/views.md) shows the three sections,
+the lists to their left and links between views of the same records. Full native transitions,
+per-tab state restoration and arbitrary filter editing remain implementation work.
 
 ## 3. Correspondence enters Captain through its API
 
@@ -395,10 +428,10 @@ reviewed amendment must reconcile the following:
 |---|---|
 | D1 and the six jobs | Redefine Captain's shared project-system scope and Pip's personal assistant scope. |
 | D2–D6 | Preserve data-only inference, typed workflows, person-scoped writes, person-sent correspondence and tenant isolation; specify Pip's local equivalents and provider drafts. |
-| D7 / D22 / D23 | Keep Captain's business task/project/evidence authority; define areas, required equipment reservations, chat/backlinks, and how Pip suggestions and shared correspondence enter without duplicating state. Amend the chat exclusion explicitly. |
+| D7 / D22 / D23 | Keep Captain's business task/project/evidence authority; define tags and saved views, required equipment reservations, chat/backlinks, and how Pip suggestions and shared correspondence enter without duplicating state. Amend the chat exclusion explicitly. |
 | D8 and connector ownership | Specify business connections in Captain and personal connections in Pip, scopes and revocation. |
 | D9 / D18 / D19 | Retain the current server runtime until explicitly amended; document Pip's Apple model adapter and device execution limits separately. |
-| D11 / D14 and mobile architecture | Review the Home/Work/Chat/Browse mobile mockups, native Apple clients and design authority before building application screens or changing tabs. |
+| D11 / D14 and mobile architecture | Review the Work/Chat/Resources mobile mockups, native Apple clients and design authority before building application screens or changing tabs. |
 | D13 / D21 and mail tables | Separate transient Pip processing and iCloud-derived index from today's Captain mailbox/vector store. Plan retention, exports and removal before retiring any current data. |
 | D12 / D16 / D17 | Review deployment and personal/business secret boundaries; no hosting or production changes in this proposal. |
 | D15 and earlier files proposal | Explicitly retain, relocate or retire existing capabilities in later slices; no assumed adoption or deletion. |
@@ -416,7 +449,7 @@ production workflows as a consequence of opening or merging a discussion proposa
 | Proof | Acceptance evidence |
 |---|---|
 | Product split | Walk through email-to-project, a personal reminder, a recurring business obligation and a daily brief; identify one authority and fewer user decisions in each. |
-| Captain mobile workspace | Walk My work → Marketing → launch project → equipment timeline using the connected mockups; also follow task ↔ conversation and asset ↔ task links. Verify area/project/person scope, access to shared assets and bidirectional conversation links without duplicate tasks or messages. |
+| Captain mobile workspace | Start at Work filtered to you, return left to its grouped view list, and select Marketing by tag. Repeat the list-to-view path for Chat and Resources; follow project → equipment, task ↔ conversation and asset ↔ task. Verify visible tag/project/person scope, the three-tab bar, conflict visibility and shared record identity. Prove native back navigation and per-tab state restoration before implementation is accepted. |
 | Equipment scheduling | Required: show a resource timeline, available and unavailable periods, and reservations linked to work/people. Prove overlap prevention under concurrent writes, maintenance/turnaround blocking, timezone handling, changes and cancellation. Conflicting requests must never appear confirmed. |
 | Reminders | Create/edit/complete in both apps; verify selected-list scope, denied permission, recurrence and cross-device identity after resync. |
 | Shared search | Find real sent/received attachments from vague descriptions on two devices; measure retrieval quality, backfill, index size and sync conflicts without retained bodies/files/text. Test deletion, disconnect and an offline device returning. |

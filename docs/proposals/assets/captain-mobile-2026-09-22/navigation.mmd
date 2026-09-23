@@ -1,38 +1,15 @@
-flowchart TD
-  mobile["Mobile navigation"]
-  mobile --> home["Home"]
-  mobile --> work["Work"]
-  mobile --> chat["Chat"]
-  mobile --> browse["Browse - mockup"]
-
-  home --> day["My work - mockup"]
-
-  work --> tasks["Task list - mockup"]
-  tasks --> taskDetail["Task detail - mockup"]
-  work --> projects["Project list"]
-  projects --> project["Project detail - mockup"]
-  work --> modes["List / Board / Calendar / Timeline"]
-
-  chat --> conversations["Chat list - mockup"]
-  conversations --> discussion["Discussion - mockup"]
-
-  browse --> areas["Business areas"]
-  areas --> production["Production - mockup"]
-  areas --> marketing["Marketing - mockup"]
-  areas --> sales["Sales"]
-  areas --> admin["Admin and reporting"]
-
-  browse --> shared["Shared resources"]
-  shared --> equipment["Equipment timeline - mockup"]
-  shared --> assets["Asset library - mockup"]
-  assets --> assetDetail["Asset detail - mockup"]
-  shared --> inventory["Inventory - mockup"]
-  shared --> people["People"]
-  shared --> reports["Reports"]
-
-  production -.->|"Opens schedule"| equipment
-  marketing -.->|"Opens DAM"| assets
-  project -.->|"Opens schedule"| equipment
-
+flowchart LR
+  tabs["Three tabs<br/>Each opens its selected main view"]
+  tabs --> work["Work main views - mockups<br/>My work: Assigned to you - default<br/>All tasks / Marketing / Production"]
+  tabs --> chat["Chat main view - mockup<br/>All conversations - default"]
+  tabs --> resources["Resources main views - mockups<br/>Files and assets - default<br/>Inventory / Equipment schedule"]
+  workList["Work view list - mockup<br/>For you / Business / Saved views"] <-->|"Left: list / Right: view"| work
+  chatList["Chat view list - mockup<br/>Inbox / Projects / Team"] <-->|"Left: list / Right: view"| chat
+  resourceList["Resources view list - mockup<br/>Libraries / Planning / Business"] <-->|"Left: list / Right: view"| resources
+  work --> detail["Task / Project detail - mockups"]
+  chat --> discussion["Conversation - mockup"]
+  resources --> asset["Asset version - mockup"]
+  detail -.->|"Linked discussion"| discussion
+  detail -.->|"Files / Equipment"| resources
   classDef mocked fill:#CDF4D3,stroke:#66D575
-  class day,project,marketing,equipment,tasks,taskDetail,conversations,discussion,browse,production,assets,assetDetail,inventory mocked
+  class work,chat,resources,workList,chatList,resourceList,detail,discussion,asset mocked

@@ -1,12 +1,12 @@
 flowchart LR
   subgraph perspectives["Choose a perspective"]
     day["My work"]
-    area["Business area"]
+    tags["Tag filter"]
     person["Person"]
     project["Project"]
   end
   day -->|"My assignments"| task["Same task"]
-  area -->|"Area work"| task
+  tags -->|"One or more tags"| task
   person -->|"Their assignments"| task
   project -->|"Project work"| task
   task <-->|"Discussion links"| discussion["Same conversation"]
