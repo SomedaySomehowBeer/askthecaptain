@@ -3,6 +3,9 @@
 Plan §9: backups with a rehearsed restore before the second tenant. There is one Neon database
 (D17); it is backed up two ways, and the restore is rehearsed every night.
 
+> **Paused 2026-09-23:** the `backup` workflow is disabled and was failing on a `pg_dump` version
+> mismatch; see [paused.md](paused.md).
+
 ## What runs on its own
 
 The `backup` GitHub Actions workflow (`.github/workflows/backup.yml`) runs at 00:30 Perth time and
