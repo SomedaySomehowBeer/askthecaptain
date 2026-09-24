@@ -10,7 +10,7 @@ export async function decideProject(form: FormData): Promise<DiscoveryResult> {
 	if (!id || !['accept', 'discard'].includes(decision)) return { error: 'Choose Accept or Discard.' };
 	try { await api(`/v1/organisations/${me.organisation.organisationId}/projects/${encodeURIComponent(id)}/${decision}`, { method: 'POST', token: me.token }); }
 	catch (error) { return fail(error, 'That did not work. Try again.'); }
-	revalidatePath('/commitments'); revalidatePath('/'); return { ok: true };
+	revalidatePath('/commitments'); revalidatePath('/'); revalidatePath('/today'); revalidatePath('/work'); return { ok: true };
 }
 /** Make this a project: a person chooses a thread or note; the next discovery run starts from it. */
 export async function requestDiscovery(_state: DiscoveryResult | undefined, form: FormData): Promise<DiscoveryResult> {

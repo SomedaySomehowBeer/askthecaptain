@@ -9,7 +9,7 @@ import { cookieOptions, current, organisationCookie } from '../../../lib/session
 export const metadata: Metadata = { title: 'Invitation' };
 
 /** The invitee arrives with a token. They sign in first (the API insists the signed-in email is the
- *  invited one), then the invitation is accepted on the server and they land on Today. */
+ *  invited one), then the invitation is accepted on the server and they land on Work. */
 export default async function AcceptInvitationPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
 	const { token } = await searchParams;
 	if (!token) return <Refusal>This link is missing its invitation.</Refusal>;
@@ -28,7 +28,7 @@ function Refusal({ children }: { children: React.ReactNode }) {
 	return (
 		<main className="page page--narrow">
 			<header className="stack"><Captain size={48} /><h1>Invitation</h1></header>
-			<Notice tone="attention" title="This invitation cannot be used." action={{ href: '/', label: 'Go to Today' }}>{children}</Notice>
+			<Notice tone="attention" title="This invitation cannot be used." action={{ href: '/', label: 'Go to Work' }}>{children}</Notice>
 		</main>
 	);
 }

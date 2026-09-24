@@ -1,5 +1,5 @@
-/* Tokens come from the design system verbatim (packages/ui/design, the mirror of the Claude Design
-   project). Nothing below hard-codes a colour; the app's names alias the system's. */
+/* Legacy tokens remain verbatim. Workspace extensions below follow the reviewed repository
+   mobile mockups (D14); no changes are made to the old design mirror. */
 @import '@captain/ui/design/tokens/colors.css';
 @import '@captain/ui/design/tokens/typography.css';
 @import '@captain/ui/design/tokens/spacing.css';
@@ -43,20 +43,39 @@ a { color: var(--accent-text); }
 .wordmark { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-family: var(--font-display); font-size: 17px; white-space: nowrap; margin-right: auto; }
 .captain { display: inline-block; flex: none; background-color: currentColor; -webkit-mask: var(--captain-src) center / contain no-repeat; mask: var(--captain-src) center / contain no-repeat; }
 .topnav { display: flex; gap: 4px; }
-.topnav__link { padding: 8px 12px; border-radius: 999px; color: var(--ink-2); text-decoration: none; font-weight: 500; }
-.topnav__link[aria-current='page'] { color: var(--ink); background: var(--panel-2); }
+.topnav__link { display: inline-flex; gap: 7px; align-items: center; min-height: 44px; padding: 8px 12px; border-radius: 999px; color: var(--ink-2); text-decoration: none; font-weight: 500; }
+.topnav__link[aria-current='page'] { color: var(--accent-text); background: var(--panel-2); }
 .avatar { width: 36px; height: 36px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; background: var(--accent-soft, var(--atc-mint-soft)); color: var(--ink); font-weight: 700; font-size: 13px; text-decoration: none; }
 .tabbar { display: none; }
 @media (max-width: 640px) {
 	:root { --tabbar-h: calc(80px + env(safe-area-inset-bottom, 0px)); }
 	.topnav { display: none; }
 	.wordmark__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-	.tabbar { display: flex; position: fixed; left: 10px; right: 10px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 10; padding: 6px; gap: 2px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--panel) 86%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.3); backdrop-filter: blur(18px) saturate(1.3); box-shadow: var(--shadow-float); }
-	.tabbar__tab { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 52px; padding: 4px 7px; color: var(--muted); text-decoration: none; border-radius: 999px; }
-	.tabbar__tab[aria-current='page'] { color: var(--accent-text); background: var(--accent-soft, var(--atc-mint-soft)); }
+	.tabbar { display: flex; position: fixed; left: 50%; width: calc(80% - 22.4px); min-width: 244px; transform: translateX(-50%); bottom: calc(19px + env(safe-area-inset-bottom, 0px)); z-index: 10; padding: 3px; gap: 1px; border: 1px solid #ffffffcc; border-radius: 30px; background: #fffdf7ed; -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); box-shadow: 0 3px 8px #1426190a, 0 8px 26px #1426191a; }
+	.tabbar__tab { flex: 1 1 0; min-width: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 46px; padding: 1px 6px; color: #647367; text-decoration: none; border-radius: 30px; }
+	.tabbar__tab[aria-current='page'] { color: #197334; background: rgb(217 222 214 / 50%); }
 	.tabbar__tab:active { opacity: var(--press-opacity); }
 	.tabbar__label { font-size: 11px; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
 }
+
+.workspace-crumb { margin-right: auto; min-width: 0; }
+.workspace-crumb a { display: inline-flex; gap: 10px; align-items: center; min-height: 44px; font-weight: 600; text-decoration: none; }
+.workspace-crumb span { font-size: 28px; line-height: 1; }
+.avatar { flex-shrink: 0; }
+.shell .page > header h1 { font-size: clamp(26px, 5vw, 34px); }
+.shell .page { padding-top: 20px; gap: 20px; }
+.view-group h2 { margin-bottom: 10px; font-size: 14px; color: var(--muted); }
+.view-group__rows { gap: 0; border: 1px solid var(--line); border-radius: var(--radius-card); overflow: hidden; background: var(--panel); }
+.view-group__rows li + li { border-top: 1px solid var(--line); }
+.view-row { display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 14px 16px; min-height: 68px; text-decoration: none; color: var(--ink); }
+.view-row strong, .view-row small { display: block; }
+.view-row small { color: var(--muted); margin-top: 3px; font-size: 13px; }
+.view-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.view-row--disabled { flex-wrap: wrap; }
+:root[data-theme='dark'] .tabbar { background: color-mix(in srgb, var(--panel) 94%, transparent); border-color: var(--line); }
+:root[data-theme='dark'] .tabbar__tab { color: var(--muted); }
+:root[data-theme='dark'] .tabbar__tab[aria-current='page'] { color: var(--accent-text); background: var(--panel-2); }
+[id] { scroll-margin-top: 90px; }
 
 /* Page and cards */
 .page { width: 100%; min-width: 0; max-width: 880px; margin: 0 auto; padding: 32px 20px max(64px, calc(24px + var(--tabbar-h))); display: flex; flex-direction: column; gap: 24px; }

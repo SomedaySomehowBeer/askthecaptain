@@ -7,7 +7,7 @@ Jobs advanced: **own commitments** and **brief and answer**.
 The [product proposal](../proposals/2026-09-22-captain-and-pip.md) defines the intended
 Captain/Pip split. This plan turns that direction into reviewable slices. The adopted [plan](../plan.md)
 (D1–D25) reconciles the product/navigation/design decisions; this sequence does not itself migrate
-production or require Pip before Captain is useful. Preserve the [operational pause](../runbooks/paused.md).
+production or require Pip before Captain is useful. Production remains paused; [operational status](../runbooks/paused.md) records the owner’s staging-only authorisation (at most one machine per app).
 
 ## Where this stands (24 September 2026)
 
@@ -15,12 +15,30 @@ production or require Pip before Captain is useful. Preserve the [operational pa
 |---|---|
 | 0. Architecture proof | Built as a fictional harness; web checks and bundle exports pass locally and in the new `client-proof` CI check ([#120](https://github.com/SomedaySomehowBeer/askthecaptain/pull/120)). Native-device acceptance has not been run. |
 | 1. Reviewed amendments | Done: plan D1–D25 and the migration inventory merged in #116. |
-| 2. Client and work foundation | Started: task tags and the filtered work query (migration 0035) are in PR #117, open. No workspace shell, saved views or `apps/mobile` yet. |
+| 2. Client and work foundation | In progress: task/tag API merged in #117. Web now has the three-tab shell, grouped view lists, real filtered Work and task creation. Saved views, task tag editing UI and `apps/mobile` remain; this does not complete slice 2. |
 | 3–7 | Not started. Equipment, chat, files, mobile builds and Pip integration are designs, not code. |
 | Pip | Separate product, tracked in [#119](https://github.com/SomedaySomehowBeer/askthecaptain/issues/119); no Captain slice waits for it. |
 
 Slice numbers are this plan's own; they are unrelated to the historical phases 0–5 in plan §11.
-The production pause in [paused.md](../runbooks/paused.md) applies to every slice.
+Production stays paused through every slice. Staging may be resumed when needed under the one-machine-per-app limit; the local web checks do not require it.
+
+## First web foundation increment
+
+- `/` opens `/work`: your open tasks, with visible owner, status, project and tag filters in the URL.
+  Pagination preserves the filter; selected lookup values survive partial read failures.
+- `/work/new` creates through the existing authenticated task API. Task links open the existing
+  Commitments record, revealing completed tasks where necessary. Cancelled rows are readable but explicitly have no
+  detail page in this increment.
+- Work, Chat and Resources have grouped `/views` lists. Tab route/filter state is remembered for
+  this browser session, scoped to person and organisation. Full scroll/native stack restoration
+  remains an acceptance item; this is not saved-view persistence.
+- `/today` retains the former landing page. Existing Inbox, Calendar, Commitments, Notes, stock,
+  contacts, connections and Settings remain reachable. Inventory at `/resources/inventory` reuses the existing counted-stock controls while retaining
+  Resources navigation; the legacy Commitments stock section remains available.
+- Chat and Files & assets are explicitly unavailable. No fictional records, free-equipment
+  assertions or create actions for unimplemented capabilities are exposed.
+- Project/member labels currently come from existing overview APIs; a smaller lookup endpoint,
+  saved filters, task tag editing and native integration are subsequent work.
 
 ## Outcome and first usable release
 

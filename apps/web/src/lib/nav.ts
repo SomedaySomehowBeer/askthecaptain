@@ -1,13 +1,26 @@
-/** The five tabs, named once: the tab label, the page title and the URL are the same word. */
+/** Workspace sections; existing record URLs keep their identity during migration (D11). */
 export type Tab = { href: string; label: string };
 export const tabs: Tab[] = [
-	{ href: '/', label: 'Today' },
-	{ href: '/inbox', label: 'Inbox' },
-	{ href: '/commitments', label: 'Commitments' },
-	{ href: '/calendar', label: 'Calendar' },
-	{ href: '/settings', label: 'Settings' }
+	{ href: '/work', label: 'Work' },
+	{ href: '/chat', label: 'Chat' },
+	{ href: '/resources', label: 'Resources' }
 ];
 export const here = (pathname: string, href: string) => href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
+export function workspaceSection(pathname: string): string | null {
+	if (here(pathname, '/chat')) return '/chat';
+	if (here(pathname, '/resources') || here(pathname, '/settings/connections') || here(pathname, '/settings/contacts') || here(pathname, '/inbox/contacts') || here(pathname, '/inbox/companies')) return '/resources';
+	if (['/work', '/today', '/commitments', '/calendar', '/inbox', '/notes'].some(path => here(pathname, path)) || pathname === '/') return '/work';
+	return null;
+}
+/** Session storage is optional and untrusted: never turn a stored route into an external link. */
+export function rememberedView(value: string | null, section: string): string {
+	if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return section;
+	try {
+		const url = new URL(value, 'https://captain.invalid');
+		if (url.origin !== 'https://captain.invalid' || workspaceSection(url.pathname) !== section || url.pathname.endsWith('/views')) return section;
+		return url.pathname + url.search + url.hash;
+	} catch { return section; }
+}
 export function initialsOf(name: string, email: string): string {
 	const words = name.trim().split(/\s+/).filter(Boolean);
 	if (words.length === 0) return (email[0] ?? '?').toUpperCase();

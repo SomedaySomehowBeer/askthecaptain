@@ -26,7 +26,7 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
 			<header className="stack">
 				<Captain size={48} />
 				<h1>Ask The Captain</h1>
-				<p>An administrative assistant for your business.</p>
+				<p>A shared workspace for your business.</p>
 			</header>
 			{params.error ? <Notice tone="attention">{said[params.error] ?? 'Sign-in did not finish. Try again.'}</Notice> : null}
 			{!providers.ok ? <Notice tone="failed" title="Captain cannot reach its API.">Sign-in is not possible just now. Try again in a minute.</Notice>

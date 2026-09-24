@@ -70,7 +70,7 @@ export class BriefService {
   } });
   registry.registerStep('briefs.record', { kind: 'write', transaction: (ctx, args) => this.record(ctx, args as unknown as Sources & { brief: unknown }) });
   registry.registerStep('push.owner', { kind: 'notify', retrySafe: true, call: async (ctx, args) => {
-   const deliveries = await push.send(ctx.organisationId, ctx.userId, { title: (args.brief as Brief).title, body: 'Open Captain for your morning brief.', url: '/', tag: ctx.idempotencyKey }, { runId: ctx.runId, actor: { userId: ctx.userId, requestId: ctx.runId } });
+   const deliveries = await push.send(ctx.organisationId, ctx.userId, { title: (args.brief as Brief).title, body: 'Open Captain for your morning brief.', url: '/today', tag: ctx.idempotencyKey }, { runId: ctx.runId, actor: { userId: ctx.userId, requestId: ctx.runId } });
    if (!deliveries.some(d => d.state === 'sent')) throw Error('The brief is saved in Today, but push could not be sent. Check your devices in Settings → Notifications, then retry the run.');
    return { sent: deliveries.filter(d => d.state === 'sent').length, failed: deliveries.filter(d => d.state !== 'sent').length };
   } });

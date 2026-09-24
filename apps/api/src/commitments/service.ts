@@ -9,7 +9,7 @@ export type TaskStatus = 'suggested' | 'open' | 'in_progress' | 'done' | 'cancel
 export type BriefLine = { text: string; evidence: { kind: 'mail_thread' | 'note'; id: string } | null };
 export type Brief = { what: BriefLine[]; standing: BriefLine[]; people: BriefLine[]; questions: BriefLine[] };
 export const briefSections = ['what', 'standing', 'people', 'questions'] as const;
-export type Project = { id: string; name: string; description: string; stages: string[]; stage: 'idea' | 'underway'; brief: Brief; briefUpdatedAt: Date | null; ownerId: string | null; systemKind: 'obligations' | null;
+export type Project = { id: string; name: string; description: string; stages: string[]; stage: 'idea' | 'underway'; state: 'proposed' | 'active' | 'archived'; brief: Brief; briefUpdatedAt: Date | null; ownerId: string | null; systemKind: 'obligations' | null;
 	archivedAt: Date | null; createdAt: Date; updatedAt: Date };
 export type Task = { id: string; projectId: string; parentId: string | null; title: string; body: string; status: TaskStatus; ownerId: string | null; ownerName: string | null;
 	due: string | null; sourceKind: 'person' | 'mail' | 'series' | 'run'; sourceId: string | null; seriesId: string | null; periodStart: string | null;
@@ -21,7 +21,7 @@ export type Series = { id: string; projectId: string; title: string; body: strin
 export type ProjectSource = { projectId: string; kind: 'mail_thread' | 'note'; id: string; title: string; at: Date | null; linkedBy: 'rule' | 'model' | 'person'; total: number };
 export type Overview = { projects: Project[]; tasks: Task[]; series: Series[]; links: ProjectSource[]; today: string; timezone: string };
 
-const projectColumns = 'id, name, description, stages, stage, brief, brief_updated_at, owner_id, system_kind, archived_at, created_at, updated_at';
+const projectColumns = 'id, name, description, stages, stage, state, brief, brief_updated_at, owner_id, system_kind, archived_at, created_at, updated_at';
 const seriesColumns = 'id, project_id, title, body, owner_id, evidence_required, recurrence, every_months, anchor::text as anchor, due_offset_days, paused_at, created_at, updated_at';
 const taskSelect = `select t.id, t.project_id, t.parent_id, t.title, t.body, t.status, t.owner_id, u.name as owner_name, t.due::text as due, t.source_kind, t.source_id, t.series_id,
 	t.period_start::text as period_start, t.period_end::text as period_end, coalesce(s.evidence_required, false) as evidence_required, t.completed_by, t.completed_at, t.created_at, t.updated_at

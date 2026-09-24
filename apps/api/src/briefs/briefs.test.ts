@@ -24,7 +24,7 @@ it('the real runner saves a validated local-date brief, audits it and pushes the
   const input = f.provider.requests.at(-1)!; assert.match(input.instruction, /UNTRUSTED DATA/); assert.match(input.input, /untrustedContent/);
   assert.ok(!JSON.stringify(input.input).includes('PRIVATE')); assert.ok(!JSON.stringify(input.input).includes('fixture-token'));
   assert.match(input.input, /"period":"overdue"/); assert.match(input.input, /"period":"today"/); assert.match(input.input, /"period":"suggested"/);
-  assert.equal(f.payloads.length, 1); assert.equal(f.payloads[0]!.endpoint, 'https://push.example.test/owner'); assert.equal(f.payloads[0]!.payload.title, f.output.title); assert.equal(f.payloads[0]!.payload.url, '/');
+  assert.equal(f.payloads.length, 1); assert.equal(f.payloads[0]!.endpoint, 'https://push.example.test/owner'); assert.equal(f.payloads[0]!.payload.title, f.output.title); assert.equal(f.payloads[0]!.payload.url, '/today');
   const [audit] = await f.tx(tx => tx`select actor_kind, actor_id from audit_events where action = 'brief.produced'`); assert.equal(audit!.actorKind, 'workflow'); assert.equal(audit!.actorId, f.userId);
   const requests = f.provider.requests.length; await f.engine.boss.send('workflow_morning-brief', { organisationId: f.org, runId: run });
   await new Promise(resolve => setTimeout(resolve, 1200));

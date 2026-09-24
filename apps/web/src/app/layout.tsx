@@ -4,7 +4,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
 	title: { default: 'Ask The Captain', template: '%s · Ask The Captain' },
-	description: 'An administrative assistant for small businesses.',
+	description: 'Shared projects, tasks and resources for small businesses.',
 	manifest: '/manifest.webmanifest',
 	appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Captain' },
 	icons: { icon: [{ url: '/brand/favicon.png', type: 'image/png' }, { url: '/brand/captain.svg', type: 'image/svg+xml' }], apple: '/brand/icon.png' }

@@ -50,7 +50,7 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 | Path | What |
 |---|---|
 | `apps/api` | Hono API: auth, routes over services, webhooks, health |
-| `apps/web` | Next.js app, phone-first, server components read the API; still the legacy five tabs until the workspace shell slice |
+| `apps/web` | Next.js app, phone-first, server components read the API; Work/Chat/Resources shell with retained legacy routes |
 | `apps/e2e` | Playwright deployment smoke suite and isolated browser regression checks |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Google, Xero, Shopify |
@@ -89,8 +89,9 @@ pnpm workspace, not application code.
 - Do not import code or designs from other projects. This repository is self-contained; anything
   worth having is written here against the plan.
 - Production deploys, infrastructure applies, DNS, secrets and anything legal are the repository
-  owner's to do. Prepare them; do not run them. Preserve the pause in `docs/runbooks/paused.md`;
-  development does not authorise resuming machines, deployments, backups or provider schedules.
+  owner's to do. Prepare them; do not run them. The owner authorised reviewed PR merges and staging-only resumption on 24 September 2026,
+  with at most one machine per app. Production remains paused; backups are a separate operation.
+  Follow `docs/runbooks/paused.md` and record any actual operational changes there.
 - On a shared development machine, run one build or test at a time; wrap heavy commands in
   `flock /tmp/atc-build.lock`.
 

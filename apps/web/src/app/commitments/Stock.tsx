@@ -6,9 +6,9 @@ import { requireCurrent } from '../../components/Page.tsx';
 import { api, load } from '../../lib/api.ts';
 import { ArchiveStock, CountForm, StockForm, type StockItem, type Supplier } from './StockForms.tsx';
 type Stock = { items: StockItem[]; locations: string[]; suppliers: Supplier[]; timezone: string };
-export async function StockSection({ me, shopifyOffset = 0 }: { me: Awaited<ReturnType<typeof requireCurrent>>; shopifyOffset?: number }) {
- const [result, shopify] = await Promise.all([load(() => api<Stock>(`/v1/organisations/${me.organisation.organisationId}/stock?includeArchived=1`, { token: me.token })), ShopifyStock({ me, offset: shopifyOffset })]);
- if (!result.ok) return <section className="card" aria-labelledby="stock-heading" id="stock"><h2 id="stock-heading">Stock</h2><Notice tone="failed" action={{ href: '/commitments', label: 'Try again' }}>{result.error.message} The stock list could not be read.</Notice>{shopify}</section>;
+export async function StockSection({ me, shopifyOffset = 0, basePath = '/commitments' }: { me: Awaited<ReturnType<typeof requireCurrent>>; shopifyOffset?: number; basePath?: string }) {
+ const [result, shopify] = await Promise.all([load(() => api<Stock>(`/v1/organisations/${me.organisation.organisationId}/stock?includeArchived=1`, { token: me.token })), ShopifyStock({ me, offset: shopifyOffset, basePath })]);
+ if (!result.ok) return <section className="card" aria-labelledby="stock-heading" id="stock"><h2 id="stock-heading">Stock</h2><Notice tone="failed" action={{ href: basePath, label: 'Try again' }}>{result.error.message} The stock list could not be read.</Notice>{shopify}</section>;
  const { items, locations, suppliers, timezone } = result.value;
  const active = items.filter((i) => !i.archivedAt); const archived = items.filter((i) => i.archivedAt);
  const line = (item: StockItem) => <article className="stack" key={item.id} aria-label={item.name} style={{ borderTop: '1px solid var(--line)', paddingTop: '1rem', overflowWrap: 'anywhere' }}>

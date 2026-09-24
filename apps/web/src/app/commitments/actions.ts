@@ -10,7 +10,7 @@ const text = (form: FormData, name: string) => String(form.get(name) ?? '').trim
 const optional = (value: string) => value || undefined;
 
 async function who() { const me = await current(); if (!me?.organisation) redirect('/sign-in?return_to=/commitments'); return { token: me.token, org: me.organisation.organisationId }; }
-const done = (): Result => { revalidatePath('/commitments'); revalidatePath('/'); return { ok: true }; };
+const done = (): Result => { revalidatePath('/commitments'); revalidatePath('/'); revalidatePath('/today'); revalidatePath('/work'); return { ok: true }; };
 
 export async function createTask(_: Result | undefined, form: FormData): Promise<Result> {
 	const { token, org } = await who();
