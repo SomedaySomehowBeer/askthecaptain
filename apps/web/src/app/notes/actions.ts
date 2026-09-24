@@ -11,17 +11,17 @@ export async function createNote(_: unknown, form: FormData): Promise<Result> {
  const me = await requireCurrent('/notes'); let id: string;
  try { ({ id } = await api<{ id: string }>(`/v1/organisations/${me.organisation.organisationId}/notes`, { method: 'POST', token: me.token, body: body(form) })); }
  catch (error) { return { error: error instanceof ApiError ? error.message : 'The note could not be saved. Try again.' }; }
- revalidatePath('/notes'); revalidatePath('/'); redirect(`/notes/${id}`);
+ revalidatePath('/notes'); revalidatePath('/'); revalidatePath('/today'); revalidatePath('/work'); redirect(`/notes/${id}`);
 }
 export async function updateNote(_: unknown, form: FormData): Promise<Result> {
  const me = await requireCurrent('/notes'); const id = String(form.get('id'));
  try { await api(`/v1/organisations/${me.organisation.organisationId}/notes/${encodeURIComponent(id)}`, { method: 'PUT', token: me.token, body: body(form) }); }
  catch (error) { return { error: error instanceof ApiError ? error.message : 'The note could not be saved. Try again.' }; }
- revalidatePath('/notes', 'layout'); revalidatePath('/');
+ revalidatePath('/notes', 'layout'); revalidatePath('/'); revalidatePath('/today'); revalidatePath('/work');
 }
 export async function archiveNote(_: unknown, form: FormData): Promise<Result> {
  const me = await requireCurrent('/notes'); const id = String(form.get('id'));
  try { await api(`/v1/organisations/${me.organisation.organisationId}/notes/${encodeURIComponent(id)}/archive`, { method: 'POST', token: me.token }); }
  catch (error) { return { error: error instanceof ApiError ? error.message : 'The note could not be archived. Try again.' }; }
- revalidatePath('/notes', 'layout'); revalidatePath('/'); redirect('/notes');
+ revalidatePath('/notes', 'layout'); revalidatePath('/'); revalidatePath('/today'); revalidatePath('/work'); redirect('/notes');
 }

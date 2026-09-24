@@ -94,8 +94,8 @@ export class StocktakeService {
   } });
   registry.registerStep('push.counter', { kind: 'notify', retrySafe: true, call: async (ctx: HandlerContext, args) => {
    const item = itemSchema.parse(args.item);
-   const deliveries = await this.push.send(ctx.organisationId, ctx.userId, { title: `Count ${item.name}`, body: `Enter the ${item.unitLabel} at ${item.location} in Stock.`, tag: `stock:${item.id}`, url: '/commitments#stock' }, { runId: ctx.runId, actor: { userId: ctx.userId, requestId: ctx.runId } });
-   const note = deliveries.length ? 'Count requested. Delivery results are recorded per device.' : 'No subscribed device for the enabling person. Enter counts in Commitments → Stock.';
+   const deliveries = await this.push.send(ctx.organisationId, ctx.userId, { title: `Count ${item.name}`, body: `Enter the ${item.unitLabel} at ${item.location} in Stock.`, tag: `stock:${item.id}`, url: '/resources/inventory#stock' }, { runId: ctx.runId, actor: { userId: ctx.userId, requestId: ctx.runId } });
+   const note = deliveries.length ? 'Count requested. Delivery results are recorded per device.' : 'No subscribed device for the enabling person. Enter counts in Resources → Inventory.';
    await withTenant(this.db, ctx, tx => journal({ ...ctx, tx }, 'stock.count_requested', 'stock_item', item.id, { note })); return { deliveries, note };
   } });
   if (!registry.handlers.has('outbox.create')) registry.registerStep('outbox.create', { kind: 'write', transaction: workflowDraft });

@@ -36,7 +36,7 @@ it('real runner wakes from a member’s HTTP count, reorders only below threshol
   assert.equal((await request('workflows/stocktake/run', owner, { parameters: { nonsense: true } })).status, 400);
   f.provider.responses.push(result({ body: 'Could you advise availability and a suitable order quantity for malt?' }));
   const response = await request('workflows/stocktake/run', owner, { parameters: { location: 'Store' } }); assert.equal(response.status, 202); const { runId } = await response.json() as { runId: string };
-  await state(f, runId, 'waiting'); assert.equal(f.pushes.length, 1); assert.equal(f.pushes[0]!.tag, `stock:${a.id}`); assert.equal(f.pushes[0]!.url, '/commitments#stock');
+  await state(f, runId, 'waiting'); assert.equal(f.pushes.length, 1); assert.equal(f.pushes[0]!.tag, `stock:${a.id}`); assert.equal(f.pushes[0]!.url, '/resources/inventory#stock');
   assert.equal((await request(`stock/${a.id}/count`, member, { count: '2.5' })).status, 201);
   await until(() => f.tx(tx => tx`select wait_key from workflow_run_steps where run_id = ${runId} and state = 'waiting'`), rows => rows.some(r => r.waitKey === `stock:${b.id}`));
   await f.stock.count(f.member, f.org, b.id, { count: '8' }); await state(f, runId, 'succeeded');

@@ -55,3 +55,17 @@ it('the brief and stage are saved by a person; a line may cite only a thread or 
 		assert.equal((await c.overview(f.actor, f.org)).projects.find(p => p.id === taproom.id)!.stage, 'idea');
 	} finally { await f.engine.close(); }
 });
+
+it('project responses expose the database state used by Work filters and Commitments sections', async () => {
+ const f = await triageFixture(db); try {
+  const c = new CommitmentsService(db.app);
+  const project = await c.createProject(f.actor, f.org, { name: 'Visible launch' });
+  assert.equal(project.state, 'active');
+  assert.equal((await c.overview(f.actor, f.org)).projects.find(p => p.id === project.id)!.state, 'active');
+  assert.equal((await c.updateProject(f.actor, f.org, project.id, { archived: true })).state, 'archived');
+  assert.equal((await c.overview(f.actor, f.org)).projects.find(p => p.id === project.id)!.state, 'archived');
+  await c.updateProject(f.actor, f.org, project.id, { archived: false });
+  await f.tx(tx => tx`update projects set proposed_at = now(), accepted_at = null where id = ${project.id}`);
+  assert.equal((await c.overview(f.actor, f.org)).projects.find(p => p.id === project.id)!.state, 'proposed');
+ } finally { await f.engine.close(); }
+});

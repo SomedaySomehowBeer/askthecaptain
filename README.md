@@ -5,10 +5,12 @@ their owners, tags, equipment reservations, and the conversations and evidence a
 organised into **Work, Chat and Resources**.
 A separate personal assistant, Pip, will handle each person's own mail, calendar and reminders.
 
-The existing implementation is the earlier product, an administrative assistant with five tabs
-(Today, Inbox, Commitments, Calendar, Settings). Its routes and data are retained while the workspace
-replaces it slice by slice. Tags, chat, equipment scheduling and the mobile app are planned, not
-built. The hosted service is paused ([docs/runbooks/paused.md](docs/runbooks/paused.md)).
+The web app now has the Work/Chat/Resources shell. Work lists real tasks, defaults to your open
+tasks, and supports owner, status, project and tag filters plus task creation. Existing pages and
+data remain reachable through the grouped view lists; the former landing page is at `/today`.
+Chat, equipment scheduling, saved views and the mobile app remain to be built. Hosted services
+remain recorded as stopped; staging-only resumption is authorised when needed, with at most one
+machine per app ([operational status](docs/runbooks/paused.md)).
 
 - [The plan](docs/plan.md) is the source of truth: what Captain is and its decisions.
 - [The delivery plan](docs/plans/captain-workspace-delivery-2026-09.md) sequences the workspace.

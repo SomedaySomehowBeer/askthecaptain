@@ -1,3 +1,4 @@
+import { RevealTask } from './RevealTask.tsx';
 import { SaveForm } from './SaveForm.tsx';
 import { StockSection } from './Stock.tsx';
 import type { Metadata } from 'next';
@@ -21,7 +22,7 @@ function TaskLine({ task, steps, today, timezone, showProject }: { task: Task; s
 	const doneWhen = task.completedAt ? `done ${shortDate(dateIn(task.completedAt, timezone))}` : null;
 	const stepsDone = steps?.filter((s) => s.status === 'done').length ?? 0;
 	return (
-		<li className={`task${task.status === 'done' ? ' task--done' : ''}`}>
+		<li id={showProject ? undefined : `task-${task.id}`} className={`task${task.status === 'done' ? ' task--done' : ''}`}>
 			<div className="task__body">
 				<span className="task__title">{task.title}</span>
 				<span className="task__meta">
@@ -36,7 +37,7 @@ function TaskLine({ task, steps, today, timezone, showProject }: { task: Task; s
 					{steps && steps.length > 0 ? <span>{stepsDone} of {steps.length} steps done{stepsDone === steps.length && task.status !== 'done' ? ': mark the task done when it is' : ''}</span> : null}
 				</span>
 				{task.body ? <span className="secondary">{task.body}</span> : null}
-				{steps && steps.length > 0 ? <ul className="bare task__steps">{steps.map((step) => <TaskLine key={step.id} task={step} today={today} timezone={timezone} />)}</ul> : null}
+				{steps && steps.length > 0 ? <ul className="bare task__steps">{steps.map((step) => <TaskLine key={step.id} task={step} showProject={showProject} today={today} timezone={timezone} />)}</ul> : null}
 				{steps && isOpen(task) ? <details className="disclosure"><summary>Add a step</summary><StepForm taskId={task.id} /></details> : null}
 			</div>
 			<span className="task__actions">
@@ -174,6 +175,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 	const byProject = (id: string) => ({ tasks: tasks.filter((t) => t.projectId === id), series: series.filter((s) => s.projectId === id), links: links.filter((l) => l.projectId === id) });
 	return (
 		<Page title="Commitments" lede={nothingYet ? 'One list of what the business owes: projects, tasks and the duties that come round every period.' : me.organisation.organisationName}>
+			<RevealTask />
 			{nothingYet ? (
 				<Notice title="Nothing is owed yet.">Add a task to any project, or a recurring duty to the deadline book. When mail is connected, triage will add suggested tasks here too.</Notice>
 			) : attention.length > 0 ? (
@@ -190,7 +192,7 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 				<TaskForm projects={live} compact />
 			</section>
 			{live.map((project) => <ProjectCard key={project.id} project={project} projects={live} today={today} timezone={timezone} {...byProject(project.id)} />)}
-			<section className="card">
+			<section className="card" id="new-project">
 				<h2>New project</h2>
 				<p className="secondary">A project is a name for a stream of work: Wholesale, Production, the new taproom. Tasks and duties belong to one.</p>
 				<ProjectForm />

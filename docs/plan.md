@@ -5,8 +5,9 @@ merged product proposal #114. This document is the source of truth for what Capt
 recorded in §13 and changed only by a reviewed pull request. Target behaviour below is delivered
 in the [workspace sequence](plans/captain-workspace-delivery-2026-09.md); naming a capability here
 does not claim it is implemented. Existing personal-assistant behaviour remains a compatibility
-surface until its data and workflows are deliberately migrated. The operational pause in
-[paused.md](runbooks/paused.md) remains in force; development does not authorise a resume.
+surface until its data and workflows are deliberately migrated. Production remains paused. The owner authorised staging-only resumption when needed on
+24 September 2026, with at most one machine per app; actual operational changes are recorded in
+[paused.md](runbooks/paused.md).
 
 ## 1. What Captain is
 
@@ -89,7 +90,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | Path | What |
 |---|---|
 | `apps/api` | Hono HTTP API: auth, routes over services, webhooks, health |
-| `apps/web` | Next.js; server components read the API. Today it is the legacy five-tab app (Today, Inbox, Commitments, Calendar, Settings); the responsive Work/Chat/Resources shell is a later slice |
+| `apps/web` | Next.js; server components read the API. Work/Chat/Resources shell with real filtered Work and task creation; legacy pages remain reachable through grouped view lists, including Today at `/today` |
 | `apps/e2e` | Playwright deployment smoke suite (deploy workflow, currently paused) and isolated browser regression in CI |
 | `apps/mobile` | Planned React Native/Expo development-build client for iOS and Android; not in the repository yet; native-device acceptance precedes release |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
@@ -172,9 +173,9 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 - `organisation_deletions` — platform record of a deleted organisation: name, who deleted it, row
   counts; everything else cascades away with the organisation (§9 deletion as a first-class operation).
 
-**Workspace additions (target; implemented in subsequent migrations)** None of these tables exists
-on `main` yet. Tags and task tags are proposed in migration 0035 in PR #117, open at the time of
-writing.
+**Workspace additions.** Tags and task tags are implemented by migration 0035, merged in #117.
+Their API supports tag management and bounded, filtered task queries; the web Work list uses it.
+Other workspace additions below remain targets for subsequent slices.
 - `tags` — organisation-owned flat labels with a stable ID and a nonblank name, unique without
   case distinctions inside the organisation. Tags carry no custom fields or permissions.
 - `task_tags` — tenant-qualified links between tasks and tags. A task can have zero or more;

@@ -106,14 +106,14 @@ export async function retrieve(db: Sql, tx: TransactionSql, org: string, questio
   if (range.explicit) warnings.push('Stock values are current saved observations, not stock as of the requested historical date.');
   const items = await tx`select id, left(name, 200) as name, left(location, 200) as location, unit_label, current_count::text, counted_at, reorder_point::text
    from stock_items where archived_at is null order by location, name, id limit 21`;
-  add('stock', items, i => `${i.name} · ${i.location}`, () => '/commitments#stock');
+  add('stock', items, i => `${i.name} · ${i.location}`, () => '/resources/inventory#stock');
   const state = await shopifyState(tx);
   if (!state.connected || !state.complete) warnings.push(state.error ?? 'Shopify data is incomplete. Check Settings → Connections.');
   const shop = !state.connected ? [] : await tx`select p.id || ':' || coalesce(l.location_provider_id, 'unknown') as id, left(p.title, 200) as title, left(p.variant_title, 200) as variant_title, p.sku,
    l.location_name, case when p.tracked then l.available else null end as available, l.updated_at, p.tracked
    from shopify_products p left join shopify_inventory_levels l using (organisation_id, connection_id, inventory_item_id)
    where p.connection_id = ${state.connection!.id} and p.product_status in ('ACTIVE', 'UNLISTED') order by p.title, p.id, l.location_provider_id limit 21`;
-  add('shop_stock', shop, i => `${i.title} · ${i.locationName ?? 'unknown location'}`, () => '/commitments#stock');
+  add('shop_stock', shop, i => `${i.title} · ${i.locationName ?? 'unknown location'}`, () => '/resources/inventory#stock');
  }
  if (!rows.length) warnings.push('No matching records were retrieved. This does not establish that none exist; try a full name, email, source type or supported date range.');
  return { today, timezone, range, rows, warnings, scope };

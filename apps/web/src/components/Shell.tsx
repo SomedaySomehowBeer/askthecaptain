@@ -1,22 +1,23 @@
 import Link from 'next/link';
-import { Captain } from './Captain.tsx';
+import { Suspense } from 'react';
+import { WorkspaceCrumb } from './WorkspaceCrumb.tsx';
 import { TabBar } from './TabBar.tsx';
 import { initialsOf } from '../lib/nav.ts';
 import { current } from '../lib/session.ts';
 
-/** The frame around every signed-in page: wordmark, the five areas, the person; on a phone the
- *  areas move to a bar at the bottom of the screen. */
+/** Three shared workspace sections, with account controls outside the primary navigation. */
 export async function Shell({ children }: { children: React.ReactNode }) {
 	const me = await current();
+	const scope = `${me?.me.user.id ?? 'signed-out'}:${me?.organisation?.organisationId ?? 'no-organisation'}`;
 	return (
 		<div className="shell">
 			<header className="topbar">
-				<Link className="wordmark" href="/"><Captain size={26} /><span className="wordmark__text">Ask The Captain</span></Link>
-				<TabBar variant="top" />
+				<WorkspaceCrumb />
+				<Suspense><TabBar variant="top" scope={scope} /></Suspense>
 				{me ? <Link className="avatar" href="/settings" aria-label={`${me.me.user.name || me.me.user.email}, settings`} title={me.me.user.email}>{initialsOf(me.me.user.name, me.me.user.email)}</Link> : null}
 			</header>
 			{children}
-			<TabBar variant="bottom" />
+			<Suspense><TabBar variant="bottom" scope={scope} /></Suspense>
 		</div>
 	);
 }

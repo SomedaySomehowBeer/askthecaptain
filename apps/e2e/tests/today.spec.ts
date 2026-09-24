@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { webUrl } from '../targets.ts';
 
-/** The Today tab as a signed-in person. Needs E2E_SESSION_TOKEN; skipped, visibly, without one. */
+/** The retained Today view as a signed-in person. Needs E2E_SESSION_TOKEN; skipped, visibly, without one. */
 const token = process.env.E2E_SESSION_TOKEN?.trim();
 
 test.describe('today', () => {
@@ -9,7 +9,7 @@ test.describe('today', () => {
 	test.beforeEach(async ({ context }) => { await context.addCookies([{ name: 'captain_session', value: token!, url: webUrl() }]); });
 
 	test('the front page says what needs you and is honest about each source', async ({ page }) => {
-		await page.goto(`${webUrl()}/`);
+		await page.goto(`${webUrl()}/today`);
 		await expect(page.getByRole('heading', { level: 1 })).toContainText(/^(Morning|Afternoon|Evening), /);
 		await expect(page.locator('.notice--failed')).toHaveCount(0);
 		await expect(page.getByRole('heading', { name: 'Waiting on you' })).toBeVisible();

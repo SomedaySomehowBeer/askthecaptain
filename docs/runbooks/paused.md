@@ -4,6 +4,20 @@ Ask The Captain is paused while the product is re-thought. Nothing runs and noth
 compute on Fly. Nothing was deleted: apps, images, secrets, the Neon database, DNS and the Tigris
 bucket are all as they were, so the steps below bring everything back as it was.
 
+## Staging authorisation (24 September 2026)
+
+The owner authorised restarting infrastructure **when needed**, deploying **only to staging**,
+and keeping **at most one machine per app**, plus merging PRs after review. This supersedes the
+owner-only resume instruction below for those staging actions. Production remains stopped.
+This authorisation is not a claim that services have restarted: the web workspace increment is
+validated against disposable local Postgres and a local API/web pair. It does not change machines,
+provider schedules, the disabled deploy workflow or the disabled backup workflow.
+
+Before a staging resume, inspect live machine counts and deployment targets, constrain rollout
+and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
+workflow that could promote production. Backups remain disabled pending their separate restore
+checks and operational decision.
+
 ## What was stopped
 
 | What | State | How it was stopped |
