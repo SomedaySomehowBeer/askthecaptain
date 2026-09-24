@@ -1,4 +1,4 @@
-// Uses the repository's existing Playwright dependency and the shared browser, never a new context.
+// Local review attaches to the shared browser; CI opts into its own headless browser explicitly.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import fs from 'node:fs/promises';
@@ -8,10 +8,12 @@ const require = createRequire(new URL('../../../../apps/e2e/package.json', impor
 const { chromium } = require('@playwright/test');
 const root = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.join(root, 'dist');
-const output = path.join(root, 'evidence');
+const output = process.env.PROOF_EVIDENCE_DIR || path.join(root, 'evidence');
 await fs.mkdir(output, { recursive: true });
-const browser = await chromium.connectOverCDP(process.env.CHROME_CDP_URL || 'http://127.0.0.1:9222');
-const page = await browser.contexts()[0].newPage();
+const headless = process.argv.includes('--headless');
+const browser = headless ? await chromium.launch() :
+  await chromium.connectOverCDP(process.env.CHROME_CDP_URL || 'http://127.0.0.1:9222');
+const page = headless ? await browser.newPage() : await browser.contexts()[0].newPage();
 const errors = [];
 page.on('pageerror', e => errors.push(e.message));
 await page.route('http://captain-proof.test/**', async route => {
@@ -94,4 +96,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log('PASS no page errors. Browser proof only; native hardware and software keyboards unverified.');
+} catch (error) {
+  await page.screenshot({ path: path.join(output, 'failure.png') }).catch(() => {});
+  throw error;
 } finally { await page.close(); await browser.close(); }
