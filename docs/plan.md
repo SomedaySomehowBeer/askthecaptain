@@ -123,7 +123,8 @@ The checked-in configuration and 23 September pause record identify the serving 
 A dormant pair, `askthecaptain-api` and `askthecaptain-web`, is retained; `api.askthecaptain.app`
 points at the production API. The pause record dates its last promotion to 2026-09-05.
 `askthecaptain-embed` is the D21 embedding service. Staging API/web and embedding resumed on
-24 September with one machine each; the web/API serve reviewed commit `2c63030` (#123).
+24 September with one machine each. Web/API now serve the reviewed equipment increment #127
+(merged main `5986b93`, identical image-source tree `dc32eea`), including #125 and earlier work.
 Production remains stopped, and GitHub's `deploy` and `backup` workflows remain disabled.
 The [operational record](runbooks/paused.md) records health checks, limitations and the deployment
 procedure; configuration alone is not a live availability check.
