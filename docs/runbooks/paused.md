@@ -1,24 +1,75 @@
-# Paused (2026-09-23)
+# Staging resumed; production paused (2026-09-24)
 
-Ask The Captain is paused while the product is re-thought. Nothing runs and nothing is billed for
-compute on Fly. Nothing was deleted: apps, images, secrets, the Neon database, DNS and the Tigris
-bucket are all as they were, so the steps below bring everything back as it was.
+Captain's staging workspace is available at **https://app.askthecaptain.app/work**. The API and
+web run reviewed commit `2c63030efd832f3d2ab87ada2a96907fee65d875` (#123, including #122).
+Production remains stopped. The original 23 September pause is recorded below as history.
 
 ## Staging authorisation (24 September 2026)
 
 The owner authorised restarting infrastructure **when needed**, deploying **only to staging**,
 and keeping **at most one machine per app**, plus merging PRs after review. This supersedes the
 owner-only resume instruction below for those staging actions. Production remains stopped.
-This authorisation is not a claim that services have restarted: the web workspace increment is
-validated against disposable local Postgres and a local API/web pair. It does not change machines,
-provider schedules, the disabled deploy workflow or the disabled backup workflow.
+The authorised restart was performed on 24 September. Existing enabled in-app workflows and
+provider syncs resume with the API; their settings and secrets were preserved. This is distinct
+from GitHub's deploy and backup workflows, which remain disabled.
 
 Before a staging resume, inspect live machine counts and deployment targets, constrain rollout
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
 
-## What was stopped
+## Actual resumption (24 September 2026, UTC)
+
+Job: **own commitments**. Make the reviewed Work, task creation, filters and shared tag controls
+available to the first customer. Chat, equipment scheduling and the file library are not delivered.
+
+| App | Existing machine | Result |
+|---|---|---|
+| `askthecaptain-api-staging` | `80e39ea6416e18` | new image, autostart on, stop when idle, minimum zero |
+| `askthecaptain-web-staging` | `9185776e7cd3d8` | new image, autostart on, stop when idle, minimum zero |
+| `askthecaptain-embed` | `82d1dd0b021908` | existing image unchanged, autostart restored, stop when idle |
+
+Both new image tags are `git-2c63030efd832f3d2ab87ada2a96907fee65d875` in their respective
+`registry.fly.io/<app>` repositories. Previous staging images, and the unchanged embedding image,
+are tagged `git-ad43f401f97fd2f2327e327af2a6c0f2afdebab6`.
+
+Images were built with Depot and pushed without deploying. To avoid a second temporary release
+machine, the existing stopped API machine was updated to the new image with autostart off,
+restart policy `no`, and a one-shot command running `packages/db/src/migrate.ts`, then
+`packages/engine/src/install.ts`. It was explicitly started. Migration `0035_task_tags.sql`
+applied at **10:51:53Z**, `CAPTAIN_MIGRATION_COMPLETE` appeared at **10:51:54Z**, and the process
+exited **0**. Only this additive migration was pending. No new backup or Neon recovery branch
+was created; existing backup recovery coverage remains unverified.
+
+API and web deployments then used their staging configs and the built images with
+`--ha=false --strategy immediate --update-only`; API also used `--skip-release-command`, because
+the migration and queue installer had already succeeded. The API's command override was cleared
+and restart policy restored to `on-failure`. No additional app machines were created.
+
+The API started normally at **10:53:06Z**. `/readyz` returned HTTP 200 with `{"ok":true}`;
+the embedding `/healthz` returned its healthy encoder/version/dimensions response.
+Web Push is not configured in this environment, as reported by API startup; notifications that
+require it remain unavailable. Existing schedules only run while the API is awake, including
+catch-up after an idle period. A successful readiness check does not establish provider sync or
+inference completion. Better Stack's live monitor state was not inspected or changed.
+
+Live Chrome checks at 390×844 and 1280×900 confirmed `/work` redirects signed-out visitors to
+the rendered sign-in page, with the Google action present, no failed notice, no horizontal
+overflow and no browser errors. Sign-in initiation returned a redirect to `accounts.google.com`.
+There was no existing hosted browser session, so authenticated hosted checks were not run and
+no test records were added to the customer's database. The task/tag write flows were previously
+checked against isolated real Postgres in #122/#123; that is not hosted-session evidence.
+
+Production's two API and two web machines remain stopped with autostart off. Their counts and
+images were not changed. No production deployment, DNS, secret or infrastructure apply occurred.
+GitHub deploy and backup workflows remain disabled. Future code merges do not deploy themselves.
+
+For rollback, redeploy the previous staging images with the same single-machine flags. Migration
+0035 is additive and compatible with those images; do not drop the new tables to roll back code.
+Future API releases must run migrations and the queue installer on the sole machine before
+skipping the release command; never skip those operations merely to avoid the extra machine.
+
+## Original pause: what was stopped (23 September)
 
 | What | State | How it was stopped |
 |---|---|---|
@@ -46,7 +97,7 @@ the client selection before re-enabling it. [#120](https://github.com/SomedaySom
 prepares explicit PostgreSQL 18 executable paths and a pgvector-capable restore image; the changes
 passed a disposable local restore. They do not resume backups or establish a fresh hosted backup.
 
-## What still runs or can still be reached
+## Original pause: what still ran or could be reached
 
 - **CI and tofu workflows** stay enabled: they run on pull requests and pushes and deploy nothing
   to Fly (`tofu` applies only on changes under `infra/tofu/`).
@@ -66,7 +117,11 @@ passed a disposable local restore. They do not resume backups or establish a fre
 - **The in-app schedulers** (five-minute mail poll, morning brief, triage) live in the API process
   and do not run while it is stopped.
 
-## Resume
+## Original resume procedure (superseded for staging)
+
+Historical instructions follow. For the current staging scope, use the single-machine procedure
+above and leave GitHub deployment/backup workflows disabled. Production resumption still belongs
+to the owner.
 
 1. Owner only: review the resume and backup repairs, then `gh workflow enable deploy.yml` and,
    once the backup tooling/restore checks pass, `gh workflow enable backup.yml`.

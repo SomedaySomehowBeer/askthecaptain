@@ -122,9 +122,11 @@ The checked-in configuration and 23 September pause record identify the serving 
 `www` are configured to point at the web app and `api-staging.askthecaptain.app` at the API.
 A dormant pair, `askthecaptain-api` and `askthecaptain-web`, is retained; `api.askthecaptain.app`
 points at the production API. The pause record dates its last promotion to 2026-09-05.
-`askthecaptain-embed` is the D21 embedding service. All apps are recorded stopped under the
-operational pause ([paused.md](runbooks/paused.md)); the `deploy` and `backup` workflows were
-verified disabled on 24 September. Configuration is not a live availability check.
+`askthecaptain-embed` is the D21 embedding service. Staging API/web and embedding resumed on
+24 September with one machine each; the web/API serve reviewed commit `2c63030` (#123).
+Production remains stopped, and GitHub's `deploy` and `backup` workflows remain disabled.
+The [operational record](runbooks/paused.md) records health checks, limitations and the deployment
+procedure; configuration alone is not a live availability check.
 
 **Durable execution (D19).** Use **pg-boss with a small Captain runner** in the existing
 application process and Postgres. The bounded D10 inbox-triage spike ran both pg-boss and
