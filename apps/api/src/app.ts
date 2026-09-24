@@ -1,3 +1,5 @@
+import { TagsService } from './tags/service.ts';
+import { tagsRoutes } from './tags/routes.ts';
 import { AnswerService } from './answers/service.ts';
 import { answerRoutes } from './answers/routes.ts';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
@@ -200,6 +202,7 @@ export function createApp(deps: Deps) {
 	if (deps.notes) signedIn.route('/', notesRoutes(deps.notes));
 	signedIn.route('/', inferenceRoutes(deps.inference));
 	signedIn.route('/', commitmentsRoutes(deps.commitments));
+	signedIn.route('/', tagsRoutes(new TagsService(deps.db)));
 	signedIn.get('/v1/organisations/:id/mail/watch', async (c) => {
 		if (!deps.gmailWatch) { await deps.organisations.get(actor(c), uuid.parse(c.req.param('id'))); return c.json({ configured: false, polling: Boolean(deps.mailScheduleEnabled), status: 'off', expiresAt: null, error: null }); }
 		return c.json(await deps.gmailWatch.status(actor(c), uuid.parse(c.req.param('id')), Boolean(deps.mailScheduleEnabled)));
