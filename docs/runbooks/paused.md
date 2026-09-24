@@ -1,7 +1,8 @@
 # Staging resumed; production paused (2026-09-24)
 
 Captain's staging workspace is available at **https://app.askthecaptain.app/work**. The API and
-web run reviewed commit `2c63030efd832f3d2ab87ada2a96907fee65d875` (#123, including #122).
+web now include equipment scheduling from #125/#127 (merged main `5986b93`). Image source
+`dc32eea` has the identical tree to that merge; the release record below gives the full image tag.
 Production remains stopped. The original 23 September pause is recorded below as history.
 
 ## Staging authorisation (24 September 2026)
@@ -18,10 +19,50 @@ and standby behaviour to the one-machine limit, and record what changed here. Do
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
 
+## Equipment release (24 September 2026, UTC)
+
+Jobs: **keep the calendar** and **own commitments**. Reviewed #127 passed the full CI check and
+was squash-merged as `5986b93ba34a6c15f8c39feba9b342613e19ac79`. API and web images were built
+from a clean archive of reviewed PR head `dc32eeae888b75390388c7112449d1517f61d53f`; its Git tree
+was verified identical to the squash merge before deployment. Both apps now use
+`registry.fly.io/<app>:git-dc32eeae888b75390388c7112449d1517f61d53f`.
+
+The existing sole API machine `80e39ea6416e18` was stopped with autostart off, updated to the
+image with restart policy `no`, and started with the one-shot migration/queue-install command.
+Migration `0036_equipment_reservations.sql` applied at **14:35:54Z**; the completion marker and
+normal exit **0** followed at **14:35:55Z**. This adds equipment/reservations and the `btree_gist`
+extension; it does not rewrite existing work. No temporary release machine was created. Existing
+backup recovery coverage remains unverified; no new backup or Neon recovery branch was created.
+
+API deployment used `--skip-release-command --ha=false --strategy immediate --update-only`
+after that confirmed migration. Web used the same single-machine deployment flags on
+`9185776e7cd3d8`. Both finished with normal empty command overrides, `on-failure` restart,
+autostart enabled, idle stop and minimum zero. Embedding machine `82d1dd0b021908` was unchanged.
+Machine lists confirmed exactly one machine in each staging/embedding app; all four dormant
+production machines stayed stopped with autostart off. Deploy and backup workflows remain disabled.
+
+Live checks passed: API readiness, embedding health, signed-out redirects for the new equipment
+routes, and the rendered Google sign-in action on phone and desktop with no overflow or browser
+exceptions. There was no existing hosted session, so authenticated hosted booking writes were
+not tested and no fixture records were added to customer data. All five equipment browser groups
+passed locally against real Postgres and the production web build; see the
+[validation record](../plans/workspace-web-validation-2026-09.md).
+
+Open **Resources → Equipment schedule** (or `/resources/equipment`) to add equipment and create,
+edit or cancel reservations. Continuous hours/days/weeks views include maintenance and buffers.
+This is the web increment; native-device gesture acceptance and the rest of the first-customer
+workflow remain open. Chat and the file library are still unavailable. Temporary API failures
+being treated as sign-out are tracked in [#126](https://github.com/SomedaySomehowBeer/askthecaptain/issues/126).
+
+Rollback uses the preceding `git-2c63030efd832f3d2ab87ada2a96907fee65d875` API/web images with the
+same single-machine flags, rolling back both apps together. Migration 0036 is additive; retain its tables and any reservations if
+rolling back code. The older UI will not expose equipment records until the new image is restored.
+
 ## Actual resumption (24 September 2026, UTC)
 
 Job: **own commitments**. Make the reviewed Work, task creation, filters and shared tag controls
-available to the first customer. Chat, equipment scheduling and the file library are not delivered.
+available to the first customer. At this initial resumption, chat, equipment scheduling and the file
+library were not delivered; the later equipment release is recorded above.
 
 | App | Existing machine | Result |
 |---|---|---|
