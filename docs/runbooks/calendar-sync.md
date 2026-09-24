@@ -1,6 +1,7 @@
 # Calendar sync
 
-Job 3: Keep the calendar. D3 system housekeeping, D6 forced RLS, D8 first-party REST, D11 Calendar tab.
+Job 3: Keep the calendar. D3 system housekeeping, D6 forced RLS, D8 first-party REST, and the legacy Calendar tab
+(the five-tab navigation that D11 described before the workspace amendment in #116).
 
 ## Setup and operation
 

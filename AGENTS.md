@@ -50,13 +50,20 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 | Path | What |
 |---|---|
 | `apps/api` | Hono API: auth, routes over services, webhooks, health |
-| `apps/web` | Next.js app, phone-first, server components read the API |
+| `apps/web` | Next.js app, phone-first, server components read the API; still the legacy five tabs until the workspace shell slice |
+| `apps/e2e` | Playwright deployment smoke suite and isolated browser regression checks |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Google, Xero, Shopify |
 | `packages/steps` | the step catalog and workflow definitions |
+| `packages/engine` | pg-boss workflow runner in the API process (D19) |
 | `packages/model` | inference client, structured output, budgets, usage |
+| `packages/retrieval` | embedding units, the embedding-service client, similarity search (D21) |
 | `packages/ui` | tokens/components follow reviewed repository workspace designs (D14); `packages/ui/design/` is an unedited legacy Claude Design mirror, so author new work outside it |
-| `infra` | OpenTofu |
+| `infra` | OpenTofu (`infra/tofu`), the embedding service (`infra/embed`, D21) and the inference Sprite's bootstrap files (`infra/sprites`, D18) |
+
+There is no `apps/mobile` yet; the plan names it for a later slice. The Expo client proof under
+`docs/proposals/assets/captain-client-proof-2026-09-23` is a standalone, fictional harness outside the
+pnpm workspace, not application code.
 
 - Migrations are hand-written SQL, numbered, never edited after merge. One migration per pull
   request. Drizzle describes the schema; SQL is what runs.
@@ -77,7 +84,8 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
   reviewed repository-native design before building (D14).
 - Do not add a package, a table, a dependency or a background process that the plan does not
   name without amending the plan in the same pull request.
-- Do not build for a hypothetical tenant. The first customer is the only one until Phase 4.
+- Do not build for a hypothetical tenant. The first customer is the only one until a second business
+  is onboarded (D17). The historical Phase 4 prepared for that and did not complete it.
 - Do not import code or designs from other projects. This repository is self-contained; anything
   worth having is written here against the plan.
 - Production deploys, infrastructure applies, DNS, secrets and anything legal are the repository

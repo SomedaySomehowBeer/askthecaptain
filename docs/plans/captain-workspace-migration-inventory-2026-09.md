@@ -1,7 +1,8 @@
 # Captain workspace migration inventory
 
-Status: proposed inventory for review, 24 September 2026. Input to slice 1 of the
-[delivery plan](captain-workspace-delivery-2026-09.md) ("migration inventory reviewed").
+Status: reviewed and merged with the plan amendment in #116, 24 September 2026; slice 1 of the
+[delivery plan](captain-workspace-delivery-2026-09.md). The plan adopted the conservative
+first-slice answers below (D7: Obligations remains the default home; D23: existing notes stay notes).
 Jobs advanced: **own commitments** and **brief and answer**.
 
 This is an inventory of the **code**: schema, services, schedulers and workflow definitions on
@@ -12,8 +13,8 @@ connection status or configured secret was read from production to write it. Eve
 below is something the owner must establish from a read-only look at a restored copy, not from
 the paused production database.
 
-The plan (D1–D23) remains authoritative until the reviewed amendment in slice 1 replaces it.
-Nothing here authorises a migration, a deletion or a change to a running system.
+The amended plan (D1–D25) is authoritative; where this inventory says "proposed", the plan's
+text decides. Nothing here authorises a migration, a deletion or a change to a running system.
 
 ## Ground rules while the migration is developed
 
@@ -45,7 +46,7 @@ These hold from now until the owner explicitly lifts them.
 
 - **Code fact**: taken from a migration, service or definition; the file is named.
 - **Unknown (live)**: depends on production state not read for this document.
-- **Proposed**: this document's suggestion, for review in the slice 1 amendment.
+- **Proposed**: this document's suggestion, reviewed with the slice 1 amendment (#116); the plan decides where they differ.
 - **Decision**: an open product question for the owner; listed together at the end.
 
 Dispositions are one of **keep** (Captain stays the authority, schema kept), **migrate** (kept, but
@@ -70,6 +71,11 @@ started against a copy of production data would fire each missed daily run once.
 | Series occurrences | 1 h | `SERIES_DISABLED=1` | database only (creates tasks) |
 | Retrieval index fill | 1 h and after sync | `INDEX_DISABLED=1` | embedding service |
 | Attachment text expiry (D13) | 1 h | none | database only (deletes expired `attachment_text`, a D13 requirement) |
+
+Outside the API, configured callers include a Better Stack monitor for
+`api-staging.askthecaptain.app/readyz` every 30 minutes (`infra/tofu/uptime.tf`) and Gmail's
+Pub/Sub push subscription to `/webhooks/gmail`, if configured. Their live state was not audited.
+Neither can start a stopped machine while autostart is off.
 
 **Proposed:** any process pointed at a copy of real data sets all seven `*_DISABLED` flags to `1` and leaves the
 Gmail push variables unset. Add a disable flag for the Gmail watch in the first migration PR that

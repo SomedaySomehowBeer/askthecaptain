@@ -1,13 +1,26 @@
 # Captain workspace delivery plan
 
-Status: implementation sequence from merged PR #114; workspace adoption amendment in review,
-24 September 2026.
+Status: adopted with the plan amendment in #116 (merged 24 September 2026); sequence from the
+product proposal merged in #114.
 Jobs advanced: **own commitments** and **brief and answer**.
 
 The [product proposal](../proposals/2026-09-22-captain-and-pip.md) defines the intended
-Captain/Pip split. This plan turns that direction into reviewable slices. The current [plan amendment](../plan.md)
-reconciles the product/navigation/design decisions; this sequence does not itself migrate
+Captain/Pip split. This plan turns that direction into reviewable slices. The adopted [plan](../plan.md)
+(D1–D25) reconciles the product/navigation/design decisions; this sequence does not itself migrate
 production or require Pip before Captain is useful. Preserve the [operational pause](../runbooks/paused.md).
+
+## Where this stands (24 September 2026)
+
+| Slice | State |
+|---|---|
+| 0. Architecture proof | Built as a fictional harness; web checks and bundle exports pass locally and in the new `client-proof` CI check ([#120](https://github.com/SomedaySomehowBeer/askthecaptain/pull/120)). Native-device acceptance has not been run. |
+| 1. Reviewed amendments | Done: plan D1–D25 and the migration inventory merged in #116. |
+| 2. Client and work foundation | Started: task tags and the filtered work query (migration 0035) are in PR #117, open. No workspace shell, saved views or `apps/mobile` yet. |
+| 3–7 | Not started. Equipment, chat, files, mobile builds and Pip integration are designs, not code. |
+| Pip | Separate product, tracked in [#119](https://github.com/SomedaySomehowBeer/askthecaptain/issues/119); no Captain slice waits for it. |
+
+Slice numbers are this plan's own; they are unrelated to the historical phases 0–5 in plan §11.
+The production pause in [paused.md](../runbooks/paused.md) applies to every slice.
 
 ## Outcome and first usable release
 
@@ -54,7 +67,10 @@ Existence of code is not an assertion that every production integration is confi
   Share UI where it improves maintenance; timeline gestures, navigation and keyboard handling
   can have platform implementations. Server packages, secrets and database code never enter clients.
 - Pip is a separate Apple application; native Apple development is the working preference.
-  Its model, Siri, Reminders and Focus proofs have their own gates. No Captain milestone waits
+  Its model, Siri, Reminders and Focus proofs have their own gates, tracked in issue [#119](https://github.com/SomedaySomehowBeer/askthecaptain/issues/119).
+  Private Cloud Compute is available to eligible apps on supported devices (managed entitlement,
+  daily quota); it still needs a device to issue the request, so it is no substitute for Captain's
+  server-side scheduled inference ([Apple PCC documentation](https://developer.apple.com/documentation/FoundationModels/adding-server-side-intelligence-with-private-cloud-compute/), checked 24 September). No Captain milestone waits
   for those proofs, and no unsupported Apple capability is assumed by Captain's API.
 
 Expo also supports web. The bounded proof exercises its universal route as an alternative,

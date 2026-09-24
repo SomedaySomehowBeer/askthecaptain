@@ -1,8 +1,8 @@
 # How Captain's mobile views fit together
 
 **Proposal, updated 23 September 2026.** Advances **own commitments** and **brief and answer**.
-This maps the Captain/Pip discussion and fifteen mobile mockups. It is not an adopted
-replacement for D11 or the live application's navigation.
+This maps the Captain/Pip discussion and fifteen mobile mockups. Since #116 (24 September) it
+describes the adopted D11 navigation; the live application still has the legacy five tabs.
 
 ![Three sections, each with a grouped list to the left of its selected view](navigation.png)
 

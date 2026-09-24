@@ -4,6 +4,15 @@
 the owner; no implementation, migration, deployment or replacement of the current plan's
 decisions is authorised by this document. The live [plan](../plan.md) remains authoritative.
 
+> **Update, 24 September 2026.** Merged as #114, then adopted with amendments by #116 into the plan
+> (D1, D7, D8, D11, D14, D23, and the new D24 equipment and D25 chat). The plan and the
+> [delivery plan](../plans/captain-workspace-delivery-2026-09.md) are authoritative where they
+> differ from this text, which is kept unchanged as the record of the discussion. Its "must be
+> amended before implementation" conditions (chat, tabs, design authority) are met by #116; none of
+> the workspace is implemented yet. Pip's implementation is tracked in issue [#119](https://github.com/SomedaySomehowBeer/askthecaptain/issues/119): the agreed
+> personal requirements (§§5–8), the native Apple model and Siri gates, no mail retention (§6) and
+> the optional phone experiment (§7).
+
 **Jobs advanced:** own commitments; brief and answer. The split also relocates inbox triage,
 correspondence and personal calendar assistance, while retaining business chasing workflows.
 
