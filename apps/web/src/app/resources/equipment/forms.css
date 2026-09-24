@@ -1,0 +1,30 @@
+/* Equipment catalogue and reservation forms. Shared tokens only; the timeline's own styles live
+   in timeline.css. */
+.equipment-form__row { align-items: flex-end; }
+.equipment-form__row .field { flex: 1 1 220px; }
+.equipment-tabs { gap: 8px; }
+.equipment-tabs .chip { min-height: 44px; padding: 0 14px; text-decoration: none; }
+.equipment-tabs__schedule { margin-left: auto; min-height: 44px; display: inline-flex; align-items: center; font-size: 14px; }
+.equipment-list { gap: 0; }
+.equipment-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.equipment-row:first-child { border-top: 0; }
+.equipment-row__name { flex: 1 1 auto; min-width: 0; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 500; overflow-wrap: anywhere; }
+.equipment-row__link { min-height: 44px; display: inline-flex; align-items: center; font-size: 14px; }
+.equipment-controls { flex-basis: 100%; gap: 6px; }
+
+.reservation-form fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.reservation-form legend, .field__label { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+.reservation-form fieldset label { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.reservation-form__times .field, .reservation-form__buffers .field, .reservation-form__links .field { flex: 1 1 220px; min-width: 0; }
+.reservation-form__time input { min-width: 0; }
+.reservation-form__choice { flex-direction: column; }
+
+.reservation-detail__facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
+.reservation-detail__facts dt { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.reservation-detail__facts dd { margin: 0; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .reservation-detail__facts { grid-template-columns: 1fr; gap: 2px; } .reservation-detail__facts dd { margin-bottom: 8px; } }
+
+
+/* The catalogue's green plus reuses .equipment-plus from timeline.css (loaded by the equipment layout). */
+#add-equipment { scroll-margin-top: 90px; }
+.reservation-form input[type='datetime-local'] { width:100%; min-width:0; min-height:44px; padding:0 10px; font:inherit; font-size:14px; border:var(--border-control); border-radius:var(--radius-control); background:var(--panel); color:var(--ink); }

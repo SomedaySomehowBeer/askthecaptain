@@ -177,7 +177,8 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 
 **Workspace additions.** Tags and task tags are implemented by migration 0035, merged in #117.
 Their API supports tag management and bounded, filtered task queries; the web Work list uses it.
-Equipment scheduling has its first API increment in migration 0036; its timeline remains pending.
+Equipment scheduling uses migration 0036 and now has web timeline and booking controls. Native
+clients and device acceptance remain pending.
 Other workspace additions below remain targets for subsequent slices.
 - `tags` — organisation-owned flat labels with a stable ID and a nonblank name, unique without
   case distinctions inside the organisation. Tags carry no custom fields or permissions.
@@ -192,8 +193,9 @@ Other workspace additions below remain targets for subsequent slices.
   (D24). Migration 0036 installs `btree_gist` and a confirmed-occupancy exclusion constraint;
   tenant RLS, active-member access, revision checks, audited writes and bounded unfiltered
   availability reads ship together. The [API contract](plans/equipment-reservations-2026-09.md)
-  specifies cancellation, create retries, archival and incomplete-window semantics. Timeline
-  controls and native clients remain later increments of the same equipment slice.
+  specifies cancellation, create retries, archival and incomplete-window semantics. Web Resources
+  now includes continuous hours/days/weeks views and catalogue/create/edit/cancel controls. Native
+  clients and real-device gesture acceptance remain later increments of the same equipment slice.
 - Conversations, membership, messages, record links, shared pins, personal stars and read position
   are distinct identities (D25). Their schema and access model are reviewed in the chat slice.
   These target descriptions are not an authorisation for an unaudited generic record store.

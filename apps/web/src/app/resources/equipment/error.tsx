@@ -1,0 +1,2 @@
+'use client';
+export default function EquipmentError({ reset }: { reset: () => void }) { return <main className="page"><div className="card notice notice--failed" role="alert"><h1>Equipment could not be loaded</h1><p>Availability is unknown. Try again to read the current schedule.</p><button className="button button--secondary" onClick={reset}>Try again</button><p><a href="/resources/views">Resources views</a> · <a href="/work">Work</a></p></div></main>; }

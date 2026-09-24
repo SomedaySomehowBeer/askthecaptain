@@ -93,3 +93,34 @@ The extended browser run passed all ten check groups for the tag-controls increm
 24 September 2026, with phone/desktop screenshots inspected and no browser exceptions. Bulk
 fixture setup respects the real API rate limiter: only a rejected 429 is retried once after its
 bounded Retry-After delay; ambiguous network/5xx outcomes are never retried automatically.
+
+## Equipment follow-up
+
+Jobs: **keep the calendar** and **own commitments**. With a fresh fixture and the same production
+web/API setup above, run:
+
+```bash
+flock /tmp/atc-build.lock node apps/e2e/scripts/equipment-check.cjs
+```
+
+The fixture includes nine pieces of equipment, a multi-day work-linked booking, and maintenance.
+The check covers continuous intervals, focal zoom, horizontal scroll/paging, catalogue
+add/rename/archive/restore, linked booking create/edit/cancel, stale revisions, conflicts, lost
+create responses (both committed and missing), partial/failed availability, DST gaps/repeated
+hours, and refusal after an organisation timezone changes. Failed-response modes wrap the real
+API; the uncertain-create case commits through the API before discarding its response. No hosted
+records are used. Unit tests separately cover interval clipping, zoom geometry, half-hour DST,
+midnight transitions, skipped civil dates, and preserving timestamp precision.
+
+Synthetic pointer events exercise the web pinch handler only. They do not establish iPhone or
+Android acceptance, native momentum, Safari behaviour, screen-reader acceptance or device frame
+performance. The initial web touch pan has no momentum. Buttons and an accessible reservation
+list provide alternatives to gestures and tiny visual intervals. The timeline deliberately bounds
+its data window and equipment page; partial reads cannot imply free equipment.
+
+On 24 September 2026 all five equipment browser groups passed against the production build and
+real Postgres fixture, with no browser exceptions. Phone timeline/reservation and desktop
+screenshots were inspected. The production build, API typecheck and all 23 web unit tests passed.
+Full navigations are paced to respect the existing API limiter; fault modes remain active until
+the uncertain-result UI appears. The pre-existing temporary-service-error/sign-in behaviour is
+tracked separately in [#126](https://github.com/SomedaySomehowBeer/askthecaptain/issues/126).
