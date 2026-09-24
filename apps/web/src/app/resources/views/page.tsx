@@ -8,7 +8,7 @@ export default function ResourceViews() {
 			{ label: 'Files & assets', detail: 'File library availability', href: '/resources' },
 			{ label: 'Inventory', detail: 'Existing stock counts and stocktakes', href: '/resources/inventory' }
 		]} />
-		<ViewGroup title="Planning" views={[{ label: 'Equipment schedule', detail: 'Reservations, preparation and maintenance' }]} />
+		<ViewGroup title="Planning" views={[{ label: 'Equipment schedule', detail: 'Reservations, preparation and maintenance', href: '/resources/equipment' }]} />
 		<ViewGroup title="Business" views={[
 			{ label: 'People', detail: 'Contacts and companies', href: '/settings/contacts' },
 			{ label: 'Connections', detail: 'Business accounts in Settings, including Xero', href: '/settings/connections' },

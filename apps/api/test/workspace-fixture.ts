@@ -1,4 +1,5 @@
 import { writeFile, readFile, unlink } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { freshDatabase } from '../../../packages/db/test/harness.ts';
 import { createApp } from '../src/app.ts';
 import type { IdentityProvider } from '../src/auth/google.ts';
@@ -70,10 +71,40 @@ try {
     }
     for (let i = 0; i < 50; i++)
         await request('POST', `${base}/tasks`, owner.token, { title: `Team follow-up ${i + 1}`, projectId: project.id, ownerId: pat.user.id });
-    await writeFile(`${directory}/data.json`, JSON.stringify({ fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks }), { mode: 0o600, flag: 'wx' });
+    const equipment: { id: string; name: string }[] = [];
+    for (const name of ['A Fermenter', 'B Canning line', 'C Bright tank', 'D Cold room', 'E Delivery van', 'F Room', 'G Keg washer', 'H Chiller', 'I Pilot kit'])
+        equipment.push(await request('POST', `${base}/equipment`, owner.token, { name }));
+    const booking = await request<Identified>('POST', `${base}/equipment/${equipment[0]!.id}/reservations`, owner.token, {
+        id: randomUUID(), title: 'Multi-day lager', startsAt: '2030-10-01T01:00:00Z', endsAt: '2030-10-04T04:00:00Z', setupMinutes: 60, cleanupMinutes: 120,
+        projectId: project.id, taskId: tasks['Confirm packaging slot'], ownerId: owner.user.id
+    });
+    await request('POST', `${base}/equipment/${equipment[1]!.id}/reservations`, owner.token, {
+        id: randomUUID(), title: 'Line maintenance', kind: 'maintenance', startsAt: '2030-10-02T01:00:00Z', endsAt: '2030-10-02T02:00:00Z'
+    });
+    await writeFile(`${directory}/data.json`, JSON.stringify({ fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id }), { mode: 0o600, flag: 'wx' });
     const server = serve({ hostname: '127.0.0.1', port: 8084, fetch: async (req) => {
         const mode = await readFile(`${directory}/mode`, 'utf8').catch(() => '');
         const url = new URL(req.url);
+        if (mode === 'equipment-failed' && req.method === 'GET' && url.pathname.endsWith('/equipment'))
+            return Response.json({ error: 'Fixture equipment unavailable' }, { status: 503 });
+        if (mode === 'reservations-failed' && req.method === 'GET' && url.pathname.endsWith('/reservations'))
+            return Response.json({ error: 'Fixture reservations unavailable' }, { status: 503 });
+        if (mode === 'reservations-partial' && req.method === 'GET' && url.pathname.endsWith('/reservations')) {
+            const result = await app.fetch(req); const value = await result.json() as Record<string, unknown>;
+            return Response.json({ ...value, coverage: 'partial', nextOffset: 200 }, { status: result.status });
+        }
+        if (mode === 'equipment-lookups-failed' && req.method === 'GET' && (url.pathname.endsWith('/members') || url.pathname.endsWith('/commitments')))
+            return Response.json({ error: 'Fixture choices unavailable' }, { status: 503 });
+        if (mode === 'equipment-zone-sydney' && req.method === 'GET' && url.pathname === base) {
+            const result = await app.fetch(req); const value = await result.json() as Record<string, unknown>;
+            return Response.json({ ...value, timezone: 'Australia/Sydney' }, { status: result.status });
+        }
+        if (mode === 'reservation-save-uncertain' && req.method === 'POST' && url.pathname.endsWith('/reservations')) {
+            await app.fetch(req); // Commit the real booking, then simulate losing only the response.
+            return Response.json({ error: 'Fixture lost save response' }, { status: 503 });
+        }
+        if (mode === 'reservation-save-failed' && req.method === 'POST' && url.pathname.endsWith('/reservations'))
+            return Response.json({ error: 'Fixture did not reach booking handler' }, { status: 503 });
         if (req.method === 'GET' && url.pathname.endsWith('/tasks') && mode === 'failed')
             return Response.json({ error: 'Fixture task query unavailable' }, { status: 503 });
         if (mode === 'tags-failed' && req.method === 'GET' && (url.pathname.endsWith('/tags') || url.pathname.endsWith('/tag-options')))

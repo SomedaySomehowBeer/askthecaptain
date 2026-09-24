@@ -1,8 +1,8 @@
-# Equipment reservation API
+# Equipment reservations — API and web
 
 Jobs: **keep the calendar** and **own commitments**. Implements the scheduling integrity part of
-D24 and delivery slice 3. This API increment does not deliver the timeline or native client;
-the existing reviewed continuous timeline design remains the screen authority. Slice 2's saved
+D24 and delivery slice 3. The API increment merged as #125. Web timeline and booking controls
+now follow the existing reviewed continuous timeline design; a native client remains pending. Slice 2's saved
 views and native work also remain open. Equipment integrity can be built against the existing
 shared work API without waiting for either.
 
@@ -37,7 +37,9 @@ Actual starts/ends are at least 1900-01-01T00:00Z and strictly before 2200-01-01
 must be positive and at most 366 elapsed days. Setup and cleanup are each 0–10,080 elapsed minutes;
 occupied time may extend beyond the actual-time bounds. The organisation timezone is returned for
 display, never guessed from the API machine. Clients must deliberately resolve local-time DST
-ambiguities before sending instants. Recurring reservations and local-time form handling are later.
+ambiguities before sending instants. Web forms resolve local times in the organisation timezone, refuse DST gaps and require a
+chosen offset occurrence in repeated hours. A changed organisation timezone requires reloading
+the form before saving. Recurring reservations remain later.
 
 Occupied time is `[start - setup, end + cleanup)`. Adjacent occupied ranges may touch; overlap
 is forbidden. One GiST exclusion constraint covers all confirmed reservations for the same tenant
@@ -100,4 +102,5 @@ in that window at the moment of the read. Truncation or any nonzero offset yield
 page alone cannot declare the whole window free. Outside the requested window remains unloaded.
 Offset paging is not a stable snapshot under concurrent edits. A client seeking a complete availability
 picture should narrow a dense window and reload an untruncated first page; only an accepted write
-confirms a booking. The later timeline must preserve these distinctions when zooming or scrolling.
+confirms a booking. The web timeline preserves these distinctions when zooming or scrolling. It reads at most
+200 reservations per column; partial columns stay unknown and ask for a narrower date window.
