@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:18
+        image: pgvector/pgvector:pg18 # Match the vector extension in the current schema (D21).
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -41,6 +41,9 @@ jobs:
       AWS_DEFAULT_REGION: auto
       BUCKET: askthecaptain-tofu-state
       PGPASSWORD_REHEARSAL: postgres
+      # Ubuntu's unqualified pg_wrapper selected pg_dump 16 even after installing client 18.
+      # Pin all dump/restore/query executables, not just the apt package.
+      PG_BIN: /usr/lib/postgresql/18/bin
     steps:
       - uses: actions/checkout@v4
       - name: Postgres 18 client tools
@@ -49,7 +52,7 @@ jobs:
           sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-18
-          pg_dump --version
+          "$PG_BIN/pg_dump" --version
       - uses: opentofu/setup-opentofu@v1
         with: { tofu_version: 1.10.5 }
       - run: tofu init -input=false -backend-config="access_key=${{ secrets.TIGRIS_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.TIGRIS_SECRET_KEY }}"
@@ -59,24 +62,24 @@ jobs:
           url="$(tofu output -raw neon_owner_database_url)"
           stamp="$(date -u +%Y%m%dT%H%M%SZ)"
           echo "STAMP=$stamp" >> "$GITHUB_ENV"
-          pg_dump --dbname="$url" --format=custom --compress=zstd:6 --no-owner --no-privileges --file="/tmp/captain-$stamp.dump"
+          "$PG_BIN/pg_dump" --dbname="$url" --format=custom --compress=zstd:6 --no-owner --no-privileges --file="/tmp/captain-$stamp.dump"
           ls -l "/tmp/captain-$stamp.dump"
           # Row counts of the tenant tables as seen by the owner, for the comparison below.
-          psql "$url" -At -c "select relname || ' ' || n_live_tup from pg_stat_user_tables where schemaname = 'public' order by 1" > /tmp/counts-source.txt
-          psql "$url" -At -c "select count(*) from organisations" > /tmp/orgs-source.txt
+          "$PG_BIN/psql" "$url" -At -c "select relname || ' ' || n_live_tup from pg_stat_user_tables where schemaname = 'public' order by 1" > /tmp/counts-source.txt
+          "$PG_BIN/psql" "$url" -At -c "select count(*) from organisations" > /tmp/orgs-source.txt
       - name: Rehearse the restore
         run: |
           set -euo pipefail
           export PGPASSWORD="$PGPASSWORD_REHEARSAL"
-          pg_restore --list "/tmp/captain-$STAMP.dump" | grep -c 'TABLE DATA' | xargs -I{} echo "{} tables with data in the archive"
-          # The runtime role exists in the dump's grants; create it so the restore is faithful.
-          psql -h localhost -U postgres -d rehearsal -c "do \$\$ begin if not exists (select 1 from pg_roles where rolname = 'app') then create role app nologin; end if; end \$\$"
-          pg_restore --host=localhost --username=postgres --dbname=rehearsal --no-owner --no-privileges --exit-on-error "/tmp/captain-$STAMP.dump"
-          psql -h localhost -U postgres -d rehearsal -At -c "select count(*) from organisations" > /tmp/orgs-restored.txt
+          "$PG_BIN/pg_restore" --list "/tmp/captain-$STAMP.dump" | grep -c 'TABLE DATA' | xargs -I{} echo "{} tables with data in the archive"
+          # RLS policies in the dump reference the runtime role, even with ACLs omitted.
+          "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -c "do \$\$ begin if not exists (select 1 from pg_roles where rolname = 'app') then create role app nologin; end if; end \$\$"
+          "$PG_BIN/pg_restore" --host=localhost --username=postgres --dbname=rehearsal --no-owner --no-privileges --exit-on-error "/tmp/captain-$STAMP.dump"
+          "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -c "select count(*) from organisations" > /tmp/orgs-restored.txt
           echo "organisations: source $(cat /tmp/orgs-source.txt), restored $(cat /tmp/orgs-restored.txt)"
           test "$(cat /tmp/orgs-source.txt)" = "$(cat /tmp/orgs-restored.txt)"
-          psql -h localhost -U postgres -d rehearsal -At -c "select count(*) from schema_migrations" | xargs -I{} echo "{} migrations recorded in the restored copy"
-          psql -h localhost -U postgres -d rehearsal -At -c "select count(*) from pg_policies" | xargs -I{} echo "{} row security policies restored"
+          "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -c "select count(*) from schema_migrations" | xargs -I{} echo "{} migrations recorded in the restored copy"
+          "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -c "select count(*) from pg_policies" | xargs -I{} echo "{} row security policies restored"
       - name: Keep the dump, prune old ones
         run: |
           set -euo pipefail
