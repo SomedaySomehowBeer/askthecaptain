@@ -1,15 +1,31 @@
 # Ask The Captain — product and engineering plan
 
-**Status:** draft for approval, 2026-09-14. This document is the source of truth for what Captain
-is and how it is built. Decisions are recorded in §13 and changed only by a reviewed pull request.
+**Status:** workspace amendment for review, 2026-09-24, following merged product proposal #114.
+This document is the source of truth for what Captain is and how it is built. Decisions are
+recorded in §13 and changed only by a reviewed pull request. Target behaviour below is delivered
+in the [workspace sequence](plans/captain-workspace-delivery-2026-09.md); naming a capability here
+does not claim it is implemented. Existing personal-assistant behaviour remains a compatibility
+surface until its data and workflows are deliberately migrated. The operational pause in
+[paused.md](runbooks/paused.md) remains in force; development does not authorise a resume.
 
 ## 1. What Captain is
 
-Captain is an administrative assistant for a small business, the person a ten-person company would
-hire first if it could afford to. It reads the inbox and says what needs the owner, drafts the
-replies the owner would send, keeps the calendar, owns the list of projects, tasks and recurring
-duties, chases what is due, and gives the owner a short brief every morning. It answers questions
-about the business from the business's own data and shows where the answer came from.
+Captain is the shared project and work system for a small business. It owns projects, tasks,
+recurring duties, accountable owners, equipment reservations and the conversations and evidence
+around that work. Work, Chat and Resources are views of the same records. Production, Marketing,
+Sales and Admin/reporting are tags; people and projects can span them.
+
+Pip is a separate personal assistant on Apple devices. Personal mail, calendar assistance,
+Reminders and private attachment search belong to that product and its providers. Captain is
+useful without Pip. Pip reads or changes shared business work through Captain's authenticated,
+role-checked API; it does not keep a second business task or project state. Xero remains the
+accounting authority, file/email providers retain originals, and Captain holds their links.
+Captain's shared business schedules and inference run on the server, even when devices are off.
+Pip's Apple model/system capabilities require their own device proofs.
+
+The six job numbers below stay stable for existing workflow definitions. Their target scope is
+shared business work. The existing mail/outbox/calendar implementation is retained during the
+transition, not silently deleted, duplicated into Pip or restarted by this amendment.
 
 It is built as **workflows of deterministic steps**. Where judgement is needed, a step asks a
 language model a narrow question and takes back structured data, which the next step acts on. The
@@ -23,20 +39,21 @@ service businesses; the brewery's specifics are configuration, not code.
 
 Every piece of work on Captain must move one of these sooner.
 
-1. **Triage the inbox.** As mail arrives and each morning: what came in, what needs the owner,
-   drafts for the replies the owner would send, everything else filed. Triage raises tasks, closes
-   duties when confirmations arrive, and keeps contacts current.
-2. **Draft and send correspondence.** Replies and new mail written in the owner's voice, waiting in
-   the outbox until the owner sends them.
-3. **Keep the calendar.** Find time, create and move events, attach preparation notes, remind.
-4. **Own commitments.** Projects, tasks and recurring duties with owners, due dates and evidence.
-   One list that the rest of the product reads.
+1. **Triage the inbox.** Turn incoming shared business evidence into reviewable work and updates.
+   Pip handles personal mailbox assistance; Captain receives business correspondence links through
+   its API. Existing connected-mail triage remains until its replacement and retention are settled.
+2. **Draft and send correspondence.** Prepare business correspondence with linked project context;
+   a person sends it (D5). Keep current outbox drafts and their provenance during the transition.
+3. **Keep the calendar.** Plan shared work and equipment reservations, show conflicts and preparation,
+   and retain provider event links. Pip handles personal calendar assistance.
+4. **Own commitments.** Projects, tasks and recurring duties with owners, dates, tags, equipment and
+   evidence; one shared state across clients and linked conversations.
 5. **Chase.** Remind owners before something is due and escalate after; nudge counterparties about
-   overdue invoices and unanswered mail, as drafts the owner sends.
-6. **Brief and answer.** A morning brief delivered by push. Questions about mail, calendar,
-   commitments, customers and money answered from data, with sources shown.
+   overdue invoices and unanswered business correspondence, as drafts a person sends.
+6. **Brief and answer.** Explain shared work, conversation decisions, commitments, customers and money
+   from authorised business data, with source links and freshness. Pip handles private catch-ups.
 
-### A day with Captain
+### Existing assistant walkthrough (compatibility during migration)
 
 06:30 the owner's phone shows the brief: two invoices overdue, the excise return due Friday, three
 mails need an answer and the drafts are ready, a supplier meeting at 11 with the last three
@@ -60,7 +77,7 @@ weeks overdue. The owner sends it.
   forced, with a runtime role that cannot bypass it. Application code cannot forget it.
 - **Everything is journaled.** Every workflow run records each step's input digest and output;
   every write records who or what made it. Provenance is a property of the record, not a feature.
-- **Small surface.** Five tabs on a phone. Features earn their place by a job in §2.
+- **Small surface.** Three workspace tabs: Work, Chat and Resources. Features earn their place by a job in §2.
 - **Honest states.** When a connection is down, a budget is spent or a model is unavailable, the
   product says so and what to do. It never fabricates a quiet day.
 
@@ -71,8 +88,8 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | Path | What |
 |---|---|
 | `apps/api` | Hono HTTP API: auth, routes over services, webhooks, health |
-| `apps/web` | Next.js, phone-first, five tabs; server components read the API |
-| `apps/mobile` | Expo, later; the web is installable in the meantime |
+| `apps/web` | Next.js, responsive Work/Chat/Resources workspace; server components read the API |
+| `apps/mobile` | Planned React Native/Expo development-build client for iOS and Android; native-device acceptance precedes release |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Google (Gmail, Calendar), Xero, Shopify: OAuth, refresh, typed clients, webhooks |
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
@@ -82,6 +99,14 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `infra/embed` | the stateless embedding service: one small sentence encoder behind a bearer secret, shared by all organisations, holding no data (D21) |
 | `packages/ui` | design tokens and shared components |
 | `infra` | OpenTofu for Neon, Cloudflare and monitoring; the inference Sprite's bootstrap files, which the API uploads when an owner sets up a subscription |
+
+**Clients.** Retain Next.js web and use Expo for iOS/Android as the implementation direction.
+Share client-safe contracts, deterministic date/filter/interval logic and tokens. Keep native
+navigation/gesture/keyboard code platform-appropriate. The isolated proof in #114 has passing
+web checks and native bundle exports, not native-device acceptance. Do not replace Next.js or
+claim a signed native build from that evidence. Browser and device access use the same API;
+never bundle server credentials, database access or model secrets into a client. New shared
+packages/dependencies are named in the slice that introduces them, not added speculatively.
 
 **Hosting.** Fly.io in Sydney for the API and web; Neon Postgres; Cloudflare for DNS and TLS at the
 edge; GitHub Actions for CI and deploy. One environment: a single Neon branch and compute, and the
@@ -135,6 +160,22 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 - `organisation_deletions` — platform record of a deleted organisation: name, who deleted it, row
   counts; everything else cascades away with the organisation (§9 deletion as a first-class operation).
 
+**Workspace additions (target; implemented in subsequent migrations)**
+- `tags` — organisation-owned flat labels with a stable ID and a nonblank name, unique without
+  case distinctions inside the organisation. Tags carry no custom fields or permissions.
+- `task_tags` — tenant-qualified links between tasks and tags. A task can have zero or more;
+  assignment/removal never copies the task or moves its project. Start with explicit task tags,
+  without automatic project/series inheritance. Renaming a label keeps all links. Production,
+  Marketing, Sales and Admin/reporting are suggested names, not hard-coded workspaces.
+- Saved views are versioned filters over existing records, scoped to their owner or explicit
+  sharing rules; their persistence schema is a later slice. A filter never grants access.
+- Equipment and reservation records hold named resources, actual start/end instants, unavailability,
+  occupied setup/cleanup intervals, status and task/project/person links (D24). Concrete tables and
+  transaction constraints are reviewed together in the equipment slice.
+- Conversations, membership, messages, record links, shared pins, personal stars and read position
+  are distinct identities (D25). Their schema and access model are reviewed in the chat slice.
+  These target descriptions are not an authorisation for an unaudited generic record store.
+
 **Connections**
 - `connections` — provider, organisation, connected by, scopes, status, error; access and refresh
   tokens envelope-encrypted with a per-tenant data key wrapped by the master key (D16).
@@ -168,8 +209,10 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
   calendar event, a contact, a company, a project and a task; archived at. Not a document store
   (§12): no formatting, files or comments. A note is content like a mail thread: triaged, indexed
   and citable as evidence, and its author is the person, so it never needs the owner and is
-  never drafted a reply. A review note on a file version (the files proposal, §14) is this same
-  record with a file-version anchor, not a separate table.
+  never drafted a reply. Existing notes remain notes. New task/project/file discussions use the
+  shared chat model (D25), including a file-version anchor where relevant; they are not copied
+  into notes or a second comments table. A later migration decides how any existing file notes
+  are linked without losing their original author, evidence identity or audit history.
 - `note_triage` — one row per note, the same shape as `mail_triage` less the needs-owner flag:
   summary, facts, produced by run, model.
 
@@ -542,17 +585,33 @@ respected and persisted. Public-app expiring tokens and Shopify webhooks are lat
 
 ## 10. Web and mobile
 
-Phone-first. Five tabs:
+Phone-first and responsive desktop. Exactly three workspace tabs:
 
-- **Today** — the brief, what needs you, a question box.
-- **Inbox** — triaged threads grouped by what they need, and the outbox.
-- **Commitments** — projects with their tasks, the Obligations deadline book, and Stock: the
-  counted list with each item's last count and what is below its reorder point. Shopify quantities
-  appear alongside it labelled “from Shopify”, with their location and last sync state; only reorder
-  points are editable. Settings → Connections has the Shopify shop-domain form and sync controls.
-- **Calendar** — the week, with preparation notes.
-- **Settings** — organisation, members, connections, workflows, inference subscription and budget, activity
-  (the workflow journal), notifications.
+- **Work** — defaults to My work, filtered to Assigned to you. Projects, tasks, recurring
+  obligations and tag/project/person/status/date views all select the same records.
+- **Chat** — participant conversations, unread and personally starred conversations, linked
+  bidirectionally to projects/tasks/file versions. Participation follows the conversation by
+  default; starring is a private bookmark. Important messages use shared pins.
+- **Resources** — grouped libraries, planning and business views: files/DAM links, equipment,
+  counted stock, people/companies, Xero context and reporting as those slices become available.
+
+Each tab has an untitled grouped view list one page to the left of its selected view. Preserve
+per-tab history and native back behaviour; web routes have meaningful URLs and browser history.
+Desktop can show the list, work and detail alongside each other. Settings stays reachable from
+account/avatar controls; it is not a fourth tab. Task/file/chat detail omits the generic green
+plus; creation on other views has a named contextual action and editable defaults.
+
+The [mobile mockups](proposals/assets/captain-mobile-2026-09-22/README.md) specify the compact
+rounded tab bar, green selection, continuous multi-day equipment timeline, conversation summaries,
+shared pins, latest-six item chats and subtle alternating message rows. Loading, failed, empty,
+disabled and permission states remain required. Unknown/unloaded equipment is never shown free.
+
+**Compatibility.** Existing Today, Inbox, Commitments, Calendar and Settings URLs/data remain
+reachable until their replacements preserve the relevant actions and source links. The new shell
+is a later implementation PR, not part of this plan amendment. Briefs/questions and recurring work
+move under Work; retained mail/calendar views can be reached from grouped lists during migration.
+Do not break old evidence URLs or silently stop an enabled workflow to make the navigation fit.
+The paragraphs below describe retained features until their workspace slices relocate them.
 
 **Settings → Workflows.** Each workflow is drawn as its steps, in the manner of Apple Shortcuts:
 what starts it, then one card per step in the catalogue's words (Read, Ask the model, Write, Wait,
@@ -569,15 +628,14 @@ Disconnect; a monthly token allowance form and usage by tier. Empty, loading, fa
 states say what is known and what to do next, including when the platform has no Sprites token
 configured. Every step works on a phone; nothing requires a terminal.
 
-**Design system.** The visual language is the **Ask The Captain Design System** maintained in
-Claude Design; that project is the design authority. Its tokens (colour, type, spacing, radii,
-motion), brand assets (the octopus mark, lockups, app icons) and core components are mirrored
-verbatim into `packages/ui/design/` and re-imported when the project changes; `apps/web` consumes the
-tokens directly and adapts the reference components; `packages/ui` carries the same values for the
-native app. Screens for the five tabs are designed in that project first, then built. Paper ground
-in light, forest in dark, mint for the Captain's own actions and focus, semantic colour reserved
-for state; system fonts; states described in words, counts shown only when they change what the
-person does next. Dark and light themes and an installable web app until the Expo app exists.
+**Design authority (D14).** Reviewed repository-native workspace designs and their documented
+behaviour are authoritative for the new workspace. Start with the linked mobile mockups and
+preserve user-approved refinements. The Expo architecture harness is technical evidence, not a
+replacement visual design. `packages/ui/design/` remains the verbatim legacy Claude Design mirror;
+do not hand-edit it. New/adapted components and tokens are authored outside the mirror, with their
+source recorded in the implementation PR. Existing screens may continue consuming legacy tokens
+while they migrate. Light/dark, accessible focus, contrast and text scaling are acceptance work;
+do not invent an unreviewed dark palette or require a Claude Design round-trip for each change.
 
 ### The Today question box (job 6)
 
@@ -592,7 +650,7 @@ A note is written in one motion: a note control sits with the question box on To
 event, contact, company, project and task, pre-linked to the thing it was opened from. Today lists
 the last few notes; each linked thing lists its own. A note is plain text with an optional title
 and can be edited or archived by its author or an owner. It is not a sixth tab (D11) and not a
-document editor (§12). Screens are designed in the Claude Design project first (D14).
+document editor (§12). Workspace replacements follow the reviewed repository designs (D14).
 
 `POST /v1/organisations/:id/answers` accepts an active member's question (up to 1000 characters),
 limited to 30 attempts/hour per organisation using the existing process rate limiter. `GET` reads
@@ -617,6 +675,14 @@ one-question step. Unavailable inference and spent budgets refuse before any mod
 no dependency, provider operation, background process or tab (D2, D6, D11).
 
 ## 11. Phases
+
+The [workspace delivery plan](plans/captain-workspace-delivery-2026-09.md) now sequences new work:
+reviewed scope/migration amendments → client/work foundation → equipment → linked chat → first
+usable web/iOS release → files/business context → assistance → broader Android release. Equipment
+is mandatory in the first usable release; Android smoke checks begin early. Device acceptance and
+transactional booking tests remain gates. The table below records the earlier assistant delivery
+history and is not a new schedule or authority to resume the paused deployment.
+
 
 | Phase | Weeks | Delivers |
 |---|---|---|
@@ -645,27 +711,32 @@ client in Phase 2 can proceed in parallel.
   assistant does not need it: "Package batch 42" is a task. The business's vocabulary is the names
   of its projects, tasks and series.
 - Marketplace integrations beyond Google, Xero and Shopify.
-- Team chat, documents, or a file store; link to where those already live. Notes (§5) are plain
-  text a person writes in Captain, not documents: no formatting, files, sharing or comments.
+- A document editor or file-byte store. Captain links provider-held originals and versions;
+  business file/DAM review is in scope after its schema/access slice. Linked team chat is in scope
+  (D25). Notes (§5) remain plain authored records, distinct from conversations and file originals.
+- A personal mailbox, personal task authority or private cross-device search service inside Captain.
+  Those are Pip/provider responsibilities; existing Captain data is retained under the migration plan.
+- Full offline booking confirmation or automatic rescheduling of other people's work. Cached reads
+  and unsent drafts can be offline; booking confirmation requires the server.
 
 ## 13. Decisions
 
 | # | Decision |
 |---|---|
-| D1 | Captain is an administrative assistant for small businesses, defined by the six jobs in §2. |
+| D1 | Captain is the shared small-business work/project system; Pip is the separate personal assistant. The six stable job IDs in §2 apply to shared business work. Existing assistant features remain through an explicit migration; Captain is useful without Pip. |
 | D2 | Inference is data-only: infer steps take data and return schema-validated data; no tools, no writes, no credentials. |
 | D3 | Workflows are compositions of typed steps in five kinds (read, infer, write, await, notify) with deterministic, bounded control flow (`when`, `each`, `branch`). Housekeeping is a system routine, not a workflow. |
 | D4 | A workflow acts in the name of the person who enabled it and can do nothing they could not. |
 | D5 | Anything sent to a third party waits in the outbox for a person. |
 | D6 | Tenant isolation is forced RLS with a non-bypassing runtime role. |
-| D7 | Captain owns projects and tasks. One project holds many tasks; a task may hold sub-tasks one level deep as its checklist; projects do not nest. Recurrence is a series on a task, never on a sub-task. Obligations are tasks in a flagged system project. |
-| D8 | Connectors are first-party SDKs behind our own OAuth and encryption; no third-party integration platforms. |
+| D7 | Captain owns projects/tasks/series and their stable evidence identities. Projects do not nest; one-level task checklists and series remain. Tasks have an accountable owner and zero or more flat tags, not separate business areas. Standalone work needs no user-created project; the existing Obligations system project remains its compatible storage default. Tags/filters never duplicate work or grant access. |
+| D8 | Connectors are first-party SDKs behind our own OAuth and encryption; no third-party integration platforms. Captain owns shared business connections; Pip owns personal provider access and calls Captain through its ordinary authenticated API. Existing credentials are preserved in place during migration, never copied into Pip. No inbound forwarding mailbox is added. |
 | D9 | Inference uses each organisation's own Claude or Codex subscription through an unmodified CLI, behind a Sprite provider adapter; monthly token allowances and per-step usage, not dollar reservations. |
 | D10 | The durable execution engine is chosen by a bounded spike in Phase 2 between Restate and pg-boss with a small runner. |
-| D11 | Five tabs: Today, Inbox, Commitments, Calendar, Settings. |
+| D11 | Work, Chat and Resources are the three workspace tabs. Work defaults to Assigned to you; each tab has a grouped view list one page left. Settings is reached through account controls. Preserve existing URLs/actions until their replacement slice is ready. |
 | D12 | Hosting is Fly.io Sydney, Neon Postgres, Cloudflare, GitHub Actions. |
 | D13 | Attachment bytes are never stored. Metadata always; text extracted on an allow list and size cap, cached briefly, passed to the model as labelled untrusted content. |
-| D14 | The Ask The Captain Design System in Claude Design is the design authority, mirrored into `packages/ui/design/`. |
+| D14 | Reviewed repository-native workspace designs and behaviour are the new workspace design authority (§10). `packages/ui/design/` remains a verbatim, unedited legacy Claude Design mirror. New components/tokens live outside it; technical proof screens do not supersede the approved visual mockups. |
 | D15 | Inventory is a counted list, not a ledger: sellable stock is read from the connected commerce system; everything else is a stock item whose count a person enters, with a stocktake workflow and reorder tasks. |
 | D16 | Envelope encryption uses a master key held in the API's secrets wrapping per-tenant data keys; no cloud key-management service and no AWS account. |
 | D17 | One environment until the second customer: one Neon branch and compute, one live pair of Fly apps deployed from `main`; production promotion exists but stays dormant. |
@@ -674,25 +745,25 @@ client in Phase 2 can proceed in parallel.
 | D20 | Deterministic code decides before any model call: a rules gate on Gmail categories, list headers, sender shape and reply state, plus per-sender priors learned from earlier verdicts and a person's replies, files bulk and automated mail without inference. The model classifies only what passes. |
 | D21 | The retrieval index is a pgvector column in the tenant's own Postgres rows, filled by a small sentence encoder (bge-small-en-v1.5, 384 dimensions) in one Captain-run, stateless embedding service shared by all organisations: a plain Fly machine in Sydney that scales to zero and holds no data (`infra/embed`, decided 2026-09-20 over Workers AI, which would add a processor of mail text to audit). No separate vector store and no third-party embeddings service; vectors are mail-derived data under the same policy as mail. |
 | D22 | Captain proposes projects from evidence and a person makes them real. The triage model may name a project per thread; deterministic thresholds decide when that evidence is worth a discovery call; the discovery call judges the assembled evidence against the criteria in §14 and answers project, task, relationship or nothing; a person accepts. A project is never created from a single mail, and a proposed project is inert until accepted. |
-| D23 | Notes are first-class content: plain text a person writes in Captain, treated like mail in triage, retrieval, evidence and discovery, with the person as author so nothing needs the owner and nothing is drafted. Captain is not a document store. |
+| D23 | Existing notes remain first-class authored plain text, citable by stable ID and retained during migration. Shared discussions use D25 conversations, not duplicate notes/comments; file review may anchor a chat to a version. Captain retains metadata/links rather than file bytes and is not a document editor. |
+| D24 | Equipment scheduling is core. Continuous interval timelines support hours/days/weeks, resource scrolling and focal zoom. The server atomically prevents overlapping confirmed occupancy, including setup/cleanup/maintenance; unconfirmed, unknown and unloaded periods are explicit. Filters cannot hide competing resource occupancy. |
+| D25 | Shared chat links bidirectionally to work and file versions. Item chats show the latest six chronological messages plus shared pins referencing original IDs. Stars are personal conversation bookmarks. Membership/access, retry-safe sends, reconnect/read state, pin auditing and source-linked summaries are specified before implementation; summaries remain D2 infer outputs. |
 
 ## 14. Open questions
 
-- Product split: [Ask The Captain and Pip](proposals/2026-09-22-captain-and-pip.md)
-  proposes Captain as the shared business project system and Pip as a device-run personal
-  assistant. This is a proposal for review, not an adopted replacement for D1–D23. It records
-  task ownership, correspondence through the API, inference boundaries, private iCloud search,
-  Focus and actionable notifications, and the Apple integrations that still need device tests.
-  It also proposes Captain's tag/project/person views and Work/Chat/Resources navigation,
-  required equipment scheduling, shared assets and linked team chat, with a connected mobile
-  mockup set including grouped view lists, an equipment timeline and a view map.
-  The [delivery plan](plans/captain-workspace-delivery-2026-09.md) sequences the first usable
-  release and proposes an isolated, fictional client proof under
-  `docs/proposals/assets/captain-client-proof-2026-09-23`. That proof may use its own locked
-  Expo, React/React Native, React Native Web, development-client, safe-area and TypeScript/tsx
-  dependencies outside the production workspace. It adds no production package, service,
-  table or route; successful exports are not native-device acceptance. Architecture adoption
-  and runtime changes still require the reviewed amendments listed in the delivery plan.
+- The merged [Captain/Pip proposal](proposals/2026-09-22-captain-and-pip.md) supplies the product
+  direction adopted by this workspace amendment. The [delivery plan](plans/captain-workspace-delivery-2026-09.md)
+  sequences implementation and the [migration inventory](plans/captain-workspace-migration-inventory-2026-09.md)
+  records retained data and unresolved disposition decisions. Do not treat the historical proposal's
+  “not adopted” status as an override of the reviewed decisions here.
+- Client proof: the isolated Expo experiment under `docs/proposals/assets/captain-client-proof-2026-09-23`
+  has its own locked Expo, React/React Native, React Native Web, development-client, safe-area and
+  TypeScript/tsx dependencies outside the production workspace. Web checks and bundle exports pass;
+  real-device gestures/keyboards/performance remain open. Retain Next.js web while building Expo
+  mobile; a web replacement requires a representative comparison and another decision.
+- Pip: device model availability, Siri natural-language action routing, Reminders/iCloud identity,
+  phone/voicemail inputs and Focus control remain separate proofs. No unsupported Apple API or
+  device-off personal inference capability is assumed by Captain.
 - Model tiers: which models sit behind `small` and `large` at launch, and whether drafting starts
   on the large tier or is measured first.
 - Whether the first customer's printable production records belong in Captain or in its asset
@@ -701,10 +772,11 @@ client in Phase 2 can proceed in parallel.
 - When to enable the API-key path and cost-based budgets; pricing for it.
 - Whether Gmail's Updates category is gated by sender knowledge, as §14 says, or always classified.
 - Files in place: `docs/proposals/2026-09-16-files-in-place-and-workspace.md` is merged for
-  discussion, not adopted. Its slice B plan amendment must reconcile with D23 (file annotations are
-  notes with a file-version anchor), add its version-qualified file kind to `evidence` alongside
-  `note`, add one sentence to the §12 documents non-goal rather than rewriting it, and may add a
-  source value to `content_vectors`. Its sequencing against Phase 5 is the owner's call.
+  discussion, not adopted in full. Provider-backed originals/version links fit the workspace;
+  shared file discussions now follow D25 rather than a separate annotations-as-notes system.
+  Its editor sidebars, record kits and paper-to-record pipeline are not included by this amendment.
+  The file slice must settle provider/version access, evidence identity and any extracted-text
+  retention before adding schema or a retrieval source.
 - Proposing first steps for an idea-stage project: an infer step over the brief that suggests tasks
   for a person to accept. A later phase, after proposals have been accepted and discarded for a
   while and the brief format has settled.
