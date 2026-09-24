@@ -9,6 +9,8 @@ import { serve } from '@hono/node-server';
 // Manual browser fixture only: never imported by the application or started against hosted data.
 const directory = process.env.WORKSPACE_PROBE_DIR;
 if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to a private temporary directory.');
+const databaseHost = new URL(process.env.DATABASE_URL ?? '').hostname;
+if (!['127.0.0.1', 'localhost', '[::1]'].includes(databaseHost)) throw new Error('The browser fixture requires a loopback Postgres server.');
 const db = await freshDatabase();
 try {
 const google = { next: {subject:'workspace-owner',email:'olive@example.test',name:'Olive Owner'}, authorizationUrl:({state})=>`https://google.test/?state=${state}`, async exchange(){return this.next} };

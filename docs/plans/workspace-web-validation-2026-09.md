@@ -9,7 +9,8 @@ pages do not claim those products have shipped.
 
 Use a private temporary directory for the short-lived fixture session. Commands assume the repo
 root and installed dependencies. `DATABASE_URL` must name a local throwaway Postgres admin
-connection: the harness creates, migrates and drops a separate database. The fixed ports 8084 and
+connection: the fixture refuses non-loopback database hosts, then the harness creates, migrates
+and drops a separate database. The fixed ports 8084 and
 3034 must be free.
 
 ```bash
@@ -61,3 +62,16 @@ The web unit suite checks filter boundaries and navigation restoration validatio
 regressions cover the project `state` field required by both Work filters and Commitments sections,
 and the morning brief's `/today` notification destination. The full CI suite remains required.
 Native iOS/Android, Safari/Firefox and the full slice-2 acceptance workflow remain outstanding.
+
+## Result (24 September 2026)
+
+All seven browser check groups passed against the production build and disposable Postgres/API,
+including a real task write, with no browser exceptions. Phone and desktop screenshots were
+inspected. Workspace typechecking, the production build and all 14 web tests passed. The targeted
+Postgres suites cover commitments/answers, morning briefs and stock workflows; full PR CI remains
+the merge gate.
+
+The populated browser check also found a pre-existing missing `state` column in project API
+responses. Since the web filtered projects by that field, it hid active, proposed and archived
+projects. Returning the existing generated database column repairs the retained Commitments
+sections and project pickers as well as the new Work filters.
