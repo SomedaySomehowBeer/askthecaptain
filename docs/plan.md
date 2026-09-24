@@ -177,6 +177,7 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 
 **Workspace additions.** Tags and task tags are implemented by migration 0035, merged in #117.
 Their API supports tag management and bounded, filtered task queries; the web Work list uses it.
+Equipment scheduling has its first API increment in migration 0036; its timeline remains pending.
 Other workspace additions below remain targets for subsequent slices.
 - `tags` — organisation-owned flat labels with a stable ID and a nonblank name, unique without
   case distinctions inside the organisation. Tags carry no custom fields or permissions.
@@ -186,9 +187,13 @@ Other workspace additions below remain targets for subsequent slices.
   Marketing, Sales and Admin/reporting are suggested names, not hard-coded workspaces.
 - Saved views are versioned filters over existing records, scoped to their owner or explicit
   sharing rules; their persistence schema is a later slice. A filter never grants access.
-- Equipment and reservation records hold named resources, actual start/end instants, unavailability,
-  occupied setup/cleanup intervals, status and task/project/person links (D24). Concrete tables and
-  transaction constraints are reviewed together in the equipment slice.
+- `equipment` and `equipment_reservations` hold named exclusive resources, actual start/end
+  instants, maintenance, occupied setup/cleanup intervals, status and task/project/person links
+  (D24). Migration 0036 installs `btree_gist` and a confirmed-occupancy exclusion constraint;
+  tenant RLS, active-member access, revision checks, audited writes and bounded unfiltered
+  availability reads ship together. The [API contract](plans/equipment-reservations-2026-09.md)
+  specifies cancellation, create retries, archival and incomplete-window semantics. Timeline
+  controls and native clients remain later increments of the same equipment slice.
 - Conversations, membership, messages, record links, shared pins, personal stars and read position
   are distinct identities (D25). Their schema and access model are reviewed in the chat slice.
   These target descriptions are not an authorisation for an unaudited generic record store.
@@ -640,8 +645,8 @@ respected and persisted. Public-app expiring tokens and Shopify webhooks are lat
 
 ## 10. Web and mobile
 
-Phone-first and responsive desktop. The target is exactly three workspace tabs; the running app
-still has the five legacy tabs described under Compatibility below:
+Phone-first and responsive desktop. The running web shell has exactly three workspace tabs,
+with retained features described under Compatibility below:
 
 - **Work** — defaults to My work, filtered to Assigned to you. Projects, tasks, recurring
   obligations and tag/project/person/status/date views all select the same records.
@@ -664,7 +669,7 @@ disabled and permission states remain required. Unknown/unloaded equipment is ne
 
 **Compatibility.** Existing Today, Inbox, Commitments, Calendar and Settings URLs/data remain
 reachable until their replacements preserve the relevant actions and source links. The new shell
-is a later implementation PR, not part of this plan amendment. Briefs/questions and recurring work
+was delivered in #122. Briefs/questions and recurring work
 move under Work; retained mail/calendar views can be reached from grouped lists during migration.
 Do not break old evidence URLs or silently stop an enabled workflow to make the navigation fit.
 The paragraphs below describe retained features until their workspace slices relocate them.

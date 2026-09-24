@@ -16,11 +16,16 @@ production or require Pip before Captain is useful. Production remains paused; [
 | 0. Architecture proof | Built as a fictional harness; web checks and bundle exports pass locally and in the new `client-proof` CI check ([#120](https://github.com/SomedaySomehowBeer/askthecaptain/pull/120)). Native-device acceptance has not been run. |
 | 1. Reviewed amendments | Done: plan D1–D25 and the migration inventory merged in #116. |
 | 2. Client and work foundation | In progress: task/tag API merged in #117. Web now has the three-tab shell, grouped view lists, real filtered Work and task creation. Tag creation/renaming and individual task tag editing are now available. Saved views and `apps/mobile` remain; this does not complete slice 2. |
-| 3–7 | Not started. Equipment, chat, files, mobile builds and Pip integration are designs, not code. |
+| 3. Equipment scheduling | First API increment: equipment, maintenance/reservations, database overlap enforcement, revisions, cancellation and bounded occupancy reads. The [contract](equipment-reservations-2026-09.md) defines the integrity boundary. Timeline controls remain pending; this does not complete slice 3. |
+| 4–7 | Not started. Chat, files, mobile builds and Pip integration are designs, not code. |
 | Pip | Separate product, tracked in [#119](https://github.com/SomedaySomehowBeer/askthecaptain/issues/119); no Captain slice waits for it. |
 
 Slice numbers are this plan's own; they are unrelated to the historical phases 0–5 in plan §11.
 Production stays paused through every slice. Staging may be resumed when needed under the one-machine-per-app limit; the local web checks do not require it.
+
+The equipment API increment proceeds against the delivered task/project foundation while saved
+views and native clients remain open. Its scheduling integrity does not depend on those clients;
+the first-customer release still requires the full slices 2–4 acceptance evidence.
 
 ## First web foundation increment
 
