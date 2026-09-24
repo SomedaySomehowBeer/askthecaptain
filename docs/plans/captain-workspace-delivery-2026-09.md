@@ -1,11 +1,13 @@
 # Captain workspace delivery plan
 
-Status: proposed implementation sequence, 23 September 2026; attached to PR #114.
+Status: implementation sequence from merged PR #114; workspace adoption amendment in review,
+24 September 2026.
 Jobs advanced: **own commitments** and **brief and answer**.
 
 The [product proposal](../proposals/2026-09-22-captain-and-pip.md) defines the intended
-Captain/Pip split. This plan turns that direction into reviewable slices. It does not adopt
-D1–D23 replacements, migrate production, or require Pip before Captain is useful.
+Captain/Pip split. This plan turns that direction into reviewable slices. The current [plan amendment](../plan.md)
+reconciles the product/navigation/design decisions; this sequence does not itself migrate
+production or require Pip before Captain is useful. Preserve the [operational pause](../runbooks/paused.md).
 
 ## Outcome and first usable release
 
@@ -122,7 +124,9 @@ outside the first release unless real first-customer use requires them.
 
 ## Migration and simplification
 
-Before changing runtime behaviour, inventory projects/tasks/series, notes and evidence, mail,
+The [code-based migration inventory](captain-workspace-migration-inventory-2026-09.md) records
+known stores and unresolved live-data questions. It proposes conservative retention while new
+capabilities are added. Before retiring existing runtime behaviour, inventory projects/tasks/series, notes and evidence, mail,
 outbox drafts, vectors, connections, enabled workflows, notifications and audit records. For each,
 record authority after the split, preserve/migrate/archive disposition, retention and rollback.
 Keep stable IDs or an explicit mapping so existing evidence links survive. Do not copy credentials

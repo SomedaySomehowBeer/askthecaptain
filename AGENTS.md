@@ -2,12 +2,13 @@
 
 This file is for every agent and person who writes code here. Read it, then read
 [`docs/plan.md`](docs/plan.md). The plan is the source of truth for what Captain is and how it is
-built; its decisions (D1–D15) change only by a reviewed pull request that edits the plan.
+built; its decisions (D1–D25) change only by a reviewed pull request that edits the plan.
 
 ## The test for any piece of work
 
-Captain is an administrative assistant for small businesses with six jobs (plan §2): triage the
-inbox, draft and send correspondence, keep the calendar, own commitments, chase, brief and answer.
+Captain is the shared small-business work system, with six stable job IDs (plan §2): triage shared
+business intake, draft and send correspondence, keep the calendar, own commitments, chase, brief
+and answer. Pip handles personal assistance; existing Captain features migrate deliberately.
 Before starting anything, name the job it moves sooner. If you cannot, do not start it. Put the
 job in the pull request body.
 
@@ -36,8 +37,9 @@ job in the pull request body.
 - **Inventory is a counted list (D15).** No movements, conversions, lots or costing.
 - **No configurable domain model.** No entity types, custom fields, units or process definitions.
   The business's vocabulary is the names of its projects, tasks and series.
-- **Five tabs (D11).** Today, Inbox, Commitments, Calendar, Settings. A feature that needs a sixth
-  is a plan amendment first.
+- **Three workspace tabs (D11).** Work, Chat and Resources; Work defaults to Assigned to you.
+  Each has a grouped view list one page left. Settings is reached through account controls. Keep
+  legacy routes/actions reachable until their replacement slice is complete.
 - **Honest states.** A down connection, a spent budget or an unavailable model is said in words
   with what to do next. Never render a value the data cannot justify; never fabricate a quiet day.
 
@@ -53,7 +55,7 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 | `packages/connectors` | Google, Xero, Shopify |
 | `packages/steps` | the step catalog and workflow definitions |
 | `packages/model` | inference client, structured output, budgets, usage |
-| `packages/ui` | design tokens and shared components; `packages/ui/design/` is the verbatim mirror of the Claude Design project (D14): edit there, re-import here |
+| `packages/ui` | tokens/components follow reviewed repository workspace designs (D14); `packages/ui/design/` is an unedited legacy Claude Design mirror, so author new work outside it |
 | `infra` | OpenTofu |
 
 - Migrations are hand-written SQL, numbered, never edited after merge. One migration per pull
@@ -72,14 +74,15 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 - Small pull requests, one concern each, with the job named in the body and the decision it
   relies on when there is one. CI must be green. Squash-merge.
 - Design of screens and of the step catalog is a plan matter: propose in a plan amendment or a
-  design in the Claude Design project before building.
+  reviewed repository-native design before building (D14).
 - Do not add a package, a table, a dependency or a background process that the plan does not
   name without amending the plan in the same pull request.
 - Do not build for a hypothetical tenant. The first customer is the only one until Phase 4.
 - Do not import code or designs from other projects. This repository is self-contained; anything
   worth having is written here against the plan.
 - Production deploys, infrastructure applies, DNS, secrets and anything legal are the repository
-  owner's to do. Prepare them; do not run them.
+  owner's to do. Prepare them; do not run them. Preserve the pause in `docs/runbooks/paused.md`;
+  development does not authorise resuming machines, deployments, backups or provider schedules.
 - On a shared development machine, run one build or test at a time; wrap heavy commands in
   `flock /tmp/atc-build.lock`.
 
