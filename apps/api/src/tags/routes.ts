@@ -19,6 +19,10 @@ export function tagsRoutes(service: TagsService) {
  });
  routes.post('/v1/organisations/:id/tags', async c => c.json(await service.save(actor(c), uuid.parse(c.req.param('id')), await readJson(c.req)), 201));
  routes.patch('/v1/organisations/:id/tags/:tagId', async c => c.json(await service.save(actor(c), uuid.parse(c.req.param('id')), await readJson(c.req), uuid.parse(c.req.param('tagId')))));
+ routes.get('/v1/organisations/:id/tasks/:taskId/tag-options', async c => {
+  const { offset, limit } = pagination.parse(c.req.query());
+  return c.json(await service.options(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('taskId')), offset, limit));
+ });
  for (const method of ['put', 'delete'] as const) routes[method]('/v1/organisations/:id/tasks/:taskId/tags/:tagId', async c =>
   c.json(await service.setLink(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('taskId')), uuid.parse(c.req.param('tagId')), method === 'put')));
  routes.get('/v1/organisations/:id/tasks', async c => {

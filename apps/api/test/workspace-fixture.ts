@@ -76,6 +76,10 @@ try {
         const url = new URL(req.url);
         if (req.method === 'GET' && url.pathname.endsWith('/tasks') && mode === 'failed')
             return Response.json({ error: 'Fixture task query unavailable' }, { status: 503 });
+        if (mode === 'tags-failed' && req.method === 'GET' && (url.pathname.endsWith('/tags') || url.pathname.endsWith('/tag-options')))
+            return Response.json({ error: 'Fixture tag query unavailable' }, { status: 503 });
+        if (mode === 'tag-write-failed' && req.method !== 'GET' && url.pathname.includes('/tags'))
+            return Response.json({ error: 'Fixture tag write unavailable' }, { status: 503 });
         return app.fetch(req);
     } });
     console.log('Workspace fixture ready on 8084');

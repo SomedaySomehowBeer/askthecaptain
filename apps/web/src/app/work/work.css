@@ -36,3 +36,18 @@
 .work-chip__remove { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; border-radius: 999px; color: inherit; text-decoration: none; font-size: 15px; line-height: 1; }
 .work-chip__remove:hover { background: var(--line); }
 .work-chip__remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Edit tags sits beside the task's own link, never inside it. */
+.work-task { display: flex; align-items: flex-start; gap: 8px; }
+.work-task__link { flex: 1 1 auto; min-width: 0; }
+.work-task__edit-tags { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; font-size: 13px; color: var(--accent-text); }
+
+/* Tags and a task's tag choices. */
+.work-tag-form { align-items: flex-end; }
+.work-tag-form .field { flex: 1 1 200px; }
+.work-tag-row, .work-tag-choice { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.work-tag-row:first-child, .work-tag-choice:first-child { border-top: 0; }
+.work-tag-row__name, .work-tag-choice__name { flex: 1 1 auto; min-width: 0; display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 500; overflow-wrap: anywhere; }
+.work-tag-row__use { font-size: 13px; color: var(--accent-text); min-height: 44px; display: inline-flex; align-items: center; }
+.work-tag-row .disclosure { flex-basis: 100%; }
+.work-tag-choice__error { flex-basis: 100%; }

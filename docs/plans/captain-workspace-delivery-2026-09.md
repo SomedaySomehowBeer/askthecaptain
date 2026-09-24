@@ -15,7 +15,7 @@ production or require Pip before Captain is useful. Production remains paused; [
 |---|---|
 | 0. Architecture proof | Built as a fictional harness; web checks and bundle exports pass locally and in the new `client-proof` CI check ([#120](https://github.com/SomedaySomehowBeer/askthecaptain/pull/120)). Native-device acceptance has not been run. |
 | 1. Reviewed amendments | Done: plan D1–D25 and the migration inventory merged in #116. |
-| 2. Client and work foundation | In progress: task/tag API merged in #117. Web now has the three-tab shell, grouped view lists, real filtered Work and task creation. Saved views, task tag editing UI and `apps/mobile` remain; this does not complete slice 2. |
+| 2. Client and work foundation | In progress: task/tag API merged in #117. Web now has the three-tab shell, grouped view lists, real filtered Work and task creation. Tag creation/renaming and individual task tag editing are now available. Saved views and `apps/mobile` remain; this does not complete slice 2. |
 | 3–7 | Not started. Equipment, chat, files, mobile builds and Pip integration are designs, not code. |
 | Pip | Separate product, tracked in [#119](https://github.com/SomedaySomehowBeer/askthecaptain/issues/119); no Captain slice waits for it. |
 
@@ -38,7 +38,17 @@ Production stays paused through every slice. Staging may be resumed when needed 
 - Chat and Files & assets are explicitly unavailable. No fictional records, free-equipment
   assertions or create actions for unimplemented capabilities are exposed.
 - Project/member labels currently come from existing overview APIs; a smaller lookup endpoint,
-  saved filters, task tag editing and native integration are subsequent work.
+  saved filters and native integration are subsequent work.
+
+## Web tag-controls increment
+
+Work views now opens `/work/tags` for creating and renaming shared labels. Work task rows open
+`/work/tasks/:taskId/tags` to add/remove one label at a time. Both catalogues are paginated; a
+single-task read reports confirmed assignments without loading every work record. Renames retain
+stable IDs and update existing Work filters and assignments. Empty, invalid, unavailable and failed
+states are explicit; confirmed writes refresh the source data. Tag deletion, inheritance, project
+tagging and saved-view persistence remain outside this increment. No migration or dependency is
+introduced. This advances **own commitments** and remains part of delivery slice 2.
 
 ## Outcome and first usable release
 

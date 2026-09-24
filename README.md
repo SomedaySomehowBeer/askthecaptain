@@ -6,7 +6,8 @@ organised into **Work, Chat and Resources**.
 A separate personal assistant, Pip, will handle each person's own mail, calendar and reminders.
 
 The web app now has the Work/Chat/Resources shell. Work lists real tasks, defaults to your open
-tasks, and supports owner, status, project and tag filters plus task creation. Existing pages and
+tasks, and supports owner, status, project and tag filters plus task creation. Shared tags can be
+created and renamed, and added to or removed from individual tasks. Existing pages and
 data remain reachable through the grouped view lists; the former landing page is at `/today`.
 Chat, equipment scheduling, saved views and the mobile app remain to be built. Hosted services
 remain recorded as stopped; staging-only resumption is authorised when needed, with at most one

@@ -143,6 +143,49 @@ it('tag writes and their audit roll back together on failure', async () => {
   assert.equal((await db.owner`select * from tags where name = 'Rollback proof'`).length, 0);
  } finally { await db.owner.unsafe('drop trigger fail_tag_audit on audit_events; drop function fail_tag_audit()'); }
 });
+type Options = { task: { id: string; title: string }; tags: { id: string; name: string; attached: boolean }[]; nextOffset: number | null };
+it('task tag choices page confirmed assignments and preserve their identity through renames', async () => {
+ const attached = await makeTag('AAA editor attached'), available = await makeTag('AAB editor available');
+ await json(link(attached.id)); const endpoint = `${base()}/tasks/${task}/tag-options`;
+ const before = (await db.owner`select count(*)::int as n from audit_events`)[0]!.n;
+ const first = await json<Options>(request('GET', `${endpoint}?limit=1`, member));
+ assert.equal(first.task.id, task); assert.ok(first.task.title); assert.equal(first.nextOffset, 1);
+ assert.deepEqual(first.tags, [{ id: attached.id, name: attached.name, attached: true }]);
+ const second = await json<Options>(request('GET', `${endpoint}?limit=1&offset=1`, member));
+ assert.deepEqual(second.tags, [{ id: available.id, name: available.name, attached: false }]);
+ assert.equal((await db.owner`select count(*)::int as n from audit_events`)[0]!.n, before, 'read does not write audit');
+ const empty = await json<Options>(request('GET', `${endpoint}?offset=1000000`, member));
+ assert.equal(empty.task.id, task); assert.deepEqual(empty.tags, []); assert.equal(empty.nextOffset, null);
+ await json(request('PATCH', `${base()}/tags/${attached.id}`, member, { name: 'AAA editor renamed' }));
+ assert.deepEqual((await json<Options>(request('GET', `${endpoint}?limit=1`, member))).tags, [{ id: attached.id, name: 'AAA editor renamed', attached: true }]);
+ await json(link(attached.id, 'DELETE'));
+ assert.equal((await json<Options>(request('GET', `${endpoint}?limit=1`, member))).tags[0]!.attached, false);
+ for (const query of ['offset=-1', 'offset=1000001', 'limit=0', 'limit=101', 'limit=abc'])
+  assert.equal((await request('GET', `${endpoint}?${query}`, member)).status, 400);
+});
+it('task tag choices refuse foreign, removed-member and ineligible-task reads without leaking titles', async () => {
+ const endpoint = (id: string) => `${base()}/tasks/${id}/tag-options`;
+ assert.equal((await request('GET', endpoint(task))).status, 401);
+ assert.equal((await request('GET', endpoint(task), outsider)).status, 404);
+ assert.equal((await request('GET', endpoint(otherTask), member)).status, 404);
+ assert.equal((await request('GET', endpoint('00000000-0000-4000-8000-000000000000'), member)).status, 404);
+ assert.equal((await request('GET', endpoint('bad-id'), member)).status, 400);
+ const step = await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Editor checklist', parentId: task }), 201);
+ assert.equal((await request('GET', endpoint(step.id), member)).status, 404);
+ const p = await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Editor eligibility' }), 201);
+ const t = await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Eligibility task', projectId: p.id }), 201);
+ for (const status of ['done', 'cancelled']) {
+  await json(request('PATCH', `${base()}/tasks/${t.id}`, owner, { status }));
+  assert.equal((await request('GET', endpoint(t.id), member)).status, 200, 'matches existing link-write eligibility');
+ }
+ await json(request('PATCH', `${base()}/projects/${p.id}`, owner, { archived: true }));
+ assert.equal((await request('GET', endpoint(t.id), member)).status, 404);
+ await db.owner`update projects set archived_at = null, proposed_at = now(), accepted_at = null where id = ${p.id}`;
+ assert.equal((await request('GET', endpoint(t.id), member)).status, 404);
+ await db.owner`update memberships set status = 'removed' where organisation_id = ${org} and user_id = ${member.user.id}`;
+ try { assert.equal((await request('GET', endpoint(task), member)).status, 404); }
+ finally { await db.owner`update memberships set status = 'active' where organisation_id = ${org} and user_id = ${member.user.id}`; }
+});
 it('new tenant tables appear in export and cascade with a deleted organisation', async () => {
  const lifecycle = new OrganisationLifecycle(db.app);
  const lines: Record<string, unknown>[] = [];

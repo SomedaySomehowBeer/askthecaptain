@@ -22,7 +22,7 @@ test('signed-out people are sent to sign in, and the page is the real one', asyn
 });
 
 test('every area needs a session', async ({ request }) => {
-	for (const path of ['/work', '/work/views', '/work/new', '/chat', '/chat/views', '/resources', '/resources/views', '/resources/inventory', '/today', '/inbox', '/inbox/x', '/inbox/contacts/x', '/settings/contacts', '/commitments', '/calendar', '/settings', '/settings/members', '/settings/connections', '/settings/inference', '/settings/workflows', '/settings/notifications', '/settings/delete', '/settings/export', '/settings/passkeys', '/welcome']) {
+	for (const path of ['/work', '/work/views', '/work/tags', '/work/tasks/00000000-0000-4000-8000-000000000000/tags', '/work/new', '/chat', '/chat/views', '/resources', '/resources/views', '/resources/inventory', '/today', '/inbox', '/inbox/x', '/inbox/contacts/x', '/settings/contacts', '/commitments', '/calendar', '/settings', '/settings/members', '/settings/connections', '/settings/inference', '/settings/workflows', '/settings/notifications', '/settings/delete', '/settings/export', '/settings/passkeys', '/welcome']) {
 		const response = await request.get(`${webUrl()}${path}`, { maxRedirects: 0 });
 		expect(response.status(), path).toBe(307);
 		expect(response.headers()['location'], path).toMatch(/\/sign-in/);
