@@ -33,6 +33,21 @@ export class TagsService {
    return { tags: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   });
  }
+ /** A bounded catalogue for one task; never infer its assignments from a filtered Work page. */
+ options(actor: Actor, organisationId: string, taskId: string, offset: number, limit: number) {
+  return this.tx(actor, organisationId, async tx => {
+   const [task] = await tx<{ id: string; title: string }[]>`select t.id, t.title from tasks t
+    join projects p on p.id = t.project_id and p.organisation_id = t.organisation_id
+    where t.id = ${taskId} and t.parent_id is null and p.archived_at is null and p.state = 'active'
+    for share of t, p`;
+   if (!task) throw notFound();
+   const rows = await tx<{ id: string; name: string; attached: boolean }[]>`select tag.id, tag.name,
+    exists (select 1 from task_tags link where link.organisation_id = tag.organisation_id
+     and link.tag_id = tag.id and link.task_id = ${taskId}) as attached
+    from tags tag order by lower(tag.name), tag.id limit ${limit + 1} offset ${offset}`;
+   return { task, tags: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
+  });
+ }
  async save(actor: Actor, organisationId: string, raw: unknown, id?: string) {
   const input = tagInput.parse(raw);
   try {

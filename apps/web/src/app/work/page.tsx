@@ -34,6 +34,7 @@ function TaskRow({ task, today, meId, owners, projects }: { task: WorkTask; toda
 	return (
 		<li className="work-task">
 			{href ? <Link className="work-task__link" href={href}>{content}</Link> : <div className="work-task__link">{content}</div>}
+			<Link className="work-task__edit-tags" href={`/work/tasks/${task.id}/tags`} aria-label={`Edit tags for ${task.title}`}>Edit tags</Link>
 		</li>
 	);
 }

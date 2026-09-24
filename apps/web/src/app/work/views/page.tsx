@@ -12,6 +12,7 @@ export default async function WorkViews() {
 		]} />
 		<ViewGroup title="Across the business" views={[
 			{ label: 'All tasks', detail: 'Open tasks across people and projects', href: '/work?owner=all' },
+			{ label: 'Tags', detail: 'Add and rename the shared labels on tasks', href: '/work/tags' },
 			{ label: 'Projects & recurring duties', detail: 'Existing projects, checklists and deadline book', href: '/commitments' },
 			{ label: 'Calendar', detail: 'Connected calendars and preparation', href: '/calendar' },
 			{ label: 'Inbox', detail: 'Existing mail, drafts and correspondence', href: '/inbox' },

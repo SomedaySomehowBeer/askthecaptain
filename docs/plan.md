@@ -201,12 +201,28 @@ PUT/DELETE of the same task/tag link is a no-op after the first change. Tag name
 `GET /v1/organisations/:id/tags` lists labels; POST creates; PATCH `.../tags/:tagId` renames.
 PUT/DELETE `.../tasks/:taskId/tags/:tagId` attach/remove. `GET .../tasks` selects top-level work
 by repeated `tagId` (any selected tag matches), `ownerId`, `projectId` and `status`, combined
-with AND. Owner IDs are explicit: the future My work client supplies the signed-in person's ID.
+with AND. Owner IDs are explicit: the My work client supplies the signed-in person's ID.
 Cancelled tasks are excluded unless requested; archived/proposed projects and checklist rows are
 excluded. Responses contain stable task IDs and their current labels. Both lists use a bounded
 `limit` (default 50, maximum 100), `offset` and `nextOffset`. Tags do not change existing
 Commitments responses or create saved-view persistence. Tag deletion/archival, inherited tags,
-project tagging and the workspace filter UI are later slices.
+project tagging remain later slices; the web Work filter UI is implemented.
+
+**Web tag controls (work-foundation increment).** `/work/tags`, reached from Work views,
+provides a paginated organisation tag list with create and rename forms. Renaming is shared:
+existing assignments keep the same tag ID and display the new name. Each Work task row links to
+`/work/tasks/:taskId/tags`, a focused editor with the task name, paginated tag choices and explicit
+Add/Remove buttons. It changes one link at a time, so concurrent edits never replace somebody
+else's whole selection. No new task or tag store, inference or migration is introduced.
+
+`GET /v1/organisations/:id/tasks/:taskId/tag-options` supplies that editor: the task ID/title,
+a bounded page of organisation tags with `attached` booleans, and `nextOffset`. It accepts the same
+limit/offset bounds as the tag list, checks membership and only exposes top-level tasks in active
+projects (including completed/cancelled rows, matching existing tag-write eligibility). Cross-tenant,
+removed-member, checklist, proposed/archived-project and missing task reads are refused. Empty,
+loading, failed, unavailable and saving states remain distinct. Failed writes retain entered values;
+no client claims a link changed until the API confirms it. The editor uses the existing idempotent
+PUT/DELETE routes. Creating or renaming a label uses the existing audited API.
 
 **Connections**
 - `connections` — provider, organisation, connected by, scopes, status, error; access and refresh

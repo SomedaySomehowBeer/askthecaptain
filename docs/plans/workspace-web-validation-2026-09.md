@@ -56,6 +56,10 @@ this bridged browser check.
 - A browser-created task persists with the selected project and current owner.
 - Pagination retains filters; Inventory stays in Resources without overwriting Work's last route.
 - Grouped view lists, retained Today, phone/desktop layouts and browser exceptions are checked.
+- Tag creation and duplicate rejection preserve entered values; shared renaming keeps the tag ID
+  and updates the task's Work chips. Add/remove is confirmed through the real API.
+- Failed tag reads and unconfirmed writes, unavailable tasks, malformed URLs, and both catalogues'
+  pagination are checked. Error locators stay inside the app's main content, excluding Next's route announcer.
 - Screenshots are saved beside the fixture session, outside the repository.
 
 The web unit suite checks filter boundaries and navigation restoration validation. Real-Postgres
@@ -75,3 +79,12 @@ The populated browser check also found a pre-existing missing `state` column in 
 responses. Since the web filtered projects by that field, it hid active, proposed and archived
 projects. Returning the existing generated database column repairs the retained Commitments
 sections and project pickers as well as the new Work filters.
+
+## Tag-controls follow-up
+
+The bounded task tag-options API has nine real-Postgres tag tests, including read access after
+membership removal, cross-tenant/missing/checklist tasks, archived/proposed projects, completed
+and cancelled tasks, paging, rename identity and current assignment flags. The web suite has 17
+tests after adding offset/name boundary checks. Use a fresh disposable fixture for a full browser
+run; repeated runs are a debugging convenience, not persistent test data. No hosted deployment is
+required.

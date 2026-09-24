@@ -35,7 +35,7 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   // A failed prior run may have committed its task; clear only this fixture's named test record.
   for (const task of (await api(`/tasks?ownerId=${fixture.userId}&status=open&limit=100`)).tasks)
    if (task.title === 'Browser-created task') await api(`/tasks/${task.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
-  for (const route of ['/work', '/work/new', '/work/views', '/chat', '/chat/views', '/resources', '/resources/views', '/resources/inventory', '/today']) {
+  for (const route of ['/work', '/work/new', '/work/views', '/work/tags', '/work/tasks/00000000-0000-4000-8000-000000000000/tags', '/chat', '/chat/views', '/resources', '/resources/views', '/resources/inventory', '/today']) {
    const response = await fetch(origin + route, { redirect: 'manual' }); assert.equal(response.status, 307);
    await goto(route); await expect(page).toHaveURL(/\/sign-in\?/);
   }
@@ -64,7 +64,7 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   await expect(page.locator(`#task-${fixture.tasks['Completed launch task']}`)).toBeVisible();
   await goto('/work?owner=all&status=cancelled');
   await expect(page.getByText('Cancelled launch task', { exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: /Cancelled launch task/ })).toHaveCount(0);
+  await expect(page.locator('a.work-task__link').filter({ hasText: 'Cancelled launch task' })).toHaveCount(0);
   console.log('PASS completed task reveal and honest cancelled row');
   await goto('/work?tagId=00000000-0000-4000-8000-000000000000&projectId=00000000-0000-4000-8000-000000000001');
   await page.getByText('Filter', { exact: true }).click();
@@ -110,6 +110,85 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   await page.setViewportSize({ width: 1440, height: 1000 }); await goto('/work');
   await expect(page.locator('.topnav').getByRole('link', { name: 'Resources', exact: true })).toBeVisible();
   await page.screenshot({ path: path.join(directory, 'screenshots/work-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const taskId = fixture.tasks['Confirm packaging slot'];
+  const tagPath = `/work/tasks/${taskId}/tags`;
+  await goto('/work');
+  await page.getByRole('link', { name: 'Edit tags for Confirm packaging slot', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Confirm packaging slot', exact: true })).toBeVisible();
+  await goto('/work/tags');
+  const label = `Browser label ${Date.now()}`;
+  await page.getByLabel('New tag', { exact: true }).fill(label);
+  await page.getByRole('button', { name: 'Add tag', exact: true }).click();
+  await expect(page.locator('.work-tag-row__name').filter({ hasText: label })).toBeVisible();
+  const createdTag = (await api('/tags?limit=100')).tags.find(tag => tag.name === label); assert.ok(createdTag);
+  await page.getByLabel('New tag', { exact: true }).fill(label.toUpperCase());
+  await page.getByRole('button', { name: 'Add tag', exact: true }).click();
+  await expect(page.locator('main').getByRole('alert')).toContainText('already exists');
+  await expect(page.getByLabel('New tag', { exact: true })).toHaveValue(label.toUpperCase());
+  await goto(tagPath);
+  await page.getByRole('button', { name: `Add ${label}`, exact: true }).click();
+  await expect(page.getByRole('button', { name: `Remove ${label}`, exact: true })).toBeVisible();
+  assert.equal((await api(`/tasks/${taskId}/tag-options?limit=100`)).tags.find(tag => tag.id === createdTag.id).attached, true);
+  await goto(`/work?owner=all&tagId=${createdTag.id}`);
+  await expect(page.getByText('Confirm packaging slot', { exact: true })).toBeVisible();
+  await goto('/work/tags');
+  const row = page.locator('.work-tag-row').filter({ has: page.getByText(label, { exact: true }) });
+  await row.getByText('Rename', { exact: true }).click();
+  const renamed = `${label} renamed`;
+  await row.getByRole('textbox').fill(renamed);
+  await row.getByRole('button', { name: 'Rename for everyone', exact: true }).click();
+  await expect(page.locator('.work-tag-row__name').filter({ hasText: renamed })).toBeVisible();
+  await goto(`/work?owner=all&tagId=${createdTag.id}`);
+  await expect(page.locator('.work-task__tags')).toContainText(renamed);
+  await goto(tagPath);
+  await page.getByRole('button', { name: `Remove ${renamed}`, exact: true }).click();
+  await expect(page.getByRole('button', { name: `Add ${renamed}`, exact: true })).toBeVisible();
+  assert.equal((await api(`/tasks/${taskId}/tag-options?limit=100`)).tags.find(tag => tag.id === createdTag.id).attached, false);
+  console.log('PASS shared tag create/duplicate/rename and persisted task add/remove');
+  await mode('tag-write-failed');
+  await page.getByRole('button', { name: `Add ${renamed}`, exact: true }).click();
+  await expect(page.locator('main').getByRole('alert')).toContainText('could not confirm');
+  await expect(page.getByRole('button', { name: `Add ${renamed}`, exact: true })).toBeVisible();
+  await goto('/work/tags');
+  await page.getByLabel('New tag', { exact: true }).fill('Unconfirmed label');
+  await page.getByRole('button', { name: 'Add tag', exact: true }).click();
+  await expect(page.locator('main').getByRole('alert')).toContainText('could not confirm');
+  await expect(page.getByLabel('New tag', { exact: true })).toHaveValue('Unconfirmed label');
+  await mode('tags-failed');
+  for (const route of ['/work/tags', tagPath]) {
+   await goto(route); await expect(page.getByText('Tags could not be read', { exact: true })).toBeVisible();
+   await expect(page.getByText('No tags yet', { exact: true })).toHaveCount(0);
+  }
+  await mode('');
+  await goto('/work/tasks/00000000-0000-4000-8000-000000000000/tags');
+  await expect(page.getByText('This task cannot be tagged here', { exact: true })).toBeVisible();
+  await goto('/work/tasks/not-a-task/tags');
+  await expect(page.getByText('This link is not valid', { exact: true })).toBeVisible();
+  await goto('/work/tags?offset=1000050');
+  await expect(page.getByText('That page of tags does not exist', { exact: true })).toBeVisible();
+  await goto(`${tagPath}?offset=1000000`);
+  await expect(page.getByText('Nothing on this page', { exact: true })).toBeVisible();
+  console.log('PASS tag failed-save input retention, confirmed link state and read/error boundaries');
+  const existingNames = new Set((await api('/tags?limit=100')).tags.map(tag => tag.name));
+  for (let i = 0; i < 51; i++) {
+   const name = `Page label ${String(i).padStart(2, '0')}`;
+   if (!existingNames.has(name)) await api('/tags', { method: 'POST', body: JSON.stringify({ name }) });
+  }
+  for (const route of ['/work/tags', tagPath]) {
+   await goto(route);
+   await page.getByRole('link', { name: 'Next', exact: true }).click();
+   await expect(page).toHaveURL(origin + route + '?offset=50');
+   await page.getByRole('link', { name: 'Previous', exact: true }).click();
+   await expect(page).toHaveURL(origin + route);
+   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${route} phone overflow`);
+  }
+  await page.screenshot({ path: path.join(directory, 'screenshots/task-tags-phone.png'), fullPage: true });
+  await goto('/work/tags'); await page.screenshot({ path: path.join(directory, 'screenshots/tags-phone.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 }); await goto(tagPath);
+  await expect(page.getByRole('heading', { name: 'Confirm packaging slot', exact: true })).toBeVisible();
+  await page.screenshot({ path: path.join(directory, 'screenshots/task-tags-desktop.png'), fullPage: true });
+  console.log('PASS tag catalogue pagination and mobile/desktop layouts');
   assert.deepEqual(errors, []);
   console.log('PASS grouped routes, retained Today, mobile/desktop layout and no browser exceptions');
  } catch (error) { await page.screenshot({ path: path.join(directory, 'failure.png'), fullPage: true }).catch(() => {}); throw error; } finally { await mode(''); await context.close(); await browser.close(); }
