@@ -23,9 +23,10 @@ timings only.
    `flyctl apps create askthecaptain-embed --org <org>`.
 2. Give it the secret: `flyctl secrets set EMBED_TOKEN="$(openssl rand -hex 32)" --app askthecaptain-embed`.
 3. Deploy: the `deploy` workflow's `embed` job deploys the service whenever `infra/embed/**`
-   changes on `main` (it skips with a notice until the app exists). The app exists since
-   2026-09-21; the workflow and the machine are stopped under [the pause](paused.md). Or from a checkout:
-   `flyctl deploy infra/embed --config infra/embed/fly.toml --ha=false`.
+   changes on `main` (it skips with a notice until the app exists). The existing app and the
+   workflow are stopped under [the pause](paused.md). When the owner resumes, the equivalent
+   command from the repository root is `flyctl deploy infra/embed --config fly.toml --ha=false`;
+   flyctl resolves the config after entering the deployment directory (as fixed in #108).
 4. Check it: `curl https://askthecaptain-embed.fly.dev/healthz`.
 5. Point the API at it with the same secret: `EMBED_URL=https://askthecaptain-embed.fly.dev` and
    `EMBED_TOKEN=<the value from step 2>` on `askthecaptain-api-staging` (and the production API
