@@ -1,0 +1,15 @@
+flowchart LR
+  tabs["Three tabs<br/>Each opens its selected main view"]
+  tabs --> work["Work main views - mockups<br/>My work: Assigned to you - default<br/>All tasks / Marketing / Production"]
+  tabs --> chat["Chat main view - mockup<br/>All conversations - default"]
+  tabs --> resources["Resources main views - mockups<br/>Files and assets - default<br/>Inventory / Equipment schedule"]
+  workList["Work view list - mockup<br/>For you / Business / Saved views"] <-->|"Left: list / Right: view"| work
+  chatList["Chat view list - mockup<br/>Inbox / Projects / Team"] <-->|"Left: list / Right: view"| chat
+  resourceList["Resources view list - mockup<br/>Libraries / Planning / Business"] <-->|"Left: list / Right: view"| resources
+  work --> detail["Task / Project detail - mockups"]
+  chat --> discussion["Conversation - mockup"]
+  resources --> asset["Asset version - mockup"]
+  detail -.->|"Linked discussion"| discussion
+  detail -.->|"Files / Equipment"| resources
+  classDef mocked fill:#CDF4D3,stroke:#66D575
+  class work,chat,resources,workList,chatList,resourceList,detail,discussion,asset mocked

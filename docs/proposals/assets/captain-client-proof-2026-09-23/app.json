@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "Captain client proof",
+    "slug": "captain-client-proof",
+    "version": "0.0.1",
+    "platforms": ["ios", "android", "web"],
+    "orientation": "default",
+    "ios": { "bundleIdentifier": "app.askthecaptain.clientproof", "supportsTablet": true },
+    "android": { "package": "app.askthecaptain.clientproof" },
+    "web": { "bundler": "metro", "output": "single" }
+  }
+}
