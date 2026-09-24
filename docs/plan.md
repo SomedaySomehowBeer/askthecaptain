@@ -190,6 +190,23 @@ writing.
   are distinct identities (D25). Their schema and access model are reviewed in the chat slice.
   These target descriptions are not an authorisation for an unaudited generic record store.
 
+**First tag API slice (migration 0035).** Active organisation members may list/create/rename
+flat labels and explicitly attach/remove them on top-level tasks in active projects. RLS checks active
+membership; foreign keys include the tenant. Writes and audit share a transaction. Repeated
+PUT/DELETE of the same task/tag link is a no-op after the first change. Tag names are trimmed,
+1–60 characters and case-insensitively unique within an organisation; conflicting names return
+409. No labels or task associations are inferred or backfilled from project names.
+
+`GET /v1/organisations/:id/tags` lists labels; POST creates; PATCH `.../tags/:tagId` renames.
+PUT/DELETE `.../tasks/:taskId/tags/:tagId` attach/remove. `GET .../tasks` selects top-level work
+by repeated `tagId` (any selected tag matches), `ownerId`, `projectId` and `status`, combined
+with AND. Owner IDs are explicit: the future My work client supplies the signed-in person's ID.
+Cancelled tasks are excluded unless requested; archived/proposed projects and checklist rows are
+excluded. Responses contain stable task IDs and their current labels. Both lists use a bounded
+`limit` (default 50, maximum 100), `offset` and `nextOffset`. Tags do not change existing
+Commitments responses or create saved-view persistence. Tag deletion/archival, inherited tags,
+project tagging and the workspace filter UI are later slices.
+
 **Connections**
 - `connections` — provider, organisation, connected by, scopes, status, error; access and refresh
   tokens envelope-encrypted with a per-tenant data key wrapped by the master key (D16).
