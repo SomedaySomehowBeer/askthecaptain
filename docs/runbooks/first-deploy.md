@@ -22,7 +22,8 @@ infrastructure applies, secrets and DNS are the owner's.
    Enable the Gmail and Google Calendar APIs and allow the Gmail modify and Calendar events scopes.
    Each API is enabled separately (APIs & Services → Library); a connection with every scope granted
    but a sync card reading `403 · accessNotConfigured` means that API is still off in the project.
-6. **Deploy.** Push to `main` deploys the live apps and runs the smoke gate. The dormant production
+6. **Deploy.** Push to `main` deploys the live apps and runs the smoke gate. (Paused since
+   2026-09-23: the `deploy` workflow is disabled; see [paused.md](paused.md).) The dormant production
    pair is promoted only by running the `deploy` workflow with `promote` ticked. While we develop,
    every Fly app runs one machine that scales to zero: `min_machines_running = 0` in `fly*.toml`,
    and the workflow scales each app to one machine and deploys with `--ha=false`.

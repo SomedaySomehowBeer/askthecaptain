@@ -107,9 +107,11 @@ turns needs-owner off and records an information verdict for the sender.
 The reply-style parameter is optional: left blank, the draft instruction asks for plain, brief
 replies in the voice of the owner's own messages in the thread.
 
-The definition is version 5 (version 2 added the gate; version 3 the drafting rules and the
-optional style note; version 4 the draft score, threshold parameter and outcomes; version 5 notes). An organisation that enabled an earlier version must save the workflow's
-parameters again in Settings → Workflows before a new run will start; the runner says so.
+The definition is version 7 (version 2 added the gate; version 3 the drafting rules and the
+optional style note; version 4 the draft score, threshold parameter and outcomes; version 5 notes;
+version 6 project association; version 7 sent mail, both below). An organisation that enabled an
+earlier version must save the workflow's parameters again in Settings → Workflows before a new run
+will start; the runner says so.
 
 
 ## Association (D22)
@@ -144,7 +146,7 @@ its project when it moves, done when a person marks the task done, cancelled wit
 cannot have steps, cannot move to another project on its own, and never has a series. The morning brief counts
 tasks, not their steps. Every project has a **brief** (what this is, where it stands, who is involved, open
 questions; each line may cite a thread or note) and a **stage**, idea or underway; both are editable on
-Commitments and will be written by discovery. A cited thread or note must exist in the organisation.
+Commitments, and discovery writes them for the projects it proposes ([discovery.md](discovery.md)). A cited thread or note must exist in the organisation.
 
 ## Own writing: sent mail (§14)
 

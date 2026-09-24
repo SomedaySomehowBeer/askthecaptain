@@ -1,10 +1,14 @@
 # Backup and restore
 
 Plan §9: backups with a rehearsed restore before the second tenant. There is one Neon database
-(D17); it is backed up two ways, and the restore is rehearsed every night.
+(D17); it is backed up two ways, and each scheduled backup run rehearses the restore.
 
 > **Paused 2026-09-23:** the `backup` workflow is disabled and was failing on a `pg_dump` version
 > mismatch; see [paused.md](paused.md).
+
+The repair in [#120](https://github.com/SomedaySomehowBeer/askthecaptain/pull/120) pins PostgreSQL
+18 client executables and uses a pgvector-capable restore image. It passed a disposable local
+rehearsal; the hosted workflow remains disabled until the owner resumes it.
 
 ## What runs on its own
 
@@ -12,8 +16,8 @@ The `backup` GitHub Actions workflow (`.github/workflows/backup.yml`) runs at 00
 on demand (*Actions → backup → Run workflow*):
 
 1. reads the owner connection string from the infrastructure state, exactly as the deploy does;
-2. takes a logical dump of the whole database (`pg_dump`, custom format, zstd), roles and grants
-   included by reference, owners stripped so it restores anywhere;
+2. takes a logical dump of the whole database (`pg_dump`, custom format, zstd), stripping owner
+   assignments and ACLs; policy definitions still reference roles such as `app`;
 3. **rehearses the restore** into a fresh Postgres 18 inside the job, checks the archive lists its
    tables, restores with `--exit-on-error`, and compares the organisation count with the source;
    a difference fails the run;
@@ -47,10 +51,15 @@ When Neon's history does not reach far enough, or the project itself is gone:
    creates it; so does `infra/tofu`).
 4. Confirm: `psql "$MIGRATION_DATABASE_URL" -c "select count(*) from organisations"` and
    `select name from schema_migrations order by 1` end with the latest migration.
-5. Point the API at it: set `DATABASE_URL` and `MIGRATION_DATABASE_URL` on the Fly app to the new
+5. Before pointing an API at the restored data, restore and verify the required runtime-role
+   grants against the migration definitions. The archive omits ACLs; migrations already recorded
+   in `schema_migrations` will not run again to recreate grants. Test an authorised application
+   read/write and cross-tenant denial on the scratch restore. The automated count check alone
+   does not prove application access. Prepare/review the grant restoration as part of the drill.
+6. Point the API at it: set `DATABASE_URL` and `MIGRATION_DATABASE_URL` on the Fly app to the new
    connection strings (`tofu output -raw …`), then redeploy or restart. The release step re-runs
    migrations and the queue installation; both are idempotent.
-6. Tell people: anything written after the dump's timestamp is gone; mail and calendar re-sync from
+7. Tell people: anything written after the dump's timestamp is gone; mail and calendar re-sync from
    the providers on the next run (their cursors are in the dump and re-sync from that point).
 
 ## The drill

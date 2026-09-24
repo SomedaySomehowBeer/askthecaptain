@@ -1,5 +1,8 @@
 # Captain mobile workspace mockups
 
+> **Update, 24 September 2026.** Adopted by #116 as the design reference for the workspace (plan
+> §10, D11, D14). The screens are still mockups: no application route implements them yet.
+
 **Review concept, updated 23 September 2026.** Fifteen screens for the Captain/Pip split,
 advancing **own commitments** and **brief and answer**. All data is fictional; the reference day
 remains 22 September. These are documentation artifacts, not implemented application routes.
@@ -222,7 +225,8 @@ preview sheets are exercised, and PNG exports inspected. Screen PNGs are 390 × 
 and galleries are captured separately. Both Mermaid maps are parsed and exported as SVG/PNG.
 
 No application typecheck, Postgres tests or production-route checks are claimed for these
-documentation-only changes. The operative plan's D11 stays unchanged pending review.
+documentation-only changes. (At the time, D11 stayed unchanged pending review; #116 later
+replaced it with Work, Chat and Resources.)
 
 ## From mockups to implementation
 

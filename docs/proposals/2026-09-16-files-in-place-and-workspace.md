@@ -2,6 +2,13 @@
 
 **Status:** new proposal for review; no implementation, migration, deployment or change to the approved product boundary is implied.
 
+> **Update, 24 September 2026.** Merged for discussion as #64, with §11 rewritten as generic parts
+> in #69; not adopted in full (plan §14). Since the Captain/Pip split (#114, adopted in #116):
+> file review and discussion use the shared chat model (D25), not the separate notes and
+> annotations of §8 and the `file_annotations` table of §13; personal mail belongs to Pip, so the
+> Gmail matching and outbox attachment duties of §§6–7 need reconciling before any slice starts. Provider-held originals and version
+> links remain the direction (plan §12, delivery plan slice 5). The text below is unchanged.
+
 **Date:** 16 September 2026.
 
 **Recommended direction:** keep working files in Google Drive, bring selected Embrace viewing and review interactions into Captain, and add a Captain sidebar inside Google Docs and Sheets. Keep each business's own operational records (counts, production logs, inspections, job sheets) in business-owned spreadsheets and printable documents assembled from a small set of generic parts. The brewery is the worked example throughout, not the design.

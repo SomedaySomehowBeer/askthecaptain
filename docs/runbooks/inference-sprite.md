@@ -70,9 +70,11 @@ Sprites' own sentence to the API's server log (`flyctl logs -a <api app> | grep 
    with it. A partial failure leaves the status **Failed** with the operation and HTTP status in
    the audit journal; disconnect and set up again.
 
-The implementation was verified with stubs and an isolated fake Sprites API, not a live Sprite.
-The owner must verify the pinned CLI installation, sign-in and wake behaviour on the first Sprite
-before enabling workflows. Ryan owns the Anthropic hosting-clause consideration before operating
+The initial implementation checks used stubs and an isolated fake Sprites API. Subsequent setup
+and sign-in fixes are recorded in PRs #82–#98; the [pause record](paused.md) identifies an existing
+Sprite, but neither establishes current readiness. Verify the pinned CLI installation, sign-in
+and wake behaviour when the owner resumes the service, when pins change or when a new
+organisation's Sprite is created, before enabling its workflows. Ryan owns the Anthropic hosting-clause consideration before operating
 Claude; this runbook does not make a legal determination.
 
 ## Data-only invocation
@@ -121,11 +123,12 @@ Ephemeral request/schema files, Claude configuration/logs and Codex logs/state u
   inspect the subscription. Invalid output: two schema failures were accounted
   for; inspect the step's schema. Budget spent: increase the allowance or wait
   for the new month. Never log provider stdout/stderr or prompts when diagnosing.
-- Disconnect in Settings clears Captain's secret and blocks further inference.
-  The owner then runs `sprite destroy -o <fly-org> -s <sprite-name>` and revokes
-  the subscription login if necessary. No automatic Fly deletion occurs.
-- `model_usage.run_id` is nullable and has no FK yet because `workflow_runs` is
-  not in this checkout. The runner migration must add a composite tenant FK.
+- Disconnect in Settings clears Captain's secret, blocks further inference and, when
+  `SPRITES_API_TOKEN` is set, destroys the Sprite and its login through the Sprites API.
+  Without the token, Settings says so and the operator runs
+  `sprite destroy -o <fly-org> -s <sprite-name>`; revoke the subscription login if necessary.
+- `model_usage.run_id` is nullable; migration 0023 added its composite tenant FK to
+  `workflow_runs` (a deleted run leaves the usage row without a run).
 
 ## Adding the API path
 

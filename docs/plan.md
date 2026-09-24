@@ -1,7 +1,7 @@
 # Ask The Captain — product and engineering plan
 
-**Status:** workspace amendment for review, 2026-09-24, following merged product proposal #114.
-This document is the source of truth for what Captain is and how it is built. Decisions are
+**Status:** adopted. The workspace amendment merged as #116 on 2026-09-24, following the
+merged product proposal #114. This document is the source of truth for what Captain is and how it is built. Decisions are
 recorded in §13 and changed only by a reviewed pull request. Target behaviour below is delivered
 in the [workspace sequence](plans/captain-workspace-delivery-2026-09.md); naming a capability here
 does not claim it is implemented. Existing personal-assistant behaviour remains a compatibility
@@ -27,7 +27,8 @@ The six job numbers below stay stable for existing workflow definitions. Their t
 shared business work. The existing mail/outbox/calendar implementation is retained during the
 transition, not silently deleted, duplicated into Pip or restarted by this amendment.
 
-It is built as **workflows of deterministic steps**. Where judgement is needed, a step asks a
+People manage shared records through ordinary role-checked writes. Automation uses **workflows
+of deterministic steps**. Where judgement is needed, a step asks a
 language model a narrow question and takes back structured data, which the next step acts on. The
 model never holds a tool, never writes to anything, and never sees a credential. The owner decides
 which workflows run and how; the machine does exactly what those workflows say.
@@ -88,8 +89,9 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | Path | What |
 |---|---|
 | `apps/api` | Hono HTTP API: auth, routes over services, webhooks, health |
-| `apps/web` | Next.js, responsive Work/Chat/Resources workspace; server components read the API |
-| `apps/mobile` | Planned React Native/Expo development-build client for iOS and Android; native-device acceptance precedes release |
+| `apps/web` | Next.js; server components read the API. Today it is the legacy five-tab app (Today, Inbox, Commitments, Calendar, Settings); the responsive Work/Chat/Resources shell is a later slice |
+| `apps/e2e` | Playwright deployment smoke suite (deploy workflow, currently paused) and isolated browser regression in CI |
+| `apps/mobile` | Planned React Native/Expo development-build client for iOS and Android; not in the repository yet; native-device acceptance precedes release |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Google (Gmail, Calendar), Xero, Shopify: OAuth, refresh, typed clients, webhooks |
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
@@ -108,10 +110,20 @@ claim a signed native build from that evidence. Browser and device access use th
 never bundle server credentials, database access or model secrets into a client. New shared
 packages/dependencies are named in the slice that introduces them, not added speculatively.
 
-**Hosting.** Fly.io in Sydney for the API and web; Neon Postgres; Cloudflare for DNS and TLS at the
-edge; GitHub Actions for CI and deploy. One environment: a single Neon branch and compute, and the
-Fly apps that serve app.askthecaptain.app, deployed from `main` behind the smoke gate. The second
-pair of Fly apps and a second database wait for a second customer (D17).
+**Hosting.** Fly.io in Sydney for the API and web; Neon Postgres; Cloudflare DNS; GitHub Actions
+for CI and deploy. The checked-in DNS records are not proxied through Cloudflare; they do not
+establish Cloudflare edge TLS processing. One data environment: a single Neon branch and compute, and the
+Fly apps that serve app.askthecaptain.app, deployed from `main` behind the smoke gate. A second
+database waits for a second customer (D17).
+
+The checked-in configuration and 23 September pause record identify the serving pair under D17 as
+`askthecaptain-api-staging` and `askthecaptain-web-staging`; `app.askthecaptain.app`, the apex and
+`www` are configured to point at the web app and `api-staging.askthecaptain.app` at the API.
+A dormant pair, `askthecaptain-api` and `askthecaptain-web`, is retained; `api.askthecaptain.app`
+points at the production API. The pause record dates its last promotion to 2026-09-05.
+`askthecaptain-embed` is the D21 embedding service. All apps are recorded stopped under the
+operational pause ([paused.md](runbooks/paused.md)); the `deploy` and `backup` workflows were
+verified disabled on 24 September. Configuration is not a live availability check.
 
 **Durable execution (D19).** Use **pg-boss with a small Captain runner** in the existing
 application process and Postgres. The bounded D10 inbox-triage spike ran both pg-boss and
@@ -160,7 +172,9 @@ Every tenant table carries `organisation_id`, has forced RLS, and uses uuidv7 ke
 - `organisation_deletions` — platform record of a deleted organisation: name, who deleted it, row
   counts; everything else cascades away with the organisation (§9 deletion as a first-class operation).
 
-**Workspace additions (target; implemented in subsequent migrations)**
+**Workspace additions (target; implemented in subsequent migrations)** None of these tables exists
+on `main` yet. Tags and task tags are proposed in migration 0035 in PR #117, open at the time of
+writing.
 - `tags` — organisation-owned flat labels with a stable ID and a nonblank name, unique without
   case distinctions inside the organisation. Tags carry no custom fields or permissions.
 - `task_tags` — tenant-qualified links between tasks and tags. A task can have zero or more;
@@ -449,6 +463,9 @@ shows step notes for missing supplier addresses, unavailable Shopify data and co
 
 ### Example: inbox-triage
 
+An illustration of the definition's first shape. The live definition, now version 7 with the gate,
+drafting rules, notes, association and sent mail, is `packages/steps/src/defs/inbox-triage.ts`.
+
 ```ts
 export const inboxTriage = defineWorkflow({
   key: 'inbox-triage',
@@ -581,11 +598,14 @@ respected and persisted. Public-app expiring tokens and Shopify webhooks are lat
 - Backups with a rehearsed restore, terms of service and a privacy notice before the second tenant.
   The `backup` workflow dumps the database nightly, restores it into a throwaway Postgres in the same
   job and compares counts, then keeps thirty days of dumps in the Tigris bucket; Neon's own
-  point-in-time history is the first resort (`docs/runbooks/backup-and-restore.md`).
+  point-in-time history is the first resort (`docs/runbooks/backup-and-restore.md`). The workflow
+  had been failing since 2026-09-21 on a `pg_dump` version mismatch and is disabled under the pause;
+  no restore drill has been recorded yet.
 
 ## 10. Web and mobile
 
-Phone-first and responsive desktop. Exactly three workspace tabs:
+Phone-first and responsive desktop. The target is exactly three workspace tabs; the running app
+still has the five legacy tabs described under Compatibility below:
 
 - **Work** — defaults to My work, filtered to Assigned to you. Projects, tasks, recurring
   obligations and tag/project/person/status/date views all select the same records.
@@ -681,8 +701,9 @@ reviewed scope/migration amendments → client/work foundation → equipment →
 usable web/iOS release → files/business context → assistance → broader Android release. Equipment
 is mandatory in the first usable release; Android smoke checks begin early. Device acceptance and
 transactional booking tests remain gates. The table below records the earlier assistant delivery
-history and is not a new schedule or authority to resume the paused deployment.
-
+history and is not a new schedule or authority to resume the paused deployment. Phase numbers
+(0–5) and slice numbers (0–7) are separate sequences: "Phase 4" is not "slice 4", and the delivery
+plan's first-customer release is not the historical phase that prepared for a second customer.
 
 | Phase | Weeks | Delivers |
 |---|---|---|
@@ -693,8 +714,10 @@ history and is not a new schedule or authority to resume the paused deployment.
 | 4 Ready for a second customer | 2 | MFA, backups and restore drill, export and deletion, terms and privacy, support runbook; a second business onboarded by hand |
 | 5 Projects from mail and notes | 2 | In order: the triage gate, sender priors, weighted drafting and trimmed model input; notes; sub-tasks and the project brief; the retrieval index filled by mail sync; project association in triage; discover-projects and proposed projects on Commitments |
 
-Each phase ships to production behind feature flags to the first customer. Phase 1 and the inference
-client in Phase 2 can proceed in parallel.
+The existing assistant code covers work from these phases; the table is not evidence that every
+feature was configured or verified live. Phase 4 is incomplete: a second business is not recorded
+as onboarded, the terms and privacy notice are unpublished drafts (`docs/legal/`), and the manual
+restore-drill ledger is empty. Use the workspace delivery gates for new work.
 
 ## 12. Non-goals for version 1
 
@@ -732,7 +755,7 @@ client in Phase 2 can proceed in parallel.
 | D7 | Captain owns projects/tasks/series and their stable evidence identities. Projects do not nest; one-level task checklists and series remain. Tasks have an accountable owner and zero or more flat tags, not separate business areas. Standalone work needs no user-created project; the existing Obligations system project remains its compatible storage default. Tags/filters never duplicate work or grant access. |
 | D8 | Connectors are first-party SDKs behind our own OAuth and encryption; no third-party integration platforms. Captain owns shared business connections; Pip owns personal provider access and calls Captain through its ordinary authenticated API. Existing credentials are preserved in place during migration, never copied into Pip. No inbound forwarding mailbox is added. |
 | D9 | Inference uses each organisation's own Claude or Codex subscription through an unmodified CLI, behind a Sprite provider adapter; monthly token allowances and per-step usage, not dollar reservations. |
-| D10 | The durable execution engine is chosen by a bounded spike in Phase 2 between Restate and pg-boss with a small runner. |
+| D10 | The durable execution engine is chosen by a bounded spike in Phase 2 between Restate and pg-boss with a small runner. (Settled by D19.) |
 | D11 | Work, Chat and Resources are the three workspace tabs. Work defaults to Assigned to you; each tab has a grouped view list one page left. Settings is reached through account controls. Preserve existing URLs/actions until their replacement slice is ready. |
 | D12 | Hosting is Fly.io Sydney, Neon Postgres, Cloudflare, GitHub Actions. |
 | D13 | Attachment bytes are never stored. Metadata always; text extracted on an allow list and size cap, cached briefly, passed to the model as labelled untrusted content. |

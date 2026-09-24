@@ -2,7 +2,8 @@
 
 Bounded, fictional proof for [the delivery plan](../../../plans/captain-workspace-delivery-2026-09.md).
 Jobs: **own commitments** and **brief and answer**. This is a technical harness, not a replacement
-for the [approved-for-discussion mobile mockups](../captain-mobile-2026-09-22/README.md).
+for the [mobile mockups](../captain-mobile-2026-09-22/README.md), which the plan adopted as the
+workspace design reference (D14).
 Its buttons select experiments; they are not the proposed Work/Chat/Resources navigation.
 
 ## What this evaluates
@@ -63,10 +64,23 @@ After exporting, the repository/shared-browser review command is:
 flock /tmp/atc-build.lock node docs/proposals/assets/captain-client-proof-2026-09-23/browser-check.mjs
 ```
 
-Run that command from the repository root after its normal `pnpm install`. It attaches to the
-existing shared Chromium at loopback `9222` (override `CHROME_CDP_URL` if needed), opens one tab,
-serves exported files through Playwright interception and closes only its own tab. It does not
-start a network server or change Tailscale routes. PNG evidence is written into `evidence/`.
+Run that command from the repository root after its normal `pnpm install`. By default it attaches
+to the existing shared Chromium at loopback `9222` (override `CHROME_CDP_URL` if needed), opens one
+tab, serves exported files through Playwright interception and closes only its own tab. It does not
+start a network server or change Tailscale routes. With `--headless` it launches its own headless
+Chromium instead, for isolated machines such as CI. PNG evidence is written into `evidence/`, or
+into `PROOF_EVIDENCE_DIR` when set; a failed check also saves `failure.png` there.
+
+## Continuous integration
+
+The `client-proof` GitHub Actions check (`.github/workflows/client-proof.yml`, added in
+[#120](https://github.com/SomedaySomehowBeer/askthecaptain/pull/120)) runs when this
+harness's code, the workflow or the shared Playwright dependency changes; Markdown and `evidence/`
+edits alone do not trigger it. It runs `npm ci`, `npm run check`, `npm test`, the web/iOS/Android
+bundle export and `browser-check.mjs --headless`, and keeps the browser screenshots as a workflow
+artifact for seven days. Like the local run, it proves the fictional harness and the bundle
+exports in Chromium on Linux; it does not install, sign or run anything on an iPhone or Android
+device, so native-device acceptance below stays unverified.
 
 ## Acceptance still required
 
