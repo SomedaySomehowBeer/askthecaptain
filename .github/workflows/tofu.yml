@@ -1,10 +1,10 @@
 name: tofu
 on:
   pull_request:
-    paths: ['infra/tofu/**']
+    paths: ['infra/tofu/**', '!infra/tofu/**/*.md']
   push:
     branches: [main]
-    paths: ['infra/tofu/**']
+    paths: ['infra/tofu/**', '!infra/tofu/**/*.md']
   workflow_dispatch:
     inputs:
       state_rm:
