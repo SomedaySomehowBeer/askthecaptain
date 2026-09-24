@@ -1,10 +1,13 @@
 name: ci
+# Executable client-proof assets under docs/ have their own client-proof.yml workflow.
 on:
   pull_request:
     paths-ignore: ['docs/**', '**/*.md']
   push:
     branches: [main]
     paths-ignore: ['docs/**', '**/*.md']
+permissions:
+  contents: read
 concurrency:
   group: ci-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
@@ -39,11 +42,23 @@ jobs:
             echo '::error::relative imports must use .ts specifiers'
             exit 1
           fi
-      - run: pnpm check
-      - run: pnpm test
+      # Turbo otherwise groups/buffers whole package logs on GitHub Actions. Stream progress
+      # during the API/engine integration suites; keep real database tests uncached and serial.
+      - name: Typecheck workspace
+        run: pnpm check --log-order=stream
+      - name: Test workspace against Postgres
+        run: pnpm test --log-order=stream
       - name: infra services (plain node, no workspace)
         run: node --test infra/sprites/*.test.mjs infra/embed/*.test.mjs
       - name: browser regression for React retries
         run: |
           pnpm --filter @captain/e2e exec playwright install --with-deps chromium
           pnpm --filter @captain/e2e exec playwright test react-retry.spec.ts --project chromium
+      - name: Retain browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failures
+          path: apps/e2e/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
