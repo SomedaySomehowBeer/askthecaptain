@@ -88,3 +88,8 @@ and cancelled tasks, paging, rename identity and current assignment flags. The w
 tests after adding offset/name boundary checks. Use a fresh disposable fixture for a full browser
 run; repeated runs are a debugging convenience, not persistent test data. No hosted deployment is
 required.
+
+The extended browser run passed all ten check groups for the tag-controls increment on
+24 September 2026, with phone/desktop screenshots inspected and no browser exceptions. Bulk
+fixture setup respects the real API rate limiter: only a rejected 429 is retried once after its
+bounded Retry-After delay; ambiguous network/5xx outcomes are never retried automatically.

@@ -27,8 +27,20 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
  const goto = route => page.goto(origin + route);
  const signIn = () => context.addCookies([{ name: 'captain_session', value: fixture.token, url: origin }]);
  const api = async (route, options = {}) => {
-  const response = await fetch('http://127.0.0.1:8084' + fixture.base + route, { ...options, headers: { authorization: `Bearer ${fixture.token}`, 'content-type': 'application/json' } });
-  assert.ok(response.ok, `${route}: ${response.status}`); return response.json();
+  for (let attempt = 0; attempt < 2; attempt++) {
+   const response = await fetch('http://127.0.0.1:8084' + fixture.base + route, { ...options, headers: { authorization: `Bearer ${fixture.token}`, 'content-type': 'application/json' } });
+   // Fixture setup respects the real limiter. Only 429 is retried: middleware rejects it before
+   // any write. Transport failures and 5xx remain ambiguous and must fail, not repeat a write.
+   if (response.status === 429 && attempt === 0) {
+    const seconds = Number(response.headers.get('retry-after'));
+    assert.ok(Number.isFinite(seconds) && seconds > 0 && seconds <= 60, 'bounded Retry-After');
+    console.log(`Waiting ${seconds}s for the fixture API rate-limit window`);
+    await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+    continue;
+   }
+   assert.ok(response.ok, `${route}: ${response.status}`); return response.json();
+  }
+  throw new Error('Fixture request did not complete');
  };
  const mode = value => writeFile(path.join(directory, 'mode'), value);
  try {
