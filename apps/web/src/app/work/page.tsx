@@ -3,9 +3,13 @@ import Link from 'next/link';
 import { Notice } from '../../components/Notice.tsx';
 import { Page, requireCurrent } from '../../components/Page.tsx';
 import { api, load, type Organisation, type Member, type Project } from '../../lib/api.ts';
-import { dateIn, describeDue } from '../../lib/dates.ts';
+import { dateIn, describeDue, shortDate } from '../../lib/dates.ts';
 import { apiQuery, isDefault, maxTags, nextHref, pageSize, parseFilters, projectLabel, statuses, statusWords, unlistedTags, workHref, type Search, type WorkFilters } from './filters.ts';
-import { workTaskHref, type TagPage, type WorkPage as WorkTasks, type WorkTask } from './types.ts';
+import { type TagPage, type WorkPage as WorkTasks, type WorkTask } from './types.ts';
+import { TaskListFeedback } from './TaskListFeedback.tsx';
+import { TaskCheckRow } from './ChecklistItem.tsx';
+import { groupWork } from './group-work.ts';
+import { WorkSwitch } from './WorkSwitch.tsx';
 import './work.css';
 
 export const metadata: Metadata = { title: 'Work' };
@@ -15,28 +19,21 @@ function titleFor(filters: WorkFilters) {
 	return filters.owner === 'me' ? 'Assigned to you' : 'All tasks';
 }
 
-function TaskRow({ task, today, meId, owners, projects }: { task: WorkTask; today: string | null; meId: string; owners: Map<string, string>; projects: Map<string, Project> }) {
+function TaskRow({ task, today, meId, owners, projects, returnHref }: { returnHref: string; task: WorkTask; today: string | null; meId: string; owners: Map<string, string>; projects: Map<string, Project> }) {
 	const due = today ? describeDue(task.due, today) : { text: task.due ? `due ${task.due}` : 'no date', urgency: null };
 	const project = task.projectId ? projects.get(task.projectId) : undefined;
 	const owner = task.ownerId === meId ? 'You' : task.ownerId ? owners.get(task.ownerId) ?? 'Another member' : 'No owner';
-	const href = workTaskHref(task);
+	const active = task.status !== 'done' && task.status !== 'cancelled';
 	const content = (<>
-				<span className="work-task__title">{task.title}</span>
-				<span className="work-task__meta">
-					<span className={due.urgency ? `due--${due.urgency}` : undefined}>{task.status === 'done' ? 'done' : due.text}</span>
-					{task.status !== 'open' && task.status !== 'done' ? <span>{statusWords[task.status as keyof typeof statusWords] ?? task.status}</span> : null}
-					<span>{owner}</span>
-					{project ? <span>{project.name}</span> : task.projectId?<span>In a project</span>:<span>No project</span>}
-				</span>
-				{task.tags.length ? <span className="work-task__tags">{task.tags.map((tag) => <span key={tag.id} className="chip">{tag.name}</span>)}</span> : null}
-
-	</>);
-	return (
-		<li className="work-task">
-			{href ? <Link className="work-task__link" href={href}>{content}</Link> : <div className="work-task__link">{content}</div>}
-			<Link className="work-task__edit-tags" href={`/work/tasks/${task.id}/tags`} aria-label={`Edit tags for ${task.title}`}>Edit tags</Link>
-		</li>
-	);
+        <span className="work-task__heading"><span className="work-task__title">{task.title}</span>{task.due ? <time className={`work-task__due${active && due.urgency ? ` due--${due.urgency}` : ''}`} dateTime={task.due} title={`Due ${task.due}`}>{!active ? shortDate(task.due) : due.urgency === 'overdue' ? 'Overdue' : due.text.replace(/^due /, '')}</time> : null}</span>
+        <span className="work-task__meta">
+            {task.tags.map(tag => <span key={tag.id} className="chip">{tag.name}</span>)}
+            <span>{project ? project.name : task.projectId ? 'In a project' : 'No project'}</span>
+            <span>{owner}</span>
+            {task.status !== 'open' ? <span>{statusWords[task.status as keyof typeof statusWords] ?? task.status}</span> : null}
+        </span>
+    </>);
+	return <TaskCheckRow task={task} parentHref={returnHref} variant="task">{content}</TaskCheckRow>;
 }
 
 export default async function WorkPage({ searchParams }: { searchParams: Promise<Search> }) {
@@ -71,10 +68,14 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 	const projectOffered = !!selectedProject && selectedProject.state === 'active';
 	const tagName = (id: string) => tagNames.get(id) ?? (tags.ok ? 'Tag not in the list' : 'Selected tag');
 	const next = tasks.ok ? nextHref(filters, tasks.value.nextOffset) : null;
+	const today = organisation.ok ? dateIn(new Date().toISOString(), organisation.value.timezone) : null;
+	const groups = tasks.ok ? groupWork(tasks.value.tasks, today) : [];
+	const returnHref = workHref(filters, { offset: filters.offset });
 	const newTaskHref = filters.projectId ? `/work/new?projectId=${filters.projectId}` : '/work/new';
 
 	return (
-		<Page title={titleFor(filters)}>
+		<Page title={titleFor(filters)} lede={filters.owner === 'me' ? 'Your assigned work across the business.' : 'Shared work across the business.'}>
+            <WorkSwitch selected="tasks"/>
 			<section className="card work-filters" aria-label="Filters">
 				<div className="work-filters__active">
 					<span className="chip">{filters.owner === 'me' ? 'Assigned to you' : 'Everyone'}</span>
@@ -125,6 +126,7 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 				{!overview.ok ? <p className="muted">Project names could not be read: {overview.error.message}</p> : null}
 			</section>
 
+            <TaskListFeedback>
 			{!tasks.ok ? (
 				<Notice title="Work could not be read" tone="failed" action={{ href: workHref(filters, { offset: filters.offset }), label: 'Try again' }}>
 					{tasks.error.message}{tasks.error.requestId ? ` Reference: ${tasks.error.requestId}` : ''}
@@ -144,10 +146,10 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 					</Notice>
 				)
 			) : (
-				<section className="card">
-					<ul className="bare work-list" aria-label="Tasks">
-						{tasks.value.tasks.map((task) => <TaskRow key={task.id} task={task} today={organisation.ok ? dateIn(new Date().toISOString(),organisation.value.timezone) : null} meId={meId} owners={owners} projects={projects} />)}
-					</ul>
+				<section className="work-groups" aria-label="Tasks">
+                    {!organisation.ok ? <p className="muted">The business date could not be read. Showing recorded due dates.</p> : null}
+                    {filters.offset > 0 || next ? <p className="muted">Groups show the tasks on this page.</p> : null}
+                    {groups.map(group => <section className="work-due-group" key={group.label}><h2>{group.label}</h2><ul className="bare work-list work-list--card" aria-label={group.label}>{group.tasks.map(task => <TaskRow key={`${task.id}-${task.revision}`} task={task} today={today} meId={meId} owners={owners} projects={projects} returnHref={returnHref}/>)}</ul></section>)}
 					{filters.offset > 0 || next ? (
 						<nav className="row row--between" aria-label="Pages">
 							{filters.offset > 0 ? <Link className="button button--ghost" href={workHref(filters, { offset: Math.max(0, filters.offset - pageSize) })}>Previous</Link> : <span />}
@@ -157,6 +159,7 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 				</section>
 			)}
 
+            </TaskListFeedback>
 			<Link className="work-plus" href={newTaskHref} aria-label="New task">
 				<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14" /><path d="M5 12h14" /></svg>
 			</Link>

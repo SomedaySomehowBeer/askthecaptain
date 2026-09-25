@@ -100,6 +100,7 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   await expect(page.getByRole('heading', { name: 'Browser-created task', exact: true })).toBeVisible();
   await goto(`/work/tasks/${created.id}/tags`);
   await page.getByRole('button', { name: 'Add Production', exact: true }).click();
+  await expect(page.getByRole('button',{name:'Remove Production',exact:true})).toBeVisible();
   assert.equal((await api(`/tasks/${created.id}/tag-options?limit=100`)).tags.find(tag => tag.id === fixture.productionId).attached, true);
   await goto(`/work?owner=all&tagId=${fixture.productionId}`);
   await expect(page.getByText('Browser-created task', { exact: true })).toBeVisible();
@@ -147,7 +148,8 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   const taskId = fixture.tasks['Confirm packaging slot'];
   const tagPath = `/work/tasks/${taskId}/tags`;
   await goto('/work');
-  await page.getByRole('link', { name: 'Edit tags for Confirm packaging slot', exact: true }).click();
+  await page.locator('.work-task__link').filter({hasText:'Confirm packaging slot'}).click();
+  await page.getByRole('link',{name:'Edit tags',exact:true}).click();
   await expect(page.getByRole('heading', { name: 'Confirm packaging slot', exact: true })).toBeVisible();
   await goto('/work/tags');
   const label = `Browser label ${Date.now()}`;
@@ -173,7 +175,7 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   await row.getByRole('button', { name: 'Rename for everyone', exact: true }).click();
   await expect(page.locator('.work-tag-row__name').filter({ hasText: renamed })).toBeVisible();
   await goto(`/work?owner=all&tagId=${createdTag.id}`);
-  await expect(page.locator('.work-task__tags')).toContainText(renamed);
+  await expect(page.locator('.work-task .chip').filter({hasText:renamed})).toBeVisible();
   await goto(tagPath);
   await page.getByRole('button', { name: `Remove ${renamed}`, exact: true }).click();
   await expect(page.getByRole('button', { name: `Add ${renamed}`, exact: true })).toBeVisible();
