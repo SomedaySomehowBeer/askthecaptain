@@ -4,7 +4,7 @@ import { api, load } from '../../../lib/api.ts';
 import { ShopifyActions } from './ShopifyActions.tsx';
 export async function ShopifyCard({ me, outcome }: { me: Awaited<ReturnType<typeof requireCurrent>>; outcome?: string }) {
  const result = await load(() => api<{ available: boolean; connected: boolean; connection: { providerAccountId: string; status: string } | null; complete: boolean; lastSyncedAt: string | null; error: string | null; scheduled: boolean }>(`/v1/organisations/${me.organisation.organisationId}/shopify/connection`, { token: me.token }));
- return <section className="card stack" aria-labelledby="shopify-heading"><h2 id="shopify-heading">Shopify</h2><p>Read shop stock and orders. Quantities come from Shopify; set reorder points in Commitments.</p>
+ return <section className="card stack" aria-labelledby="shopify-heading"><h2 id="shopify-heading">Shopify</h2><p>Read shop stock and orders. Quantities come from Shopify; set reorder points in Resources → Inventory.</p>
   {outcome === 'failed' ? <Notice tone="failed">Shopify could not be connected. Start Connect Shopify again and allow the requested access.</Notice> : null}
   {!result.ok ? <Notice tone="failed" action={{ href: '/settings/connections', label: 'Try again' }}>{result.error.message} Shopify connection status could not be checked.</Notice> : <>
    <p>{result.value.connected ? `Connected to ${result.value.connection!.providerAccountId}` : result.value.connection ? 'Shopify is disconnected or needs attention.' : 'Shopify is not connected.'}</p>

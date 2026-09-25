@@ -4,7 +4,7 @@ import { rememberedView, workspaceSection } from './nav.ts';
 
 test('tab restoration keeps local filters and record anchors inside their own section', () => {
  assert.equal(rememberedView('/work?owner=all&tagId=one', '/work'), '/work?owner=all&tagId=one');
- assert.equal(rememberedView('/commitments#task-123', '/work'), '/commitments#task-123');
+ assert.equal(rememberedView('/work/tasks/123', '/work'), '/work/tasks/123');
  assert.equal(rememberedView('/resources/inventory?shopifyOffset=200', '/resources'), '/resources/inventory?shopifyOffset=200');
  assert.equal(workspaceSection('/settings/connections'), '/resources');
  assert.equal(workspaceSection('/settings'), null);
@@ -14,7 +14,7 @@ test('tab restoration keeps local filters and record anchors inside their own se
 });
 
 test('retired assistant pages belong to no section and are never restored by a tab', () => {
- for (const path of ['/today', '/inbox', '/inbox/0190c0de-0000-7000-8000-000000000000', '/inbox/contacts/x', '/calendar', '/notes', '/notes/x']) {
+ for (const path of ['/commitments', '/commitments#task-123', '/today', '/inbox', '/inbox/0190c0de-0000-7000-8000-000000000000', '/inbox/contacts/x', '/calendar', '/notes', '/notes/x']) {
   assert.equal(workspaceSection(path), null, path);
   assert.equal(rememberedView(path, '/work'), '/work', path);
   assert.equal(rememberedView(path, '/resources'), '/resources', path);

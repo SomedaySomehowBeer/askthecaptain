@@ -49,7 +49,7 @@ const origin = 'http://127.0.0.1:3034';
   await mode('');await goto('/work/new');await page.getByLabel('Task',{exact:true}).fill('Recovered session task');
   const before=await mutations();await mode('session-failed');await page.getByRole('button',{name:'Add task',exact:true}).click();
   await expect(page.locator('main').getByRole('alert')).toContainText('nothing was sent');await expect(page.getByLabel('Task',{exact:true})).toHaveValue('Recovered session task');assert.equal(await mutations(),before);await assertCookie();
-  await mode('');await page.getByRole('button',{name:'Add task',exact:true}).click();await expect(page).toHaveURL(/\/commitments#task-/);assert.equal(await mutations(),before+1);
+  await mode('');await page.getByRole('button',{name:'Add task',exact:true}).click();await expect(page).toHaveURL(/\/work\/tasks\//);assert.equal(await mutations(),before+1);
   await goto('/resources/equipment/new?equipmentId='+f.equipment[2].id+'&date=2030-10-12');await page.getByLabel('Title',{exact:true}).fill('Session recovery reservation');
   const bookingBefore=await mutations();await mode('session-rate-limited');await page.getByRole('button',{name:'Reserve',exact:true}).click();await expect(page.locator('main').getByRole('alert')).toContainText('nothing was sent');assert.equal(await mutations(),bookingBefore);await expect(page.getByLabel('Title',{exact:true})).toHaveValue('Session recovery reservation');
   await mode('reservation-save-uncertain');await page.getByRole('button',{name:'Reserve',exact:true}).click();await expect(page.getByRole('button',{name:'Check whether it was saved',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Reserve',exact:true})).toBeDisabled();assert.equal(await mutations(),bookingBefore+1);

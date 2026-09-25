@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { WorkPicker } from '../../work/WorkPicker.tsx';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState, useTransition, type FormEvent } from 'react';
 import { checkReservation, createReservation, replaceReservation, type Outcome } from './actions.ts';
@@ -114,27 +115,7 @@ export function ReservationForm(props: Props) {
 			<input type="hidden" name="ownerId" value={initial.ownerId ?? ''} />
 			<p className="muted">People could not be read, so {initial.ownerId ? label(initial.ownerId) : 'no one'} stays as the accountable person.</p></div>
 	);
-	const projectTasks = tasks?.filter((t) => t.projectId === (projectId || null)) ?? [];
-	const workFields = projects && tasks ? (
-		<div className="row reservation-form__links">
-			<div className="field"><label htmlFor="reservation-project">Project (optional)</label>
-				<select id="reservation-project" name="projectId" value={projectId} onChange={(e) => setProject(e.target.value)} disabled={locked}>
-					<option value="">No project</option>
-					{initial.projectId && !projects.some((p) => p.id === initial.projectId) ? <option value={initial.projectId}>{label(initial.projectId)} (no longer active)</option> : null}
-					{projects.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
-				</select></div>
-			<div className="field"><label htmlFor="reservation-task">Task (optional)</label>
-				<select id="reservation-task" name="taskId" key={projectId} defaultValue={projectId === (initial.projectId ?? '') ? initial.taskId ?? '' : ''} disabled={locked}>
-					<option value="">No task</option>
-					{initial.taskId && projectId === (initial.projectId ?? '') && !projectTasks.some((t) => t.id === initial.taskId) ? <option value={initial.taskId}>{label(initial.taskId)} (no longer open)</option> : null}
-					{projectTasks.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-				</select></div>
-		</div>
-	) : (
-		<div className="field"><span className="field__label">Project and task</span>
-			<input type="hidden" name="projectId" value={initial.projectId ?? ''} /><input type="hidden" name="taskId" value={initial.taskId ?? ''} />
-			<p className="muted">Projects and tasks could not be read, so the links stay as they are{initial.projectId ? ` (${label(initial.projectId)}${initial.taskId ? `, ${label(initial.taskId)}` : ''})` : initial.taskId ? ` (${label(initial.taskId)})` : ' (none)'}.</p></div>
-	);
+ const workFields=<div className="stack"><WorkPicker initial={initial.projectId} initialLabel={label(initial.projectId)} choices={projects} disabled={locked} onChange={setProject}/><WorkPicker key={projectId} kind="tasks" projectId={projectId||null} name="taskId" empty="No task" initial={projectId===(initial.projectId??'')?initial.taskId:null} initialLabel={label(initial.taskId)} choices={tasks?.filter(t=>t.projectId===(projectId||null))} disabled={locked}/><p className="muted">Choose a task from the same project (or a standalone task when no project is selected). Captain checks the link when saving.</p></div>;
 
 	return (
 		<form className="form reservation-form" onSubmit={submit} method="post" aria-busy={pending || undefined}>

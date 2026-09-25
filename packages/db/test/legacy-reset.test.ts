@@ -39,7 +39,7 @@ it('legacy reset previews, refuses drift, removes content and preserves sign-in/
   assert.equal(Number((await db.owner`select used_tokens from model_budgets`)[0]!.usedTokens), 120);
   assert.equal((await db.owner`select action from audit_events`)[0]!.action, 'workspace.legacy_data_reset');
   await assert.rejects(resetLegacyStaging(db.owner, { appName }), /already completed/);
-  assert.deepEqual(await applyMigrations(db.owner), ['0037_retire_assistant_workflows.sql', '0038_optional_projects.sql']);
+  assert.deepEqual(await applyMigrations(db.owner, undefined, '0038_optional_projects.sql'), ['0037_retire_assistant_workflows.sql', '0038_optional_projects.sql']);
  } finally { await db.close(); }
 });
 it('new workspace data and extra organisations stop the reset before any deletion', async () => {
@@ -134,6 +134,6 @@ it('every old payload chain is cleared in foreign-key order, while usage, spend 
   // Sign-in, membership and a device subscription survive; the old delivery log does not.
   for (const [table, n] of [['users', 1], ['identities', 1], ['memberships', 1], ['push_subscriptions', 1], ['organisations', 1]] as const)
    assert.equal(Number((await db.owner.unsafe(`select count(*) as n from public."${table}"`))[0]!.n), n, table);
-  assert.deepEqual(await applyMigrations(db.owner), ['0037_retire_assistant_workflows.sql', '0038_optional_projects.sql']);
+  assert.deepEqual(await applyMigrations(db.owner, undefined, '0038_optional_projects.sql'), ['0037_retire_assistant_workflows.sql', '0038_optional_projects.sql']);
  } finally { await db.close(); }
 });

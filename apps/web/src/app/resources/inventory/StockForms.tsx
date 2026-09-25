@@ -1,5 +1,5 @@
 'use client';
-import { useSaveForm } from './SaveForm.tsx';
+import { useSaveForm } from '../../../components/SaveForm.tsx';
 import { saveStock, type StockResult } from './stock-actions.ts';
 export type StockItem = { id: string; name: string; location: string; unitLabel: string; currentCount: string | null; countedAt: string | null; countedByName: string | null;
  reorderPoint: string | null; belowReorder: boolean | null; preferredSupplierId: string | null; supplierName: string | null; notes: string; archivedAt: string | null };

@@ -9,7 +9,7 @@ test.describe('Shopify stock', () => {
  test.skip(!token || !itemName, 'Needs a signed-in fixture session and E2E_SHOPIFY_ITEM');
  test.beforeEach(async ({ context }) => { await context.addCookies([{ name: 'captain_session', value: token!, url: webUrl() }]); });
  test('shop quantity stays read-only when a member changes its reorder point', async ({ page }) => {
-  await page.goto(`${webUrl()}/commitments`);
+  await page.goto(`${webUrl()}/resources/inventory`);
   const stock = page.locator('#shopify-stock'); const item = stock.getByRole('article', { name: itemName!, exact: true });
   await expect(item).toBeVisible(); await expect(item).toContainText('from Shopify');
   const quantity = await item.locator('p').filter({ hasText: /^-?\d+ available$/ }).innerText();

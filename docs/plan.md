@@ -386,6 +386,8 @@ disabled and permission states remain required. Unknown/unloaded equipment is ne
 
 **Work detail is Work.** Build bounded task/project/series reads and editors under Work; no
 “Open in Commitments” escape hatch. Standalone tasks must not display a fabricated project.
+The [Work record contract](plans/work-record-pages-2026-09.md) defines bounded reads, revision
+preconditions, copied evidence requirements and the replacement web pages; implementation is in review.
 Old bookmarks may resolve to the corresponding Work record, or an explicit retired/unavailable
 state where no target exists. Redirect compatibility is not a reason to keep old screens/actions.
 Task due dates and Work Calendar/Timeline presentations remain in scope; they are not the retired

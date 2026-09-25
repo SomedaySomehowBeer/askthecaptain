@@ -1,10 +1,10 @@
-import { Notice } from '../../components/Notice.tsx';
-import type { requireCurrent } from '../../components/Page.tsx';
-import { api, load } from '../../lib/api.ts';
-import { ShopifyReorder } from '../settings/connections/ShopifyActions.tsx';
+import { Notice } from '../../../components/Notice.tsx';
+import type { requireCurrent } from '../../../components/Page.tsx';
+import { api, load } from '../../../lib/api.ts';
+import { ShopifyReorder } from '../../settings/connections/ShopifyActions.tsx';
 type ShopStock = { connected: boolean; complete: boolean; error: string | null; lastSyncedAt: string | null; nextOffset: number | null;
  items: { id: string; providerId: string; title: string; variantTitle: string; sku: string | null; tracked: boolean; locationProviderId: string | null; locationName: string | null; available: number | null; updatedAt: string | null; reorderPoint: string | null; belowReorder: boolean | null }[] };
-export async function ShopifyStock({ me, offset = 0, basePath = '/commitments' }: { me: Awaited<ReturnType<typeof requireCurrent>>; offset?: number; basePath?: string }) {
+export async function ShopifyStock({ me, offset = 0, basePath = '/resources/inventory' }: { me: Awaited<ReturnType<typeof requireCurrent>>; offset?: number; basePath?: string }) {
  const result = await load(() => api<ShopStock>(`/v1/organisations/${me.organisation.organisationId}/shopify/stock?offset=${offset}`, { token: me.token }));
  return <div className="stack" id="shopify-stock"><h3>Shop stock</h3>
   {!result.ok ? <Notice tone="failed">{result.error.message} Shopify stock could not be read. <a href={basePath}>Try again</a>.</Notice> : <>

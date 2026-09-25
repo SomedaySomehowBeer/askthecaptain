@@ -6,8 +6,8 @@ import { test } from 'node:test';
 // #133: the personal assistant's pages remain only as retired states. Nothing else in the web may
 // link to them, revalidate them or call the retired question action.
 const root = new URL('..', import.meta.url).pathname;
-const retired = /["'`]\/(today|inbox|calendar|notes)(?=[/"'`?#$])/;
-const owners = /^app\/(today|inbox|calendar|notes)\//;
+const retired = /["'`]\/(today|inbox|calendar|notes|commitments)(?=[/"'`?#$])/;
+const owners = /^app\/(today|inbox|calendar|notes|commitments)\//;
 
 function* sources(dir: string): Generator<string> {
 	for (const name of readdirSync(dir)) {

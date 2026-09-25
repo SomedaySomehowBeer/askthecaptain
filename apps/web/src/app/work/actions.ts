@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { api, ApiError, type Task } from '../../lib/api.ts';
 import { actionSession } from '../../lib/session.ts';
 
-export type CreateResult = { id: string } | { error: string };
+export type CreateResult = { id: string } | { error: string; locked?: boolean };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const text = (form: FormData, name: string) => String(form.get(name) ?? '').trim();
 
@@ -23,9 +23,9 @@ export async function createWorkTask(form: FormData): Promise<CreateResult> {
 	try {
 		const task = await api<Task>(`/v1/organisations/${session.org}/tasks`, { method: 'POST', token: session.token,
 			body: { title, ownerId, projectId: projectId || undefined, due: due || null, body: body || undefined } });
-		revalidatePath('/work'); revalidatePath('/commitments');
+		revalidatePath('/work');
 		return { id: task.id };
 	} catch (error) {
-		return { error: error instanceof ApiError && error.status >= 400 && error.status < 500 ? error.message : 'The save could not be confirmed. Check Work before trying again.' };
+		return { locked: !(error instanceof ApiError && error.status >= 400 && error.status < 500), error: error instanceof ApiError && error.status >= 400 && error.status < 500 ? error.message : 'The save could not be confirmed. Check Work before trying again.' };
 	}
 }

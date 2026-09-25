@@ -27,6 +27,8 @@ const google: IdentityProvider & { next: { subject: string; email: string; name:
 	next: { subject: 'owner', email: 'owner@example.test', name: 'Owner' },
 	authorizationUrl: ({ state }) => `https://google.test/auth?state=${state}`, async exchange() { return google.next; },
 };
+/** The stored revision, for requests that are not testing staleness. */
+const rev = async (table: 'tasks' | 'projects' | 'task_series', id: string) => Number((await db.owner.unsafe(`select revision from ${table} where id = $1`, [id]))[0]!.revision);
 const request = (method: string, path: string, person?: Person, data?: unknown) => app.request(path, { method,
 	headers: { 'content-type': 'application/json', ...(person ? { authorization: `Bearer ${person.token}` } : {}) },
 	body: data === undefined ? undefined : JSON.stringify(data) });
@@ -261,10 +263,10 @@ it('links must be eligible work in this tenant; owners must be active members', 
 	assert.deepEqual([loose.projectId, loose.taskId], [null, standalone.id]);
 	assert.equal((await book(tank.id, { ...slot(), projectId: project, taskId: standalone.id })).status, 404, 'a standalone task is not in that project');
 	const otherProject = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Winter stout' }), 201)).id;
-	const step = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Mill grain', parentId: task }), 201)).id;
+	const step = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Mill grain', parentId: task, expectedParentRevision: await rev('tasks', task) }), 201)).id;
 	const cancelledTask = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Dropped', projectId: project, status: 'cancelled' }), 201)).id;
 	const archivedProject = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Retired' }), 201)).id;
-	await json(request('PATCH', `${base()}/projects/${archivedProject}`, owner, { archived: true }));
+	await json(request('PATCH', `${base()}/projects/${archivedProject}`, owner, { expectedRevision: await rev('projects', archivedProject), archived: true }));
 	const foreignProject = (await json<{ id: string }>(request('POST', `${base(otherOrg)}/projects`, outsider, { name: 'Theirs' }), 201)).id;
 	for (const links of [{ projectId: otherProject, taskId: task }, { projectId: project, taskId: step }, { projectId: project, taskId: cancelledTask },
 		{ projectId: archivedProject }, { projectId: foreignProject }, { projectId: randomUUID() }, { ownerId: outsider.user.id }, { ownerId: randomUUID() }])
@@ -429,10 +431,17 @@ it('two direct transactions inserting overlapping occupancy at once: the constra
 		await directInsert(tx, tank.id, member.user.id, starts, ends);
 		await tx`select pg_sleep(0.3)`; // hold the uncommitted row while the other transaction arrives
 	});
-	const results = await Promise.allSettled([attempt('2031-10-01T00:00:00Z', '2031-10-01T02:00:00Z'), attempt('2031-10-01T01:00:00Z', '2031-10-01T03:00:00Z')]);
-	assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
-	const refused = results.find(r => r.status === 'rejected') as PromiseRejectedResult;
-	assert.equal((refused.reason as { code?: string }).code, '23P01');
+	const ranges = [['2031-10-01T00:00:00Z', '2031-10-01T02:00:00Z'], ['2031-10-01T01:00:00Z', '2031-10-01T03:00:00Z']] as const;
+	const results = await Promise.allSettled(ranges.map(([starts, ends]) => attempt(starts, ends)));
+	assert.equal(results.filter(r => r.status === 'fulfilled').length, 1, 'exactly one transaction commits');
+	const loser = results.findIndex(r => r.status === 'rejected');
+	const code = ((results[loser] as PromiseRejectedResult).reason as { code?: string }).code;
+	// Two raw inserts can each wait on the other's uncommitted row in the exclusion index, so Postgres may
+	// abort the loser as a deadlock (40P01) instead of an exclusion violation (23P01). Either way the
+	// constraint admitted one row. Retrying the loser now, against the committed winner, must be refused
+	// by the constraint itself. (The service locks the equipment row first, so its writers never race here.)
+	assert.ok(code === '23P01' || code === '40P01', `unexpected loser code ${code}`);
+	if (code === '40P01') await assert.rejects(attempt(ranges[loser]![0], ranges[loser]![1]), (e: { code?: string }) => e.code === '23P01');
 	assert.equal((await db.owner`select count(*)::int as n from equipment_reservations where equipment_id = ${tank.id}`)[0]!.n, 1);
 });
 
@@ -451,8 +460,8 @@ it('bookings keep occupying the equipment after their project is archived or tas
 	const launch = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Spring bock' }), 201)).id;
 	const step = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Brew the bock', projectId: launch }), 201)).id;
 	const linked = await json<Reservation>(book(tank.id, { startsAt: '2031-12-01T00:00:00Z', endsAt: '2031-12-01T04:00:00Z', projectId: launch, taskId: step }), 201);
-	await json(request('PATCH', `${base()}/tasks/${step}`, owner, { status: 'cancelled' }));
-	await json(request('PATCH', `${base()}/projects/${launch}`, owner, { archived: true }));
+	await json(request('PATCH', `${base()}/tasks/${step}`, owner, { expectedRevision: await rev('tasks', step), status: 'cancelled' }));
+	await json(request('PATCH', `${base()}/projects/${launch}`, owner, { expectedRevision: await rev('projects', launch), archived: true }));
 	const view = await json<Range>(range(tank.id, '2031-12-01T00:00:00Z', '2031-12-02T00:00:00Z'));
 	assert.deepEqual(view.reservations.map(r => r.id), [linked.id], 'archived work still holds the slot');
 	assert.equal((await book(tank.id, { startsAt: '2031-12-01T01:00:00Z', endsAt: '2031-12-01T02:00:00Z' })).status, 409);
@@ -507,7 +516,7 @@ it('a linked task that changes project takes its confirmed reservations with it,
 	const read = async (id: string) => (await db.owner<{ projectId: string | null; taskId: string | null; revision: number }[]>`select project_id, task_id, revision from equipment_reservations where id = ${id}`)[0]!;
 
 	// Out of any project: the reservation keeps its task and now names no project either.
-	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { projectId: null }));
+	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { expectedRevision: await rev('tasks', moving), projectId: null }));
 	assert.deepEqual(await read(live.id), { projectId: null, taskId: moving, revision: live.revision + 1 });
 	assert.deepEqual(await read(past.id), { projectId: autumn, taskId: moving, revision: past.revision + 1 }, 'a cancelled reservation keeps its history (only its cancellation moved the revision)');
 	const [followed] = await db.owner`select actor_kind, detail from audit_events where subject_id = ${live.id} and action = 'equipment.reservation_updated' order by created_at desc limit 1`;
@@ -520,11 +529,11 @@ it('a linked task that changes project takes its confirmed reservations with it,
 	assert.equal((await json<Reservation>(edit(current, { title: 'Carbonate' }))).projectId, null);
 
 	// Into another project: it follows again; an edit that names the task's old project is refused.
-	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { projectId: winter }));
+	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { expectedRevision: await rev('tasks', moving), projectId: winter }));
 	const now = await read(live.id);
 	assert.equal(now.projectId, winter);
 	assert.equal((await edit({ ...current, revision: now.revision }, { projectId: null })).status, 404, "the reservation must name its task's project");
 	// Other fields only: no reservation moves, no revision bump.
-	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { title: 'Carbonate the winter release' }));
+	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { expectedRevision: await rev('tasks', moving), title: 'Carbonate the winter release' }));
 	assert.equal((await read(live.id)).revision, now.revision);
 });

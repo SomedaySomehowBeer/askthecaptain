@@ -17,6 +17,8 @@ const google: IdentityProvider & { next: { subject: string; email: string; name:
  next: { subject: 'owner', email: 'owner@example.test', name: 'Owner' },
  authorizationUrl: ({ state }) => `https://google.test/auth?state=${state}`, async exchange() { return google.next; },
 };
+/** The stored revision, for requests that are not testing staleness. */
+const rev = async (table: 'tasks' | 'projects' | 'task_series', id: string) => Number((await db.owner.unsafe(`select revision from ${table} where id = $1`, [id]))[0]!.revision);
 const request = (method: string, path: string, person?: Person, data?: unknown) => app.request(path, { method,
  headers: { 'content-type': 'application/json', ...(person ? { authorization: `Bearer ${person.token}` } : {}) },
  body: data === undefined ? undefined : JSON.stringify(data) });
@@ -70,14 +72,14 @@ it('active members create and rename flat tags; duplicate names race safely; wri
 });
 it('retrying concurrent attach/detach makes one link and one audit per actual change', async () => {
  const tag = await makeTag('Retry-safe');
- const before = (await db.owner`select project_id, title, status from tasks where id = ${task}`)[0];
+ const before = (await db.owner`select project_id, title, status, revision from tasks where id = ${task}`)[0];
  const results = await Promise.all([link(tag.id), link(tag.id)]); assert.ok(results.every(r => r.status === 200));
  assert.equal((await db.owner`select * from task_tags where task_id = ${task} and tag_id = ${tag.id}`).length, 1);
  assert.equal((await db.owner`select * from audit_events where subject_id = ${task} and action = 'task.tag_added' and detail->>'tagId' = ${tag.id}`).length, 1);
  await json(link(tag.id, 'DELETE')); await json(link(tag.id, 'DELETE'));
  assert.equal((await db.owner`select * from task_tags where task_id = ${task} and tag_id = ${tag.id}`).length, 0);
  assert.equal((await db.owner`select * from audit_events where subject_id = ${task} and action = 'task.tag_removed' and detail->>'tagId' = ${tag.id}`).length, 1);
- assert.deepEqual((await db.owner`select project_id, title, status from tasks where id = ${task}`)[0], before);
+ assert.deepEqual((await db.owner`select project_id, title, status, revision from tasks where id = ${task}`)[0], before);
 });
 it('any selected tag matches, other filter kinds combine with AND, and task identity stays stable', async () => {
  const sales = await makeTag('Sales'), production = await makeTag('Brew day');
@@ -126,9 +128,9 @@ it('archived and proposed projects stay out of the active work list', async () =
  const archived = await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Archived' }), 201);
  const hidden = await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Hidden task', projectId: archived.id }), 201);
  const tag = await makeTag('Hidden'); await json(link(tag.id, 'PUT', hidden.id));
- const step = await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Checklist step', parentId: task }), 201);
+ const step = await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Checklist step', parentId: task, expectedParentRevision: await rev('tasks', task) }), 201);
  assert.equal((await link(tag.id, 'PUT', step.id)).status, 404, 'tags belong to top-level tasks');
- await json(request('PATCH', `${base()}/projects/${archived.id}`, owner, { archived: true }));
+ await json(request('PATCH', `${base()}/projects/${archived.id}`, owner, { expectedRevision: await rev('projects', archived.id), archived: true }));
  assert.deepEqual((await json<{ tasks: WorkTask[] }>(request('GET', `${base()}/tasks?tagId=${tag.id}`, member))).tasks, []);
  assert.equal((await link(tag.id, 'PUT', hidden.id)).status, 404);
  await db.owner`update projects set archived_at = null, proposed_at = now(), accepted_at = null where id = ${archived.id}`;
@@ -170,15 +172,15 @@ it('task tag choices refuse foreign, removed-member and ineligible-task reads wi
  assert.equal((await request('GET', endpoint(otherTask), member)).status, 404);
  assert.equal((await request('GET', endpoint('00000000-0000-4000-8000-000000000000'), member)).status, 404);
  assert.equal((await request('GET', endpoint('bad-id'), member)).status, 400);
- const step = await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Editor checklist', parentId: task }), 201);
+ const step = await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Editor checklist', parentId: task, expectedParentRevision: await rev('tasks', task) }), 201);
  assert.equal((await request('GET', endpoint(step.id), member)).status, 404);
  const p = await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Editor eligibility' }), 201);
  const t = await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Eligibility task', projectId: p.id }), 201);
  for (const status of ['done', 'cancelled']) {
-  await json(request('PATCH', `${base()}/tasks/${t.id}`, owner, { status }));
+  await json(request('PATCH', `${base()}/tasks/${t.id}`, owner, { expectedRevision: await rev('tasks', t.id), status }));
   assert.equal((await request('GET', endpoint(t.id), member)).status, 200, 'matches existing link-write eligibility');
  }
- await json(request('PATCH', `${base()}/projects/${p.id}`, owner, { archived: true }));
+ await json(request('PATCH', `${base()}/projects/${p.id}`, owner, { expectedRevision: await rev('projects', p.id), archived: true }));
  assert.equal((await request('GET', endpoint(t.id), member)).status, 404);
  await db.owner`update projects set archived_at = null, proposed_at = now(), accepted_at = null where id = ${p.id}`;
  assert.equal((await request('GET', endpoint(t.id), member)).status, 404);

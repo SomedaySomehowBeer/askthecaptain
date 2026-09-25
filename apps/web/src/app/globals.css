@@ -106,13 +106,13 @@ a { color: var(--accent-text); }
 .button:active { opacity: var(--press-opacity); }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
-input[type='text'], input[type='email'], select { font: inherit; font-size: 15px; min-height: 44px; padding: 0 12px; border: var(--border-control); border-radius: var(--radius-control); background: var(--panel); color: var(--ink); }
+input:not([type]), input[type='text'], input[type='email'], input[type='url'], select { font: inherit; font-size: 15px; min-height: 44px; padding: 0 12px; border: var(--border-control); border-radius: var(--radius-control); background: var(--panel); color: var(--ink); }
 input:focus-visible, select:focus-visible, .button:focus-visible, a:focus-visible { outline: var(--border-focus); outline-offset: 2px; }
 .form { display: flex; flex-direction: column; gap: 14px; }
 .form__error { color: var(--danger); font-size: 13px; }
 .codeblock { margin: 0; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-control); overflow-x: auto; font-size: 12px; line-height: 1.5; word-break: break-all; white-space: pre-wrap; }
 
-/* Commitments */
+/* Shared work records */
 .task { display: flex; align-items: flex-start; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .task:first-child { border-top: 0; }
 .task__body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
