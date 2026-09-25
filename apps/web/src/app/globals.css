@@ -215,3 +215,5 @@ input[type='date']:focus-visible, input[type='number']:focus-visible, textarea:f
 
 .workspace-crumb a { max-width: 100%; }
 .workspace-crumb .workspace-crumb__label { font-size: inherit; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.page > header .page-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }

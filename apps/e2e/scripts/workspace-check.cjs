@@ -147,7 +147,8 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   const taskId = fixture.tasks['Confirm packaging slot'];
   const tagPath = `/work/tasks/${taskId}/tags`;
   await goto('/work');
-  await page.getByRole('link', { name: 'Edit tags for Confirm packaging slot', exact: true }).click();
+  await page.locator('.work-task__link').filter({hasText:'Confirm packaging slot'}).click();
+  await page.getByRole('link',{name:'Edit tags',exact:true}).click();
   await expect(page.getByRole('heading', { name: 'Confirm packaging slot', exact: true })).toBeVisible();
   await goto('/work/tags');
   const label = `Browser label ${Date.now()}`;

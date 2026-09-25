@@ -106,3 +106,30 @@ cross-tag task context and linked scheduling. Chat, files and summaries remain p
 not justification for omitting interactions already supported by the services. Visual acceptance
 must compare populated screens with the approved references at phone and desktop widths, alongside
 behavioural tests; successful CRUD tests alone do not establish it.
+
+## Task and Work-list design alignment
+
+The next increment implements the existing task.png/task-artwork.png/all-work.png references:
+compact metadata and owner initials, a primary complete/reopen action, and secondary editors in
+disclosures. The page has one accessible heading; plain record fields never impersonate generated
+summaries. Evidence links stay visible; an empty evidence editor sits after the primary action.
+
+Work, project and recurrence task rows have revision-aware completion controls with the same
+confirmed/pending/stale/uncertain semantics as checklists. Completing a task may remove it from
+an Open-filtered list; the current URL and filters remain unchanged. Required evidence is enforced
+by the existing API for every completion control. Cancelled rows open to their detail to reopen.
+
+Work groups the loaded page into Overdue, Due today, Tomorrow, Next 7 days, Later, No date,
+Completed and Cancelled, using the organisation's timezone. An unavailable business date shows
+recorded dates without relative urgency. Pagination remains explicit; group headings/counts must
+not imply the rest of the database was loaded. Tasks/Projects use the approved segmented navigation.
+Tag editing remains on task detail rather than adding a second action to every compact list row.
+
+Remaining #142 work includes the project overview/schedule composition, complete filter/search
+presentation and contextual equipment/chat sections as their real contracts become available.
+This increment does not declare full mockup parity or build fictitious supporting records.
+
+Confirmed row changes announce completion/reopening in a status region that survives row removal
+or regrouping. Keyboard focus moves to that confirmation when it remains on the operated checkbox;
+it does not interrupt someone who has moved to another control. The same behaviour applies to
+checklists. Pending rows say Saving; refused evidence completion links to the task's source editor.

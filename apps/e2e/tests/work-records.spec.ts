@@ -8,9 +8,9 @@ test.describe('Work records and inventory', () => {
   await page.goto(`${webUrl()}/work/new`);const title=`Shared work ${Date.now()}`;
   await page.getByLabel('Task',{exact:true}).fill(title);await page.getByRole('button',{name:'Add task',exact:true}).click();
   await expect(page).toHaveURL(/\/work\/tasks\/[0-9a-f-]+$/);await expect(page.getByRole('heading',{name:title,exact:true})).toBeVisible();
-  await page.getByLabel('Status',{exact:true}).selectOption('done');await page.getByRole('button',{name:'Update status',exact:true}).click();
+  await page.getByRole('button',{name:'Mark task complete',exact:true}).click();
   await expect(page.locator('dd').filter({hasText:/^done$/})).toBeVisible();
-  await page.getByLabel('Status',{exact:true}).selectOption('open');await page.getByRole('button',{name:'Update status',exact:true}).click();
+  await page.getByRole('button',{name:'Reopen task',exact:true}).click();
   await expect(page.locator('dd').filter({hasText:/^open$/})).toBeVisible();
  });
  test('create standalone recurring work and see its occurrence',async ({page})=>{
