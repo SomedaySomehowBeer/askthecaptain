@@ -8,6 +8,14 @@ import type { Reservation } from '../../../resources/equipment/types.ts';
 export type ProjectReservationPage = { reservations: (Reservation & { equipmentName: string; equipmentArchivedAt: string | null })[]; nextOffset: number | null; from: string; to: string; timezone: string };
 export type ProjectWindow = { date: string; span: number; from: string; to: string; zone: string };
 
+const bookingTime = (r: Reservation, zone: string) => {
+ const format = new Intl.DateTimeFormat('en-AU', { timeZone: zone, year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'shortOffset' });
+ const start = new Date(r.startsAt), end = new Date(r.endsAt);
+ const offset = (date: Date) => format.formatToParts(date).find(part => part.type === 'timeZoneName')?.value;
+ // A clock change needs both offsets, especially when a local hour repeats.
+ return offset(start) === offset(end) ? format.formatRange(start, end) : `${displayTime(r.startsAt, zone)} – ${displayTime(r.endsAt, zone)}`;
+};
+
 export function ProjectBookings({ result, window, problem, invalidWindow, href, overview, start }: {
  result: Loaded<ProjectReservationPage> | null; window: ProjectWindow | null; problem: string | null; invalidWindow: boolean;
  href: string; overview: boolean; start: number;
@@ -20,8 +28,8 @@ export function ProjectBookings({ result, window, problem, invalidWindow, href, 
   <div className="project-section__heading"><h2>Equipment bookings</h2>{overview ? <Link href={currentHref}>Schedule <span aria-hidden="true">›</span></Link> : null}</div>
   {!overview && window ? <form className="project-window" method="get" action={href}>
    <input type="hidden" name="view" value="schedule"/>
-   <label className="field">Starting date<input name="date" type="date" defaultValue={window.date} required min="1900-01-01" max="2199-12-30"/></label>
-   <label className="field">Window<select name="span" defaultValue={window.span}>{[1,7,14,28].map(span => <option key={span} value={span}>{span} {span === 1 ? 'day' : 'days'}</option>)}</select></label>
+   <div className="field"><label htmlFor="project-date">Starting date</label><input id="project-date" name="date" type="date" defaultValue={window.date} required min="1900-01-01" max="2199-12-30"/></div>
+   <div className="field"><label htmlFor="project-span">Window</label><select id="project-span" name="span" defaultValue={window.span}>{[1,7,14,28].map(span => <option key={span} value={span}>{span} {span === 1 ? 'day' : 'days'}</option>)}</select></div>
    <button className="button button--ghost" type="submit">Show bookings</button>
   </form> : null}
   {problem || !window ? <Notice title="Schedule could not be read" tone="failed" action={{ href: invalidWindow ? scheduleHref : overview ? href : scheduleHref, label: invalidWindow ? 'Open today’s project schedule' : 'Try again' }}>{problem ?? 'The business time zone is unavailable.'}</Notice> : <>
@@ -30,7 +38,7 @@ export function ProjectBookings({ result, window, problem, invalidWindow, href, 
     {result.value.reservations.length ? <ul className="bare project-bookings">
      {result.value.reservations.map(r => <li key={r.id}><Link href={`/resources/equipment/${r.equipmentId}/reservations/${r.id}`} className="project-booking">
       <span className="project-booking__heading"><strong>{r.equipmentName} · {r.title}</strong><span className="chip">Confirmed</span></span>
-      <span>{displayTime(r.startsAt, result.value.timezone)} – {displayTime(r.endsAt, result.value.timezone)}</span>
+      <span title={`${displayTime(r.startsAt, result.value.timezone)} – ${displayTime(r.endsAt, result.value.timezone)}`}>{bookingTime(r, result.value.timezone)}</span>
       {r.setupMinutes || r.cleanupMinutes ? <span>Setup {r.setupMinutes} min · Cleanup {r.cleanupMinutes} min</span> : null}
       {r.equipmentArchivedAt ? <span>Archived equipment</span> : null}
      </Link></li>)}

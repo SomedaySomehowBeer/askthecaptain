@@ -23,7 +23,7 @@
 
 /* The green plus: the view's primary creation action, above the phone tab bar. */
 .work-plus { position: fixed; right: 20px; bottom: calc(var(--tabbar-h) + 20px); z-index: 11; display: inline-flex; align-items: center; justify-content: center;
-	width: 56px; height: 56px; border-radius: 999px; background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow-float); }
+	width: 56px; height: 56px; border-radius: 999px; background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow-float); text-decoration: none; font-size: 32px; line-height: 1; }
 .work-plus:hover { background: var(--accent-hover); }
 .work-plus:focus-visible { outline: 3px solid var(--accent-text); outline-offset: 3px; }
 /* Room under the last row so the plus never covers it. */
