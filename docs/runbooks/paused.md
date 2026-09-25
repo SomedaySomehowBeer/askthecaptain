@@ -1,8 +1,8 @@
 # Staging resumed; production paused (2026-09-24)
 
 Captain's staging workspace is available at **https://app.askthecaptain.app/work**. API and web
-run the Work record API (#138, image source `806f507`) and the reviewed checklist/navigation
-web fix (#143, image source `08a6145`, merged as `7bbdc10`).
+run the Work record API (#138, image source `806f507`) and the reviewed task/Work-list design
+alignment (#145, image source `ba393bd`, merged as `77a1f02`).
 Tasks, projects and recurring work have their own Work pages; the Commitments overview is retired.
 The old-version database content was reset earlier on 25 September under explicit owner
 permission; **this release did not run another reset**. Embedding and production remain stopped.
@@ -21,6 +21,39 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Task and Work-list design release (25 September 2026, UTC)
+
+Workspace outcome: **manage shared work**. [#145](https://github.com/SomedaySomehowBeer/askthecaptain/pull/145)
+merged as `77a1f022096cb59e3b3933b161e4ffa92cc767fe` after reciprocal Claude/root review
+and green [CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36142422926)
+(2m54s). Reviewed image source `ba393bdf1e2339f6ea28ed30212849ac140cf963` has the same
+Git tree as the merge. Task details now have compact metadata, checklist-first layout and a primary
+complete/reopen action. Work/project/series lists have revision-aware completion controls;
+Work groups the loaded page by due date and links Tasks/Projects.
+
+By **13:47Z**, only existing web machine `9185776e7cd3d8` was updated to
+`registry.fly.io/askthecaptain-web-staging:git-ba393bd` (digest
+`sha256:db0217e03f66ea98e370d6737622082a2e02807fa308ef926a72b5f99c70f5d8`). The before/after
+configuration comparison showed only its image changed. Its normal Next.js command, autostart,
+idle-stop and zero minimum-running setting remain intact. Exactly one web and one API staging
+machine remain; API `80e39ea6416e18` retains image `git-806f507215017f11c9e885e5ef680e54fb0dee6e`
+and unchanged configuration. No migrations, resets, customer-record writes, secret changes,
+production/embedding updates or additional application machines were part of this release.
+
+Validation: production build/typecheck and the web unit suite passed. All 23 local browser groups
+passed against a real API and disposable Postgres: ten workspace, seven Work-record, three
+checklist/navigation and three design groups. The three design groups passed again on the final
+image source, including the completed-task due-date tooltip, required-evidence refusal and
+keyboard focus after list removal/regrouping. Populated screens were checked at 360/390/430 and
+1440 pixels; [screenshots and scope](../validation/work-design-2026-09-25/README.md) are recorded.
+The task-owned local web server and fixture were stopped; the fixture removed its temporary database.
+
+A real browser checked hosted signed-out Work/project/series routes and Google sign-in entry at
+phone/desktop widths without overflow or browser exceptions. An authenticated hosted session and
+Google round trip were not exercised. The demo remains available without a reset. Project overview,
+full search/filter presentation and contextual features remain in [#142](https://github.com/SomedaySomehowBeer/askthecaptain/issues/142);
+this increment does not claim full mockup, native-device or screen-reader acceptance.
 
 ## Checklist and parent-navigation web release (25 September 2026, UTC)
 
