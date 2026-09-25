@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { api, ApiError } from '../../../lib/api.ts';
-import { current } from '../../../lib/session.ts';
+import { actionSession } from '../../../lib/session.ts';
 import type { Tag } from '../types.ts';
 import { tagName, uuid } from './pagination.ts';
 
@@ -12,10 +12,10 @@ function refreshTagViews() {
 	revalidatePath('/work'); revalidatePath('/work/tags'); revalidatePath('/work/tasks/[taskId]/tags', 'page');
 }
 async function write(path: string, method: 'POST' | 'PATCH', name: string): Promise<TagResult> {
-	const me = await current();
-	if (!me?.organisation) return { error: 'Your session has ended. Sign in again, then try once more.' };
+	const session = await actionSession();
+	if (!session.ok) return { error: session.error };
 	try {
-		const tag = await api<Tag>(`/v1/organisations/${me.organisation.organisationId}/tags${path}`, { method, token: me.token, body: { name } });
+		const tag = await api<Tag>(`/v1/organisations/${session.org}/tags${path}`, { method, token: session.token, body: { name } });
 		refreshTagViews();
 		return { tag };
 	} catch (error) {

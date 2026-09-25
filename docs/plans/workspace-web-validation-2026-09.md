@@ -124,3 +124,29 @@ screenshots were inspected. The production build, API typecheck and all 23 web u
 Full navigations are paced to respect the existing API limiter; fault modes remain active until
 the uncertain-result UI appears. The pre-existing temporary-service-error/sign-in behaviour is
 tracked separately in [#126](https://github.com/SomedaySomehowBeer/askthecaptain/issues/126).
+
+## Session recovery follow-up (#126)
+
+Use a fresh instance of the same local fixture and production build, then run:
+
+```bash
+flock /tmp/atc-build.lock node apps/e2e/scripts/session-check.cjs
+```
+
+The fixture can rate-limit or fail `/v1/me`, or destroy its HTTP connection to exercise a real
+transport failure. Its loopback-only mutation counter proves a failed session preflight sends no
+write. Browser checks cover retry and recovery, retained cookies, Work/sign-in and special routes,
+phone/desktop layout, real invalid-session 401 and missing-cookie behaviour. Work and reservation
+forms retain input on failed preflight; an ambiguous reservation save still uses its existing
+reconciliation rather than being labelled unsaved or retried automatically.
+
+Return routes are retained; most existing page guards supply their pathname rather than the full
+filter query. Legacy actions that previously redirected on session failure now redirect to the
+retry page and can lose unsaved form text. This increment does not add universal draft storage or
+change invitation acceptance into an idempotent operation. Native passkey prompts and provider
+sign-in are not simulated by these browser checks.
+
+On 25 September 2026 all four session-recovery browser groups passed against the real Postgres
+fixture and production build, with no browser exceptions. Phone/desktop retry states were checked;
+the build, API typecheck and all 25 web tests passed. Mutation counts confirmed no write on failed
+preflight and one booking write across a lost response and reconciliation.

@@ -1,11 +1,11 @@
 'use server';
+import { requireSignedIn } from '../../../components/Page.tsx';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { api, ApiError } from '../../../lib/api.ts';
-import { current } from '../../../lib/session.ts';
 
 export type Result = { error?: string; ok?: boolean };
-async function who() { const me = await current(); if (!me) redirect('/sign-in?return_to=/settings/passkeys'); return me; }
+async function who() { const me = await requireSignedIn('/settings/passkeys'); return me; }
 const fail = (error: unknown) => ({ error: error instanceof ApiError ? error.message : 'That did not work.' });
 
 export async function registrationOptions(): Promise<{ token?: string; options?: unknown; error?: string }> {

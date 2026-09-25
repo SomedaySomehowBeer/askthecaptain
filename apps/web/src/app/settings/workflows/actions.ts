@@ -1,15 +1,15 @@
 'use server';
+import { requireCurrent } from '../../../components/Page.tsx';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { api, ApiError, type WorkflowParameterSpec } from '../../../lib/api.ts';
-import { current } from '../../../lib/session.ts';
 
 export type Result = { error?: string; ok?: boolean };
 
 /** Enable or disable one workflow with the parameters from its form. Enabling is the authorisation
  *  (plan §3): the workflow acts in this person's name from now on, so the API records who. */
 export async function setWorkflow(_: Result | undefined, form: FormData): Promise<Result> {
-	const me = await current(); if (!me?.organisation) redirect('/sign-in?return_to=/settings/workflows');
+	const me = await requireCurrent('/settings/workflows');
 	// Save parameters is distinct from the on/off toggle and keeps the workflow enabled.
 	const key = String(form.get('key') ?? ''); const enabled = form.get('intent') === 'save' || String(form.get('enabled') ?? '') === 'true';
 	let specs: Record<string, WorkflowParameterSpec> = {};
@@ -27,7 +27,7 @@ export async function setWorkflow(_: Result | undefined, form: FormData): Promis
 }
 
 export async function controlRun(_: Result | undefined, form: FormData): Promise<Result> {
- const me = await current(); if (!me?.organisation) redirect('/sign-in?return_to=/settings/workflows');
+ const me = await requireCurrent('/settings/workflows');
  const action = String(form.get('action')); const id = String(form.get('id'));
  if (!['run', 'resume', 'cancel'].includes(action)) return { error: 'That action was not understood.' };
  const path = action === 'run' ? `${encodeURIComponent(id)}/run` : `runs/${encodeURIComponent(id)}/${action}`;

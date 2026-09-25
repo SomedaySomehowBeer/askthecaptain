@@ -1,14 +1,13 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Captain } from '../../components/Captain.tsx';
-import { current } from '../../lib/session.ts';
+import { requireSignedIn } from '../../components/Page.tsx';
 import { WelcomeForm } from './WelcomeForm.tsx';
 
 export const metadata: Metadata = { title: 'Welcome' };
 
 export default async function WelcomePage() {
-	const me = await current();
-	if (!me) redirect('/sign-in?return_to=/welcome');
+	const me = await requireSignedIn('/welcome');
 	if (me.organisation) redirect('/');
 	return (
 		<main className="page page--narrow">

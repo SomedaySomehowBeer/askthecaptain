@@ -1,11 +1,14 @@
 import { redirect } from 'next/navigation';
 import { apiUrl } from '../../../lib/env.ts';
-import { current } from '../../../lib/session.ts';
+import { readSession } from '../../../lib/session.ts';
+import { unavailableHref } from '../../../lib/session-state.ts';
 
 /** Streams the organisation's export from the API to the browser as a download. The session cookie
  *  stays on this host; the API sees only the bearer token, as for every other read. */
 export async function GET() {
-	const me = await current();
+	const session = await readSession();
+	if (session.state === 'unavailable') redirect(unavailableHref('/settings/export'));
+	const me = session.state === 'signed-in' ? session.current : null;
 	if (!me?.organisation) redirect('/sign-in?return_to=/settings');
 	const upstream = await fetch(new URL(`/v1/organisations/${me.organisation.organisationId}/export`, apiUrl), { headers: { authorization: `Bearer ${me.token}` }, cache: 'no-store' });
 	if (!upstream.ok || !upstream.body) {

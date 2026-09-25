@@ -82,9 +82,22 @@ try {
         id: randomUUID(), title: 'Line maintenance', kind: 'maintenance', startsAt: '2030-10-02T01:00:00Z', endsAt: '2030-10-02T02:00:00Z'
     });
     await writeFile(`${directory}/data.json`, JSON.stringify({ fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id }), { mode: 0o600, flag: 'wx' });
-    const server = serve({ hostname: '127.0.0.1', port: 8084, fetch: async (req) => {
+    let mutationRequests = 0;
+    const server = serve({ hostname: '127.0.0.1', port: 8084, fetch: async (req, bindings) => {
         const mode = await readFile(`${directory}/mode`, 'utf8').catch(() => '');
         const url = new URL(req.url);
+        if (url.pathname === '/__fixture/stats') return Response.json({ mutationRequests });
+        if (url.pathname.startsWith(base + '/') && !['GET', 'HEAD'].includes(req.method)) mutationRequests++;
+        if (url.pathname === '/v1/me' && mode.startsWith('session-')) {
+            if (mode === 'session-network') {
+                // Drop the actual HTTP connection, rather than disguising a 503 as a network fault.
+                bindings.outgoing.destroy();
+                return new Response(null, { status: 503 });
+            }
+            const status = mode === 'session-expired' ? 401 : mode === 'session-rate-limited' ? 429 : 503;
+            return Response.json({ code: 'fixture_session_failure', error: 'Fixture session lookup failed' }, { status, headers: status === 429 ? { 'retry-after': '1' } : {} });
+        }
+
         if (mode === 'equipment-failed' && req.method === 'GET' && url.pathname.endsWith('/equipment'))
             return Response.json({ error: 'Fixture equipment unavailable' }, { status: 503 });
         if (mode === 'reservations-failed' && req.method === 'GET' && url.pathname.endsWith('/reservations'))

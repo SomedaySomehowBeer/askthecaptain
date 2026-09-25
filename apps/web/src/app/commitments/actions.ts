@@ -1,15 +1,15 @@
 'use server';
+import { requireCurrent } from '../../components/Page.tsx';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { api, ApiError, type Brief } from '../../lib/api.ts';
-import { current } from '../../lib/session.ts';
 
 export type Result = { error?: string; ok?: boolean };
 const fail = (error: unknown): Result => ({ error: error instanceof ApiError ? error.message : 'That did not work.' });
 const text = (form: FormData, name: string) => String(form.get(name) ?? '').trim();
 const optional = (value: string) => value || undefined;
 
-async function who() { const me = await current(); if (!me?.organisation) redirect('/sign-in?return_to=/commitments'); return { token: me.token, org: me.organisation.organisationId }; }
+async function who() { const me = await requireCurrent('/commitments'); return { token: me.token, org: me.organisation.organisationId }; }
 const done = (): Result => { revalidatePath('/commitments'); revalidatePath('/'); revalidatePath('/today'); revalidatePath('/work'); return { ok: true }; };
 
 export async function createTask(_: Result | undefined, form: FormData): Promise<Result> {
