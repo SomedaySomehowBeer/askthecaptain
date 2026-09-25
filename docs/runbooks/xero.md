@@ -1,5 +1,8 @@
 # Xero connection and accounting sync
 
+> **Scope, 25 September:** Xero remains accounting authority. References to old job numbers, mail chasers and morning briefs explain earlier consumers, not a requirement to retain them. New context belongs in Resources and linked business records.
+> [Current plan](../plan.md) · [operational record](paused.md).
+
 Jobs: chase overdue invoices and prepare the money brief (plan §2 jobs 5–6; D6, D8, D16).
 These are owner setup instructions. No app, secret or production deployment was created by this PR.
 

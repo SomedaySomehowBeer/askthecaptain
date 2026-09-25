@@ -1,5 +1,10 @@
 # Web workspace foundation validation
 
+> **Dated implementation evidence:** checks for Commitments links, Today and legacy sources
+> below record what earlier PRs tested. They are not target acceptance requirements. Scope-cleanup
+> PRs must replace those assertions with Work/retired-route behaviour and retain relevant access,
+> error, equipment and session checks. See the [current plan](../plan.md).
+
 Job: **own commitments**. The first web increment of delivery slice 2 is checked against a real,
 disposable PostgreSQL 18 database with pgvector, the real API and a production Next build. No
 hosted data, provider credentials, inference or schedules are used. Chat and file availability

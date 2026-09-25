@@ -1,5 +1,9 @@
 # Durable execution decision — September 2026
 
+> **Historical spike evidence:** D19 still chooses pg-boss. The inbox/outbox fixtures, old job
+> number and then-future #18 work below describe September's experiment, not current product
+> scope. The [plan](../plan.md) governs business workflows and legacy retirement.
+
 **Recommendation: pg-boss with a small Captain runner (D19).** Job 1: triage the
 inbox. This is the bounded D10 spike for #17, not the production runner for #18.
 Both engines completed the same inbox-triage definition. Neither alone prevented

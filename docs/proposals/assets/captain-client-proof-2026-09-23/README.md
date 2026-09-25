@@ -1,7 +1,7 @@
 # Captain client architecture proof
 
 Bounded, fictional proof for [the delivery plan](../../../plans/captain-workspace-delivery-2026-09.md).
-Jobs: **own commitments** and **brief and answer**. This is a technical harness, not a replacement
+Jobs: **manage shared work** and **understand and follow up**. This is a technical harness, not a replacement
 for the [mobile mockups](../captain-mobile-2026-09-22/README.md), which the plan adopted as the
 workspace design reference (D14).
 Its buttons select experiments; they are not the proposed Work/Chat/Resources navigation.

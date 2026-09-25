@@ -1,5 +1,8 @@
 # Workflow runner (D19)
 
+> **Scope, 25 September:** D19 infrastructure remains. Morning brief, invoice drafting and calendar preparation sections below describe legacy definitions. Revise or retire them under the current plan, including queued and waiting snapshots; they are not workspace onboarding.
+> [Current plan](../plan.md) · [operational record](paused.md).
+
 The API process runs pg-boss workers, one queue per workflow key. Set `WORKFLOWS_DISABLED=1` to
 stop workers and event emission; pending jobs remain durable. This flag is an operator stop,
 not a workflow switch. Settings → Workflows says the runner is stopped. Turning a workflow off

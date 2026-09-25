@@ -2,29 +2,30 @@
 
 Status: adopted with the plan amendment in #116 (merged 24 September 2026); sequence from the
 product proposal merged in #114.
-Jobs advanced: **own commitments** and **brief and answer**.
+Outcomes: **manage shared work** and **understand and follow up**.
 
 The [product proposal](../proposals/2026-09-22-captain-and-pip.md) defines the intended
 Captain/Pip split. This plan turns that direction into reviewable slices. The adopted [plan](../plan.md)
 (D1–D25) reconciles the product/navigation/design decisions; this sequence does not itself migrate
 production or require Pip before Captain is useful. Production remains paused; [operational status](../runbooks/paused.md) records the owner’s staging-only authorisation (at most one machine per app).
 
-The [next batch and assignments](captain-next-batch-2026-09-25.md) starts with service-failure
-recovery, then shared-work handoff, saved views and linked chat, with Expo foundation work in
-parallel. It adds acceptance detail without declaring any remaining slice complete.
+The [next batch and assignments](captain-next-batch-2026-09-25.md) records delivered service-failure
+recovery, then prioritises the scope cleanup, genuine standalone work, Work details, saved views
+and linked chat, with Expo foundation work alongside subsequent contracts. It adds acceptance detail without declaring any remaining slice complete.
 
-## Where this stands (24 September 2026)
+## Where this stands (25 September 2026)
 
 | Slice | State |
 |---|---|
 | 0. Architecture proof | Built as a fictional harness; web checks and bundle exports pass locally and in the new `client-proof` CI check ([#120](https://github.com/SomedaySomehowBeer/askthecaptain/pull/120)). Native-device acceptance has not been run. |
-| 1. Reviewed amendments | Done: plan D1–D25 and the migration inventory merged in #116. |
+| 1. Reviewed amendments | Original amendment merged in #116; its assistant-retention assumptions are corrected by the 25 September audit. Scope cleanup is now required. |
 | 2. Client and work foundation | In progress: task/tag API merged in #117. Web now has the three-tab shell, grouped view lists, real filtered Work and task creation. Tag creation/renaming and individual task tag editing are now available. Saved views and `apps/mobile` remain; this does not complete slice 2. |
 | 3. Equipment scheduling | First API increment: equipment, maintenance/reservations, database overlap enforcement, revisions, cancellation and bounded occupancy reads. The [contract](equipment-reservations-2026-09.md) defines the integrity boundary. Web timeline and catalogue/create/edit/cancel controls are implemented, with browser checks against real Postgres. Native clients and real-device gestures remain pending; this does not complete slice 3. |
 | 4–7 | Not started. Chat, files, mobile builds and Pip integration are designs, not code. |
 | Pip | Separate product, tracked in [#119](https://github.com/SomedaySomehowBeer/askthecaptain/issues/119); no Captain slice waits for it. |
 
-Slice numbers are this plan's own; they are unrelated to the historical phases 0–5 in plan §11.
+Slice numbers are this plan's own; the old assistant phases 0–5 are linked from the historical
+reference index, not an active second sequence.
 Production stays paused through every slice. Staging may be resumed when needed under the one-machine-per-app limit; the local web checks do not require it.
 
 The equipment API increment proceeds against the delivered task/project foundation while saved
@@ -35,13 +36,13 @@ the first-customer release still requires the full slices 2–4 acceptance evide
 
 - `/` opens `/work`: your open tasks, with visible owner, status, project and tag filters in the URL.
   Pagination preserves the filter; selected lookup values survive partial read failures.
-- `/work/new` creates through the existing authenticated task API. Task links open the existing
-  Commitments record, revealing completed tasks where necessary. Cancelled rows are readable but explicitly have no
-  detail page in this increment.
+- `/work/new` creates through the existing authenticated task API. Task links currently open the legacy
+  Commitments record; cancelled rows have no detail. Both are implementation debt to remove,
+  not navigation requirements for the new task page.
 - Work, Chat and Resources have grouped `/views` lists. Tab route/filter state is remembered for
   this browser session, scoped to person and organisation. Full scroll/native stack restoration
   remains an acceptance item; this is not saved-view persistence.
-- `/today` retains the former landing page. Existing Inbox, Calendar, Commitments, Notes, stock,
+- Legacy state still in code (scheduled for retirement): `/today` retains the former landing page. Existing Inbox, Calendar, Commitments, Notes, stock,
   contacts, connections and Settings remain reachable. Inventory at `/resources/inventory` reuses the existing counted-stock controls while retaining
   Resources navigation; the legacy Commitments stock section remains available.
 - Chat and Files & assets are explicitly unavailable. No fictional records, free-equipment
@@ -57,7 +58,7 @@ single-task read reports confirmed assignments without loading every work record
 stable IDs and update existing Work filters and assignments. Empty, invalid, unavailable and failed
 states are explicit; confirmed writes refresh the source data. Tag deletion, inheritance, project
 tagging and saved-view persistence remain outside this increment. No migration or dependency is
-introduced. This advances **own commitments** and remains part of delivery slice 2.
+introduced. This advances **manage shared work** and remains part of delivery slice 2.
 
 ## Web equipment increment
 
@@ -91,8 +92,8 @@ occupy the same timeline. A work filter cannot hide another project's resource o
 Neither an offline client nor a conflicting request can display an unconfirmed booking as booked.
 
 This is a complete first-customer workflow, not the full feature set in every mockup. Search,
-advanced file review, automated summaries, reporting and Pip integration follow it. Existing
-inventory, Xero and recurring obligations remain accessible until their replacement views work.
+advanced file review, automated summaries, reporting and Pip integration follow it. Inventory, Xero and recurring business tasks remain valid scope. Their access belongs in
+Resources/Work, independently of the old assistant screens.
 
 ## Starting point
 
@@ -147,18 +148,18 @@ role checks, audit writes and real-Postgres integration tests ship together.
 | Slice | Deliverable | Exit evidence / dependency |
 |---|---|---|
 | 0. Architecture proof | Isolated Expo timeline/chat client and browser comparison; shared deterministic geometry and message identity | Reproducible checks plus explicit native-device gaps; no production route or data changes |
-| 1. Reviewed amendments | Reconcile D1/D7/D11/D14/D23, connector ownership and retained data; approve client architecture after slice 0 | One documented authority per record; clear design authority and scope; migration inventory reviewed |
+| 1. Reviewed amendments | Reconcile workspace scope, design authority and connector ownership; correct legacy retention assumptions; approve client architecture after slice 0 | One documented authority per record; clear design authority and scope; code inventory distinguished from unknown live data |
 | 2. Client and work foundation | iOS development build and responsive web shell, authenticated API access, project/task/owner/tags, grouped and saved views | Real project/task edit visible in both clients; access revoked correctly; deep links and back/tab state work |
 | 3. Equipment scheduling | Equipment, time ranges, unavailable periods and reservations linked to work; create/change/cancel controls | Two concurrent overlapping saves cannot both confirm; cleanup/setup conflicts, DST/date boundaries, permission and stale-update tests pass |
 | 4. Linked chat | Conversation membership, messages, links to task/project, shared pins, latest-six inline view and full chat | One message identity everywhere; reconnect/retry does not duplicate; pagination, unread state and restricted access verified |
-| First-customer release | Slices 2–4 together, native/browser notifications and operational migration | Two people complete the end-to-end workflow on web and iOS; existing work preserved; rollback rehearsed |
+| First-customer release | Slices 2–4 together, native/browser notifications and operational release checks | Two people complete the end-to-end workflow on web and iOS; affected real records handled explicitly; rollback/forward recovery verified |
 | 5. Business context | Files/DAM versions and provider links; stock and Xero views/project associations; search | Original files remain provider-held; version identity/access tested; stock remains counted; Xero stays accounting authority |
 | 6. Assistance | Source-linked conversation summaries, remaining business workflows; ordinary authenticated Pip integration API | D2 validation, cut-off/source IDs, invalidation, budget/failure states; Pip retries safe and scope revocable |
 | 7. Broader release | Android release, expanded reporting and remaining approved views | Android build/smoke checks run from the early slices; full device matrix and store preparation before release |
 
 Run Android compilation/smoke checks during mobile development, even while shipping iOS first.
 Do not defer discoveries about Android layout, keyboard and navigation until slice 7. No dates
-or effort estimates are committed until slice 0 and the schema/migration inventory narrow the risks.
+or effort estimates are committed without evidence for the affected contract and native acceptance risks.
 
 ## Backend contracts to settle before screens depend on them
 
@@ -189,25 +190,26 @@ native clients, including secure session storage, revocation, deep-link return a
 Existing web push is not native push. Add native registration/delivery and unread preferences
 with the same access checks; test expired tokens, denied permission and links to revoked records.
 
-**Offline.** Initial target: cached reading and preserved unsent drafts, visibly marked stale or
+**Offline.** Initial target: cached reading and preserved unsent chat/form drafts, visibly marked stale or
 pending. Never claim a message sent or an equipment reservation confirmed before server acceptance.
 Specify what cache is removed on sign-out/revocation. Full offline edits and conflict merging are
 outside the first release unless real first-customer use requires them.
 
-## Migration and simplification
+## Scope cleanup and affected records
 
-The [code-based migration inventory](captain-workspace-migration-inventory-2026-09.md) records
-known stores and unresolved live-data questions. It proposes conservative retention while new
-capabilities are added. Before retiring existing runtime behaviour, inventory projects/tasks/series, notes and evidence, mail,
-outbox drafts, vectors, connections, enabled workflows, notifications and audit records. For each,
-record authority after the split, preserve/migrate/archive disposition, retention and rollback.
-Keep stable IDs or an explicit mapping so existing evidence links survive. Do not copy credentials
-or mail history into Pip as a migration shortcut. Owners explicitly reconnect personal providers.
+The [implementation inventory](captain-workspace-migration-inventory-2026-09.md) records legacy
+code dependencies, not known useful customer data. Correct the scope before extending old
+screens: remove assistant navigation and runtime; remove Obligations as the required storage
+home; make Work task/project/series detail usable without Commitments. Details are sequenced in
+the [next batch](captain-next-batch-2026-09-25.md). No retirement depends on Pip, a replacement
+mailbox, or a speculative live-data migration. An actual data-affecting change must identify its
+specific records/references and handling; this audit itself does not delete data or disable jobs.
 
-Keep useful existing capabilities reachable while replacement views are introduced. Retire a
-personal-assistant workflow only after its replacement is usable and its stored data disposition
-is agreed. Do not run two schedulers for the same commitment. The launch walkthrough must show
-fewer places to check and no duplicate task completion or competing project state.
+Do not copy credentials/mail history into Pip. Do not duplicate task state or series generators.
+A redirect may resolve an old link to its Work record; it must not preserve the old app as a
+parallel place to work. Business reminders and counted stock must work without Google mail or
+reply-drafting prerequisites. Finished product may be counted in Captain when no provider owns
+that quantity. The launch walkthrough must demonstrate fewer places to check.
 
 ## Proof scope and acceptance ledger
 

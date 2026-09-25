@@ -1,5 +1,12 @@
 # Discover projects (D22)
 
+> **Legacy assistant maintenance reference (25 September).** This describes code still present,
+> not current Captain scope or workspace onboarding. Its old job/decision/plan-section references
+> belong to the [historical plan](../plans/legacy-assistant-history.md). Do not enable this path
+> as a prerequisite for Work/Chat/Resources; retirement does not wait for Pip. Follow the
+> [implementation inventory](../plans/captain-workspace-migration-inventory-2026-09.md) for cleanup.
+> This status note does not itself stop a running process or establish live enablement.
+
 Captain proposes projects from evidence and a person makes them real. The workflow **Discover projects** runs at
 06:00, when a person asks from a thread or note, and on demand from Settings → Workflows. Nothing it writes is
 active until a person accepts it on Commitments.

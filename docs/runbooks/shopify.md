@@ -1,5 +1,8 @@
 # Connect Shopify (owner runbook)
 
+> **Scope, 25 September:** Shopify is an optional business source. Commitments → Stock is old navigation; Resources → Inventory exposes current inventory. Captain also supports counted finished goods when no provider owns that quantity.
+> [Current plan](../plan.md) · [operational record](paused.md).
+
 Jobs: **Own commitments** and **Brief**. Captain reads shop stock and orders; Shopify remains
 responsible for quantities. This runbook prepares the owner's setup; no production app or secret
 has been created by this change.

@@ -1,5 +1,11 @@
 # How Captain's mobile views fit together
 
+> **Status, 25 September:** these remain fictional design references; web shell, task/tag
+> controls and equipment now have implementations. Full chat/files/native acceptance is pending.
+> The historical **Inbox** group inside Chat means conversations, not the retired mail Inbox;
+> it is the approved conversation grouping, not permission to add an email feature.
+> See the [delivery status](../../../plans/captain-workspace-delivery-2026-09.md).
+
 **Proposal, updated 23 September 2026.** Advances **own commitments** and **brief and answer**.
 This maps the Captain/Pip discussion and fifteen mobile mockups. Since #116 (24 September) it
 describes the adopted D11 navigation; the live application still has the legacy five tabs.

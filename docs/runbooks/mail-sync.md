@@ -1,5 +1,12 @@
 # Gmail sync
 
+> **Legacy assistant maintenance reference (25 September).** This describes code still present,
+> not current Captain scope or workspace onboarding. Its old job/decision/plan-section references
+> belong to the [historical plan](../plans/legacy-assistant-history.md). Do not enable this path
+> as a prerequisite for Work/Chat/Resources; retirement does not wait for Pip. Follow the
+> [implementation inventory](../plans/captain-workspace-migration-inventory-2026-09.md) for cleanup.
+> This status note does not itself stop a running process or establish live enablement.
+
 Job 1: collect mail so Captain can triage the inbox. This slice does not run inference or send mail.
 
 The API checks connected Google organisations at startup and every five minutes, sequentially. Set
