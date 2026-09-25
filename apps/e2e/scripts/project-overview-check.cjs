@@ -84,6 +84,9 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   await goto(projectPath+'?view=schedule&date=invalid');await expect(page.getByText('Schedule could not be read',{exact:true})).toBeVisible();
   await page.getByRole('link',{name:'Open today’s project schedule',exact:true}).click();await expect(page.locator('.project-bookings > li')).toHaveCount(50);
   console.log('PASS bounded previews, booking pagination, date-window changes, empty and invalid schedule states');
+  // Bulk pagination setup makes many real requests. Give the unchanged per-IP limiter a full
+  // window before independent failure checks; a 429 must not mask the injected read failure.
+  await new Promise(resolve=>setTimeout(resolve,60000));
   await writeFile(path.join(directory,'mode'),'project-bookings-failed');await goto(projectPath);
   await expect(page.getByText('Bookings could not be read',{exact:true})).toBeVisible();await expect(page.getByText('No confirmed bookings overlap this window.',{exact:true})).toHaveCount(0);await expect(page.locator('.project-stream > li')).toHaveCount(6);
   await writeFile(path.join(directory,'mode'),'failed');await goto(projectPath);
