@@ -100,6 +100,7 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   await expect(page.getByRole('heading', { name: 'Browser-created task', exact: true })).toBeVisible();
   await goto(`/work/tasks/${created.id}/tags`);
   await page.getByRole('button', { name: 'Add Production', exact: true }).click();
+  await expect(page.getByRole('button',{name:'Remove Production',exact:true})).toBeVisible();
   assert.equal((await api(`/tasks/${created.id}/tag-options?limit=100`)).tags.find(tag => tag.id === fixture.productionId).attached, true);
   await goto(`/work?owner=all&tagId=${fixture.productionId}`);
   await expect(page.getByText('Browser-created task', { exact: true })).toBeVisible();
