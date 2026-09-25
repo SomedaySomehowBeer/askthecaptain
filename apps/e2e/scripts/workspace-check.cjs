@@ -47,7 +47,7 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
  try {
   // A failed prior run may have committed its task; clear only this fixture's named test record.
   for (const task of (await api(`/tasks?ownerId=${fixture.userId}&status=open&limit=100`)).tasks)
-   if (task.title === 'Browser-created task') await api(`/tasks/${task.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) });
+   if (task.title === 'Browser-created task') await api(`/tasks/${task.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled', expectedRevision: task.revision }) });
   for (const route of ['/work', '/work/new', '/work/views', '/work/tags', '/work/tasks/00000000-0000-4000-8000-000000000000/tags', '/chat', '/chat/views', '/resources', '/resources/views', '/resources/inventory', '/today']) {
    const response = await fetch(origin + route, { redirect: 'manual' }); assert.equal(response.status, 307);
    await goto(route); await expect(page).toHaveURL(/\/sign-in\?/);
