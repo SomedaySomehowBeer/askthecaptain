@@ -11,9 +11,9 @@ is preserved as history, not an active migration mandate.
 
 ## Evidence boundary
 
-This inventory describes schema, services and trigger paths in the repository. It is **not a live
-data audit**. Useful customer records, pending drafts, provider connections, enabled definitions
-and waiting runs have not been counted. “Existing business data” was an unverified assumption,
+This inventory describes schema, services and trigger paths in the repository. The initial
+inventory was **not a live data audit**. A later [staging count audit and authorised reset](optional-work-projects-2026-09.md) now establish the affected legacy records. Useful customer records, pending drafts, provider connections, enabled definitions
+and waiting runs had not been counted at that point. “Existing business data” was an unverified assumption,
 not evidence supporting a migration requirement. Neither “there is useful data” nor “there is no
 data” follows from the presence of tables.
 

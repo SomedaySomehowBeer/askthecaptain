@@ -37,15 +37,18 @@ before(async () => {
 });
 after(async () => { await db?.close(); });
 
-it('a new organisation has its Obligations deadline book and nothing else', async () => {
+it('a new organisation has no project, and reading creates none', async () => {
 	const overview = await body<Overview>(await json('GET', `/v1/organisations/${orgId}/commitments`, owner.token), 200);
-	assert.deepEqual(overview.projects.map((p) => [p.name, p.systemKind]), [['Obligations', 'obligations']]);
+	assert.deepEqual(overview.projects, []);
+	assert.equal((await db.owner`select count(*)::int as n from projects where organisation_id = ${orgId}`)[0]!.n, 0);
 	assert.deepEqual(overview.tasks, []); assert.deepEqual(overview.series, []);
 	assert.equal(overview.today, todayIn('Australia/Perth')); assert.equal(overview.timezone, 'Australia/Perth');
 });
 
-it('tasks land in Obligations by default, are completed with who and when, and are audited', async () => {
+it('a task without a project stands alone, is completed with who and when, and is audited', async () => {
 	const task = await body<Task>(await json('POST', `/v1/organisations/${orgId}/tasks`, owner.token, { title: '  Send updated price list ', due: '2026-10-01' }), 201);
+	assert.equal(task.projectId, null);
+	assert.equal((await db.owner`select count(*)::int as n from projects where organisation_id = ${orgId}`)[0]!.n, 0, 'no project is created for it');
 	assert.equal(task.title, 'Send updated price list'); assert.equal(task.due, '2026-10-01'); assert.equal(task.status, 'open'); assert.equal(task.sourceKind, 'person');
 	assert.equal(task.ownerName, null);
 	const done = await body<Task>(await json('PATCH', `/v1/organisations/${orgId}/tasks/${task.id}`, owner.token, { status: 'done', ownerId: owner.user.id }), 200);
@@ -59,7 +62,7 @@ it('tasks land in Obligations by default, are completed with who and when, and a
 	assert.equal((await json('PATCH', `/v1/organisations/${orgId}/tasks/${task.id}`, owner.token, { ownerId: '00000000-0000-7000-8000-000000000000' })).status, 400, 'owner must be a member');
 });
 
-it('projects are created, edited and archived; the Obligations project cannot be archived', async () => {
+it('projects are created, edited, archived and restored, and none is special', async () => {
 	const project = await body<Project>(await json('POST', `/v1/organisations/${orgId}/projects`, owner.token, { name: 'Production', stages: ['Planned', ' Brewing ', ''] }), 201);
 	assert.deepEqual(project.stages, ['Planned', 'Brewing']);
 	const archived = await body<Project>(await json('PATCH', `/v1/organisations/${orgId}/projects/${project.id}`, owner.token, { description: 'Brew days', archived: true }), 200);
@@ -68,8 +71,8 @@ it('projects are created, edited and archived; the Obligations project cannot be
 	const restored = await body<Project>(await json('PATCH', `/v1/organisations/${orgId}/projects/${project.id}`, owner.token, { archived: false }), 200);
 	assert.equal(restored.archivedAt, null);
 	const overview = await body<Overview>(await json('GET', `/v1/organisations/${orgId}/commitments`, owner.token), 200);
-	const obligations = overview.projects.find((p) => p.systemKind === 'obligations')!;
-	assert.equal((await json('PATCH', `/v1/organisations/${orgId}/projects/${obligations.id}`, owner.token, { archived: true })).status, 400);
+	assert.deepEqual(overview.projects.map((p) => p.name), ['Production']);
+	assert.ok(!('systemKind' in overview.projects[0]!), 'projects no longer carry a system kind');
 });
 
 it('a series materialises its current occurrence once, and editing it changes future occurrences only', async () => {
@@ -81,7 +84,7 @@ it('a series materialises its current occurrence once, and editing it changes fu
 	assert.equal(occurrences.length, 1, 'exactly one occurrence after creation and a read');
 	const [occurrence] = occurrences;
 	assert.equal(occurrence!.sourceKind, 'series'); assert.equal(occurrence!.periodStart, `${today.slice(0, 7)}-01`); assert.match(occurrence!.title, /^Excise return — /);
-	assert.equal(occurrence!.projectId, overview.projects.find((p) => p.systemKind === 'obligations')!.id);
+	assert.equal(occurrence!.projectId, null, 'a series without a project makes standalone occurrences');
 	const renamed = await body<Series>(await json('PATCH', `/v1/organisations/${orgId}/series/${series.id}`, owner.token, { title: 'Excise duty return' }), 200);
 	assert.equal(renamed.title, 'Excise duty return');
 	overview = await body<Overview>(await json('GET', `/v1/organisations/${orgId}/commitments`, owner.token), 200);

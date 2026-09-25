@@ -101,7 +101,6 @@ function schedule(form: FormData, timeZone: string): Record<string, unknown> | {
 	const link = (key: string) => { const value = text(form, key); return value ? value : null; };
 	const projectId = link('projectId'); const taskId = link('taskId'); const ownerId = link('ownerId');
 	for (const value of [projectId, taskId, ownerId]) if (value !== null && !uuid.test(value)) return { error: 'A linked project, task or person is not valid. Choose again.' };
-	if (taskId && !projectId) return { error: 'Choose the task’s project as well.' };
 	return { title, kind, startsAt, endsAt, setupMinutes, cleanupMinutes, projectId, taskId, ownerId };
 }
 

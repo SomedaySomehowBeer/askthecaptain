@@ -7,7 +7,7 @@ import { createProject, createSeries, createStep, createTask, saveBrief, type Re
 const Feedback = ({ state }: { state: Result | undefined }) => state?.error ? <p className="form__error" role="alert">{state.error}</p> : null;
 const ProjectSelect = ({ id, projects, defaultValue }: { id: string; projects: Project[]; defaultValue?: string }) => (
 	<div className="field"><label htmlFor={id}>Project</label>
-		<select id={id} name="projectId" defaultValue={defaultValue ?? projects.find((p) => p.systemKind)?.id}>{projects.filter((p) => !p.archivedAt).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+		<select id={id} name="projectId" defaultValue={defaultValue ?? ''}><option value="">No project</option>{projects.filter((p) => !p.archivedAt).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
 );
 
 /** A task in words: what, where, by when. Everything else is edited later. */
@@ -43,29 +43,30 @@ export function ProjectForm() {
 	);
 }
 
-/** A recurring duty: the rule that makes a task for every period. */
+/** Recurring work: the rule that makes a task for every period. */
 export function SeriesForm({ projects, projectId }: { projects: Project[]; projectId?: string }) {
 	const [state, action, pending] = useSaveForm((form) => createSeries(undefined, form));
 	const [recurrence, setRecurrence] = useState('monthly');
+	const id = `series-${projectId ?? 'standalone'}`;
 	return (
 		<form className="form" onSubmit={action} method="post">
 			<div className="row">
-				<div className="field" style={{ flex: '1 1 220px' }}><label htmlFor="series-title">Duty</label><input id="series-title" name="title" type="text" required maxLength={200} placeholder="Excise return" /></div>
-				{projectId ? <input type="hidden" name="projectId" value={projectId} /> : <ProjectSelect id="series-project" projects={projects} />}
+				<div className="field" style={{ flex: '1 1 220px' }}><label htmlFor={`${id}-title`}>Title</label><input id={`${id}-title`} name="title" type="text" required maxLength={200} placeholder="Excise return" /></div>
+				{projectId ? <input type="hidden" name="projectId" value={projectId} /> : <ProjectSelect id={`${id}-project`} projects={projects} />}
 			</div>
 			<div className="row">
-				<div className="field"><label htmlFor="series-recurrence">Repeats</label>
-					<select id="series-recurrence" name="recurrence" value={recurrence} onChange={(event) => setRecurrence(event.target.value)}>
+				<div className="field"><label htmlFor={`${id}-recurrence`}>Repeats</label>
+					<select id={`${id}-recurrence`} name="recurrence" value={recurrence} onChange={(event) => setRecurrence(event.target.value)}>
 						<option value="monthly">monthly</option><option value="quarterly">quarterly</option><option value="yearly">yearly</option><option value="weekdays">every weekday</option><option value="custom">every N months</option>
 					</select></div>
-				{recurrence === 'custom' ? <div className="field"><label htmlFor="series-every">N</label><input id="series-every" name="everyMonths" type="number" min={1} max={120} defaultValue={2} style={{ width: '5em' }} /></div> : null}
-				<div className="field"><label htmlFor="series-anchor">First period starts</label><input id="series-anchor" name="anchor" type="date" required /></div>
-				{recurrence === 'weekdays' ? null : <div className="field"><label htmlFor="series-offset">Due, days after the period ends</label><input id="series-offset" name="dueOffsetDays" type="number" min={-366} max={366} defaultValue={0} style={{ width: '6em' }} /></div>}
+				{recurrence === 'custom' ? <div className="field"><label htmlFor={`${id}-every`}>N</label><input id={`${id}-every`} name="everyMonths" type="number" min={1} max={120} defaultValue={2} style={{ width: '5em' }} /></div> : null}
+				<div className="field"><label htmlFor={`${id}-anchor`}>First period starts</label><input id={`${id}-anchor`} name="anchor" type="date" required /></div>
+				{recurrence === 'weekdays' ? null : <div className="field"><label htmlFor={`${id}-offset`}>Due, days after the period ends</label><input id={`${id}-offset`} name="dueOffsetDays" type="number" min={-366} max={366} defaultValue={0} style={{ width: '6em' }} /></div>}
 			</div>
 			<label className="row" style={{ fontSize: 13 }}><input type="checkbox" name="evidenceRequired" /> Needs evidence attached before it counts as done</label>
-			<p className="muted">Write <span className="mono">{'{period}'}</span> in the duty name to place the period; otherwise it is added at the end.</p>
+			<p className="muted">Write <span className="mono">{'{period}'}</span> in the title to place the period; otherwise it is added at the end.</p>
 			<Feedback state={state} />
-			<div className="row"><button className="button button--secondary" type="submit" disabled={pending} aria-busy={pending || undefined}>{pending ? 'Adding…' : 'Add recurring duty'}</button></div>
+			<div className="row"><button className="button button--secondary" type="submit" disabled={pending} aria-busy={pending || undefined}>{pending ? 'Adding…' : 'Add recurring work'}</button></div>
 		</form>
 	);
 }

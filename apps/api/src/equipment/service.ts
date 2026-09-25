@@ -18,15 +18,15 @@ const rangeFields = {
  startsAt: instant, endsAt: instant, setupMinutes: z.number().int().min(0).max(10080).default(0),
  cleanupMinutes: z.number().int().min(0).max(10080).default(0), projectId: link, taskId: link, ownerId: link,
 };
-const validBooking = (value: { startsAt: Date; endsAt: Date; taskId: string | null; projectId: string | null }) => {
+const validBooking = (value: { startsAt: Date; endsAt: Date }) => {
  // A failed field refinement can leave its raw input here. Preserve Zod's field error, not a TypeError.
  if (!(value.startsAt instanceof Date) || !(value.endsAt instanceof Date)) return true;
- return value.endsAt.getTime() > value.startsAt.getTime() && value.endsAt.getTime() - value.startsAt.getTime() <= 366 * day && (!value.taskId || !!value.projectId);
+ return value.endsAt.getTime() > value.startsAt.getTime() && value.endsAt.getTime() - value.startsAt.getTime() <= 366 * day;
 };
 export const createReservation = z.object({ id: uuid, ...rangeFields }).strict().refine(validBooking,
- 'The end must follow the start within 366 days; a linked task requires its project.');
+ 'The end must follow the start within 366 days.');
 export const replaceReservation = z.object({ expectedRevision: revision, ...rangeFields }).strict().refine(validBooking,
- 'The end must follow the start within 366 days; a linked task requires its project.');
+ 'The end must follow the start within 366 days.');
 export const cancelReservation = z.object({ expectedRevision: revision }).strict();
 export const equipmentInput = z.object({ name }).strict();
 export const equipmentPatch = z.object({ expectedRevision: revision, name: name.optional(), archived: z.boolean().optional() }).strict()
@@ -105,7 +105,8 @@ export class EquipmentService {
    if (!project) throw notFound();
   }
   if (input.taskId) {
-   const [task] = await tx`select id from tasks where id = ${input.taskId} and project_id = ${input.projectId} and parent_id is null and status <> 'cancelled' for share`;
+   // A linked task carries its own project, or none; the reservation must name the same one (D7: projects are optional).
+   const [task] = await tx`select id from tasks where id = ${input.taskId} and project_id is not distinct from ${input.projectId}::uuid and parent_id is null and status <> 'cancelled' for share`;
    if (!task) throw notFound();
   }
  }

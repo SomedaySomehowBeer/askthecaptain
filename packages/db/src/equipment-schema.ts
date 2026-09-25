@@ -32,9 +32,9 @@ export const equipmentReservations = pgTable('equipment_reservations', {
  check('equipment_reservations_revision_check', sql`${t.revision} > 0`),
  check('equipment_reservations_setup_minutes_check', sql`${t.setupMinutes} between 0 and 10080`),
  check('equipment_reservations_cleanup_minutes_check', sql`${t.cleanupMinutes} between 0 and 10080`),
- check('equipment_reservations_task_project_check', sql`${t.taskId} is null or ${t.projectId} is not null`),
  check('equipment_reservations_times_check', sql`isfinite(${t.startsAt}) and isfinite(${t.endsAt}) and ${t.startsAt} >= '1900-01-01T00:00:00Z' and ${t.endsAt} < '2200-01-01T00:00:00Z' and ${t.endsAt} > ${t.startsAt} and extract(epoch from ${t.endsAt} - ${t.startsAt}) <= 31622400`),
  check('equipment_reservations_setup_check', sql`${t.occupiedStartsAt} = ${t.startsAt} - ${t.setupMinutes} * interval '1 minute'`),
  check('equipment_reservations_cleanup_check', sql`${t.occupiedEndsAt} = ${t.endsAt} + ${t.cleanupMinutes} * interval '1 minute'`),
  // Migration 0036 also adds equipment_reservations_no_overlap (GiST, confirmed occupied [start,end)).
+ // Migration 0038 dropped the task-requires-project check; the service compares a task's project null-safely.
 ]);

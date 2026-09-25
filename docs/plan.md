@@ -32,11 +32,13 @@ Personal calendar preparation, mailbox triage, reply drafting and mail-driven pr
 are not Captain delivery requirements. Retirement does not wait for Pip or a replacement mailbox.
 Ordinary recurring business tasks, due dates, equipment schedules and business summaries remain.
 
-No useful live records, pending drafts or enabled workflows were counted for this audit. Do not
-turn their possible existence into a requirement to preserve old screens or behaviour. Reusing a
+The initial scope audit did not count live records. A later read-only staging inventory and the
+owner’s explicit permission to delete old-version data are recorded in the
+[optional-project/reset contract](plans/optional-work-projects-2026-09.md). Do not turn legacy
+records into a requirement to preserve old screens or behaviour. Reusing a
 valid service or stable record identity is different from keeping its old product surface. A change
 that actually affects stored records must establish those specific dependencies and its handling;
-this plan neither orders deletion nor invents a general data-migration programme.
+the authorised staging reset removes old-version content rather than converting it into workspace records.
 
 ## 2. The work Captain serves
 
@@ -163,7 +165,7 @@ These target semantics do not claim the old schema has already changed.
 |---|---|---|
 | Identity/access | Organisations, users, sessions, passkeys and memberships | Existing services; preserve tenant checks and revocation |
 | Projects | Named shared outcomes, owner, description and lifecycle; no nesting | Existing project services reusable; mail-discovery proposal machinery is legacy |
-| Tasks | Title/body, status, owner, due date, optional project, evidence and one-level checklist | Existing `project_id NOT NULL` and Obligations fallback must be removed through a reviewed schema/service change; hiding or renaming the project is not the fix |
+| Tasks | Title/body, status, owner, due date, optional project, evidence and one-level checklist | Migration 0038 and the [optional-project contract](plans/optional-work-projects-2026-09.md) remove the mandatory project and Obligations fallback; deployment requires the authorised legacy reset first |
 | Recurring work | Series generate ordinary tasks; no artificial project required; edits affect future occurrences | Existing materialisation reusable; update project assumptions and completion rules together |
 | Tags | Flat organisation labels; many per task, stable identity on rename, no permissions or inherited duplication | Migration 0035 and API/web controls implemented; [tag contract](plans/workspace-task-tags-2026-09.md) records current project restrictions to lift with standalone work |
 | Saved views | Named, versioned filters over authorised records | Planned; schema/sharing/revisions need their own contract |

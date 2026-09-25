@@ -50,7 +50,8 @@ it('the export streams every tenant table as newline-delimited JSON, without sec
 	assert.ok((header.tables as string[]).includes('tasks') && (header.tables as string[]).includes('connections') && (header.tables as string[]).includes('audit_events'));
 	const rows = lines.slice(1, -1) as { table: string; row: Record<string, unknown> }[];
 	assert.equal(rows.filter((r) => r.table === 'tasks').length, 1);
-	assert.equal(rows.filter((r) => r.table === 'projects').length, 1, 'the Obligations project');
+	assert.equal(rows.filter((r) => r.table === 'projects').length, 0, 'no project is created for the organisation or its task');
+	assert.equal(rows.find((r) => r.table === 'tasks')!.row.projectId, null);
 	const connection = rows.find((r) => r.table === 'connections')!;
 	assert.equal(connection.row.provider, 'google'); assert.ok(!('accessTokenEncrypted' in connection.row) && !('refreshTokenEncrypted' in connection.row) && !Object.keys(connection.row).some((k) => /Encrypted$/.test(k)), 'tokens never leave');
 	assert.ok(rows.every((r) => r.row.organisationId === orgId), 'only this organisation');

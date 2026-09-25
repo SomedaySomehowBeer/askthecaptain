@@ -38,7 +38,7 @@ export function NewTaskForm({ owners, ownerId, projects, projectId }: { owners: 
 				</div>
 				{projects ? (
 					<div className="field"><label htmlFor="new-task-project">Project</label>
-						<select id="new-task-project" name="projectId" defaultValue={projectId}>{projects.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
+						<select id="new-task-project" name="projectId" defaultValue={projectId}><option value="">No project</option>{projects.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}</select></div>
 				) : null}
 				<div className="field"><label htmlFor="new-task-body">Notes</label><textarea id="new-task-body" name="body" maxLength={5000} /></div>
 			</fieldset>

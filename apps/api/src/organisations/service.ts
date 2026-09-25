@@ -30,9 +30,7 @@ export class OrganisationService {
 			const [org] = await tx<Organisation[]>`insert into organisations (id, name, timezone) values (${id}, ${name}, ${input.timezone ?? 'Australia/Perth'})
 				returning id, name, timezone, locale, created_at`;
 			await tx`insert into memberships (organisation_id, user_id, role) values (${org!.id}, ${actor.userId}, 'owner')`;
-			// Every organisation has its deadline book from the start (D7).
-			await tx`insert into projects (organisation_id, name, description, system_kind, created_by)
-				values (${org!.id}, 'Obligations', 'Returns, renewals and payments the business owes on a date.', 'obligations', ${actor.userId})`;
+			// No project is created: tasks and series may stand alone (D7).
 			await audit(tx, { organisationId: org!.id, actor: { kind: 'person', id: actor.userId }, action: 'organisation.created', subjectType: 'organisation', subjectId: org!.id, requestId: actor.requestId, detail: { name } });
 			return org!;
 		}) as Promise<Organisation>;

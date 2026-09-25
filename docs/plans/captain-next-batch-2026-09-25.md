@@ -125,3 +125,7 @@ does not block Captain.
 See the [runtime retirement contract](assistant-runtime-retirement-2026-09.md) for removed
 assistant entry points, task-reminder v4 and stocktake v3, run/schedule cancellation and staging
 cutover. This does not mark the optional-project/Obligations or Work detail-page increments done.
+
+The [optional-project/reset increment](optional-work-projects-2026-09.md) implements task/series
+null projects, checklist and equipment links, and a separately invoked staging legacy-data reset
+authorised by the owner. Work detail-route replacement remains the next dependency.

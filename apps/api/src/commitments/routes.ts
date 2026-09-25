@@ -4,7 +4,10 @@ import type { Session } from '../auth/service.ts';
 import type { CommitmentsService } from './service.ts';
 
 type Vars = { Variables: { requestId: string; session: Session } };
-const uuid = z.string().uuid();
+// Lower-cased so a project or parent id compares equal to the stored one.
+const uuid = z.string().uuid().transform((value) => value.toLowerCase());
+/** Absent keeps the current project; null means no project. */
+const projectRef = uuid.nullable().optional();
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD');
 const status = z.enum(['suggested', 'open', 'in_progress', 'done', 'cancelled']);
 const recurrence = z.enum(['monthly', 'quarterly', 'yearly', 'weekdays', 'custom']);
@@ -32,21 +35,21 @@ export function commitmentsRoutes(commitments: CommitmentsService) {
 	});
 
 	routes.post('/v1/organisations/:id/tasks', async (c) => {
-		const input = z.object({ projectId: uuid.optional(), parentId: uuid.optional(), title: text(200).min(1), body: text(5000).optional(), ownerId: uuid.nullable().optional(), due: date.nullable().optional(), status: status.optional() }).parse(await c.req.json());
+		const input = z.object({ projectId: projectRef, parentId: uuid.optional(), title: text(200).min(1), body: text(5000).optional(), ownerId: uuid.nullable().optional(), due: date.nullable().optional(), status: status.optional() }).parse(await c.req.json());
 		return c.json(await commitments.createTask(actor(c), org(c), input), 201);
 	});
 	routes.patch('/v1/organisations/:id/tasks/:taskId', async (c) => {
-		const input = z.object({ projectId: uuid.optional(), title: text(200).min(1).optional(), body: text(5000).optional(), ownerId: uuid.nullable().optional(), due: date.nullable().optional(), status: status.optional() }).parse(await c.req.json());
+		const input = z.object({ projectId: projectRef, title: text(200).min(1).optional(), body: text(5000).optional(), ownerId: uuid.nullable().optional(), due: date.nullable().optional(), status: status.optional() }).parse(await c.req.json());
 		return c.json(await commitments.updateTask(actor(c), org(c), uuid.parse(c.req.param('taskId')), input));
 	});
 
 	routes.post('/v1/organisations/:id/series', async (c) => {
-		const input = z.object({ projectId: uuid.optional(), title: text(200).min(1), body: text(5000).optional(), ownerId: uuid.nullable().optional(), evidenceRequired: z.boolean().optional(),
+		const input = z.object({ projectId: projectRef, title: text(200).min(1), body: text(5000).optional(), ownerId: uuid.nullable().optional(), evidenceRequired: z.boolean().optional(),
 			recurrence, everyMonths: z.number().int().min(1).max(120).nullable().optional(), anchor: date, dueOffsetDays: z.number().int().min(-366).max(366).optional() }).parse(await c.req.json());
 		return c.json(await commitments.createSeries(actor(c), org(c), input), 201);
 	});
 	routes.patch('/v1/organisations/:id/series/:seriesId', async (c) => {
-		const input = z.object({ projectId: uuid.optional(), title: text(200).min(1).optional(), body: text(5000).optional(), ownerId: uuid.nullable().optional(), evidenceRequired: z.boolean().optional(),
+		const input = z.object({ projectId: projectRef, title: text(200).min(1).optional(), body: text(5000).optional(), ownerId: uuid.nullable().optional(), evidenceRequired: z.boolean().optional(),
 			recurrence: recurrence.optional(), everyMonths: z.number().int().min(1).max(120).nullable().optional(), anchor: date.optional(), dueOffsetDays: z.number().int().min(-366).max(366).optional(), paused: z.boolean().optional() }).parse(await c.req.json());
 		return c.json(await commitments.updateSeries(actor(c), org(c), uuid.parse(c.req.param('seriesId')), input));
 	});

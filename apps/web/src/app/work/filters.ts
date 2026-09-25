@@ -80,11 +80,11 @@ export function apiQuery(filters: WorkFilters, userId: string): string {
 export const unlistedTags = (selected: string[], listed: { id: string }[] | null): string[] =>
 	selected.filter((id) => !listed?.some((tag) => tag.id === id));
 
-type NamedProject = { name: string; state: 'proposed' | 'active' | 'archived'; systemKind: 'obligations' | null };
+type NamedProject = { name: string; state: 'proposed' | 'active' | 'archived' };
 /** What a selected project is called in the filter, saying so when it cannot be offered as a choice. */
 export function projectLabel(project: NamedProject | undefined): string {
 	if (!project) return 'Unknown project';
-	const name = project.systemKind === 'obligations' ? 'Obligations' : project.name;
+	const name = project.name;
 	return project.state === 'active' ? name : `${name} (${project.state})`;
 }
 

@@ -76,3 +76,11 @@ stays paused. Do not use a second release machine for migration 0037.
 Do not roll back to an old API image that can re-enable personal ingestion or execute retired
 snapshots. Prefer a forward fix; an outage fallback keeps the API stopped. Database snapshots and
 historical runs are retained for inspection; do not reconstruct enabled schedules from them.
+
+## Later deletion authorisation
+
+After #135 merged, the owner authorised deletion of all old-version Captain data. The
+[optional-project/reset contract](optional-work-projects-2026-09.md) supersedes preservation as an
+operational requirement. Migration 0037 remains immutable; the separate reset is run before it
+and 0038 during cutover. Historical rendering remains defensive code, not a requirement to retain
+legacy customer content.

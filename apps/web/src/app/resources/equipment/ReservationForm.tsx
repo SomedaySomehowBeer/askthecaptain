@@ -7,7 +7,7 @@ import { localChoices, localValue } from './time.ts';
 import type { Reservation } from './types.ts';
 
 export type Choice = { id: string; label: string };
-export type TaskChoice = Choice & { projectId: string };
+export type TaskChoice = Choice & { projectId: string | null };
 /** Options come from existing lookups. `null` means that lookup failed: the form then keeps any
  *  current value unchanged instead of offering (and silently clearing) an incomplete list. */
 export type ReservationOptions = { people: Choice[] | null; projects: Choice[] | null; tasks: TaskChoice[] | null };
@@ -114,7 +114,7 @@ export function ReservationForm(props: Props) {
 			<input type="hidden" name="ownerId" value={initial.ownerId ?? ''} />
 			<p className="muted">People could not be read, so {initial.ownerId ? label(initial.ownerId) : 'no one'} stays as the accountable person.</p></div>
 	);
-	const projectTasks = tasks?.filter((t) => t.projectId === projectId) ?? [];
+	const projectTasks = tasks?.filter((t) => t.projectId === (projectId || null)) ?? [];
 	const workFields = projects && tasks ? (
 		<div className="row reservation-form__links">
 			<div className="field"><label htmlFor="reservation-project">Project (optional)</label>
@@ -124,16 +124,16 @@ export function ReservationForm(props: Props) {
 					{projects.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
 				</select></div>
 			<div className="field"><label htmlFor="reservation-task">Task (optional)</label>
-				<select id="reservation-task" name="taskId" key={projectId} defaultValue={projectId === (initial.projectId ?? '') ? initial.taskId ?? '' : ''} disabled={locked || !projectId}>
-					<option value="">{projectId ? 'No task' : 'Choose a project first'}</option>
-					{initial.taskId && projectId === initial.projectId && !projectTasks.some((t) => t.id === initial.taskId) ? <option value={initial.taskId}>{label(initial.taskId)} (no longer open)</option> : null}
+				<select id="reservation-task" name="taskId" key={projectId} defaultValue={projectId === (initial.projectId ?? '') ? initial.taskId ?? '' : ''} disabled={locked}>
+					<option value="">No task</option>
+					{initial.taskId && projectId === (initial.projectId ?? '') && !projectTasks.some((t) => t.id === initial.taskId) ? <option value={initial.taskId}>{label(initial.taskId)} (no longer open)</option> : null}
 					{projectTasks.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
 				</select></div>
 		</div>
 	) : (
 		<div className="field"><span className="field__label">Project and task</span>
 			<input type="hidden" name="projectId" value={initial.projectId ?? ''} /><input type="hidden" name="taskId" value={initial.taskId ?? ''} />
-			<p className="muted">Projects and tasks could not be read, so the links stay as they are{initial.projectId ? ` (${label(initial.projectId)}${initial.taskId ? `, ${label(initial.taskId)}` : ''})` : ' (none)'}.</p></div>
+			<p className="muted">Projects and tasks could not be read, so the links stay as they are{initial.projectId ? ` (${label(initial.projectId)}${initial.taskId ? `, ${label(initial.taskId)}` : ''})` : initial.taskId ? ` (${label(initial.taskId)})` : ' (none)'}.</p></div>
 	);
 
 	return (
