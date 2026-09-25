@@ -6,11 +6,13 @@ built; its decisions (D1–D25) change only by a reviewed pull request that edit
 
 ## The test for any piece of work
 
-Captain is the shared small-business work system, with six stable job IDs (plan §2): triage shared
-business intake, draft and send correspondence, keep the calendar, own commitments, chase, brief
-and answer. Pip handles personal assistance; existing Captain features migrate deliberately.
-Before starting anything, name the job it moves sooner. If you cannot, do not start it. Put the
-job in the pull request body.
+Captain is the shared small-business work system: manage shared work, allocate resources,
+discuss work, manage business context, and understand/follow up (plan §2). Pip owns personal
+assistance. Name the concrete workspace outcome in each PR; the old six assistant job IDs are
+historical, not an eligibility test or permission to retain old features. Commitments, Obligations,
+Inbox/Outbox and personal calendar assistance are legacy scope to retire. Do not retain them for
+hypothetical data or make retirement wait for Pip. Reuse valid services and handle actual affected
+records deliberately; never claim a live data audit from a code inventory.
 
 ## Rules that constrain code
 
@@ -20,10 +22,9 @@ job in the pull request body.
 - **Writes are plain writes.** A person's write is role-checked inside Row Level Security and
   recorded in `audit_events`. A workflow's write happens in the name of the person who enabled the
   workflow (D4). There is no approval layer, no signed request, no confirmation token. Where a
-  person should see something before it happens, the record carries a review state (an outbox
-  draft, a suggested task).
-- **Outbound waits in the outbox (D5).** Nothing is sent to a third party by a workflow. Mail is
-  drafted into `outbox` and a person sends it.
+  person should see something before it happens, the record carries a review state (for example, a suggested task).
+- **No autonomous correspondence (D5).** Workflows never send external mail. The legacy outbox
+  remains person-sent until retirement; it is not a requirement for a Captain mail product.
 - **RLS on every tenant table (D6).** Every tenant table has `organisation_id`, forced RLS, and a
   policy. The runtime role cannot bypass it. A migration that adds a tenant table adds its policy
   in the same file and a cross-tenant test in the same pull request.
@@ -32,14 +33,15 @@ job in the pull request body.
   (sync, token refresh, series occurrences, budget rollover) is a system routine, not a workflow.
 - **Connectors are first-party SDKs (D8).** OAuth, refresh and encryption are ours. No
   integration platforms, no vendor MCP servers as step sources.
-- **Attachment bytes are never stored (D13).** Metadata always; text extracted on the allow list
-  and size cap, cached briefly, passed to the model as labelled untrusted content.
-- **Inventory is a counted list (D15).** No movements, conversions, lots or costing.
+- **Attachment bytes are never stored (D13).** Keep selected business metadata/provider links.
+  Extraction needs an allow list, size cap, brief expiry and labelled untrusted input; no mailbox ingestion.
+- **Inventory is a counted list (D15).** Ingredients, consumables and finished product. One
+  explicit quantity authority; Shopify is optional. No movements, conversions, lots or costing.
 - **No configurable domain model.** No entity types, custom fields, units or process definitions.
   The business's vocabulary is the names of its projects, tasks and series.
 - **Three workspace tabs (D11).** Work, Chat and Resources; Work defaults to Assigned to you.
-  Each has a grouped view list one page left. Settings is reached through account controls. Keep
-  legacy routes/actions reachable until their replacement slice is complete.
+  Each has a grouped view list one page left. Settings is reached through account controls. Retire
+  old assistant screens; a scoped redirect may preserve a valid record link without keeping old UI.
 - **Honest states.** A down connection, a spent budget or an unavailable model is said in words
   with what to do next. Never render a value the data cannot justify; never fabricate a quiet day.
 
@@ -50,7 +52,7 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 | Path | What |
 |---|---|
 | `apps/api` | Hono API: auth, routes over services, webhooks, health |
-| `apps/web` | Next.js app, phone-first, server components read the API; Work/Chat/Resources shell with retained legacy routes |
+| `apps/web` | Next.js app, phone-first, server components read the API; Work/Chat/Resources client; remaining legacy routes are cleanup debt |
 | `apps/e2e` | Playwright deployment smoke suite and isolated browser regression checks |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Google, Xero, Shopify |
@@ -78,7 +80,7 @@ pnpm workspace, not application code.
 
 ## How work moves
 
-- Small pull requests, one concern each, with the job named in the body and the decision it
+- Small pull requests, one concern each, with the workspace outcome named in the body and the decision it
   relies on when there is one. CI must be green. Squash-merge.
 - Design of screens and of the step catalog is a plan matter: propose in a plan amendment or a
   reviewed repository-native design before building (D14).
@@ -98,5 +100,5 @@ pnpm workspace, not application code.
 ## Definition of done
 
 Typecheck passes. Tests pass against Postgres. Touched pages pass their Playwright checks. The
-pull request names the job. Nothing in the diff contradicts a decision in the plan. If a step was
+pull request names the workspace outcome. Nothing in the diff contradicts a decision in the plan. If a step was
 skipped, the pull request says so.

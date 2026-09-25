@@ -1,5 +1,11 @@
 # Documentation and CI review — 24 September 2026
 
+> **Correction, 25 September:** this is the historical 24 September audit. Its conclusions
+> preserving the old five-tab assistant, Obligations and retirement/migration gates were wrong.
+> It did not establish useful live data. Those scope conclusions and dated delivery statuses are
+> superseded by the [new audit](captain-scope-audit-2026-09-25.md) and current plan. CI evidence
+> below remains dated evidence, not a fresh run or instruction to retain the old product.
+
 Jobs advanced: **own commitments** and **brief and answer**. #116 adopted the Captain workspace
 amendment. This review aligns the documentation with that direction while distinguishing the
 retained implementation, planned capabilities and historical proposals.

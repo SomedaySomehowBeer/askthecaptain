@@ -1,5 +1,12 @@
 # Inbox triage
 
+> **Legacy assistant maintenance reference (25 September).** This describes code still present,
+> not current Captain scope or workspace onboarding. Its old job/decision/plan-section references
+> belong to the [historical plan](../plans/legacy-assistant-history.md). Do not enable this path
+> as a prerequisite for Work/Chat/Resources; retirement does not wait for Pip. Follow the
+> [implementation inventory](../plans/captain-workspace-migration-inventory-2026-09.md) for cleanup.
+> This status note does not itself stop a running process or establish live enablement.
+
 Jobs 1 and 2; D2/D4/D5/D6/D13. The API release applies `0012_triage.sql` and installs queues.
 Migration 0013 may already be installed: the migrator applies every missing migration, not just
 numbers greater than the latest one. No additional resources or credentials are needed.

@@ -1,8 +1,8 @@
 # Captain: next delivery batch after equipment
 
 Status: implementation sequence, 25 September 2026. The adopted [plan](../plan.md)
-remains authoritative; this document does not change D1–D25. Jobs: **own commitments**, **keep
-the calendar**, and **brief and answer**. Equipment API/web #125/#127 are live on staging;
+remains authoritative; the 25 September scope audit corrects this sequence. Outcomes: **manage
+shared work**, **allocate resources**, and **discuss work**. Equipment API/web #125/#127 are live on staging;
 [the release record](../runbooks/paused.md) distinguishes that from native acceptance.
 
 ## Outcome
@@ -27,7 +27,9 @@ has already been delegated or implemented.
 
 The immediate recovery fix is delivered in reviewed #130 and deployed to staging. Claude also
 completed the read-only task-handoff audit; [#131](https://github.com/SomedaySomehowBeer/askthecaptain/issues/131)
-records the next bounded task-detail contract and implementation. That code has not started.
+records the bounded task-detail contract and implementation, corrected to remove Commitments
+compatibility. [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) tracks scope cleanup and optional-project contracts before dependent UI work. That code
+has not started.
 
 ## Ordered increments
 
@@ -35,12 +37,18 @@ records the next bounded task-detail contract and implementation. That code has 
    lead to sign-in. A rate limit, unavailable API or server failure preserves the session and
    presents a retry state. The same distinction applies on Work, sign-in and other protected
    pages. A failed session read before a write cannot send it; an ambiguous write response still
-   requires reconciliation. Do not retry writes automatically. This is the immediate code PR.
-2. **Finish the shared-work handoff.** Audit the existing task/project detail and edit routes
-   before adding screens. Expose their current authoritative records through Work navigation,
-   retaining owners, tags, evidence, completed/cancelled state and legacy URLs. Add equipment
-   backlinks where the bounded API can justify them. Any new read contract ships with access
-   tests; do not scan every booking or duplicate task state in the client.
+   requires reconciliation. Do not retry writes automatically. Delivered in #130; this is completed work.
+2. **Correct scope, then finish shared work.** Follow the
+   [implementation inventory](captain-workspace-migration-inventory-2026-09.md): remove legacy
+   Today/Inbox/Outbox/Commitments/Notes/personal-Calendar navigation and onboarding; retire
+   mail/discovery/preparation paths and revise mixed business workflows, including queued and
+   waiting runs. Keep business stock/reminders independent of mail. Remove the Obligations
+   storage fallback with a reviewed optional-project contract covering tasks, series, checklists,
+   tags, equipment links, every writer and access/export tests. Then deliver bounded Work task,
+   project and recurrence detail/editing. No “Open in Commitments” action or new placeholder
+   project. Old valid links may redirect to Work; other retired destinations get honest states.
+   Inspect only the actual affected records/run state before a data/runtime change; do not
+   invent a migration requirement or wait for Pip. Each part is a small reviewed PR.
 3. **Saved Work views.** Review a small filter contract before migration: named, versioned
    filters, initially personal within an organisation, with strict supported fields and bounded
    counts. Saving a view never grants record access. Define deleted tags/projects, revoked
@@ -104,7 +112,7 @@ Before calling the larger first-customer workflow ready, two members must create
 reserve equipment without overlaps, discuss it in the same linked conversation, pin a message,
 star privately, reconnect without duplicate sends and observe the same state on web and iOS.
 Revoked access must disappear across full chat, inline previews, links, pins and summaries.
-Native notifications and operational migration remain part of that release gate.
+Native notifications and operational release checks remain part of that release gate.
 
 Production remains paused. Staging deploys reuse one machine per app, run required migrations
 without creating a second release machine, and record health checks and rollback. Backup

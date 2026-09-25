@@ -1,5 +1,8 @@
 # Contacts and companies
 
+> **Scope, 25 September:** Shared people/companies remain Captain scope. Mail harvesting and Inbox panels below are legacy; they are not a prerequisite for People. The reference to old Inbox/Settings tabs is historical.
+> [Current plan](../plan.md) · [operational record](paused.md).
+
 Jobs: triage the inbox; brief and answer. Decisions: D2 (data only, no inference here), D6
 (tenant isolation), D8 (our Google connector), D11 (the existing Inbox and Settings tabs).
 

@@ -1,5 +1,11 @@
 # Captain mobile workspace mockups
 
+> **Status, 25 September:** these remain fictional design references; web shell, task/tag
+> controls and equipment now have implementations. Full chat/files/native acceptance is pending.
+> The historical **Inbox** group inside Chat means conversations, not the retired mail Inbox;
+> it is the approved conversation grouping, not permission to add an email feature.
+> See the [delivery status](../../../plans/captain-workspace-delivery-2026-09.md).
+
 > **Update, 24 September 2026.** Adopted by #116 as the design reference for the workspace (plan
 > §10, D11, D14). The screens are still mockups: no application route implements them yet.
 

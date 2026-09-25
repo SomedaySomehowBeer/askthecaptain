@@ -1,5 +1,9 @@
 # First deploy
 
+> **Current operations:** use [paused.md](paused.md) for the authorised staging procedure,
+> one machine per app. Automatic deploy/backup workflows remain disabled and production remains
+> paused; the historical pipeline setup below is not permission to apply infrastructure or promote.
+
 What the repository owner does once so the pipeline can run. Nothing here is automated on purpose:
 infrastructure applies, secrets and DNS are the owner's.
 
@@ -16,12 +20,9 @@ infrastructure applies, secrets and DNS are the owner's.
    in `fly*.toml`.
 5. **Google OAuth client.** A web client whose authorised redirect URIs are
    `https://api-staging.askthecaptain.app/auth/google/callback` and
-   `https://api.askthecaptain.app/auth/google/callback`, plus the connection callbacks
-   `https://api-staging.askthecaptain.app/connections/google/callback` and
-   `https://api.askthecaptain.app/connections/google/callback` (`${API_URL}/connections/google/callback`).
-   Enable the Gmail and Google Calendar APIs and allow the Gmail modify and Calendar events scopes.
-   Each API is enabled separately (APIs & Services → Library); a connection with every scope granted
-   but a sync card reading `403 · accessNotConfigured` means that API is still off in the project.
+   `https://api.askthecaptain.app/auth/google/callback`, for sign-in. Gmail/Calendar connection callbacks and scopes belong to the legacy assistant,
+   not new Captain onboarding. Do not request mailbox/calendar consent to enable shared work.
+   Existing adapter diagnostics remain in the legacy sync runbooks while that code is retired.
 6. **Deploy.** Push to `main` deploys the live apps and runs the smoke gate. (Paused since
    2026-09-23: the `deploy` workflow is disabled; see [paused.md](paused.md).) The dormant production
    pair is promoted only by running the `deploy` workflow with `promote` ticked. While we develop,

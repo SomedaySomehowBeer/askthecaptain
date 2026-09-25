@@ -1,6 +1,12 @@
 # First workspace foundation: flat task tags
 
-Jobs advanced: **own commitments**, **brief and answer**. This implementation is based on the
+> **Status, 25 September:** delivered API contract (#117), not a future whole-workspace plan.
+> Web tag controls have since shipped. Project-required eligibility below describes the current
+> API and must change with D7's genuine standalone-task implementation; it does not justify an
+> Obligations default. Staging has resumed under [paused.md](../runbooks/paused.md); operational
+> statements below describe this PR's local validation, not a current blanket pause.
+
+Jobs advanced: **manage shared work**, **understand and follow up**. This implementation is based on the
 workspace adoption amendment, PR #116, and D7/D6. It is additive: no existing task or project is
 renamed, duplicated or moved, and no old workflow is enabled/disabled by this slice.
 

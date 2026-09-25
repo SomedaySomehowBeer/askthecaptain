@@ -1,5 +1,8 @@
 # Embedding service
 
+> **Scope, 25 September:** This service currently supports the legacy mail/note index. Retiring ingestion must include fill/after-sync hooks; do not keep the service running solely for a hypothetical future business index. Any repurposing needs a reviewed source/access contract. Current staging/pause status is in paused.md, overriding dated setup wording below.
+> [Current plan](../plan.md) · [operational record](paused.md).
+
 `infra/embed` is the retrieval index's encoder (D21): one small sentence encoder behind a bearer
 secret, shared by every organisation, holding no data. Mail and note text reaches it over TLS, is
 embedded in memory and never written or logged; it returns numbers. It is not the inference Sprite

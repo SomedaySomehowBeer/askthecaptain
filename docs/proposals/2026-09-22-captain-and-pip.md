@@ -1,5 +1,13 @@
 # Proposal: Ask The Captain for the business, Pip for the person
 
+> **Scope correction, 25 September:** the [current plan](../plan.md) adopts the product split and
+> designs, not the old compatibility assumptions. Captain has no Inbox/Outbox, Commitments or
+> Obligations target. Business reminders stay; correspondence assistance belongs to Pip/providers.
+> The old §9 inventory/retention language does not make retirement wait for Pip or presumed data.
+> The approved “Chat: Inbox” grouping below means the person's conversations, not
+> email or a separate mail feature. Web foundation/equipment now exist; dated “not implemented” statements below
+> describe the proposal at that time. Pip's unproved platform capabilities remain proof gates.
+
 **Status:** draft for review, 22 September 2026. Captures the product direction discussed with
 the owner; no implementation, migration, deployment or replacement of the current plan's
 decisions is authorised by this document. The live [plan](../plan.md) remains authoritative.

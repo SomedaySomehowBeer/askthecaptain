@@ -1,5 +1,12 @@
 # Proposal: files where people work, with Captain providing context and evidence
 
+> **Scope correction, 25 September:** historical discussion, not an implementation backlog.
+> Five tabs, Commitments, Gmail matching, Captain outbox/attachment sending and separate file
+> notes/comments are superseded. Adopted scope is provider-held DAM/version links with D25 chat.
+> Docs/Sheets sidebars, record kits, OCR and Embrace/Lore migration are not adopted or prerequisites.
+> The [current plan](../plan.md) overrides those proposals; do not “reconcile” them by restoring
+> a Captain mailbox. The original text below is retained only as discussion history.
+
 **Status:** new proposal for review; no implementation, migration, deployment or change to the approved product boundary is implied.
 
 > **Update, 24 September 2026.** Merged for discussion as #64, with §11 rewritten as generic parts

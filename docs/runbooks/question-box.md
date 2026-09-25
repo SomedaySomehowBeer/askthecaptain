@@ -1,5 +1,12 @@
 # Today questions
 
+> **Legacy assistant maintenance reference (25 September).** This describes code still present,
+> not current Captain scope or workspace onboarding. Its old job/decision/plan-section references
+> belong to the [historical plan](../plans/legacy-assistant-history.md). Do not enable this path
+> as a prerequisite for Work/Chat/Resources; retirement does not wait for Pip. Follow the
+> [implementation inventory](../plans/captain-workspace-migration-inventory-2026-09.md) for cleanup.
+> This status note does not itself stop a running process or establish live enablement.
+
 Job 6: brief and answer. Migration `0025_answers.sql` is applied by the API release step. No new
 configuration, queue or resource is needed. An active member with ready inference and sufficient
 monthly token allowance can ask a question at the bottom of Today. Each question is independent;

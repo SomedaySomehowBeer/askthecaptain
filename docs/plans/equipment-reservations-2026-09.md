@@ -1,6 +1,11 @@
 # Equipment reservations — API and web
 
-Jobs: **keep the calendar** and **own commitments**. Implements the scheduling integrity part of
+> **Scope correction, 25 September:** equipment remains core. The task-requires-matching-project
+> rule below describes the delivered API, not a requirement to fabricate a project for standalone
+> work. D7's optional-project implementation must amend this contract and its link checks/tests
+> together. Allocation is a workspace outcome, independent of personal calendar assistance.
+
+Jobs: **allocate resources** and **manage shared work**. Implements the scheduling integrity part of
 D24 and delivery slice 3. The API increment merged as #125. Web timeline and booking controls
 now follow the existing reviewed continuous timeline design; a native client remains pending. Slice 2's saved
 views and native work also remain open. Equipment integrity can be built against the existing

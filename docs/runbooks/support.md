@@ -1,6 +1,9 @@
 # Support
 
-Plan §11 Phase 4 asks for a support runbook before the second customer. This is what to do when a
+> **Scope, 25 September:** This runbook mixes reusable security/workflow diagnostics with legacy Inbox/Calendar/Today support. Legacy rows are maintenance history, not instructions to enable or reconnect those features for the workspace. Current scope and retirement are in the plan; current deployment state is in paused.md.
+> [Current plan](../plan.md) · [operational record](paused.md).
+
+Second-customer readiness (#27) requires a support runbook. This is what to do when a
 person says Captain is not doing what they expect. Everything here is read from the product or the
 database; nothing needs a code change. Never read mail bodies to answer a support question unless
 the person has asked you to look at a specific thread.
@@ -8,7 +11,7 @@ the person has asked you to look at a specific thread.
 ## Where to look first
 
 - **Settings → Workflows → Activity** (in the product, as the person): every run, its state, and the
-  reason in words when it paused or failed. Most "Captain did nothing" reports end here.
+  reason in words when it paused or failed. Use this for automation incidents; ordinary task/equipment writes do not require inference.
 - **Settings → Connections**: each provider's status. `needs attention`, `refresh_failed` or `revoked`
   means the person must reconnect; nothing downstream runs until they do.
 - **Settings → Inference**: the runtime's state (`provisioning`, `needs sign-in`, `ready`, `failed`) and

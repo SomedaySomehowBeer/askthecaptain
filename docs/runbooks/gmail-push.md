@@ -1,5 +1,12 @@
 # Gmail push notifications
 
+> **Legacy assistant maintenance reference (25 September).** This describes code still present,
+> not current Captain scope or workspace onboarding. Its old job/decision/plan-section references
+> belong to the [historical plan](../plans/legacy-assistant-history.md). Do not enable this path
+> as a prerequisite for Work/Chat/Resources; retirement does not wait for Pip. Follow the
+> [implementation inventory](../plans/captain-workspace-migration-inventory-2026-09.md) for cleanup.
+> This status note does not itself stop a running process or establish live enablement.
+
 **Job 1: Triage the inbox as mail arrives.** This is system housekeeping (D3, D6, D8), not a
 workflow. Gmail watches and Pub/Sub delivery supplement the existing five-minute mail poll.
 

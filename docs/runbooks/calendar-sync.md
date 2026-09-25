@@ -1,5 +1,12 @@
 # Calendar sync
 
+> **Legacy assistant maintenance reference (25 September).** This describes code still present,
+> not current Captain scope or workspace onboarding. Its old job/decision/plan-section references
+> belong to the [historical plan](../plans/legacy-assistant-history.md). Do not enable this path
+> as a prerequisite for Work/Chat/Resources; retirement does not wait for Pip. Follow the
+> [implementation inventory](../plans/captain-workspace-migration-inventory-2026-09.md) for cleanup.
+> This status note does not itself stop a running process or establish live enablement.
+
 Job 3: Keep the calendar. D3 system housekeeping, D6 forced RLS, D8 first-party REST, and the legacy Calendar tab
 (the five-tab navigation that D11 described before the workspace amendment in #116).
 

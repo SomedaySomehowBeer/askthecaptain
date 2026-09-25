@@ -1,5 +1,8 @@
 # Stocktake
 
+> **Scope, 25 September:** Counts and reorder tasks remain Captain scope. Supplier-email drafts, Google/inference prerequisites and Commitments/Inbox navigation below are legacy implementation to remove; do not carry them into the new business workflow.
+> [Current plan](../plan.md) · [operational record](paused.md).
+
 **Job 4 — Own commitments (D15).** A stocktake asks for counts, keeps the person's observations,
 and creates reorder tasks and drafts. It never computes stock from movements or sends an order.
 
