@@ -30,7 +30,7 @@ completed the read-only task-handoff audit; [#131](https://github.com/SomedaySom
 records the bounded task-detail contract and implementation, corrected to remove Commitments
 compatibility. [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) tracks scope
 cleanup: runtime retirement (#135), optional projects/reset (#136), and Work record replacement
-(#138) are implemented and deployed. Empty retired storage, connector capabilities and deployment
+(#138) are implemented and deployed. Empty retired storage, the retrieval package, connector capabilities and deployment
 assets still need removal. Saved-view and linked-chat contracts are the next feature increments.
 
 ## Ordered increments
@@ -127,10 +127,11 @@ does not block Captain.
 
 See the [runtime retirement contract](assistant-runtime-retirement-2026-09.md) for removed
 assistant entry points, task-reminder v4 and stocktake v3, run/schedule cancellation and staging
-cutover. This does not mark the optional-project/Obligations or Work detail-page increments done.
+cutover. Optional-project/Obligations removal and Work detail pages shipped separately in #136
+and #138 (below).
 
 The [optional-project/reset increment](optional-work-projects-2026-09.md) implements task/series
 null projects, checklist and equipment links, and a separately invoked staging legacy-data reset
-authorised by the owner. The [Work record increment](work-record-pages-2026-09.md) now implements
-that next dependency; review and browser/release evidence are recorded with its PR. Saved views
-and linked-chat contracts follow it.
+authorised by the owner. The [Work record increment](work-record-pages-2026-09.md) shipped in
+#138; release evidence is in the [operational record](../runbooks/paused.md). Saved views and
+linked-chat contracts follow it.
