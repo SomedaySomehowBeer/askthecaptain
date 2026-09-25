@@ -167,8 +167,8 @@ phone/desktop details without browser exceptions. The real API commits uncertain
 the fixture loses their responses, proving the form locks rather than silently retrying.
 
 All seven groups passed locally against the production web build and disposable Postgres on
-25 September. The fixture seeds 55 extra projects to exercise a second options page. Existing
-workspace and equipment scripts now assert Work detail routes and updated selector labels.
+25 September. The fixture seeds 55 extra projects to exercise a second options page. All ten existing workspace groups and all five equipment groups also passed against the final
+production build; they now assert Work detail routes and updated selector labels.
 The signed-in deployment spec is `work-records.spec.ts`; inventory/Shopify checks target Resources.
 CI without a fixture session still skips hosted signed-in checks explicitly; this local proof is
 not a real provider sign-in, native-device or production acceptance claim.

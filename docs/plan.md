@@ -387,7 +387,7 @@ disabled and permission states remain required. Unknown/unloaded equipment is ne
 **Work detail is Work.** Build bounded task/project/series reads and editors under Work; no
 “Open in Commitments” escape hatch. Standalone tasks must not display a fabricated project.
 The [Work record contract](plans/work-record-pages-2026-09.md) defines bounded reads, revision
-preconditions, copied evidence requirements and the replacement web pages; implementation is in review.
+preconditions, copied evidence requirements and the replacement web pages, shipped in #138.
 Old bookmarks may resolve to the corresponding Work record, or an explicit retired/unavailable
 state where no target exists. Redirect compatibility is not a reason to keep old screens/actions.
 Task due dates and Work Calendar/Timeline presentations remain in scope; they are not the retired
@@ -411,14 +411,17 @@ do not invent an unreviewed dark palette or require a Claude Design round-trip f
 
 Follow the [delivery plan](plans/captain-workspace-delivery-2026-09.md) and
 [next batch](plans/captain-next-batch-2026-09-25.md). The next work corrects the scope debt before
-adding more legacy-backed screens: retire assistant navigation/runtime, support genuinely optional
-projects, finish Work details, then saved views/chat and the Expo client. Equipment scheduling is
+adding more legacy-backed screens. Assistant navigation/runtime retirement, optional projects and
+Work details are delivered; remaining retired storage/code cleanup continues alongside saved
+views/chat and the Expo client. Equipment scheduling is
 mandatory in the first usable workflow. Web and iOS need two-person acceptance; Android smoke
 checks start during mobile development and broader Android release follows.
 
 Implemented: web shell, filtered Work/task creation, tags, counted inventory access, equipment
 API/web, session recovery, and the assistant UI/API/runtime retirement with revised task/stock
-workflows. Not complete: Work detail/project/series replacement, Obligations/storage cleanup, saved views, linked chat, files/DAM, native application and device acceptance.
+workflows, optional projects/Obligations removal, and revision-aware Work task/project/series
+pages (#138). Not complete: remaining retired assistant storage/connector cleanup, saved views,
+linked chat, files/DAM, native application and device acceptance.
 Do not call the remaining screens implemented because mockups or bundle exports exist.
 
 The old phases 0–5 and six jobs are historical. Their completed issues document earlier work;
