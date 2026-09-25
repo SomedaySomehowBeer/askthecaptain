@@ -19,9 +19,10 @@ const pauseWords: Record<string, string> = {
 };
 export class BossEngine {
  readonly db: Sql; readonly boss: PgBoss; readonly registry: Registry; readonly definitions: WorkflowDefinition[];
+ readonly retiredVersions: Readonly<Record<string, number>>;
  readonly dayMs: number; ready = false;
- constructor(db: Sql, url: string, registry: Registry, definitions: WorkflowDefinition[], dayMs = 86400000) {
-  this.db = db; this.registry = registry; this.definitions = definitions; this.dayMs = dayMs;
+ constructor(db: Sql, url: string, registry: Registry, definitions: WorkflowDefinition[], dayMs = 86400000, retiredVersions: Readonly<Record<string, number>> = {}) {
+  this.db = db; this.registry = registry; this.definitions = definitions; this.dayMs = dayMs; this.retiredVersions = retiredVersions;
   this.boss = new PgBoss({ connectionString: url, schema, migrate: false, createSchema: false });
   this.boss.on('error', () => console.error('[workflows] queue unavailable; inspect the operator runbook'));
  }
@@ -35,6 +36,7 @@ export class BossEngine {
  }
  async close() { this.ready = false; await this.boss.stop({ graceful: true, timeout: 30000 }); }
  unavailable(definition: WorkflowDefinition) { return !this.ready ? 'The workflow runner is stopped. Ask the operator to start it.' : this.registry.missing(definition).length ? 'The steps for this workflow are not installed yet.' : null; }
+ private retired(key: string, version: number) { return Object.hasOwn(this.retiredVersions, key) && version <= this.retiredVersions[key]!; }
  private journal(org: string, userId?: string) { return new EngineJournal(this.db, { organisationId: org, ...(userId ? { userId } : {}) }); }
  private async send(tx: TransactionSql, key: string, runId: string, startAfter?: Date) {
   await transactionalBoss(tx).send(queueName(key), { runId }, { ...(startAfter ? { startAfter } : {}) });
@@ -46,6 +48,7 @@ export class BossEngine {
  }
  async start(tx: TransactionSql, organisationId: string, key: string, trigger: unknown = { kind: 'manual' }, parameters?: Record<string, unknown>) {
   const definition = this.definitions.find(d => d.key === key); if (!definition) throw new WorkflowProblem('Workflow not found');
+  if (this.retired(key, definition.version)) throw new WorkflowProblem('This workflow version has been retired.');
   const problem = this.unavailable(definition); if (problem) throw new WorkflowProblem(problem);
   const e = (await enabled(tx, key))[0]; if (!e || e.organisationId !== organisationId) throw new WorkflowProblem('Turn this workflow on first');
   if (e.definitionVersion !== definition.version) throw new WorkflowProblem('This workflow has changed. Save its parameters in Settings before starting a new run.');
@@ -94,10 +97,11 @@ export class BossEngine {
    if (run.scheduleKey && !run.scheduleAdvanced) {
     await transactionalBoss(tx).unschedule(queueName(run.definitionKey), run.scheduleKey);
     const trigger = (run.snapshot as Snapshot | null)?.trigger as Trigger | undefined;
-    if (replaceSchedule && e && trigger && (trigger.kind === 'daily' || trigger.kind === 'weekly')) await this.schedule(tx, e, (run.snapshot as Snapshot).definition, trigger, run.scheduleKey);
+    if (replaceSchedule && !this.retired(run.definitionKey, run.definitionVersion) && e && trigger && (trigger.kind === 'daily' || trigger.kind === 'weekly')) await this.schedule(tx, e, (run.snapshot as Snapshot).definition, trigger, run.scheduleKey);
     await advance(tx, runId);
    }
   } else {
+   if (this.retired(run.definitionKey, run.definitionVersion)) throw new WorkflowProblem('This workflow version has been retired. Review the current workflow in Settings and start a new run.');
    if (!this.ready) throw new WorkflowProblem('The workflow runner is stopped.');
    if (run.state !== 'paused' || !run.snapshot) throw new WorkflowProblem('Only a paused production run can resume.');
    if (!await journal.authorised(tx, run)) throw new WorkflowProblem('Enable the workflow and restore the enabling person’s active membership first.');
@@ -107,7 +111,8 @@ export class BossEngine {
  /** The destination service calls this in the transaction recording sent/discarded. Early events
   * are also observed by the await handler reading destination state, so there is no lost wake-up. */
  async wake(tx: TransactionSql, organisationId: string, runId: string, key: string) {
-  await this.journal(organisationId).run(tx, runId);
+  const pending = await this.journal(organisationId).run(tx, runId);
+  if (this.retired(pending.definitionKey, pending.definitionVersion)) return;
   for (const run of await waiting(tx, key, runId)) {
    await this.journal(organisationId).state(tx, run.id, 'queued'); await this.send(tx, run.definitionKey, run.id);
   }
@@ -134,6 +139,7 @@ export class BossEngine {
     const pending = await journal.run(tx, runId, false);
     const currentEnablement = (await enabled(tx, pending.definitionKey))[0];
     const run = await journal.run(tx, runId); if (terminal.includes(run.state)) return null;
+    if (this.retired(run.definitionKey, run.definitionVersion)) { await journal.state(tx, runId, 'cancelled', 'This personal-assistant workflow version has been retired.'); return null; }
     const snapshot = run.snapshot as Snapshot | null;
     if (!snapshot || digestOf(snapshot.definition) !== run.definitionDigest || snapshot.definition.version !== run.definitionVersion || snapshot.enablement.enabledBy !== run.enabledBy || snapshot.definition.key !== run.definitionKey || snapshot.enablement.id !== run.enablementId || snapshot.enablement.organisationId !== journal.tenant.organisationId) {
      await journal.state(tx, runId, 'paused', 'This run has no valid pinned definition. Start a new run.'); return null;

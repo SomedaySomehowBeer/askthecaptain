@@ -50,7 +50,7 @@ it('a device subscribes, is listed for its person only, and satisfies the push r
 	const mine = await body<{ subscriptions: { endpoint: string }[] }>(await json('GET', `/v1/organisations/${orgId}/push/subscriptions`, owner.token), 200);
 	assert.deepEqual(mine.subscriptions.map((s) => s.endpoint), [device(1).endpoint]);
 	const offered = await body<{ workflows: { definition: { key: string }; unmet: { requirement: string }[] }[] }>(await json('GET', `/v1/organisations/${orgId}/workflows`, owner.token), 200);
-	assert.ok(!offered.workflows.find((w) => w.definition.key === 'morning-brief')!.unmet.some((u) => u.requirement === 'push'), 'push is no longer unmet');
+	assert.ok(!offered.workflows.find((w) => w.definition.key === 'chase-due')!.unmet.some((u) => u.requirement === 'push'), 'push is no longer unmet');
 	assert.equal((await json('POST', `/v1/organisations/${orgId}/push/subscriptions`, owner.token, { ...device(2), endpoint: 'http://insecure.example/x' })).status, 400);
 });
 

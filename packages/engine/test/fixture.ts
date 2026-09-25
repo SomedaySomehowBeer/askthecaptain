@@ -3,7 +3,10 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { withTenant } from '@captain/db';
 import { StubProvider, type Result } from '@captain/model';
-import { definitions, digestOf } from '@captain/steps';
+import { digestOf } from '@captain/steps';
+import { inboxTriage } from './legacy-definition.ts';
+// A historical immutable snapshot used only to exercise generic engine crash/replay semantics.
+const definitions = [inboxTriage];
 import { freshDatabase, type Harness } from '@captain/db/test';
 import { InferenceService } from '../../../apps/api/src/inference/service.ts';
 import { inferenceStep } from '../../../apps/api/src/workflows/bindings.ts';

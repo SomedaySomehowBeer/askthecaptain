@@ -1,4 +1,4 @@
-import { withUser, type Sql } from '@captain/db';
+import { withUser, type TransactionSql, type Sql } from '@captain/db';
 import { notFound } from './errors.ts';
 
 export type Role = 'owner' | 'admin' | 'member';
@@ -12,3 +12,8 @@ export async function roleOf(db: Sql, userId: string, organisationId: string): P
 	return row.role;
 }
 export const canManage = (role: Role) => role === 'owner' || role === 'admin';
+
+export async function requireMember(tx: TransactionSql, userId: string, organisationId: string) {
+ const [row] = await tx`select role from memberships where organisation_id = ${organisationId} and user_id = ${userId} and status = 'active'`;
+ if (!row) throw notFound(); return row.role as string;
+}

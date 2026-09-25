@@ -10,7 +10,7 @@ const text = (form: FormData, name: string) => String(form.get(name) ?? '').trim
 const optional = (value: string) => value || undefined;
 
 async function who() { const me = await requireCurrent('/commitments'); return { token: me.token, org: me.organisation.organisationId }; }
-const done = (): Result => { revalidatePath('/commitments'); revalidatePath('/'); revalidatePath('/today'); revalidatePath('/work'); return { ok: true }; };
+const done = (): Result => { revalidatePath('/commitments'); revalidatePath('/work'); return { ok: true }; };
 
 export async function createTask(_: Result | undefined, form: FormData): Promise<Result> {
 	const { token, org } = await who();
@@ -77,6 +77,11 @@ export async function saveBrief(form: FormData): Promise<Result> {
 	let existing: Partial<Brief> = {}; try { existing = JSON.parse(String(form.get('existing') ?? '{}')) as Partial<Brief>; } catch { existing = {}; }
 	const brief = Object.fromEntries(briefKeys.map((key) => [key, String(form.get(key) ?? '').split('\n').map((line) => line.trim()).filter(Boolean).slice(0, 30)
 		.map((line) => ({ text: line.slice(0, 500), evidence: existing[key]?.find((l) => l.text === line)?.evidence ?? null }))]));
-	try { await api(`/v1/organisations/${org}/projects/${id}`, { method: 'PATCH', token, body: { stage, brief } }); } catch (error) { return fail(error); }
+	try { await api(`/v1/organisations/${org}/projects/${id}`, { method: 'PATCH', token, body: { stage, brief } }); }
+	catch (error) {
+		// Only citations read from this page are sent back, so a refusal means the brief changed after the page loaded.
+		if (error instanceof ApiError && error.code === 'evidence_retired') return { error: 'This brief changed after the page loaded, so nothing was saved. Reload the page and make your edit again.' };
+		return fail(error);
+	}
 	return done();
 }

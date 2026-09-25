@@ -27,7 +27,7 @@ export class WorkflowService {
 		for (const definition of definitions) {
 			await this.#db`insert into workflow_definitions (key, version, name, description, job, triggers, parameters, steps, requirements, digest)
 				values (${definition.key}, ${definition.version}, ${definition.name}, ${definition.description}, ${definition.job}, ${this.#db.json(definition.triggers as never)},
-					${this.#db.json(definition.parameters as never)}, ${this.#db.json(definition.steps as never)}, ${this.#db.array(requirementsOf(definition))}, ${digestOf(definition)})
+					${this.#db.json(definition.parameters as never)}, ${this.#db.json(definition.steps as never)}, array(select jsonb_array_elements_text(${this.#db.json(requirementsOf(definition))}::jsonb)), ${digestOf(definition)})
 				on conflict (key) do update set version = excluded.version, name = excluded.name, description = excluded.description, job = excluded.job, triggers = excluded.triggers,
 					parameters = excluded.parameters, steps = excluded.steps, requirements = excluded.requirements, digest = excluded.digest, updated_at = now()
 				where workflow_definitions.digest is distinct from excluded.digest`;
@@ -44,7 +44,7 @@ export class WorkflowService {
 			return Promise.all(definitions.map(async (definition) => {
 				const found = enablements.find((e) => e.definitionKey === definition.key);
 				const personal = new Set(available);
-				if (['morning-brief', 'stocktake'].includes(definition.key) && !await this.#push?.available(tx, organisationId, found?.enabled ? found.enabledBy ?? actor.userId : actor.userId)) personal.delete('push');
+				if (['chase-due', 'stocktake'].includes(definition.key) && !await this.#push?.available(tx, organisationId, found?.enabled ? found.enabledBy ?? actor.userId : actor.userId)) personal.delete('push');
 				const requirements = requirementsOf(definition);
 				const unmet = requirements.filter((r) => !personal.has(r)).map((requirement) => ({ requirement, words: requirementWords[requirement] }));
 				const enablement = found ? { id: found.id, enabled: found.enabled, enabledBy: found.enabledBy, enabledByName: found.enabledByName, parameters: found.parameters, updatedAt: found.updatedAt, definitionVersion: found.definitionVersion } : null;
@@ -67,7 +67,7 @@ export class WorkflowService {
 			if (input.enabled) {
 				if (this.#engine) { const problem = this.#engine.unavailable(definition); if (problem) throw badRequest('runner_unavailable', problem); }
 				const available = await this.#available(tx, organisationId);
-				if (['morning-brief', 'stocktake'].includes(key) && !await this.#push?.available(tx, organisationId, actor.userId)) available.delete('push');
+				if (['chase-due', 'stocktake'].includes(key) && !await this.#push?.available(tx, organisationId, actor.userId)) available.delete('push');
 				const unmet = requirementsOf(definition).filter((r) => !available.has(r));
 				if (unmet.length) throw badRequest('requirements_unmet', `${definition.name} needs ${unmet.map((r) => requirementWords[r]).join(' and ')} before it can run`);
 			}
@@ -123,7 +123,7 @@ export class WorkflowService {
 	async #available(tx: TransactionSql, organisationId: string): Promise<Set<Requirement>> {
 		const available = new Set<Requirement>();
 		const connections = await tx<{ provider: string }[]>`select provider from connections where organisation_id = ${organisationId} and status = 'connected'`;
-		for (const c of connections) if (c.provider === 'google' || c.provider === 'xero' || c.provider === 'shopify') available.add(`connection:${c.provider}` as Requirement);
+		for (const c of connections) if (c.provider === 'xero' || c.provider === 'shopify') available.add(`connection:${c.provider}` as Requirement);
 		const [runtime] = await tx<{ status: string }[]>`select status from inference_runtimes where organisation_id = ${organisationId}`;
 		if (runtime?.status === 'ready') available.add('inference');
 		if (this.#push && (await this.#push.available(tx, organisationId))) available.add('push');

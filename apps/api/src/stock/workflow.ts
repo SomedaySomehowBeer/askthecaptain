@@ -1,12 +1,8 @@
 import { withTenant, type Sql } from '@captain/db';
 import { Registry, type HandlerContext } from '@captain/engine';
-import { draftOrderEmailInstruction } from '@captain/steps';
 import { z } from 'zod';
-import type { InferenceService } from '../inference/service.ts';
 import type { PushService } from '../push/service.ts';
-import { inferenceStep } from '../workflows/bindings.ts';
-import { draftSchema, journal, type Context } from '../triage/data.ts';
-import { workflowDraft } from '../triage/outbox.ts';
+import { journal, type Context } from '../workflows/journal.ts';
 import { shopifyState } from '../shopify/connections.ts';
 const quantity = z.string().regex(/^-?\d+(?:\.\d+)?$/);
 const itemSchema = z.object({ id: z.uuid(), name: z.string(), location: z.string(), unitLabel: z.string(), reorderPoint: quantity.nullable(),
@@ -18,8 +14,8 @@ async function receipt(ctx: Context, action: string) {
  return (await ctx.tx`select subject_id, detail from audit_events where action = ${action} and detail->>'idempotencyKey' = ${ctx.idempotencyKey} limit 1`)[0];
 }
 export class StocktakeService {
- readonly db: Sql; readonly inference: InferenceService; readonly push: PushService;
- constructor(db: Sql, inference: InferenceService, push: PushService) { this.db = db; this.inference = inference; this.push = push; }
+ readonly db: Sql; readonly push: PushService;
+ constructor(db: Sql, push: PushService) { this.db = db; this.push = push; }
  async items(ctx: Context, args: Record<string, unknown>) {
   const location = z.string().trim().min(1).max(200).parse(args.location);
   const rows = await ctx.tx`select s.id, s.name, s.location, s.unit_label, s.reorder_point::text, c.name as supplier_name,
@@ -86,19 +82,12 @@ export class StocktakeService {
   registry.registerStep('stock.recordCount', { kind: 'write', transaction: (ctx, args) => this.record(ctx, args) });
   registry.registerStep('tasks.createInProject', { kind: 'write', transaction: (ctx, args) => this.task(ctx, args) });
   registry.registerStep('shopify.stockLevels', { kind: 'read', transaction: ctx => this.shop(ctx) });
-  const draft = inferenceStep(this.inference, draftOrderEmailInstruction, draftSchema);
-  registry.registerStep('draftOrderEmail', { kind: 'infer', retrySafe: true, call: (ctx, args) => {
-   const item = itemSchema.parse(args.item), count = countSchema.parse(args.count);
-   if (!('call' in draft)) throw Error('Inference binding is not installed');
-   return draft.call(ctx, { untrustedStock: { item: item.name, unit: item.unitLabel, count: count.count, reorderPoint: item.reorderPoint, supplier: item.preferredSupplier?.name ?? null, usualQuantity: null } });
-  } });
   registry.registerStep('push.counter', { kind: 'notify', retrySafe: true, call: async (ctx: HandlerContext, args) => {
    const item = itemSchema.parse(args.item);
    const deliveries = await this.push.send(ctx.organisationId, ctx.userId, { title: `Count ${item.name}`, body: `Enter the ${item.unitLabel} at ${item.location} in Stock.`, tag: `stock:${item.id}`, url: '/resources/inventory#stock' }, { runId: ctx.runId, actor: { userId: ctx.userId, requestId: ctx.runId } });
    const note = deliveries.length ? 'Count requested. Delivery results are recorded per device.' : 'No subscribed device for the enabling person. Enter counts in Resources → Inventory.';
    await withTenant(this.db, ctx, tx => journal({ ...ctx, tx }, 'stock.count_requested', 'stock_item', item.id, { note })); return { deliveries, note };
   } });
-  if (!registry.handlers.has('outbox.create')) registry.registerStep('outbox.create', { kind: 'write', transaction: workflowDraft });
   return registry;
  }
 }

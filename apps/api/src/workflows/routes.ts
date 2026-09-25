@@ -2,13 +2,16 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { badRequest } from '../errors.ts';
 import type { Session } from '../auth/service.ts';
-import { catalog } from '@captain/steps';
+import { catalog, definitions, type Step } from '@captain/steps';
 import type { WorkflowService } from './service.ts';
 
 type Vars = { Variables: { requestId: string; session: Session } };
 const uuid = z.string().uuid();
 const key = z.string().regex(/^[a-z][a-z0-9-]{1,40}$/);
-const stepWords = Object.fromEntries(Object.entries(catalog).map(([k, entry]) => [k, { kind: entry.kind, does: entry.does, until: entry.until ?? null }]));
+const activeSteps = new Set<string>();
+function collect(steps: Step[]) { for (const step of steps) { if (step.kind === 'each') collect(step.steps); else if (step.kind === 'branch') { collect(step.then); collect(step.else ?? []); } else activeSteps.add(step.key); } }
+for (const definition of definitions) collect(definition.steps);
+const stepWords = Object.fromEntries(Object.entries(catalog).filter(([k]) => activeSteps.has(k)).map(([k, entry]) => [k, { kind: entry.kind, does: entry.does, until: entry.until ?? null }]));
 
 /** The workflow catalogue, enablement and journal under an organisation. Mounted inside the
  *  signed-in router; the service checks membership and role on every call. */

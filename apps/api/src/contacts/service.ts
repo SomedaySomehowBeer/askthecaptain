@@ -1,8 +1,7 @@
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { audit } from '../audit.ts';
 import { badRequest, HttpError, notFound } from '../errors.ts';
-import { requireMember } from '../mail/store.ts';
-import { addresses } from './addresses.ts';
+import { requireMember } from '../tenant.ts';
 type Actor = { userId: string; requestId: string };
 export type ContactInput = { name?: string; email?: string; companyId?: string | null; phone?: string; role?: string; notes?: string; archived?: boolean };
 export type CompanyInput = { name?: string; domain?: string | null; notes?: string; archived?: boolean };
@@ -30,17 +29,7 @@ export class ContactsService {
   return this.tenant(actor, org, async (tx) => {
    const [contact] = await tx`select c.*, co.name as company_name from contacts c left join companies co on co.id = c.company_id where c.id = ${id}`;
    if (!contact) throw notFound('That contact is not available. Return to People and companies.');
-   // The SQL prefilter is only an optimisation; exact parsed addresses decide membership, so
-   // ann@example.com cannot see a thread for joann@example.com. No message bodies are read.
-   const candidates = await tx`select t.id, m.subject, m.sent_at, m.from_header, m.to_header, m.cc_header, m.bcc_header from mail_messages m
-    join mail_threads t on t.id = m.thread_id join connections c on c.id = t.connection_id and c.account_email = t.account_email
-    where c.status <> 'disconnected' and (m.from_header ilike ${searchPattern(contact.email)} or m.to_header ilike ${searchPattern(contact.email)} or m.cc_header ilike ${searchPattern(contact.email)} or m.bcc_header ilike ${searchPattern(contact.email)})
-    order by m.sent_at desc, m.id desc`;
-   const threads = new Map<string, { id: string; subject: string; sentAt: Date }>();
-   for (const m of candidates) if (!threads.has(m.id) && addresses([m.fromHeader, m.toHeader, m.ccHeader, m.bccHeader].join(',')).some((a) => a.email === contact.email)) {
-    threads.set(m.id, { id: m.id, subject: m.subject, sentAt: m.sentAt }); if (threads.size === 20) break;
-   }
-   return { contact, threads: [...threads.values()] };
+   return { contact };
   });
  }
  async saveContact(actor: Actor, org: string, input: ContactInput, id?: string) {

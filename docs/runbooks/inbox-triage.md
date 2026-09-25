@@ -1,5 +1,11 @@
 # Inbox triage
 
+> **Retired implementation:** the assistant runtime is removed in #135. Commands below are
+> historical recovery context, not current setup instructions. Do not re-enable these sources.
+> Follow the [retirement contract](../plans/assistant-runtime-retirement-2026-09.md), including
+> stopped-worker cutover, embedding shutdown and deliberate provider-grant handling.
+
+
 > **Legacy assistant maintenance reference (25 September).** This describes code still present,
 > not current Captain scope or workspace onboarding. Its old job/decision/plan-section references
 > belong to the [historical plan](../plans/legacy-assistant-history.md). Do not enable this path

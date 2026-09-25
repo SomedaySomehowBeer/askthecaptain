@@ -1,4 +1,5 @@
-/** Workspace sections; existing record URLs keep their identity during migration (D11). */
+/** Workspace sections; existing record URLs keep their identity during migration (D11). The retired
+ *  assistant pages (Today, Inbox, Calendar, Notes) belong to no section, so a tab never remembers them. */
 export type Tab = { href: string; label: string };
 export const tabs: Tab[] = [
 	{ href: '/work', label: 'Work' },
@@ -8,8 +9,8 @@ export const tabs: Tab[] = [
 export const here = (pathname: string, href: string) => href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
 export function workspaceSection(pathname: string): string | null {
 	if (here(pathname, '/chat')) return '/chat';
-	if (here(pathname, '/resources') || here(pathname, '/settings/connections') || here(pathname, '/settings/contacts') || here(pathname, '/inbox/contacts') || here(pathname, '/inbox/companies')) return '/resources';
-	if (['/work', '/today', '/commitments', '/calendar', '/inbox', '/notes'].some(path => here(pathname, path)) || pathname === '/') return '/work';
+	if (here(pathname, '/resources') || here(pathname, '/settings/connections') || here(pathname, '/settings/contacts')) return '/resources';
+	if (['/work', '/commitments'].some(path => here(pathname, path)) || pathname === '/') return '/work';
 	return null;
 }
 /** Session storage is optional and untrusted: never turn a stored route into an external link. */

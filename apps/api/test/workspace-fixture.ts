@@ -1,13 +1,14 @@
 import { writeFile, readFile, unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { freshDatabase } from '../../../packages/db/test/harness.ts';
+import { ConnectionService } from '../src/connections/service.ts';
+import { WorkflowService } from '../src/workflows/service.ts';
 import { createApp } from '../src/app.ts';
 import type { IdentityProvider } from '../src/auth/google.ts';
 import type { TaskStatus } from '../src/commitments/service.ts';
 import { AuthService } from '../src/auth/service.ts';
 import { OrganisationService } from '../src/organisations/service.ts';
 import { CommitmentsService } from '../src/commitments/service.ts';
-import { NotesService } from '../src/notes/service.ts';
 import { serve } from '@hono/node-server';
 // Manual browser fixture only: never imported by the application or started against hosted data.
 const directory = process.env.WORKSPACE_PROBE_DIR;
@@ -26,7 +27,7 @@ try {
     const google: IdentityProvider & {
         next: Identity;
     } = { next: { subject: 'workspace-owner', email: 'olive@example.test', name: 'Olive Owner' }, authorizationUrl: ({ state }) => `https://google.test/?state=${state}`, async exchange() { return this.next; } };
-    const app = createApp({ db: db.app, auth: new AuthService(db.app, google, { appUrl: 'http://127.0.0.1:3034', sessionTtlDays: 1 }), organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), notes: new NotesService(db.app) });
+    const app = createApp({ connections: new ConnectionService(db.app, null, null), workflows: new WorkflowService(db.app), db: db.app, auth: new AuthService(db.app, google, { appUrl: 'http://127.0.0.1:3034', sessionTtlDays: 1 }), organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app) });
     async function request<T>(method: string, path: string, token: string | null, body?: unknown): Promise<T> {
         const response = await app.request(path, {
             method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
@@ -81,7 +82,15 @@ try {
     await request('POST', `${base}/equipment/${equipment[1]!.id}/reservations`, owner.token, {
         id: randomUUID(), title: 'Line maintenance', kind: 'maintenance', startsAt: '2030-10-02T01:00:00Z', endsAt: '2030-10-02T02:00:00Z'
     });
-    await writeFile(`${directory}/data.json`, JSON.stringify({ fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id }), { mode: 0o600, flag: 'wx' });
+    // Historical activity fixture only: no old definition is enabled or executed.
+    await new WorkflowService(db.app).sync();
+    const [oldEnablement] = await db.owner`insert into workflow_enablements (organisation_id, definition_key, definition_version, enabled, enabled_by)
+        values (${org.id}, 'chase-due', 3, false, ${owner.user.id}) returning id`;
+    const [oldRun] = await db.owner`insert into workflow_runs (organisation_id, enablement_id, definition_key, definition_version, definition_digest, trigger, enabled_by, state, reason)
+        values (${org.id}, ${oldEnablement!.id}, 'chase-due', 3, 'fixture-historical', '{}', ${owner.user.id}, 'cancelled', 'Retired personal-assistant version') returning id`;
+    await db.owner`insert into workflow_run_steps (organisation_id, run_id, path, kind, key, state)
+        values (${org.id}, ${oldRun!.id}, 'steps.2', 'infer', 'draftChaser', 'succeeded')`;
+    await writeFile(`${directory}/data.json`, JSON.stringify({ fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id, retiredRun: oldRun!.id }), { mode: 0o600, flag: 'wx' });
     let mutationRequests = 0;
     const server = serve({ hostname: '127.0.0.1', port: 8084, fetch: async (req, bindings) => {
         const mode = await readFile(`${directory}/mode`, 'utf8').catch(() => '');

@@ -39,7 +39,7 @@ export default async function SettingsPage() {
 			) : null}
 			<section className="card card--inset">
 				<h2>People and companies</h2>
-				<p className="secondary">Contacts from your mail and the people you add by hand.</p>
+				<p className="secondary">The people and companies the business works with.</p>
 				<Link className="button button--secondary" href="/settings/contacts">Manage people and companies</Link>
 			</section>
 			<section className="card card--inset">
@@ -59,7 +59,7 @@ export default async function SettingsPage() {
 			</section>
 			<section className="card card--inset">
 				<h2>Inference</h2>
-				<p className="secondary">Use your Claude or Codex subscription for triage, drafts and the brief.</p>
+				<p className="secondary">Use your Claude or Codex subscription for Captain’s business workflows.</p>
 				<Link className="button button--secondary" href="/settings/inference">Manage inference</Link>
 			</section>
 		</Page>

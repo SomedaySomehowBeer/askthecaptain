@@ -24,7 +24,8 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   } else await route.fulfill({ response });
  });
  const page = await context.newPage(); page.setDefaultTimeout(10000); page.on('pageerror', e => errors.push(e.message));
- const goto = route => page.goto(origin + route);
+ // Pace full navigations: each server-rendered view checks the session and may read several resources.
+ const goto = async route => { await new Promise(resolve => setTimeout(resolve, 1500)); return page.goto(origin + route); };
  const signIn = () => context.addCookies([{ name: 'captain_session', value: fixture.token, url: origin }]);
  const api = async (route, options = {}) => {
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -114,10 +115,25 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   await page.locator('.tabbar').getByRole('link', { name: 'Work', exact: true }).click();
   await expect(page).toHaveURL(remembered);
   console.log('PASS bounded pagination and independent Inventory/Work tab state');
-  for (const route of ['/work/views', '/chat/views', '/resources/views', '/resources', '/resources/inventory', '/today', '/sign-in']) {
+  for (const route of ['/work/views', '/chat/views', '/resources/views', '/resources', '/resources/inventory', '/today', '/inbox', '/calendar', '/notes', '/settings/connections', '/settings/contacts', '/settings/workflows', '/sign-in']) {
    await goto(route); await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${route} phone overflow`);
   }
+  for (const route of ['/today', '/inbox', '/calendar', '/notes', '/inbox/00000000-0000-4000-8000-000000000000', '/notes/00000000-0000-4000-8000-000000000000']) {
+   await goto(route); await expect(page.getByRole('heading', { name: 'This part of Captain has been retired' })).toBeVisible();
+   await expect(page.locator('form')).toHaveCount(0);
+  }
+  await goto('/work/views');
+  await expect(page.locator('a[href^="/today"], a[href^="/inbox"], a[href^="/calendar"], a[href^="/notes"]')).toHaveCount(0);
+  await goto(`/settings/workflows?run=${fixture.retiredRun}`);
+  await expect(page.getByText("This run's workflow version is no longer offered, so its steps are listed below as they ran.", { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
+  await page.getByText('Every step as it ran', { exact: true }).click(); await expect(page.getByText('draftChaser', { exact: true })).toBeVisible();
+  await goto('/settings/connections'); await expect(page.getByRole('button', { name: /Connect Google|Reconnect Google|Enable live/ })).toHaveCount(0);
+  const person = await api('/contacts', { method: 'POST', body: JSON.stringify({ name: 'Resource contact', email: `resource-${Date.now()}@example.test` }) });
+  await goto(`/settings/contacts/${person.id}`); await expect(page.getByRole('heading', { name: 'Resource contact', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Recent mail|Notes/ })).toHaveCount(0);
+  await goto(`/inbox/contacts/${person.id}`); await expect(page).toHaveURL(origin + `/settings/contacts/${person.id}`);
   await goto('/work/views'); await page.screenshot({ path: path.join(directory, 'screenshots/work-views-phone.png'), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 }); await goto('/work');
   await expect(page.locator('.topnav').getByRole('link', { name: 'Resources', exact: true })).toBeVisible();
@@ -202,6 +218,6 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   await page.screenshot({ path: path.join(directory, 'screenshots/task-tags-desktop.png'), fullPage: true });
   console.log('PASS tag catalogue pagination and mobile/desktop layouts');
   assert.deepEqual(errors, []);
-  console.log('PASS grouped routes, retained Today, mobile/desktop layout and no browser exceptions');
+  console.log('PASS grouped routes, retired assistant routes, mobile/desktop layout and no browser exceptions');
  } catch (error) { await page.screenshot({ path: path.join(directory, 'failure.png'), fullPage: true }).catch(() => {}); throw error; } finally { await mode(''); await context.close(); await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

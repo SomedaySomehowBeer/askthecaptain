@@ -62,13 +62,7 @@ export class CommitmentsService {
 				order by system_kind is null, archived_at is not null, name`;
 			const tasks = await this.#tasks(tx, organisationId, tx`t.status <> 'cancelled'`);
 			const series = await this.#series(tx, organisationId, today);
-			const links = await tx<ProjectSource[]>`select project_id, kind, id, title, at, linked_by, total::int as total from (
-				select ps.project_id, ps.source_kind as kind, ps.source_id as id, ps.linked_by,
-					case ps.source_kind when 'mail_thread' then coalesce((select m.subject from mail_messages m where m.thread_id = ps.source_id order by m.sent_at desc, m.provider_id desc limit 1), '')
-						else coalesce((select n.title from notes n where n.id = ps.source_id), '') end as title,
-					case ps.source_kind when 'mail_thread' then (select t.last_message_at from mail_threads t where t.id = ps.source_id) else (select n.updated_at from notes n where n.id = ps.source_id) end as at,
-					row_number() over (partition by ps.project_id order by ps.created_at desc) as rank, count(*) over (partition by ps.project_id) as total
-				from project_sources ps where ps.organisation_id = ${organisationId}) s where rank <= 10 order by project_id, at desc nulls last`;
+			const links: ProjectSource[] = []; // Legacy source records remain stored; no personal-source preview reads.
 			return { projects, tasks, series, links, today, timezone };
 		});
 	}
@@ -90,11 +84,11 @@ export class CommitmentsService {
 		await roleOf(this.#db, actor.userId, organisationId);
 		if (input.name !== undefined && !input.name.trim()) throw badRequest('name_required', 'the project needs a name');
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
-			const [current] = await tx<Project[]>`select ${tx.unsafe(projectColumns)} from projects where id = ${projectId} and organisation_id = ${organisationId}`;
+			const [current] = await tx<Project[]>`select ${tx.unsafe(projectColumns)} from projects where id = ${projectId} and organisation_id = ${organisationId} for update`;
 			if (!current) throw notFound('that project does not exist');
 			if (current.systemKind && input.archived) throw badRequest('system_project', 'the Obligations project cannot be archived');
 			if (input.ownerId) await this.#requireMember(tx, organisationId, input.ownerId);
-			if (input.brief) await this.#checkBrief(tx, input.brief);
+			if (input.brief) this.#checkBrief(input.brief, current.brief);
 			const [project] = await tx<Project[]>`update projects set
 				name = coalesce(${input.name?.trim() ?? null}, name), description = coalesce(${input.description?.trim() ?? null}, description),
 				stages = coalesce(${input.stages ? tx.array(input.stages.map((s) => s.trim()).filter(Boolean)) : null}, stages),
@@ -280,15 +274,13 @@ export class CommitmentsService {
 		return again!.id;
 	}
 
-	/** A brief line may cite only a thread or note this tenant holds; the citation is what makes the line checkable. */
-	async #checkBrief(tx: TransactionSql, brief: Brief) {
-		const cited = briefSections.flatMap((k) => brief[k].map((line) => line.evidence)).filter((e): e is NonNullable<BriefLine['evidence']> => e !== null);
-		const threads = cited.filter((e) => e.kind === 'mail_thread').map((e) => e.id), notes = cited.filter((e) => e.kind === 'note').map((e) => e.id);
-		const found = new Set<string>();
-		if (threads.length) for (const r of await tx`select id from mail_threads where id = any(${tx.array(threads)}::uuid[])`) found.add(`mail_thread:${r.id}`);
-		if (notes.length) for (const r of await tx`select id from notes where id = any(${tx.array(notes)}::uuid[])`) found.add(`note:${r.id}`);
-		if (cited.some((e) => !found.has(`${e.kind}:${e.id}`))) throw badRequest('evidence_unknown', 'a brief line cites a thread or note that is not here');
-	}
+	/** Preserve an unchanged historical citation, but do not accept a new personal source link. */
+ #checkBrief(brief: Brief, previous: Brief) {
+  const identity = (line: BriefLine) => JSON.stringify([line.text, line.evidence?.kind, line.evidence?.id]);
+  const existing = new Set(briefSections.flatMap(k => previous[k].map(identity)));
+  if (briefSections.some(k => brief[k].some(line => line.evidence && !existing.has(identity(line)))))
+   throw badRequest('evidence_retired', 'New mail and note citations are no longer supported. Remove the citation from the changed line.');
+ }
 
 	async #tasks(tx: TransactionSql, organisationId: string, where: ReturnType<TransactionSql>): Promise<Task[]> {
 		const rows = await tx<Omit<Task, 'evidence'>[]>`${tx.unsafe(taskSelect)} where t.organisation_id = ${organisationId} and ${where}

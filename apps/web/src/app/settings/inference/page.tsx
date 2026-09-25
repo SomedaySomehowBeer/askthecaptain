@@ -11,7 +11,7 @@ type State = { role: 'owner' | 'admin' | 'member'; disabled: boolean; spritesCon
 const states = { provisioning: 'Setting up', needs_login: 'Needs sign-in', ready: 'Ready', failed: 'Failed', removed: 'Disconnected' };
 export default async function InferencePage() {
  const me = await requireCurrent('/settings/inference');
- return <Page title="Inference" lede="Your subscription powers triage, drafts and the brief.">
+ return <Page title="Inference" lede="Your Claude or Codex subscription powers Captain’s business workflows.">
   <Suspense fallback={<div role="status"><Notice>Checking inference and this month’s allowance…</Notice></div>}><Details me={me} /></Suspense>
  </Page>;
 }
@@ -44,7 +44,7 @@ async function Details({ me }: { me: Awaited<ReturnType<typeof requireCurrent>> 
    <InferenceForm action="budget" disabled={role === 'member'} label="Save allowance"><div className="field"><label htmlFor="inference-limit">Monthly tokens</label><input id="inference-limit" name="limitTokens" type="number" min="0" step="1" max="9007199254740991" required defaultValue={budget.limitTokens} /></div></InferenceForm>
    <p className="secondary">The allowance renews each month. Provider subscription limits still apply.</p>
   </section>
-  <section className="card"><h2>This month’s usage</h2>{usage.length ? <ul>{usage.map(row => <li key={row.tier}>{row.tier === 'small' ? 'Classification and extraction' : 'Drafts and brief'}: {row.inputTokens.toLocaleString('en-AU')} input tokens, {row.outputTokens.toLocaleString('en-AU')} output tokens ({row.calls} calls).</li>)}</ul> : <Notice>No inference usage recorded this month.</Notice>}</section>
+  <section className="card"><h2>This month’s usage</h2>{usage.length ? <ul>{usage.map(row => <li key={row.tier}>{row.tier === 'small' ? 'Classification and extraction' : 'Writing and summaries'}: {row.inputTokens.toLocaleString('en-AU')} input tokens, {row.outputTokens.toLocaleString('en-AU')} output tokens ({row.calls} calls).</li>)}</ul> : <Notice>No inference usage recorded this month.</Notice>}</section>
  </>;
 }
 
