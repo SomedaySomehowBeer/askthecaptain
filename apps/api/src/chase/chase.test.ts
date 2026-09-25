@@ -17,7 +17,8 @@ it('independent task waits do not block reminders ; owner routing, fresh status 
   const [future] = await f.tx(tx => tx`insert into tasks (organisation_id, project_id, title, status, due, source_kind, created_by)
    select organisation_id, project_id, 'Future delivery', 'open', ${f.clock.today}::date + 5, 'person', ${f.userId} from tasks where id = ${f.due.id} returning id`);
   await f.enable(); const run = await f.start();
-  await until(() => f.workflows.run(f.actor, f.org, run), r => r.state === 'waiting');
+  // The run turns 'waiting' at the first parked item while later independent items still execute; wait for both parks.
+  await until(() => f.workflows.run(f.actor, f.org, run), r => r.state === 'waiting' && r.steps.filter(s => s.state === 'waiting').length === 2);
   assert.equal(f.payloads.length, 3); assert.ok(f.payloads.some(p => p.endpoint.endsWith('/member') && p.payload.title === 'Due soon: File the return'));
   assert.ok(f.payloads.some(p => p.endpoint.endsWith('/owner') && p.payload.title === 'Overdue: File the return'));
   const state = await f.workflows.run(f.actor, f.org, run); assert.equal(state.steps.filter(s => s.state === 'waiting').length, 2);
