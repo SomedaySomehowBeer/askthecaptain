@@ -1,8 +1,8 @@
 # Staging resumed; production paused (2026-09-24)
 
 Captain's staging workspace is available at **https://app.askthecaptain.app/work**. API and web
-run the Work record API (#138, image source `806f507`) and the reviewed task/Work-list design
-alignment (#145, image source `ba393bd`, merged as `77a1f02`).
+run the reviewed project overview and linked equipment schedule (#147, image source `ac28154`,
+merged as `ad74d7e`), including the earlier Work record and task/list corrections.
 Tasks, projects and recurring work have their own Work pages; the Commitments overview is retired.
 The old-version database content was reset earlier on 25 September under explicit owner
 permission; **this release did not run another reset**. Embedding and production remain stopped.
@@ -21,6 +21,52 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Project overview and schedule release (25 September 2026, UTC)
+
+Workspace outcomes: **manage shared work** and **allocate resources**.
+[#147](https://github.com/SomedaySomehowBeer/askthecaptain/pull/147) merged as
+`ad74d7e838a41201f1dea73712b8f8e3c410a4a1` after reciprocal Claude/root review and green
+[CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36149762198) (check job 2m58s).
+Image source `ac28154a22a5980d7b08b957b82890229eed85c1` has the same Git tree as the merge.
+
+At approximately **14:52–14:53Z**, the existing staging machines were updated in API-then-web
+order. API readiness returned `200 {"ok":true}` before the web update. Verified inventory:
+
+- API: only `80e39ea6416e18`, `registry.fly.io/askthecaptain-api-staging:git-ac28154`, digest
+  `sha256:00823060f5fb7b0e63d3de14c4fedd06be7ba64afbb2305ca07865db82dc39db`.
+- Web: only `9185776e7cd3d8`, `registry.fly.io/askthecaptain-web-staging:git-ac28154`, digest
+  `sha256:4778c3f25052215df47c8d09821d1bf8c03170df6eecf062c7914a0773c8a0dc`.
+
+Before/after configuration comparisons showed only each image changed. Normal API/Next.js commands,
+autostart, idle-stop and zero minimum-running settings remain unchanged. No migration, queue install,
+data reset, customer-record write, secret change, production/embedding update or new application
+machine was part of this release. Existing demo tasks and bookings remain the user's test data.
+
+The project now has Overview, Tasks and Schedule views. Overview previews open/in-progress work
+across shared tags; Schedule uses an authenticated, RLS-protected bounded project-booking read.
+Archived history remains readable. Project-filtered bookings never claim equipment availability;
+the shared timeline retains competing occupancy across projects. No invented chat, files or conflicts.
+
+Validation passed: workspace typecheck, production build, 24 real-Postgres equipment tests, four
+reminder tests and 11 local browser groups (four project and seven existing Work-record groups).
+Groups were run in bounded sessions: bulk pagination exhausted a normal request window before one
+fault check, and the earlier regression fixture stopped before booking creation. Those remaining
+groups passed after the request window/fresh fixture, without changing application limits. The
+project script now waits one request window between bulk setup and fault injection. The task-owned
+local servers were stopped after validation and their throwaway databases disposed.
+
+CI exposed an existing reminder-test race: it asserted two independent waits after observing only
+the first. The test now waits for both; its original assertions remain and production workflow code
+is unchanged. [Populated screenshots and design scope](../validation/project-overview-2026-09-25/README.md)
+record comparisons at 360/390/430 and 1440 pixels. Claude implemented the API/test fix, root reviewed
+them, and Claude approved the UI and final proof.
+
+Hosted browser checks passed for signed-out Work/project/series and project-detail/schedule routes,
+Google sign-in entry, phone/desktop layout and absence of browser exceptions. An authenticated
+hosted session and full Google round trip were not exercised. Remaining search/filter presentation,
+task-history ordering and contextual Chat/Files stay in [#142](https://github.com/SomedaySomehowBeer/askthecaptain/issues/142);
+this is not complete native-device, screen-reader or mockup acceptance.
 
 ## Task and Work-list design release (25 September 2026, UTC)
 
