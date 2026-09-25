@@ -83,7 +83,7 @@ const origin = 'http://127.0.0.1:3034';
   assert.equal(standalone.projectId, null);
   await newForm(equip[2].id,'Browser booking','2030-10-10T09:00','2030-10-10T11:00');
   await page.getByLabel('Setup before (minutes)',{exact:true}).fill('15');await page.getByLabel('Cleanup after (minutes)',{exact:true}).fill('30');
-  await expect(page.getByLabel('Project (optional)',{exact:true})).toHaveValue('');await page.getByLabel('Task (optional)',{exact:true}).selectOption(standalone.id);
+  await expect(page.getByLabel('Project',{exact:true})).toHaveValue('');await page.getByLabel('Task',{exact:true}).selectOption(standalone.id);
   await saveNew();const createdUrl=page.url(),createdId=createdUrl.split('/').pop();
   await expect(page.getByRole('heading',{name:'Browser booking',exact:true})).toBeVisible();await expect(page.getByText('Revision 1',{exact:true})).toBeVisible();
   await expect(page.locator('.equipment-plus')).toHaveCount(0);

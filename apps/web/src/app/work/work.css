@@ -51,3 +51,8 @@
 .work-tag-row__use { font-size: 13px; color: var(--accent-text); min-height: 44px; display: inline-flex; align-items: center; }
 .work-tag-row .disclosure { flex-basis: 100%; }
 .work-tag-choice__error { flex-basis: 100%; }
+
+.work-record-meta { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1rem; margin:0; }
+.work-record-meta dt { color: var(--muted); font-size: .85rem; }
+.work-record-meta dd { margin:.25rem 0 0; overflow-wrap:anywhere; }
+.work-record-body { white-space:pre-wrap; overflow-wrap:anywhere; }

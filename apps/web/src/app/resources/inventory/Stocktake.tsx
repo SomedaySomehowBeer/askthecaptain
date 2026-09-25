@@ -1,6 +1,6 @@
-import { api, load, type OfferedWorkflow } from '../../lib/api.ts';
-import { Notice } from '../../components/Notice.tsx';
-import type { requireCurrent } from '../../components/Page.tsx';
+import { api, load, type OfferedWorkflow } from '../../../lib/api.ts';
+import { Notice } from '../../../components/Notice.tsx';
+import type { requireCurrent } from '../../../components/Page.tsx';
 import { StartStocktake } from './StartStocktake.tsx';
 export async function Stocktake({ me, locations }: { me: Awaited<ReturnType<typeof requireCurrent>>; locations: string[] }) {
  const result = await load(() => api<{ workflows: OfferedWorkflow[] }>(`/v1/organisations/${me.organisation.organisationId}/workflows`, { token: me.token }));

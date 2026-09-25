@@ -36,19 +36,18 @@ the first-customer release still requires the full slices 2–4 acceptance evide
 
 - `/` opens `/work`: your open tasks, with visible owner, status, project and tag filters in the URL.
   Pagination preserves the filter; selected lookup values survive partial read failures.
-- `/work/new` creates through the existing authenticated task API. Task links currently open the legacy
-  Commitments record; cancelled rows have no detail. Both are implementation debt to remove,
-  not navigation requirements for the new task page.
+- `/work/new` creates a task with an optional project. The [Work record increment](work-record-pages-2026-09.md)
+  now in review replaces Commitments links with bounded task, project and recurring-work pages,
+  including cancelled-task details, revisions and searchable selectors.
 - Work, Chat and Resources have grouped `/views` lists. Tab route/filter state is remembered for
   this browser session, scoped to person and organisation. Full scroll/native stack restoration
   remains an acceptance item; this is not saved-view persistence.
-- Legacy state still in code (scheduled for retirement): `/today` retains the former landing page. Existing Inbox, Calendar, Commitments, Notes, stock,
-  contacts, connections and Settings remain reachable. Inventory at `/resources/inventory` reuses the existing counted-stock controls while retaining
-  Resources navigation; the legacy Commitments stock section remains available.
+- Former Today, Inbox, Calendar and Notes routes are retired. Inventory at `/resources/inventory`
+  uses counted-stock controls; contacts, connections and account Settings remain available.
+  The Work record increment removes the remaining Commitments forms and overview API.
 - Chat and Files & assets are explicitly unavailable. No fictional records, free-equipment
   assertions or create actions for unimplemented capabilities are exposed.
-- Project/member labels currently come from existing overview APIs; a smaller lookup endpoint,
-  saved filters and native integration are subsequent work.
+- Saved filters and native integration remain subsequent work.
 
 ## Web tag-controls increment
 

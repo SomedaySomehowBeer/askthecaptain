@@ -128,4 +128,6 @@ cutover. This does not mark the optional-project/Obligations or Work detail-page
 
 The [optional-project/reset increment](optional-work-projects-2026-09.md) implements task/series
 null projects, checklist and equipment links, and a separately invoked staging legacy-data reset
-authorised by the owner. Work detail-route replacement remains the next dependency.
+authorised by the owner. The [Work record increment](work-record-pages-2026-09.md) now implements
+that next dependency; review and browser/release evidence are recorded with its PR. Saved views
+and linked-chat contracts follow it.

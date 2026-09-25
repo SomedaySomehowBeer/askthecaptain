@@ -6,7 +6,4 @@ export type WorkPage = { tasks: WorkTask[]; nextOffset: number | null };
 export type Tag = { id: string; name: string };
 export type TagPage = { tags: Tag[]; nextOffset: number | null };
 
-/** There is no task page yet: a task opens where it is edited today, on Commitments, at its own anchor.
- *  Commitments does not list cancelled tasks, so a cancelled task has nowhere to open. */
-export const workTaskHref = (task: { id: string; status?: TaskStatus }): string | null =>
-	task.status === 'cancelled' ? null : `/commitments#task-${task.id}`;
+export const workTaskHref = (task: { id: string; status?: TaskStatus }): string => `/work/tasks/${task.id}`;

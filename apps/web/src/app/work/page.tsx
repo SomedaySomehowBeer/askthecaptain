@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Notice } from '../../components/Notice.tsx';
 import { Page, requireCurrent } from '../../components/Page.tsx';
-import { api, load, type Commitments, type Member, type Project } from '../../lib/api.ts';
-import { describeDue } from '../../lib/dates.ts';
+import { api, load, type Organisation, type Member, type Project } from '../../lib/api.ts';
+import { dateIn, describeDue } from '../../lib/dates.ts';
 import { apiQuery, isDefault, maxTags, nextHref, pageSize, parseFilters, projectLabel, statuses, statusWords, unlistedTags, workHref, type Search, type WorkFilters } from './filters.ts';
 import { workTaskHref, type TagPage, type WorkPage as WorkTasks, type WorkTask } from './types.ts';
 import './work.css';
@@ -26,10 +26,10 @@ function TaskRow({ task, today, meId, owners, projects }: { task: WorkTask; toda
 					<span className={due.urgency ? `due--${due.urgency}` : undefined}>{task.status === 'done' ? 'done' : due.text}</span>
 					{task.status !== 'open' && task.status !== 'done' ? <span>{statusWords[task.status as keyof typeof statusWords] ?? task.status}</span> : null}
 					<span>{owner}</span>
-					{project ? <span>{project.name}</span> : null}
+					{project ? <span>{project.name}</span> : task.projectId?<span>In a project</span>:<span>No project</span>}
 				</span>
 				{task.tags.length ? <span className="work-task__tags">{task.tags.map((tag) => <span key={tag.id} className="chip">{tag.name}</span>)}</span> : null}
-				{href ? null : <span className="muted">Cancelled tasks are not listed on Commitments, so this one has no page to open.</span>}
+
 	</>);
 	return (
 		<li className="work-task">
@@ -53,13 +53,16 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 	}
 	const filters = parsed.filters;
 	const org = me.organisation.organisationId; const token = me.token; const meId = me.me.user.id;
-	const [tasks, tags, overview, members] = await Promise.all([
+	const [tasks, tags, overview, members, organisation, chosenProject] = await Promise.all([
 		load(() => api<WorkTasks>(`/v1/organisations/${org}/tasks?${apiQuery(filters, meId)}`, { token })),
 		load(() => api<TagPage>(`/v1/organisations/${org}/tags?limit=100`, { token })),
-		load(() => api<Commitments>(`/v1/organisations/${org}/commitments`, { token })),
-		load(() => api<{ members: Member[] }>(`/v1/organisations/${org}/members`, { token }))
+		load(() => api<{projects:Project[];nextOffset:number|null}>(`/v1/organisations/${org}/projects?limit=50`, { token })),
+		load(() => api<{ members: Member[] }>(`/v1/organisations/${org}/members`, { token })),
+		load(()=>api<Organisation>(`/v1/organisations/${org}`,{token})),
+		filters.projectId?load(()=>api<Project>(`/v1/organisations/${org}/projects/${filters.projectId}`,{token})):null
 	]);
 	const projects = new Map((overview.ok ? overview.value.projects : []).map((p) => [p.id, p]));
+	if(chosenProject?.ok) projects.set(chosenProject.value.id,chosenProject.value);
 	const activeProjects = [...projects.values()].filter((p) => p.state === 'active');
 	const owners = new Map((members.ok ? members.value.members : []).map((m) => [m.userId, m.name || m.email]));
 	const tagNames = new Map((tags.ok ? tags.value.tags : []).map((t) => [t.id, t.name]));
@@ -100,7 +103,7 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 										<option value="">Any project</option>
 										{filters.projectId && !projectOffered ? <option value={filters.projectId}>{projectLabel(selectedProject)}</option> : null}
 										{activeProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-									</select></div>
+									</select>{overview.value.nextOffset!==null?<p className="muted">The first 50 projects are shown. <Link href="/work/projects">Browse all projects</Link> to open one and see its tasks.</p>:null}</div>
 							) : filters.projectId ? <input type="hidden" name="projectId" value={filters.projectId} /> : null}
 						</div>
 						{(tags.ok && tags.value.tags.length) || unlisted.length ? (
@@ -136,14 +139,14 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 				) : (
 					<Notice title="No tasks match these filters" action={{ href: '/work', label: 'Back to my work' }}>
 						{selectedProject && selectedProject.state !== 'active'
-							? `${projectLabel(selectedProject)}: Work lists tasks in active projects only. Open it on Commitments, or remove the project filter.`
+							? `${projectLabel(selectedProject)} has no tasks matching these filters.`
 							: 'Change a filter, or clear them to see your open work.'}
 					</Notice>
 				)
 			) : (
 				<section className="card">
 					<ul className="bare work-list" aria-label="Tasks">
-						{tasks.value.tasks.map((task) => <TaskRow key={task.id} task={task} today={overview.ok ? overview.value.today : null} meId={meId} owners={owners} projects={projects} />)}
+						{tasks.value.tasks.map((task) => <TaskRow key={task.id} task={task} today={organisation.ok ? dateIn(new Date().toISOString(),organisation.value.timezone) : null} meId={meId} owners={owners} projects={projects} />)}
 					</ul>
 					{filters.offset > 0 || next ? (
 						<nav className="row row--between" aria-label="Pages">

@@ -2,11 +2,12 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Notice } from '../../../../../../components/Notice.tsx';
 import { Page, requireCurrent } from '../../../../../../components/Page.tsx';
-import { api, load } from '../../../../../../lib/api.ts';
+import { api, load, type Project } from '../../../../../../lib/api.ts';
 import { reservationLookups } from '../../../new/lookups.ts';
 import { ReservationForm } from '../../../ReservationForm.tsx';
 import { displayTime, localValue } from '../../../time.ts';
 import { uuid, type Equipment, type Reservation } from '../../../types.ts';
+import type { TaskDetail } from '../../../../../work/records.ts';
 import { CancelReservation } from './CancelReservation.tsx';
 import '../../../forms.css';
 
@@ -39,6 +40,11 @@ export default async function ReservationPage({ params }: { params: Promise<{ eq
 			Times cannot be shown safely without it. {lookups.timeZoneError?.message}</Notice></Page>;
 	}
 	const r = reservation.value; const zone = lookups.timeZone;
+ const [linkedProject,linkedTask]=await Promise.all([
+ r.projectId?load(()=>api<Project>(`/v1/organisations/${org}/projects/${r.projectId}`,{token:me.token})):null,
+ r.taskId?load(()=>api<TaskDetail>(`/v1/organisations/${org}/tasks/${r.taskId}?limit=1`,{token:me.token})):null]);
+ if(linkedProject?.ok)lookups.labels[linkedProject.value.id]=linkedProject.value.name;
+ if(linkedTask?.ok)lookups.labels[linkedTask.value.task.id]=linkedTask.value.task.title;
 	const name = equipment.ok ? equipment.value.name : 'This equipment';
 	const archived = equipment.ok && !!equipment.value.archivedAt;
 	const person = (id: string | null) => id ? lookups.labels[id] ?? 'A person no longer listed' : 'No one';
@@ -57,8 +63,8 @@ export default async function ReservationPage({ params }: { params: Promise<{ eq
 					<dt>Equipment occupied</dt><dd>{displayTime(r.occupiedStartsAt, zone)} to {displayTime(r.occupiedEndsAt, zone)}</dd>
 					<dt>Timezone</dt><dd>{zone}</dd>
 					<dt>Accountable</dt><dd>{person(r.ownerId)}</dd>
-					<dt>Project</dt><dd>{r.projectId ? <Link href={`/commitments#project-${r.projectId}`}>{lookups.labels[r.projectId] ?? 'Open the project'}</Link> : 'None'}</dd>
-					<dt>Task</dt><dd>{r.taskId ? <Link href={`/commitments#task-${r.taskId}`}>{lookups.labels[r.taskId] ?? 'Open the task'}</Link> : 'None'}</dd>
+					<dt>Project</dt><dd>{r.projectId ? <Link href={`/work/projects/${r.projectId}`}>{lookups.labels[r.projectId] ?? 'Open the project'}</Link> : 'None'}</dd>
+					<dt>Task</dt><dd>{r.taskId ? <Link href={`/work/tasks/${r.taskId}`}>{lookups.labels[r.taskId] ?? 'Open the task'}</Link> : 'None'}</dd>
 					<dt>Created by</dt><dd>{person(r.createdBy)}</dd>
 				</dl>
 				{!equipment.ok ? <p className="muted">The equipment details could not be read ({equipment.error.message}); the reservation above is current.</p> : null}

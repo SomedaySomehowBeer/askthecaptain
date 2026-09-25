@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
 import { Notice } from '../../../components/Notice.tsx';
 import { Page, requireCurrent } from '../../../components/Page.tsx';
-import { api, load, type Commitments, type Member } from '../../../lib/api.ts';
+import { api, load, type Project, type Member } from '../../../lib/api.ts';
 import { NewTaskForm, type OwnerOption, type ProjectOption } from './NewTaskForm.tsx';
+import type { Options } from '../records.ts';
 import '../work.css';
 
 export const metadata: Metadata = { title: 'New task' };
@@ -15,14 +16,16 @@ export default async function NewTaskPage({ searchParams }: { searchParams: Prom
 	const org = me.organisation.organisationId; const meId = me.me.user.id;
 	const { projectId: suggested } = await searchParams;
 	const [overview, members] = await Promise.all([
-		load(() => api<Commitments>(`/v1/organisations/${org}/commitments`, { token: me.token })),
+		load(() => api<Options>(`/v1/organisations/${org}/work/options?limit=50`, { token: me.token })),
 		load(() => api<{ members: Member[] }>(`/v1/organisations/${org}/members`, { token: me.token }))
 	]);
 	const owners: OwnerOption[] = [{ id: meId, label: 'You' }, ...(members.ok ? members.value.members : [])
 		.filter((m) => m.status === 'active' && m.userId !== meId).map((m) => ({ id: m.userId, label: m.name || m.email }))];
-	const active = overview.ok ? overview.value.projects.filter((p) => p.state === 'active') : [];
-	const projects: ProjectOption[] | null = overview.ok ? active.map((p) => ({ id: p.id, label: p.name })) : null;
-	const wanted = typeof suggested === 'string' && uuid.test(suggested) && active.some((p) => p.id === suggested) ? suggested : undefined;
+	const suggestedProject = typeof suggested==='string' && uuid.test(suggested) ? await load(()=>api<Project>(`/v1/organisations/${org}/projects/${suggested}`,{token:me.token})) : null;
+	const active = overview.ok ? overview.value.projects.items : [];
+	const projects: ProjectOption[] | null = overview.ok ? [...active] : null;
+	if(projects&&suggestedProject?.ok&&!projects.some(p=>p.id===suggestedProject.value.id))projects.push({id:suggestedProject.value.id,label:suggestedProject.value.name});
+	const wanted = typeof suggested === 'string' && uuid.test(suggested) && suggestedProject?.ok && suggestedProject.value.state === 'active' ? suggested : undefined;
 	const projectId = wanted ?? '';
 	return (
 		<Page title="New task">

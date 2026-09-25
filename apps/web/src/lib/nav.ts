@@ -10,7 +10,7 @@ export const here = (pathname: string, href: string) => href === '/' ? pathname 
 export function workspaceSection(pathname: string): string | null {
 	if (here(pathname, '/chat')) return '/chat';
 	if (here(pathname, '/resources') || here(pathname, '/settings/connections') || here(pathname, '/settings/contacts')) return '/resources';
-	if (['/work', '/commitments'].some(path => here(pathname, path)) || pathname === '/') return '/work';
+	if (['/work'].some(path => here(pathname, path)) || pathname === '/') return '/work';
 	return null;
 }
 /** Session storage is optional and untrusted: never turn a stored route into an external link. */

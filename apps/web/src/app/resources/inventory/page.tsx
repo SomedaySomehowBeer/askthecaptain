@@ -1,5 +1,5 @@
 import { Page, requireCurrent } from '../../../components/Page.tsx';
-import { StockSection } from '../../commitments/Stock.tsx';
+import { StockSection } from './Stock.tsx';
 export const metadata = { title: 'Inventory' };
 export default async function InventoryPage({ searchParams }: { searchParams: Promise<{ shopifyOffset?: string }> }) {
  const me = await requireCurrent('/resources/inventory');

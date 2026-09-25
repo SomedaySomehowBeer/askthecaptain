@@ -6,12 +6,12 @@ import { roleOf, type Actor } from '../tenant.ts';
 export type Tag = { id: string; name: string; createdAt: Date; updatedAt: Date };
 export const tagInput = z.object({ name: z.string().trim().min(1).max(60) }).strict();
 export const workQuery = z.object({
- tagIds: z.array(z.string().uuid()).max(20).default([]), ownerId: z.string().uuid().optional(), projectId: z.string().uuid().optional(),
+ tagIds: z.array(z.string().uuid()).max(20).default([]), ownerId: z.string().uuid().optional(), projectId: z.string().uuid().optional(), seriesId: z.string().uuid().optional(),
  status: z.enum(['suggested', 'open', 'in_progress', 'done', 'cancelled']).optional(),
  offset: z.coerce.number().int().min(0).max(1_000_000).default(0), limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 export type WorkQuery = z.infer<typeof workQuery>;
-export type WorkTask = { id: string; projectId: string | null; title: string; ownerId: string | null; status: string; due: string | null; tags: { id: string; name: string }[] };
+export type WorkTask = { id: string; projectId: string | null; seriesId: string | null; title: string; ownerId: string | null; status: string; due: string | null; revision: number; tags: { id: string; name: string }[] };
 const tagColumns = 'id, name, created_at, updated_at';
 /** Person-scoped labels and task links. The existing task remains the only work record. A top-level task is
  *  eligible when it has no project, or its project is active (not archived or proposed). */
@@ -98,16 +98,21 @@ export class TagsService {
  work(actor: Actor, organisationId: string, raw: unknown) {
   const query = workQuery.parse(raw);
   return this.tx(actor, organisationId, async tx => {
-   const conditions = [tx`t.organisation_id = ${organisationId}`, tx`t.parent_id is null`, tx`${tx.unsafe(eligibleWhere)}`];
+   // The default list excludes archived and proposed projects' work. Naming a project or a series is an
+   // explicit request for that record's work, so it includes an archived project's tasks too.
+   const explicit = Boolean(query.projectId || query.seriesId);
+   const conditions = [tx`t.organisation_id = ${organisationId}`, tx`t.parent_id is null`];
+   if (!explicit) conditions.push(tx`${tx.unsafe(eligibleWhere)}`);
    if (query.ownerId) conditions.push(tx`t.owner_id = ${query.ownerId}`);
    if (query.projectId) conditions.push(tx`t.project_id = ${query.projectId}`);
+   if (query.seriesId) conditions.push(tx`t.series_id = ${query.seriesId}`);
    conditions.push(query.status ? tx`t.status = ${query.status}` : tx`t.status <> 'cancelled'`);
    // Match any selected tag, AND with other filter kinds; EXISTS returns each task only once.
    const tagIds = [...new Set(query.tagIds)];
    if (tagIds.length) conditions.push(tx`exists (select 1 from task_tags tt
     where tt.organisation_id = t.organisation_id and tt.task_id = t.id and tt.tag_id in ${tx(tagIds)})`);
    const where = conditions.reduce((a, b) => tx`${a} and ${b}`);
-   const rows = await tx<Omit<WorkTask, 'tags'>[]>`select t.id, t.project_id, t.title, t.owner_id, t.status, t.due::text
+   const rows = await tx<Omit<WorkTask, 'tags'>[]>`select t.id, t.project_id, t.series_id, t.title, t.owner_id, t.status, t.due::text, t.revision
     ${tx.unsafe(eligible)}
     where ${where} order by t.due nulls last, t.id limit ${query.limit + 1} offset ${query.offset}`;
    const page = rows.slice(0, query.limit);

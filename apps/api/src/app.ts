@@ -183,7 +183,7 @@ export function createApp(deps: Deps) {
 	signedIn.route('/', stockRoutes(deps.stock ?? new StockService(deps.db)));
 	signedIn.route('/', contactsRoutes(new ContactsService(deps.db)));
 	signedIn.route('/', inferenceRoutes(deps.inference));
-	signedIn.route('/', commitmentsRoutes(deps.commitments));
+	signedIn.route('/', commitmentsRoutes(deps.commitments, deps.db));
 	signedIn.route('/', tagsRoutes(new TagsService(deps.db)));
 	signedIn.route('/', equipmentRoutes(new EquipmentService(deps.db)));
 	if (deps.workflows) signedIn.route('/', workflowRoutes(deps.workflows));

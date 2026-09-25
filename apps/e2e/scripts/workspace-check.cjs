@@ -74,10 +74,10 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   console.log('PASS real owner/tag filters and tab route restoration');
   await goto('/work?owner=all&status=done');
   await page.getByText('Completed launch task', { exact: true }).click();
-  await expect(page.locator(`#task-${fixture.tasks['Completed launch task']}`)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Completed launch task', exact: true })).toBeVisible();
   await goto('/work?owner=all&status=cancelled');
   await expect(page.getByText('Cancelled launch task', { exact: true })).toBeVisible();
-  await expect(page.locator('a.work-task__link').filter({ hasText: 'Cancelled launch task' })).toHaveCount(0);
+  await expect(page.locator('a.work-task__link').filter({ hasText: 'Cancelled launch task' })).toHaveCount(1);
   console.log('PASS completed task reveal and honest cancelled row');
   await goto('/work?tagId=00000000-0000-4000-8000-000000000000&projectId=00000000-0000-4000-8000-000000000001');
   await page.getByText('Filter', { exact: true }).click();
@@ -94,10 +94,10 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   await page.getByLabel('Task', { exact: true }).fill('Browser-created task');
   await expect(page.getByLabel('Project', { exact: true })).toHaveValue('');
   await page.getByRole('button', { name: 'Add task', exact: true }).click();
-  await expect(page).toHaveURL(/\/commitments#task-/);
+  await expect(page).toHaveURL(/\/work\/tasks\//);
   const created = (await api(`/tasks?ownerId=${fixture.userId}&status=open&limit=100`)).tasks.find(task => task.title === 'Browser-created task');
   assert.ok(created); assert.equal(created.ownerId, fixture.userId); assert.equal(created.projectId, null);
-  await expect(page.locator(`#task-${created.id}`)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Browser-created task', exact: true })).toBeVisible();
   await goto(`/work/tasks/${created.id}/tags`);
   await page.getByRole('button', { name: 'Add Production', exact: true }).click();
   assert.equal((await api(`/tasks/${created.id}/tag-options?limit=100`)).tags.find(tag => tag.id === fixture.productionId).attached, true);

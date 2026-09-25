@@ -5,7 +5,7 @@
 > PRs must replace those assertions with Work/retired-route behaviour and retain relevant access,
 > error, equipment and session checks. See the [current plan](../plan.md).
 
-Job: **own commitments**. The first web increment of delivery slice 2 is checked against a real,
+Outcome: **manage shared work**. The first web increment of delivery slice 2 is checked against a real,
 disposable PostgreSQL 18 database with pgvector, the real API and a production Next build. No
 hosted data, provider credentials, inference or schedules are used. Chat and file availability
 pages do not claim those products have shipped.
@@ -101,7 +101,7 @@ bounded Retry-After delay; ambiguous network/5xx outcomes are never retried auto
 
 ## Equipment follow-up
 
-Jobs: **keep the calendar** and **own commitments**. With a fresh fixture and the same production
+Outcomes: **allocate resources** and **manage shared work**. With a fresh fixture and the same production
 web/API setup above, run:
 
 ```bash
@@ -155,3 +155,20 @@ On 25 September 2026 all four session-recovery browser groups passed against the
 fixture and production build, with no browser exceptions. Phone/desktop retry states were checked;
 the build, API typecheck and all 25 web tests passed. Mutation counts confirmed no write on failed
 preflight and one booking write across a lost response and reconciliation.
+
+## Work record replacement (25 September 2026)
+
+The [Work record contract](work-record-pages-2026-09.md) replaces the remaining overview assertions.
+`optional-projects-check.cjs` now opens real Work details and covers seven groups: standalone task
+creation/tags/checklist/evidence and complete/cancel/reopen; stale and uncertain edits; paged project
+search preserving off-page selections; project archive/restore; recurring task materialisation and
+pause; standalone equipment links, task-move booking revisions and old-link redirects; responsive
+phone/desktop details without browser exceptions. The real API commits uncertain writes before
+the fixture loses their responses, proving the form locks rather than silently retrying.
+
+All seven groups passed locally against the production web build and disposable Postgres on
+25 September. The fixture seeds 55 extra projects to exercise a second options page. Existing
+workspace and equipment scripts now assert Work detail routes and updated selector labels.
+The signed-in deployment spec is `work-records.spec.ts`; inventory/Shopify checks target Resources.
+CI without a fixture session still skips hosted signed-in checks explicitly; this local proof is
+not a real provider sign-in, native-device or production acceptance claim.

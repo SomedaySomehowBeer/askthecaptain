@@ -54,6 +54,9 @@ try {
     const pat = await login();
     await request('POST', '/v1/invitations/accept', pat.token, { token: invitation.token });
     const project = await request<Identified>('POST', `${base}/projects`, owner.token, { name: 'Autumn launch' });
+    // More than one selector page, seeded directly to avoid testing the write-rate limiter here.
+    await db.owner`insert into projects (organisation_id, name, created_by)
+        select ${org.id}, 'Pagination project ' || lpad(n::text, 2, '0'), ${owner.user.id} from generate_series(1, 55) n`;
     const production = await request<Identified>('POST', `${base}/tags`, owner.token, { name: 'Production' });
     const sales = await request<Identified>('POST', `${base}/tags`, owner.token, { name: 'Sales' });
     const tasks: Record<string, string> = {};
@@ -115,7 +118,7 @@ try {
             const result = await app.fetch(req); const value = await result.json() as Record<string, unknown>;
             return Response.json({ ...value, coverage: 'partial', nextOffset: 200 }, { status: result.status });
         }
-        if (mode === 'equipment-lookups-failed' && req.method === 'GET' && (url.pathname.endsWith('/members') || url.pathname.endsWith('/commitments')))
+        if (mode === 'equipment-lookups-failed' && req.method === 'GET' && (url.pathname.endsWith('/members') || url.pathname.endsWith('/work/options')))
             return Response.json({ error: 'Fixture choices unavailable' }, { status: 503 });
         if (mode === 'equipment-zone-sydney' && req.method === 'GET' && url.pathname === base) {
             const result = await app.fetch(req); const value = await result.json() as Record<string, unknown>;
@@ -127,6 +130,10 @@ try {
         }
         if (mode === 'reservation-save-failed' && req.method === 'POST' && url.pathname.endsWith('/reservations'))
             return Response.json({ error: 'Fixture did not reach booking handler' }, { status: 503 });
+        if (mode === 'work-save-uncertain' && ['POST','PATCH'].includes(req.method) && /\/(tasks|projects|series)(\/[^/]+)?$/.test(url.pathname)) {
+            await app.fetch(req);
+            return Response.json({ error: 'Fixture lost Work save response' }, { status: 503 });
+        }
         if (req.method === 'GET' && url.pathname.endsWith('/tasks') && mode === 'failed')
             return Response.json({ error: 'Fixture task query unavailable' }, { status: 503 });
         if (mode === 'tags-failed' && req.method === 'GET' && (url.pathname.endsWith('/tags') || url.pathname.endsWith('/tag-options')))

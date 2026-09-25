@@ -1,12 +1,12 @@
 import { Suspense } from 'react';
 import { Stocktake } from './Stocktake.tsx';
 import { ShopifyStock } from './ShopifyStock.tsx';
-import { Notice } from '../../components/Notice.tsx';
-import { requireCurrent } from '../../components/Page.tsx';
-import { api, load } from '../../lib/api.ts';
+import { Notice } from '../../../components/Notice.tsx';
+import { requireCurrent } from '../../../components/Page.tsx';
+import { api, load } from '../../../lib/api.ts';
 import { ArchiveStock, CountForm, StockForm, type StockItem, type Supplier } from './StockForms.tsx';
 type Stock = { items: StockItem[]; locations: string[]; suppliers: Supplier[]; timezone: string };
-export async function StockSection({ me, shopifyOffset = 0, basePath = '/commitments' }: { me: Awaited<ReturnType<typeof requireCurrent>>; shopifyOffset?: number; basePath?: string }) {
+export async function StockSection({ me, shopifyOffset = 0, basePath = '/resources/inventory' }: { me: Awaited<ReturnType<typeof requireCurrent>>; shopifyOffset?: number; basePath?: string }) {
  const [result, shopify] = await Promise.all([load(() => api<Stock>(`/v1/organisations/${me.organisation.organisationId}/stock?includeArchived=1`, { token: me.token })), ShopifyStock({ me, offset: shopifyOffset, basePath })]);
  if (!result.ok) return <section className="card" aria-labelledby="stock-heading" id="stock"><h2 id="stock-heading">Stock</h2><Notice tone="failed" action={{ href: basePath, label: 'Try again' }}>{result.error.message} The stock list could not be read.</Notice>{shopify}</section>;
  const { items, locations, suppliers, timezone } = result.value;
