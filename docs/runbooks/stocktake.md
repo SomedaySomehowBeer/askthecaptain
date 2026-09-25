@@ -1,28 +1,24 @@
 # Stocktake
 
-> **Scope, 25 September:** Counts and reorder tasks remain Captain scope. Supplier-email drafts, Google/inference prerequisites and Commitments/Inbox navigation below are legacy implementation to remove; do not carry them into the new business workflow.
-> [Current plan](../plan.md) · [operational record](paused.md).
-
-**Job 4 — Own commitments (D15).** A stocktake asks for counts, keeps the person's observations,
-and creates reorder tasks and drafts. It never computes stock from movements or sends an order.
+Counted stock and reorder tasks, D15. Current definition: **Stocktake v3**.
+See the [retirement cutover](../plans/assistant-runtime-retirement-2026-09.md) before upgrading old runs.
 
 ## Turn it on
 
 In Settings → Workflows, turn on **Stocktake** with a counted-stock **location** and the name of the
 **purchasing project** (default Purchasing). The enabling person needs a subscribed push device;
-Google must be connected and inference ready. Shopify is optional. Runs are weekly on Monday at
-08:00 in the organisation's timezone, or on demand. Version 2 needs its parameters saved again if
-an older definition was enabled. The operator must already have installed and started the runner
-as described in [workflow-runner.md](workflow-runner.md); this feature adds no process or migration.
+Google and inference are not required. Shopify is optional. Runs are weekly on Monday at
+08:00 in the organisation's timezone, or on demand. Migration 0037 turns old versions off and cancels unfinished old runs. Review and enable v3 afresh. The operator must already have installed and started the runner
+as described in [workflow-runner.md](workflow-runner.md); the version-3 retirement uses migration 0037 and adds no background process.
 
-Owners/admins can choose **Start a stocktake** in Commitments → Stock and enter a location. That
+Owners/admins can choose **Start a stocktake** in Resources → Inventory and enter a location. That
 location is pinned to this run; it does not change the weekly settings or who enabled the workflow.
 The button opens the run in Activity. Members cannot start it but can enter counts.
 
 ## Count, record, reorder
 
 The enabling person's subscribed devices receive one notification per item, tagged by item id,
-linking to Stock. Enter a count in its existing count form. A count newer than the run's start wakes
+linking to Resources → Inventory. Enter a count in its existing count form. A count newer than the run's start wakes
 the waiting step in the same transaction as the saved observation. Counts entered early are found
 when that item's turn arrives; old counts do not satisfy a new stocktake. The run's recorded
 observation is fixed when the wait succeeds. Later corrections remain separate counts.
@@ -34,17 +30,7 @@ due seven days later in the organisation's timezone. The named project is create
 if absent. Multiple active projects with that name pause the run until their names are distinct.
 Task and observation receipts are idempotent by run, step and loop item.
 
-A preferred supplier is a company. Companies have no direct email field: Captain uses the email
-only when exactly one active contact is linked to that company. No supplier, no active contact,
-an invalid email or multiple contacts means the email step is skipped with a note in Activity;
-the reorder task still exists. Edit the linked contacts in People and companies for future runs.
-The infer step receives labelled untrusted item/unit/count/reorder/supplier-name data, with a fixed
-instruction and validated output. No usual order quantity is stored today, so it is passed as
-unknown; the draft asks about availability/quantity instead of inventing an order amount.
-
-The short email waits in Inbox's Outbox as a standalone draft addressed to that supplier.
-A person reviews and sends it. The draft pins the Google account; reconnecting another account
-cannot send it. Missing Google access pauses draft creation until reconnection and Resume.
+Supplier details do not trigger email drafting. Reorder tasks require a person to choose any purchase.
 
 ## Shop stock and recovery
 
@@ -57,6 +43,5 @@ exceeding that bound pauses explicitly instead of silently dropping items.
 
 Count wake-ups remain durable while workers are stopped and continue after restart. A queue-write
 failure rolls the count back too, so the form reports failure rather than losing its wake-up.
-Disabling the workflow or removing its enabling person pauses further writes. Inference sign-in
-and budget failures show the normal actionable runner pauses; fix the cause, then Resume.
-Already completed tasks, drafts and observations are retained across retries or cancellation.
+Disabling the workflow or removing its enabling person pauses further writes. Fix the stated permission or device problem before Resume.
+Already completed tasks and observations are retained across retries or cancellation.

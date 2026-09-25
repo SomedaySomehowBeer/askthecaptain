@@ -24,7 +24,8 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   } else await route.fulfill({ response });
  });
  const page = await context.newPage(); page.setDefaultTimeout(10000); page.on('pageerror', e => errors.push(e.message));
- const goto = route => page.goto(origin + route);
+ // Pace full navigations: each server-rendered view checks the session and may read several resources.
+ const goto = async route => { await new Promise(resolve => setTimeout(resolve, 1500)); return page.goto(origin + route); };
  const signIn = () => context.addCookies([{ name: 'captain_session', value: fixture.token, url: origin }]);
  const api = async (route, options = {}) => {
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -125,7 +126,7 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   await goto('/work/views');
   await expect(page.locator('a[href^="/today"], a[href^="/inbox"], a[href^="/calendar"], a[href^="/notes"]')).toHaveCount(0);
   await goto('/settings/connections'); await expect(page.getByRole('button', { name: /Connect Google|Reconnect Google|Enable live/ })).toHaveCount(0);
-  const person = await api('/contacts', { method: 'POST', body: JSON.stringify({ name: 'Resource contact', email: 'resource@example.test' }) });
+  const person = await api('/contacts', { method: 'POST', body: JSON.stringify({ name: 'Resource contact', email: `resource-${Date.now()}@example.test` }) });
   await goto(`/settings/contacts/${person.id}`); await expect(page.getByRole('heading', { name: 'Resource contact', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Recent mail|Notes/ })).toHaveCount(0);
   await goto(`/inbox/contacts/${person.id}`); await expect(page).toHaveURL(origin + `/settings/contacts/${person.id}`);

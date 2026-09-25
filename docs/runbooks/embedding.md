@@ -1,5 +1,11 @@
 # Embedding service
 
+> **Retired implementation:** the assistant runtime is removed in #135. Commands below are
+> historical recovery context, not current setup instructions. Do not re-enable these sources.
+> Follow the [retirement contract](../plans/assistant-runtime-retirement-2026-09.md), including
+> stopped-worker cutover, embedding shutdown and deliberate provider-grant handling.
+
+
 > **Scope, 25 September:** This service currently supports the legacy mail/note index. Retiring ingestion must include fill/after-sync hooks; do not keep the service running solely for a hypothetical future business index. Any repurposing needs a reviewed source/access contract. Current staging/pause status is in paused.md, overriding dated setup wording below.
 > [Current plan](../plan.md) · [operational record](paused.md).
 
