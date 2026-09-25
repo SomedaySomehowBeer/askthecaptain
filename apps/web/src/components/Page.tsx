@@ -20,9 +20,9 @@ export async function requireCurrent(returnTo: string): Promise<Current & { orga
 	return me as Current & { organisation: NonNullable<Current['organisation']> };
 }
 
-export function Page({ title, lede, children, hideTitle = false }: { title: string; lede?: React.ReactNode; children: React.ReactNode; hideTitle?: boolean }) {
+export function Page({ title, lede, children, hideTitle = false, parent }: { title: string; lede?: React.ReactNode; children: React.ReactNode; hideTitle?: boolean; parent?: { href: string; label: string } }) {
 	return (
-		<Shell>
+		<Shell parent={parent}>
 			<main className="page">
 				<header className={hideTitle ? 'visually-hidden' : undefined}><h1>{title}</h1>{lede ? <p>{lede}</p> : null}</header>
 				{children}

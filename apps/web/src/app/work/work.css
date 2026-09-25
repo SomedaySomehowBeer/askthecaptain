@@ -56,3 +56,14 @@
 .work-record-meta dt { color: var(--muted); font-size: .85rem; }
 .work-record-meta dd { margin:.25rem 0 0; overflow-wrap:anywhere; }
 .work-record-body { white-space:pre-wrap; overflow-wrap:anywhere; }
+
+.work-checklist-item { flex-wrap: wrap; }
+.work-checklist-item__toggle { display: flex; align-items: center; justify-content: center; flex: 0 0 44px; min-height: 48px; cursor: pointer; }
+.work-checklist-item__toggle input { width: 22px; height: 22px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.work-checklist-item__toggle:has(input:disabled) { cursor: default; }
+.work-checklist-item__toggle input:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.work-checklist-item > .work-task__link { flex-basis: calc(100% - 52px); }
+.work-checklist-item:has(input:checked) .work-task__title { color: var(--muted); text-decoration: line-through; }
+.work-checklist-item__error { flex-basis: 100%; color: var(--danger, var(--ink)); }
+
+.work-checklist-item__saved { flex-basis: 100%; color: var(--muted); margin: 0; }

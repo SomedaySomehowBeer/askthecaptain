@@ -82,3 +82,27 @@ recurrence controls, stale/uncertain saves, off-page options, Resources links, o
 phone/desktop layouts. Typecheck, repository tests, reciprocal review and CI precede merge. Staging
 gets migration 0039 and the reviewed images on its existing single API/web machines. No reset is
 run; production and the retired embedding worker stay paused.
+
+## Demo usability correction (25 September 2026)
+
+The first populated demo exposed missing direct checklist controls and a header that always
+returned to section views. #138 established record APIs/forms, not visual or interaction parity
+with the approved mockups. Its completion status above must not be read as design acceptance.
+
+Checklist rows retain their detail links and add directly operable checkboxes. Checking completes
+that item; unchecking reopens it. Each write uses the child's current revision, stays on the parent
+page, and shows a confirmed state only after success. Pending writes disable the control; stale or
+uncertain writes require a reload. Cancelled items remain readable and are reopened in their detail.
+
+The header navigates **up**, independently of browser history: checklist item → parent task;
+recurring occurrence → recurrence rule → project (when present); ordinary task → project;
+project → Projects. Standalone work returns to Work. Task tags return to their task, and creation
+from a project returns to that project. Section-level views retain the grouped view-list link.
+Long parent names truncate visually but retain their complete accessible label.
+
+Remaining mockup parity is a separate required delivery slice: compact record presentation and
+primary completion action; task-list completion controls and due-date grouping; project overview,
+cross-tag task context and linked scheduling. Chat, files and summaries remain planned capabilities,
+not justification for omitting interactions already supported by the services. Visual acceptance
+must compare populated screens with the approved references at phone and desktop widths, alongside
+behavioural tests; successful CRUD tests alone do not establish it.

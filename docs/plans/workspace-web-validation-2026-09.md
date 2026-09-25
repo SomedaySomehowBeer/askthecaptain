@@ -172,3 +172,12 @@ production build; they now assert Work detail routes and updated selector labels
 The signed-in deployment spec is `work-records.spec.ts`; inventory/Shopify checks target Resources.
 CI without a fixture session still skips hosted signed-in checks explicitly; this local proof is
 not a real provider sign-in, native-device or production acceptance claim.
+
+## Checklist and hierarchical navigation regression
+
+`checklist-navigation-check.cjs` uses the same disposable Postgres/API/production-web fixture.
+It exercises checkbox completion and reopening without leaving the parent page, persistence after
+reload, stale revisions and committed writes with lost responses. It follows checklist → task →
+project → Projects, task-tag return and contextual task creation. Phone widths 360/390 and desktop
+1440 check overflow and minimum checkbox targets. This is focused interaction evidence; it does
+not establish full visual parity with the approved mockups.

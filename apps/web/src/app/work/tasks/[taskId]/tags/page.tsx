@@ -34,7 +34,7 @@ export default async function TaskTagsPage({ params, searchParams }: { params: P
 	const previous = offset > 0 ? tagPageHref(path, Math.max(0, offset - tagPageSize)) : null;
 	const next = tagPageHref(path, nextOffset);
 	return (
-		<Page title={task.title} lede="Tags on this task. Each Add or Remove changes one tag and is saved straight away.">
+		<Page title={task.title} parent={{href:`/work/tasks/${task.id}`,label:task.title}} lede="Tags on this task. Each Add or Remove changes one tag and is saved straight away.">
 			{tags.length === 0 ? (
 				offset > 0
 					? <Notice title="Nothing on this page" action={{ href: path, label: 'Back to the first page' }}>The tag list is shorter than this page.</Notice>
@@ -57,7 +57,7 @@ export default async function TaskTagsPage({ params, searchParams }: { params: P
 					) : null}
 				</section>
 			)}
-			<div className="row"><Link className="button button--ghost" href="/work">Back to Work</Link><Link className="button button--ghost" href="/work/tags">Manage tags</Link></div>
+			<div className="row"><Link className="button button--ghost" href={`/work/tasks/${task.id}`}>Back to task</Link><Link className="button button--ghost" href="/work/tags">Manage tags</Link></div>
 		</Page>
 	);
 }
