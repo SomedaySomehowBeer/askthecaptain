@@ -84,7 +84,8 @@ async function WorkflowContent({ me, searchParams }: { me: Awaited<ReturnType<ty
 /** The run laid over its workflow's steps: how far each got, counting loop items. The steps shown are
  *  the current definition; a run pinned to an older version says so rather than pretending. */
 function RunSteps({ detail, definition, catalog }: { detail: WorkflowRunDetail; definition: OfferedWorkflow['definition'] | null; catalog: WorkflowCatalog }) {
-	if (!definition) return <p className="muted">This run's workflow is no longer offered, so its steps are listed below as they ran.</p>;
+	// A retired version (e.g. chase-due v3) is not drawn with the current, differently shaped steps.
+	if (!definition || isRetiredWorkflow(detail.definitionKey, detail.definitionVersion)) return <p className="muted">This run's workflow version is no longer offered, so its steps are listed below as they ran.</p>;
 	return (<>
 		{definition.version !== detail.definitionVersion ? <p className="muted">This run used version {detail.definitionVersion} of the workflow; the steps drawn here are version {definition.version}, so some may not line up.</p> : null}
 		<WorkflowSteps definition={definition} catalog={catalog} run={detail.steps} />

@@ -8,7 +8,7 @@ export async function Stocktake({ me, locations }: { me: Awaited<ReturnType<type
  const problem = !result.ok ? 'Stocktake availability could not be checked. Try again or check Settings → Workflows.' : !workflow ? 'Stocktake is not installed yet.' : workflow.runnerProblem
   ?? (!workflow.enablement?.enabled ? 'Turn on Stocktake in Settings → Workflows first.' : workflow.unmet.length ? `Stocktake needs ${workflow.unmet.map(u => u.words).join(' and ')}.` : null);
  return <div className="stack" aria-label="Start a stocktake"><h3>Start a stocktake</h3>
-  <p>Ask for counts at one location. Low counts create reorder tasks and supplier drafts for a person to send.</p>
+  <p>Ask for counts at one location. Low counts create reorder tasks for a person to act on.</p>
   {problem ? <Notice tone={!result.ok ? 'failed' : 'quiet'}>{problem} <a href="/settings/workflows">Open Workflows</a>.</Notice> : null}
   {me.organisation.role === 'member' ? <p>Only an owner or admin can start a stocktake. Everyone can enter counts below.</p> : null}
   <StartStocktake disabled={!!problem || me.organisation.role === 'member'} locations={locations} location={String(workflow?.enablement?.parameters.location ?? '')} />

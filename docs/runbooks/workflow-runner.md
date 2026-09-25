@@ -50,7 +50,7 @@ business audit events in that transaction. Every write gets a stable JSON tuple 
 
 External handlers declare `retrySafe: true`: they must implement desired-state writes, provider
 idempotency, or reconciliation using that key. A running journal row is the durable intent; success
-is recorded after the response. Gmail labels reconcile desired state. Inference is data-only through
+is recorded after the response. Inference is data-only through
 `inferenceStep` / `InferenceService.infer`; each attempt records real usage, so an interrupted response
 can cost another inference call. Notify uses `notificationStep` / `PushService.send` with a stable tag
 (the displayed notification is replaced; receipts can repeat). Never adapt a non-idempotent send as

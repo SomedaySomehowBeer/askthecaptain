@@ -82,7 +82,15 @@ try {
     await request('POST', `${base}/equipment/${equipment[1]!.id}/reservations`, owner.token, {
         id: randomUUID(), title: 'Line maintenance', kind: 'maintenance', startsAt: '2030-10-02T01:00:00Z', endsAt: '2030-10-02T02:00:00Z'
     });
-    await writeFile(`${directory}/data.json`, JSON.stringify({ fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id }), { mode: 0o600, flag: 'wx' });
+    // Historical activity fixture only: no old definition is enabled or executed.
+    await new WorkflowService(db.app).sync();
+    const [oldEnablement] = await db.owner`insert into workflow_enablements (organisation_id, definition_key, definition_version, enabled, enabled_by)
+        values (${org.id}, 'chase-due', 3, false, ${owner.user.id}) returning id`;
+    const [oldRun] = await db.owner`insert into workflow_runs (organisation_id, enablement_id, definition_key, definition_version, definition_digest, trigger, enabled_by, state, reason)
+        values (${org.id}, ${oldEnablement!.id}, 'chase-due', 3, 'fixture-historical', '{}', ${owner.user.id}, 'cancelled', 'Retired personal-assistant version') returning id`;
+    await db.owner`insert into workflow_run_steps (organisation_id, run_id, path, kind, key, state)
+        values (${org.id}, ${oldRun!.id}, 'steps.2', 'infer', 'draftChaser', 'succeeded')`;
+    await writeFile(`${directory}/data.json`, JSON.stringify({ fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id, retiredRun: oldRun!.id }), { mode: 0o600, flag: 'wx' });
     let mutationRequests = 0;
     const server = serve({ hostname: '127.0.0.1', port: 8084, fetch: async (req, bindings) => {
         const mode = await readFile(`${directory}/mode`, 'utf8').catch(() => '');
