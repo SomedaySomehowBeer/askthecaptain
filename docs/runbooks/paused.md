@@ -1,7 +1,8 @@
 # Staging resumed; production paused (2026-09-24)
 
 Captain's staging workspace is available at **https://app.askthecaptain.app/work**. API and web
-now run the reviewed Work record replacement (#138), image source `806f507`, merged as `f6b45cf`.
+run the Work record API (#138, image source `806f507`) and the reviewed checklist/navigation
+web fix (#143, image source `08a6145`, merged as `7bbdc10`).
 Tasks, projects and recurring work have their own Work pages; the Commitments overview is retired.
 The old-version database content was reset earlier on 25 September under explicit owner
 permission; **this release did not run another reset**. Embedding and production remain stopped.
@@ -20,6 +21,29 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Checklist and parent-navigation web release (25 September 2026, UTC)
+
+Workspace outcome: **manage shared work**. [#143](https://github.com/SomedaySomehowBeer/askthecaptain/pull/143)
+merged as `7bbdc10d17c1fbae39d0c029c6f075c211e3c25e` after Claude's independent final review
+and green [CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36136161548)
+(3m10s). The clean source commit `08a6145` has the same tree as the merge.
+
+At approximately **12:44Z**, only existing web machine `9185776e7cd3d8` was updated, to
+`registry.fly.io/askthecaptain-web-staging:git-08a6145` (digest
+`sha256:9876d71b3d3cf6029ebf93eaf3a06fd571375414c44edd8f2e05bcf40fd2ac6d`). Its normal
+`pnpm --dir apps/web exec next start` command, autostart and idle-stop configuration were retained.
+The live inventory still contains exactly one web and one API staging machine. API image
+`git-806f507215017f11c9e885e5ef680e54fb0dee6e` is unchanged. No migration, reset, record mutation,
+production update, secret change or new application machine was part of this release.
+The previously created demo project and resource records remain intact.
+
+All ten local browser groups passed against a production web build, real API and disposable
+Postgres: three focused checklist/navigation groups plus seven existing Work-record groups.
+Checks covered persistent checkbox completion/reopen, parent hierarchy including recurring work,
+stale and uncertain writes, phone/desktop layouts, editing, archive/restore and equipment links.
+The local fixture was stopped and its throwaway database removed afterward. Broader visual
+parity is explicitly unfinished and tracked in [#142](https://github.com/SomedaySomehowBeer/askthecaptain/issues/142).
 
 ## Work record release (25 September 2026, UTC)
 
