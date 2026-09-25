@@ -175,7 +175,7 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   await row.getByRole('button', { name: 'Rename for everyone', exact: true }).click();
   await expect(page.locator('.work-tag-row__name').filter({ hasText: renamed })).toBeVisible();
   await goto(`/work?owner=all&tagId=${createdTag.id}`);
-  await expect(page.locator('.work-task__tags')).toContainText(renamed);
+  await expect(page.locator('.work-task .chip').filter({hasText:renamed})).toBeVisible();
   await goto(tagPath);
   await page.getByRole('button', { name: `Remove ${renamed}`, exact: true }).click();
   await expect(page.getByRole('button', { name: `Add ${renamed}`, exact: true })).toBeVisible();
