@@ -1,7 +1,7 @@
 # Work record pages
 
-Status: implemented and reciprocally reviewed, 25 September 2026; merge/staging release evidence
-is recorded with the PR and operational runbook.
+Status: shipped in [#138](https://github.com/SomedaySomehowBeer/askthecaptain/pull/138),
+25 September 2026. See the [staging release record](../runbooks/paused.md).
 Outcome: **manage shared work**; supports **allocate resources**. Decisions D7, D11 and D25.
 This amendment implements the existing task/project detail designs in
 [the mobile view map](../proposals/assets/captain-mobile-2026-09-22/views.md).

@@ -1,10 +1,11 @@
 # Staging resumed; production paused (2026-09-24)
 
 Captain's staging workspace is available at **https://app.askthecaptain.app/work**. API and web
-now run the reviewed assistant retirement and optional-project cleanup (#135/#136), image source
-`7b77ba9`, merged as `d11fcdf`. The old-version database content was reset on 25 September under
-explicit owner authorisation. The embedding service is stopped with autostart off. Production
-remains stopped. The original 23 September pause is recorded below as history.
+now run the reviewed Work record replacement (#138), image source `806f507`, merged as `f6b45cf`.
+Tasks, projects and recurring work have their own Work pages; the Commitments overview is retired.
+The old-version database content was reset earlier on 25 September under explicit owner
+permission; **this release did not run another reset**. Embedding and production remain stopped.
+The original 23 September pause is recorded below as history.
 
 ## Staging authorisation (24 September 2026)
 
@@ -19,6 +20,46 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Work record release (25 September 2026, UTC)
+
+Workspace outcomes: **manage shared work** and **allocate resources**. [#138](https://github.com/SomedaySomehowBeer/askthecaptain/pull/138)
+merged at **07:01:55Z** as `f6b45cfa1af6094b01859c5d27e53d42f67a890a`, after reciprocal
+Claude/root review and a green [final CI run](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36105328447)
+(2m56s). Both images were built from clean reviewed head `806f507215017f11c9e885e5ef680e54fb0dee6e`;
+its Git tree equals the merge. CI's raw concurrent-insert test was corrected to verify an exclusion
+conflict after retrying a PostgreSQL deadlock loser; production booking code was unchanged by that fix.
+
+The existing API/web machines had autostart disabled and were stopped. The sole API machine ran
+migration/queue installation with restart policy `no`. At **07:04:47Z**, only
+`0039_work_revisions.sql` was applied. At **07:04:48Z**, the queue installer and
+`WORK_RECORDS_MIGRATION_READY` marker completed and the process exited **0**. Release commands performed no old-content reset,
+provider request or record purge. Existing records received initial revisions and occurrence evidence
+requirements; no database rollback or downgrade was attempted.
+
+The normal API and web commands were then restored explicitly, with autostart on and idle-stop
+behaviour unchanged. Verified machine inventory:
+
+- API staging: only `80e39ea6416e18`, image `git-806f507215017f11c9e885e5ef680e54fb0dee6e`,
+  command `node dist/index.js`.
+- Web staging: only `9185776e7cd3d8`, the same image-source suffix, command
+  `pnpm --dir apps/web exec next start`.
+- Embedding: only `82d1dd0b021908`, still stopped with autostart off and its previous image.
+- The two pre-existing production API machines and two production web machines remain stopped
+  with autostart off, unchanged. No application machine was created.
+
+After release, API `/readyz` returned `200 {"ok":true}` and Google identity entry returned 302 to
+`accounts.google.com`. A real browser verified signed-out Work/project/recurrence routes reach a
+working sign-in page at phone and desktop widths, with no browser exceptions. No hosted identity
+or customer records were used to bypass sign-in; an interactive Google round trip was not tested.
+Validation included 279 passing repository tests and 22 passing local browser groups,
+including task/checklist/evidence changes, stale/uncertain saves, selector pagination, project and
+recurrence controls, booking conflicts, DST, and old-link redirects.
+
+Migration 0039 is additive and stays applied. Prefer a reviewed forward fix for release problems;
+older application images lack the new revision and copied-evidence contracts. Do not reset the
+workspace or remove columns as an automatic rollback. Production deployment and backup workflows
+remain disabled.
 
 ## Workspace cleanup release and legacy reset (25 September 2026, UTC)
 

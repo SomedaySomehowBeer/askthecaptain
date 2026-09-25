@@ -28,8 +28,10 @@ has already been delegated or implemented.
 The immediate recovery fix is delivered in reviewed #130 and deployed to staging. Claude also
 completed the read-only task-handoff audit; [#131](https://github.com/SomedaySomehowBeer/askthecaptain/issues/131)
 records the bounded task-detail contract and implementation, corrected to remove Commitments
-compatibility. [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) tracks scope cleanup and optional-project contracts before dependent UI work. That code
-has not started.
+compatibility. [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) tracks scope
+cleanup: runtime retirement (#135), optional projects/reset (#136), and Work record replacement
+(#138) are implemented and deployed. Empty retired storage, the retrieval package, connector capabilities and deployment
+assets still need removal. Saved-view and linked-chat contracts are the next feature increments.
 
 ## Ordered increments
 
@@ -48,7 +50,8 @@ has not started.
    project and recurrence detail/editing. No “Open in Commitments” action or new placeholder
    project. Old valid links may redirect to Work; other retired destinations get honest states.
    Inspect only the actual affected records/run state before a data/runtime change; do not
-   invent a migration requirement or wait for Pip. Each part is a small reviewed PR.
+   invent a migration requirement or wait for Pip. Delivered through #135/#136/#138; remaining
+   retired storage/code removal stays tracked in #133. Each part is a small reviewed PR.
 3. **Saved Work views.** Review a small filter contract before migration: named, versioned
    filters, initially personal within an organisation, with strict supported fields and bounded
    counts. Saving a view never grants record access. Define deleted tags/projects, revoked
@@ -124,10 +127,11 @@ does not block Captain.
 
 See the [runtime retirement contract](assistant-runtime-retirement-2026-09.md) for removed
 assistant entry points, task-reminder v4 and stocktake v3, run/schedule cancellation and staging
-cutover. This does not mark the optional-project/Obligations or Work detail-page increments done.
+cutover. Optional-project/Obligations removal and Work detail pages shipped separately in #136
+and #138 (below).
 
 The [optional-project/reset increment](optional-work-projects-2026-09.md) implements task/series
 null projects, checklist and equipment links, and a separately invoked staging legacy-data reset
-authorised by the owner. The [Work record increment](work-record-pages-2026-09.md) now implements
-that next dependency; review and browser/release evidence are recorded with its PR. Saved views
-and linked-chat contracts follow it.
+authorised by the owner. The [Work record increment](work-record-pages-2026-09.md) shipped in
+#138; release evidence is in the [operational record](../runbooks/paused.md). Saved views and
+linked-chat contracts follow it.
