@@ -9,6 +9,10 @@ Captain/Pip split. This plan turns that direction into reviewable slices. The ad
 (D1–D25) reconciles the product/navigation/design decisions; this sequence does not itself migrate
 production or require Pip before Captain is useful. Production remains paused; [operational status](../runbooks/paused.md) records the owner’s staging-only authorisation (at most one machine per app).
 
+The [next batch and assignments](captain-next-batch-2026-09-25.md) starts with service-failure
+recovery, then shared-work handoff, saved views and linked chat, with Expo foundation work in
+parallel. It adds acceptance detail without declaring any remaining slice complete.
+
 ## Where this stands (24 September 2026)
 
 | Slice | State |
