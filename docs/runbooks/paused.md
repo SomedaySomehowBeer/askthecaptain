@@ -1,9 +1,10 @@
 # Staging resumed; production paused (2026-09-24)
 
-Captain's staging workspace is available at **https://app.askthecaptain.app/work**. Web now runs
-session recovery #130 (merged `3fb1095`, image source `f87098b`). API retains equipment #125/#127
-(image source `dc32eea`); the release records below give full tags. Production remains stopped.
-The original 23 September pause is recorded below as history.
+Captain's staging workspace is available at **https://app.askthecaptain.app/work**. API and web
+now run the reviewed assistant retirement and optional-project cleanup (#135/#136), image source
+`7b77ba9`, merged as `d11fcdf`. The old-version database content was reset on 25 September under
+explicit owner authorisation. The embedding service is stopped with autostart off. Production
+remains stopped. The original 23 September pause is recorded below as history.
 
 ## Staging authorisation (24 September 2026)
 
@@ -18,6 +19,74 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Workspace cleanup release and legacy reset (25 September 2026, UTC)
+
+Workspace outcome: remove the personal-assistant runtime and mandatory Obligations container;
+allow shared tasks and recurring work without a project. #135 merged as `aa09691a2ce2bf11919f4788f37be30f16401519`;
+#136 merged as `d11fcdfcedc0b3840b7e9634d60181b6c475fb5c` after independent Claude/root reviews and
+a green final CI pass (2m53s). Both deployed images were built from clean reviewed head
+`7b77ba9782e23a6cee9f2d52d861804f9e4c257e`, whose Git tree equals that merge.
+
+The owner explicitly authorised deleting tasks, emails and other data from the old Captain.
+The reviewed [reset contract](../plans/optional-work-projects-2026-09.md) governs the separate
+operational command; it is never an automatic migration or startup operation.
+
+The old API and web were stopped with autostart off. The existing API machine ran the new image's
+read-only reset preview at **05:22:53Z**, with restart policy `no`. It found 82 tasks, one generated
+Obligations project, 660 mail messages in 502 threads, 266 attachment metadata rows, 2 drafts,
+12 events in 3 calendars, 236 contacts, 138 companies, 5 project candidates and 5 candidate-source
+rows, 12 runs and 1,942 run steps, 24,594 old application audit rows, 15 queue jobs and one schedule.
+The mail/audit counts had advanced since the earlier inventory while the old API was still allowed
+to wake. The final preview, not the earlier count, was used for apply.
+
+At **05:23:52Z**, the reset transaction verified the same locked manifest and completed. Its digest
+was `30d7b01905e749acc8b3a7d41bdd3a389d95cdae95158340e2be989bbef19b4a`.
+All targeted content tables were verified empty inside that transaction. Old mail/calendar copies,
+tasks, drafts, all contacts and companies (236/138), discovery data, workflow history, local Google
+mail/calendar credentials, sync state and application audit payloads were deleted. The reset
+wrote one new audit entry containing counts and authorisation, without old source contents.
+
+Identity sign-in, the organisation and membership, four existing session rows (none used for these checks), inference runtime
+configuration, the budget and 78 model-usage records remain. Run links on those usage records
+became null; costs/tokens and consumed budget were not reset. No Gmail/calendar/provider request,
+remote deletion or OAuth revocation occurred. This is a reset of the live application database,
+not a purge of provider originals, backup/PITR history, service logs or the inference Sprite's disk.
+
+Migrations **0037** and **0038** applied at **05:23:52Z**, then queue installation succeeded and
+`CAPTAIN_RESET_CUTOVER_COMPLETE` appeared at **05:23:53Z**. The normal API command was restored
+and the matching web image was deployed via updates of the existing machines. No release VM,
+standby machine or additional application machine was created.
+
+| App | Sole machine | Released state |
+|---|---|---|
+| `askthecaptain-api-staging` | `80e39ea6416e18` | `git-7b77ba9782e23a6cee9f2d52d861804f9e4c257e`, normal `node dist/index.js`, autostart on, idle stop/minimum zero |
+| `askthecaptain-web-staging` | `9185776e7cd3d8` | same Git tag in its web registry, normal Next start, autostart on, idle stop/minimum zero |
+| `askthecaptain-embed` | `82d1dd0b021908` | previous image retained, stopped with autostart off; its mail/note consumers are gone |
+
+Validation: 266 workspace tests passed locally against PostgreSQL 18. The reset suite then grew
+from two tests to three and passed separately; final CI passed all **267 tests** (55 DB, 124 API,
+19 engine, 29 web, 17 connectors, 11 model, 7 retrieval, 5 steps). Typecheck and the production web
+build passed. The final Chrome regression covered standalone create/tag/filter/complete, recurring
+materialisation, unique form labels, booking a standalone task, moving the task and rejecting a
+stale booking edit. Phone/desktop forms had no overflow or browser exceptions. A browser-discovered
+old save-action project requirement was fixed and independently reviewed before the final pass.
+
+Hosted checks passed: API `/readyz` returned 200 with `{"ok":true}`, signed-out `/work` returned
+307 to sign-in, Google sign-in initiation returned 302, and Chrome rendered sign-in at 390px/1440px
+without overflow or exceptions. No hosted session was used for task/booking writes and no test
+records were added to the customer's database. Existing identity rows plus local reset tests are
+not a claim of a completed hosted Google OAuth round trip.
+
+Final machine inspection confirmed one API, one web and one stopped embedding machine. All four
+production machines stayed stopped with autostart off; their images were unchanged. GitHub deploy
+and backup workflows remain disabled. No production deployment, DNS, secret or infrastructure apply
+occurred. **Do not roll back to the old assistant images:** the reset is destructive and 0038 drops
+`system_kind`. Use a forward fix or hold the staging API stopped. No data restore was performed.
+
+The next cleanup replaces the temporary Commitments detail/overview handoffs with bounded Work
+routes and revision-aware writes (#133 step 5 / #131). Empty retired schema/modules still need
+removal. This release does not claim that those remaining code paths have been retired.
 
 ## Legacy-data inventory (25 September 2026, UTC)
 
