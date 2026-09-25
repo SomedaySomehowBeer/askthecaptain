@@ -89,8 +89,8 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
 | `packages/engine` | durable workflow execution: pg-boss and a small typed runner in the API process |
 | `packages/model` | the inference client: provider adapter, structured output, budgets, usage |
-| `packages/retrieval` | existing embedding client and mail/note index code; legacy source ingestion pending retirement (D21) |
-| `infra/embed` | the stateless embedding service: one small sentence encoder behind a bearer secret, shared by all organisations, holding no data (D21) |
+| `packages/retrieval` | unused embedding client and legacy index code pending deletion; ingestion is retired (D21) |
+| `infra/embed` | former stateless mail/note embedding service, stopped with autostart off; deployment assets pending removal (D21) |
 | `packages/ui` | design tokens and shared components |
 | `infra` | OpenTofu for Neon, Cloudflare and monitoring; the inference Sprite's bootstrap files, which the API uploads when an owner sets up a subscription |
 
@@ -114,10 +114,11 @@ The checked-in configuration and 23 September pause record identify the serving 
 `www` are configured to point at the web app and `api-staging.askthecaptain.app` at the API.
 A dormant pair, `askthecaptain-api` and `askthecaptain-web`, is retained; `api.askthecaptain.app`
 points at the production API. The pause record dates its last promotion to 2026-09-05.
-`askthecaptain-embed` is the D21 embedding service. Staging API/web and embedding resumed on
-24 September with one machine each. API retains equipment #127 (image source `dc32eea`),
-including #125 and earlier work. Web adds session recovery #130 on 25 September (merged
-`3fb1095`, identical image-source tree `f87098b`).
+`askthecaptain-embed` is the former D21 mail/note embedding service; it is stopped with autostart off
+following the retirement release. On 25 September staging API/web moved to #135/#136 (merge
+`d11fcdf`, identical image-source tree `7b77ba9`), with one machine per app. The owner-authorised
+legacy-data reset completed before migrations 0037/0038. Sign-in/configuration and truthful
+spending totals remain; old assistant content is not migrated into workspace tasks.
 Production remains stopped, and GitHub's `deploy` and `backup` workflows remain disabled.
 The [operational record](runbooks/paused.md) records health checks, limitations and the deployment
 procedure; configuration alone is not a live availability check.
@@ -143,8 +144,7 @@ external-write guarantee. D5 still forbids workflow mail sending; it does not re
 A catalogue registry binds service/connector handlers; uninstalled handlers keep the corresponding
 workflow unavailable. Run snapshots pin definitions, parameters and enabling people. Local writes
 and journal completion share a transaction; provider intent precedes I/O, with idempotency or
-reconciliation in the adapter. Legacy mail-sync cursor commits enqueue `mail.synced` runs in
-the same transaction; retirement must remove this trigger, not only its UI. Await deadlines and event wake-ups are also atomic with journal/destination
+reconciliation in the adapter. The legacy mail-sync trigger and `mail.synced` enqueue path are removed. Await deadlines and event wake-ups are also atomic with journal/destination
 state. Membership checks, actionable inference pauses, Resume, cancellation and named retry
 exhaustion are part of the runner. No separate engine service is provisioned.
 
@@ -152,7 +152,7 @@ Daily/weekly schedules use the organisation's timezone and a persisted next run,
 first delivery; each queue payload contains only a run id. A platform failure queue records exhausted
 worker deliveries back into the tenant journal. Settings → Workflows → Activity links to run details:
 ordered steps, loop item, state and reason, with Resume for paused runs and Cancel for unfinished runs
-(owner/admin). Empty, unavailable, failed and saving states use words. Existing triage/outbox handlers are legacy bindings to retire; the runner remains reusable infrastructure. [The runbook](runbooks/workflow-runner.md) covers installation,
+(owner/admin). Empty, unavailable, failed and saving states use words. Triage/outbox bindings are removed; the runner remains reusable infrastructure. [The runbook](runbooks/workflow-runner.md) covers installation,
 handler contracts and recovery.
 
 ## 5. Data model
@@ -166,10 +166,10 @@ These target semantics do not claim the old schema has already changed.
 | Identity/access | Organisations, users, sessions, passkeys and memberships | Existing services; preserve tenant checks and revocation |
 | Projects | Named shared outcomes, owner, description and lifecycle; no nesting | Existing project services reusable; mail-discovery proposal machinery is legacy |
 | Tasks | Title/body, status, owner, due date, optional project, evidence and one-level checklist | Migration 0038 and the [optional-project contract](plans/optional-work-projects-2026-09.md) remove the mandatory project and Obligations fallback; deployment requires the authorised legacy reset first |
-| Recurring work | Series generate ordinary tasks; no artificial project required; edits affect future occurrences | Existing materialisation reusable; update project assumptions and completion rules together |
-| Tags | Flat organisation labels; many per task, stable identity on rename, no permissions or inherited duplication | Migration 0035 and API/web controls implemented; [tag contract](plans/workspace-task-tags-2026-09.md) records current project restrictions to lift with standalone work |
+| Recurring work | Series generate ordinary tasks; no artificial project required; edits affect future occurrences | Standalone materialisation and nullable project semantics implemented by #136; completion evidence rules preserved |
+| Tags | Flat organisation labels; many per task, stable identity on rename, no permissions or inherited duplication | Migration 0035 and API/web controls implemented; [tag contract](plans/workspace-task-tags-2026-09.md) records its original project restrictions, superseded by #136 standalone-task eligibility |
 | Saved views | Named, versioned filters over authorised records | Planned; schema/sharing/revisions need their own contract |
-| Equipment | Exclusive resources and bookings/maintenance with occupied start/end, setup/cleanup, revision and work/person links | Migration 0036 and web shipped; [contract](plans/equipment-reservations-2026-09.md); task/project eligibility must adapt to standalone tasks |
+| Equipment | Exclusive resources and bookings/maintenance with occupied start/end, setup/cleanup, revision and work/person links | Migration 0036 and web shipped; [contract](plans/equipment-reservations-2026-09.md); standalone task links and revision-aware project movement added by #136 |
 | Chat | Conversations, participants, messages, links, pins, stars and read positions with separate stable IDs | Planned; D25 access/retry contract before tables |
 | Evidence | Business source links and deliberately shared correspondence with source-qualified identity and provenance | Existing generic evidence references reusable but need a bounded sharing/access contract; no mailbox archive |
 | Files/DAM | Provider originals, version identities, work links, version-scoped review/chat | Planned; no byte store or imported Embrace backend |
@@ -461,7 +461,7 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 | D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and removal are self-service from Settings (amended 2026-09-19: the API creates and destroys the Sprite through the Sprites HTTP API with a platform token scoped to a dedicated Sprites organisation, and drives the CLI sign-in through the shim; the owner never needs a terminal, and the one-time login code is forwarded once in memory). The Sprite is the only inference runtime today; the API path is a documented seam, not a second runtime. |
 | D19 | Durable workflows use pg-boss with a small Captain runner in the existing process and Postgres, following the D10 spike. Tenant-scoped run/step journals and destination idempotency remain ours; neither engine guarantees exactly-once remote writes. Production execution follows the transaction, continuation and recovery contracts in §4; each workflow waits for its complete handler registry. No Restate service or SDK is retained. |
 | D20 | Retired product decision: deterministic Gmail triage gates and sender priors belong to the legacy assistant. Their implementation history is not a new Captain requirement. |
-| D21 | Existing retrieval uses tenant-scoped pgvector and a stateless Captain embedding service. Legacy mail/note ingestion is retirement work. Any new business source needs an explicit access/retention contract; no automatic adoption of old indexes, and no transfer to Pip. |
+| D21 | Legacy mail/note ingestion is retired, its stored index is cleared, and its embedding service is stopped. The unused pgvector/client schema and deployment assets remain cleanup debt. Any new business source needs an explicit access/retention contract; no automatic adoption of old indexes, and no transfer to Pip. |
 | D22 | Retired product decision: automatic mail/note project discovery is legacy. Projects are managed in Work; any later suggestion over deliberately shared business evidence needs a separate reviewed contract and does not restore mailbox discovery. |
 | D23 | Shared item discussion is D25 chat, not a Notes/comments subsystem. Business evidence retains source identity; handle an actual note reference deliberately when affected, without invented messages or a requirement to retain Notes as a product. Captain is not a document editor. |
 | D24 | Equipment scheduling is core. Continuous interval timelines support hours/days/weeks, resource scrolling and focal zoom. The server atomically prevents overlapping confirmed occupancy, including setup/cleanup/maintenance; unconfirmed, unknown and unloaded periods are explicit. Filters cannot hide competing resource occupancy. |
@@ -470,8 +470,6 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 
 ## 14. Open implementation decisions and historical authority
 
-- Standalone-task schema and service contract: nullable project semantics, recurrence, checklist
-  constraints, tags, equipment links, exports and every writer must agree. No new placeholder project.
 - Work details, saved filters and linked chat: bounded reads, revisions, participants/access,
   retry identity, history/read state and summaries as specified in the delivery contracts.
 - Files: provider/version identity, permissions, preview/extraction retention and explicitly shared

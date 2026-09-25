@@ -1,5 +1,8 @@
 # Optional projects and removal of the Obligations fallback
 
+**Released:** #136 merged and deployed to staging on 25 September after the authorised legacy reset;
+see [the operational record](../runbooks/paused.md).
+
 Workspace outcome: create and schedule shared tasks and recurring work without an artificial
 project. Implements #133 step 4 under D7; the bounded Work detail replacement remains step 5.
 
