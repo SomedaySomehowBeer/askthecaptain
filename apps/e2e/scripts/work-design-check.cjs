@@ -68,6 +68,7 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   const artwork=page.getByRole('checkbox',{name:'Complete Approve can artwork',exact:true});
   await artwork.click();await expect(artwork).toBeChecked();await expect(page).toHaveURL(origin+workPath);
   await expect(page.getByRole('heading',{name:'Completed',exact:true})).toBeVisible();
+  await expect(page.locator('.work-due-group').filter({has:page.getByRole('heading',{name:'Completed',exact:true})}).locator('time').first()).toHaveAttribute('title',`Due ${day(-1)}`);
   await artwork.click();await expect(artwork).not.toBeChecked();
   await goto(`/work?owner=all&projectId=${project.id}`);
   await artwork.focus();await artwork.press('Space');await expect(artwork).toHaveCount(0);

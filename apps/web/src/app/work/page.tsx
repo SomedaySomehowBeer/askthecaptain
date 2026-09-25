@@ -25,7 +25,7 @@ function TaskRow({ task, today, meId, owners, projects, returnHref }: { returnHr
 	const owner = task.ownerId === meId ? 'You' : task.ownerId ? owners.get(task.ownerId) ?? 'Another member' : 'No owner';
 	const active = task.status !== 'done' && task.status !== 'cancelled';
 	const content = (<>
-        <span className="work-task__heading"><span className="work-task__title">{task.title}</span>{task.due ? <time className={`work-task__due${active && due.urgency ? ` due--${due.urgency}` : ''}`} dateTime={task.due} title={due.text}>{!active ? shortDate(task.due) : due.urgency === 'overdue' ? 'Overdue' : due.text.replace(/^due /, '')}</time> : null}</span>
+        <span className="work-task__heading"><span className="work-task__title">{task.title}</span>{task.due ? <time className={`work-task__due${active && due.urgency ? ` due--${due.urgency}` : ''}`} dateTime={task.due} title={`Due ${task.due}`}>{!active ? shortDate(task.due) : due.urgency === 'overdue' ? 'Overdue' : due.text.replace(/^due /, '')}</time> : null}</span>
         <span className="work-task__meta">
             {task.tags.map(tag => <span key={tag.id} className="chip">{tag.name}</span>)}
             <span>{project ? project.name : task.projectId ? 'In a project' : 'No project'}</span>
