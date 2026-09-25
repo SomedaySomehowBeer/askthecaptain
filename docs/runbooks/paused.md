@@ -1,9 +1,9 @@
 # Staging resumed; production paused (2026-09-24)
 
-Captain's staging workspace is available at **https://app.askthecaptain.app/work**. The API and
-web now include equipment scheduling from #125/#127 (merged main `5986b93`). Image source
-`dc32eea` has the identical tree to that merge; the release record below gives the full image tag.
-Production remains stopped. The original 23 September pause is recorded below as history.
+Captain's staging workspace is available at **https://app.askthecaptain.app/work**. Web now runs
+session recovery #130 (merged `3fb1095`, image source `f87098b`). API retains equipment #125/#127
+(image source `dc32eea`); the release records below give full tags. Production remains stopped.
+The original 23 September pause is recorded below as history.
 
 ## Staging authorisation (24 September 2026)
 
@@ -18,6 +18,26 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Session recovery release (25 September 2026, UTC)
+
+Job: **own commitments**. Reviewed #130 passed full CI and merged as
+`3fb10954da8d4e3c001f7565aa5230f95e182891`. The web image was built from clean reviewed PR head
+`f87098b8fb6f9a6a45210db46f8409d0c68fcd17`, verified to have the same Git tree as that merge.
+Only the existing staging web machine `9185776e7cd3d8` was deployed, using
+`registry.fly.io/askthecaptain-web-staging:git-f87098b8fb6f9a6a45210db46f8409d0c68fcd17`
+and `--ha=false --strategy immediate --update-only`. No migration or API/embedding deployment
+was needed. The API still uses `git-dc32eeae888b75390388c7112449d1517f61d53f`.
+
+Live API readiness, signed-out protected-route redirects, the rendered retry page on phone and
+desktop, and normal sign-in after Try again passed. Hosted failures were not injected and no
+customer records were changed. The real-Postgres local proof covers rate limits, server failures,
+dropped connections and write recovery; all four groups and 25 web tests passed.
+
+Machine lists confirmed one web, one API and one embedding machine, with autostart enabled.
+All four production machines remain stopped with autostart off. GitHub deploy and backup workflows
+remain disabled. Rollback is web-only to `git-dc32eeae888b75390388c7112449d1517f61d53f` on the same
+machine with the same rollout flags; no schema rollback is involved.
 
 ## Equipment release (24 September 2026, UTC)
 

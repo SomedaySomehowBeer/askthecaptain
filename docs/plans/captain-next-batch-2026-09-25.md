@@ -25,6 +25,10 @@ branching, commits and PRs. Only one heavy build/test runs at a time under `/tmp
 New assignments begin after the current one is complete; this table does not claim future work
 has already been delegated or implemented.
 
+The immediate recovery fix is delivered in reviewed #130 and deployed to staging. Claude also
+completed the read-only task-handoff audit; [#131](https://github.com/SomedaySomehowBeer/askthecaptain/issues/131)
+records the next bounded task-detail contract and implementation. That code has not started.
+
 ## Ordered increments
 
 1. **Recover without signing people out.** Missing credentials or a confirmed invalid session
