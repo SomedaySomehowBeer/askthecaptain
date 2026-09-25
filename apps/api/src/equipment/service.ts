@@ -47,6 +47,8 @@ export type Reservation = Schedule & { id: string; equipmentId: string; status: 
  createdBy: string; revision: number; createdAt: Date; updatedAt: Date };
 const equipmentColumns = 'id, name, archived_at, revision, created_at, updated_at';
 const reservationColumns = 'id, equipment_id, title, kind, status, starts_at, ends_at, setup_minutes, cleanup_minutes, occupied_starts_at, occupied_ends_at, project_id, task_id, owner_id, created_by, revision, created_at, updated_at';
+const joinedReservationColumns = reservationColumns.split(', ').map(column => `r.${column}`).join(', ');
+export type ProjectReservation = Reservation & { equipmentName: string; equipmentArchivedAt: Date | null };
 const conflict = (code: string, message: string) => new HttpError(409, code, message);
 const stale = () => conflict('stale_revision', 'This record changed. Refresh it before saving again.');
 const idExists = () => conflict('reservation_id_exists', 'That reservation request already exists with different details. Refresh before retrying.');
@@ -158,6 +160,23 @@ export class EquipmentService {
     order by occupied_starts_at, id limit ${query.limit + 1} offset ${query.offset}`;
    return { reservations: rows.slice(0, query.limit), nextOffset: rows.length > query.limit ? query.offset + query.limit : null,
     coverage: query.offset === 0 && rows.length <= query.limit ? 'complete' as const : 'partial' as const,
+    from: query.from, to: query.to, timezone: organisation.timezone };
+  });
+ }
+ /** One project's confirmed bookings across all equipment. Not availability: other work is deliberately absent. */
+ projectReservations(actor: Actor, organisationId: string, projectId: string, raw: unknown) {
+  const query = reservationsQuery.parse(raw);
+  return this.tx(actor, organisationId, async tx => {
+   // Archived projects keep their history; any project row in this tenant is readable.
+   const [project] = await tx`select id from projects where id = ${projectId}`;
+   if (!project) throw notFound();
+   const [organisation] = await tx<{ timezone: string }[]>`select timezone from organisations where id = ${organisationId}`;
+   if (!organisation) throw notFound();
+   const rows = await tx<ProjectReservation[]>`select ${tx.unsafe(joinedReservationColumns)}, e.name as equipment_name, e.archived_at as equipment_archived_at
+    from equipment_reservations r join equipment e on e.organisation_id = r.organisation_id and e.id = r.equipment_id
+    where r.project_id = ${projectId} and r.status = 'confirmed' and r.occupied_starts_at < ${query.to} and r.occupied_ends_at > ${query.from}
+    order by r.occupied_starts_at, r.id limit ${query.limit + 1} offset ${query.offset}`;
+   return { reservations: rows.slice(0, query.limit), nextOffset: rows.length > query.limit ? query.offset + query.limit : null,
     from: query.from, to: query.to, timezone: organisation.timezone };
   });
  }

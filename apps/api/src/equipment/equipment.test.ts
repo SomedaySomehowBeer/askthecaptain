@@ -489,20 +489,89 @@ it('a single reservation reads back, cancelled or not, only through its own equi
 	assert.equal((await request('GET', `${reservations(tank.id)}/not-an-id`, member)).status, 400);
 });
 
-it('equipment tables appear in the organisation export and go with a deleted organisation', async () => {
-	const lifecycle = new OrganisationLifecycle(db.app);
-	const lines: { table?: string; row?: { organisationId: string } }[] = [];
-	for await (const line of lifecycle.export({ userId: owner.user.id, requestId: 'equipment-export' }, org)) lines.push(JSON.parse(line));
-	for (const table of ['equipment', 'equipment_reservations']) {
-		assert.ok(lines.some(l => l.table === table), table);
-		assert.ok(lines.filter(l => l.table === table).every(l => l.row!.organisationId === org));
+type ProjectRange = { reservations: (Reservation & { equipmentName: string; equipmentArchivedAt: string | null })[]; nextOffset: number | null; from: string; to: string; timezone: string };
+const projectRange = (projectId: string, query: string, person = member, organisation = org) =>
+	request('GET', `${base(organisation)}/projects/${projectId}/reservations?${query}`, person);
+const span = (from: string, to: string, extra = '') => `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${extra}`;
+
+it("a project's schedule lists only its confirmed occupancy across all equipment, in stable pages, and claims no availability", async () => {
+	const planned = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Summer saison' }), 201)).id;
+	const elsewhere = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Summer pils' }), 201)).id;
+	const kettle = await makeEquipment('Schedule kettle'), tank = await makeEquipment('Schedule tank'), tun = await makeEquipment('Schedule mash tun');
+	const at = (time: string) => `2025-06-01T${time}:00Z`;
+	const mine = (equipmentId: string, body: Record<string, unknown>) => json<Reservation>(book(equipmentId, { projectId: planned, ...body }), 201);
+	// The window is [10:00, 14:00). Occupied time ending at `from` or starting at `to` is outside it.
+	await mine(tank.id, { startsAt: at('08:00'), endsAt: at('09:00'), cleanupMinutes: 60 });
+	const cleanupOnly = await mine(kettle.id, { startsAt: at('09:00'), endsAt: at('09:30'), cleanupMinutes: 45 });
+	const tied = [await mine(tank.id, { startsAt: at('10:00'), endsAt: at('11:00') }), await mine(tun.id, { startsAt: at('10:00'), endsAt: at('11:00') })];
+	const setupOnly = await mine(tank.id, { startsAt: at('14:30'), endsAt: at('15:00'), setupMinutes: 45 });
+	await mine(kettle.id, { startsAt: at('14:10'), endsAt: at('15:00'), setupMinutes: 10 });
+	const dropped = await mine(kettle.id, { startsAt: at('11:00'), endsAt: at('12:00') });
+	await json(cancel(dropped, 1));
+	await json(book(kettle.id, { startsAt: at('11:00'), endsAt: at('12:00') }), 201);
+	const theirs = await json<Reservation>(book(kettle.id, { startsAt: at('12:00'), endsAt: at('13:00'), projectId: elsewhere }), 201);
+	// Archived equipment keeps its history on the project's schedule.
+	const archivedTank = await json<Equipment>(request('PATCH', `${base()}/equipment/${tank.id}`, member, { expectedRevision: 1, archived: true }));
+
+	const expected = [cleanupOnly, ...tied.sort((a, b) => a.id < b.id ? -1 : 1), setupOnly].map(r => r.id);
+	const full = await json<ProjectRange>(projectRange(planned, span('2025-06-01T18:00:00+08:00', at('14:00'))));
+	assert.deepEqual(full.reservations.map(r => r.id), expected, 'occupied start then id; cancelled, unlinked and other-project bookings excluded');
+	assert.equal(full.from, '2025-06-01T10:00:00.000Z'); assert.equal(full.to, '2025-06-01T14:00:00.000Z');
+	assert.equal(full.timezone, 'Australia/Perth'); assert.equal(full.nextOffset, null);
+	assert.ok(!('coverage' in full), 'a project schedule never claims to cover the equipment');
+	const bySchedule = new Map(full.reservations.map(r => [r.id, r]));
+	assert.deepEqual([bySchedule.get(setupOnly.id)!.equipmentName, bySchedule.get(setupOnly.id)!.equipmentArchivedAt], ['Schedule tank', archivedTank.archivedAt]);
+	assert.deepEqual([bySchedule.get(cleanupOnly.id)!.equipmentName, bySchedule.get(cleanupOnly.id)!.equipmentArchivedAt], ['Schedule kettle', null]);
+	assert.deepEqual({ ...bySchedule.get(cleanupOnly.id)!, equipmentName: undefined, equipmentArchivedAt: undefined },
+		{ ...cleanupOnly, equipmentName: undefined, equipmentArchivedAt: undefined }, 'rows are the stored reservation plus its equipment');
+	assert.deepEqual((await json<ProjectRange>(projectRange(elsewhere, span(at('10:00'), at('14:00'))))).reservations.map(r => r.id), [theirs.id]);
+
+	// Pages are bounded, deterministic and join back to the full list.
+	const pages: string[] = [];
+	for (let offset: number | null = 0, count = 0; offset !== null; count++) {
+		assert.ok(count < 5, 'paging terminates');
+		const page: ProjectRange = await json<ProjectRange>(projectRange(planned, span(at('10:00'), at('14:00'), `&limit=3&offset=${offset}`)));
+		assert.ok(page.reservations.length <= 3); pages.push(...page.reservations.map(r => r.id)); offset = page.nextOffset;
 	}
-	// Delete only this test's second tenant.
-	const theirs = await makeEquipment('Cascade tank', outsider, otherOrg);
-	await json(book(theirs.id, { startsAt: '2031-08-01T00:00:00Z', endsAt: '2031-08-01T01:00:00Z' }, outsider, otherOrg), 201);
-	await lifecycle.delete({ userId: outsider.user.id, email: 'equipment-outsider@example.test', requestId: 'equipment-delete' }, otherOrg, 'Other business');
-	assert.equal((await db.owner`select * from equipment where organisation_id = ${otherOrg}`).length, 0);
-	assert.equal((await db.owner`select * from equipment_reservations where organisation_id = ${otherOrg}`).length, 0);
+	assert.deepEqual(pages, expected);
+	const first = await json<ProjectRange>(projectRange(planned, span(at('10:00'), at('14:00'), '&limit=2')));
+	assert.equal(first.nextOffset, 2); assert.deepEqual(first.reservations.map(r => r.id), expected.slice(0, 2));
+
+	// An archived project still shows its history; a missing one is not found.
+	await json(request('PATCH', `${base()}/projects/${planned}`, owner, { expectedRevision: await rev('projects', planned), archived: true }));
+	assert.deepEqual((await json<ProjectRange>(projectRange(planned, span(at('10:00'), at('14:00')), owner))).reservations.map(r => r.id), expected);
+	assert.equal((await json<Failure>(projectRange(randomUUID(), span(at('10:00'), at('14:00'))), 404)).code, 'not_found');
+
+	// The query is strict and uses the bounded reservation window.
+	for (const query of [span(at('10:00'), at('14:00'), '&equipmentId=' + kettle.id), span(at('10:00'), at('14:00'), '&status=cancelled'),
+		span(at('10:00'), at('14:00'), '&limit=0'), span(at('10:00'), at('14:00'), '&limit=201'), span(at('10:00'), at('14:00'), '&offset=-1'),
+		span(at('10:00'), at('10:00')), span(at('14:00'), at('10:00')), span('2025-06-01T10:00:00', at('14:00')),
+		span('2025-01-01T00:00:00Z', '2025-04-04T00:00:01Z'), `from=${encodeURIComponent(at('10:00'))}`, ''])
+		assert.equal((await projectRange(planned, query)).status, 400, query);
+	assert.equal((await projectRange('not-an-id', span(at('10:00'), at('14:00')))).status, 400);
+	assert.equal((await projectRange(planned, span('2025-03-01T00:00:00Z', '2025-06-02T00:00:00Z', '&limit=200'))).status, 200, 'exactly 93 days, the largest page');
+});
+
+it("a project's schedule is invisible to other tenants, unauthenticated people and removed members", async () => {
+	const secret = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Secret collab' }), 201)).id;
+	const tank = await makeEquipment('Schedule tank 2');
+	await json(book(tank.id, { title: 'Secret brew', startsAt: '2025-07-01T00:00:00Z', endsAt: '2025-07-01T01:00:00Z', projectId: secret }), 201);
+	const query = span('2025-07-01T00:00:00Z', '2025-07-02T00:00:00Z');
+	assert.equal((await json<ProjectRange>(projectRange(secret, query))).reservations.length, 1);
+	assert.equal((await request('GET', `${base()}/projects/${secret}/reservations?${query}`)).status, 401);
+	const outside = [await projectRange(secret, query, outsider), await projectRange(secret, query, outsider, otherOrg)];
+	for (const response of outside) {
+		assert.equal(response.status, 404); const text = await response.text();
+		assert.ok(!text.includes('Secret') && !text.includes(tank.id), text);
+	}
+	// Their own project read through our tenant's path finds nothing, and ours through theirs neither.
+	const foreign = (await json<{ id: string }>(request('POST', `${base(otherOrg)}/projects`, outsider, { name: 'Theirs too' }), 201)).id;
+	assert.equal((await projectRange(foreign, query)).status, 404);
+	assert.deepEqual((await json<ProjectRange>(projectRange(foreign, query, outsider, otherOrg))).reservations, []);
+	await setMembership(member.user.id, 'removed');
+	try { assert.equal((await projectRange(secret, query)).status, 404, 'a removed member reads nothing'); }
+	finally { await setMembership(member.user.id, 'active'); }
+	assert.equal((await json<ProjectRange>(projectRange(secret, query))).reservations.length, 1);
 });
 
 it('a linked task that changes project takes its confirmed reservations with it, with a new revision; history stays', async () => {
@@ -536,4 +605,21 @@ it('a linked task that changes project takes its confirmed reservations with it,
 	// Other fields only: no reservation moves, no revision bump.
 	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { expectedRevision: await rev('tasks', moving), title: 'Carbonate the winter release' }));
 	assert.equal((await read(live.id)).revision, now.revision);
+});
+
+// Runs last: it deletes the second tenant that the isolation tests above rely on.
+it('equipment tables appear in the organisation export and go with a deleted organisation', async () => {
+	const lifecycle = new OrganisationLifecycle(db.app);
+	const lines: { table?: string; row?: { organisationId: string } }[] = [];
+	for await (const line of lifecycle.export({ userId: owner.user.id, requestId: 'equipment-export' }, org)) lines.push(JSON.parse(line));
+	for (const table of ['equipment', 'equipment_reservations']) {
+		assert.ok(lines.some(l => l.table === table), table);
+		assert.ok(lines.filter(l => l.table === table).every(l => l.row!.organisationId === org));
+	}
+	// Delete only this test's second tenant.
+	const theirs = await makeEquipment('Cascade tank', outsider, otherOrg);
+	await json(book(theirs.id, { startsAt: '2031-08-01T00:00:00Z', endsAt: '2031-08-01T01:00:00Z' }, outsider, otherOrg), 201);
+	await lifecycle.delete({ userId: outsider.user.id, email: 'equipment-outsider@example.test', requestId: 'equipment-delete' }, otherOrg, 'Other business');
+	assert.equal((await db.owner`select * from equipment where organisation_id = ${otherOrg}`).length, 0);
+	assert.equal((await db.owner`select * from equipment_reservations where organisation_id = ${otherOrg}`).length, 0);
 });

@@ -134,6 +134,8 @@ try {
             await app.fetch(req);
             return Response.json({ error: 'Fixture lost Work save response' }, { status: 503 });
         }
+        if (req.method === 'GET' && /\/projects\/[^/]+\/reservations$/.test(url.pathname) && mode === 'project-bookings-failed')
+            return Response.json({ error: 'Fixture project booking query unavailable' }, { status: 503 });
         if (req.method === 'GET' && url.pathname.endsWith('/tasks') && mode === 'failed')
             return Response.json({ error: 'Fixture task query unavailable' }, { status: 503 });
         if (mode === 'tags-failed' && req.method === 'GET' && (url.pathname.endsWith('/tags') || url.pathname.endsWith('/tag-options')))

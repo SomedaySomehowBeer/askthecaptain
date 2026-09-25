@@ -1,0 +1,38 @@
+/* project.png: compact project context, underlined views, cross-tag work and real bookings. */
+.project-context { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-top: -8px; }
+.project-owner { width: 26px; height: 26px; flex: 0 0 26px; font-size: 10px; }
+.project-tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--line); }
+.project-tabs a { display: flex; align-items: center; min-height: 44px; border-bottom: 2px solid transparent; color: var(--ink); text-decoration: none; font-size: 13px; }
+.project-tabs a[aria-current='page'] { border-bottom-color: var(--ink); font-weight: 600; }
+.project-description { font-size: 14px; margin: 0; }
+.project-section { display: flex; flex-direction: column; gap: 10px; }
+.project-section__heading { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.project-section__heading h2 { font-size: 16px; margin: 0; }
+.project-section__heading > a { min-height: 44px; display: inline-flex; align-items: center; gap: 12px; font-size: 12px; color: var(--ink); text-decoration: none; }
+.project-note { font-size: 12px; color: var(--muted); margin: 0; }
+.project-empty { margin: 0; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; font-size: 14px; }
+.project-stream > li + li { border-top: 1px solid var(--line); }
+.project-stream__link { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 10px 12px; text-decoration: none; color: var(--ink); }
+.project-stream__mark { display: grid; place-items: center; width: 30px; height: 32px; flex: 0 0 30px; border-radius: 8px; background: var(--accent-soft); color: var(--accent-text); font-size: 13px; font-weight: 600; }
+.project-stream__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.project-stream__text strong { font-size: 13px; }
+.project-stream__text > span { font-size: 11px; color: var(--muted); }
+.project-stream__link:hover strong { text-decoration: underline; }
+.project-bookings { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; gap: 0; }
+.project-bookings > li + li { border-top: 1px solid var(--line); }
+.project-booking { display: flex; flex-direction: column; gap: 5px; padding: 14px; color: var(--ink); text-decoration: none; }
+.project-booking__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.project-booking__heading strong { font-size: 14px; overflow-wrap: anywhere; }
+.project-booking .chip { font-size: 10px; padding: 2px 6px; border-radius: 5px; background: var(--accent-soft); color: var(--accent-text); }
+.project-booking > span:not(:first-child) { font-size: 11px; color: var(--muted); }
+.project-window { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.project-window .field { flex: 1 1 130px; min-width: 0; }
+.project-window input, .project-window select { min-width: 0; width: 100%; }
+.project-window-nav { display: flex; justify-content: space-between; }
+.project-window-nav a, .project-schedule-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; }
+.project-task-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.project-task-filters a { padding: 8px 10px; min-height: 44px; display: flex; align-items: center; font-size: 12px; color: var(--ink); border: 1px solid var(--line); border-radius: 12px; text-decoration: none; }
+.project-task-filters a[aria-current='page'] { background: var(--panel); font-weight: 600; }
+.project-actions, .project-edit { font-size: 13px; }
+.project-actions .stack, .project-edit > form { margin-top: 12px; }
+.project-section a:focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
