@@ -133,7 +133,7 @@ export function ReservationForm(props: Props) {
 	) : (
 		<div className="field"><span className="field__label">Project and task</span>
 			<input type="hidden" name="projectId" value={initial.projectId ?? ''} /><input type="hidden" name="taskId" value={initial.taskId ?? ''} />
-			<p className="muted">Projects and tasks could not be read, so the links stay as they are{initial.projectId ? ` (${label(initial.projectId)}${initial.taskId ? `, ${label(initial.taskId)}` : ''})` : ' (none)'}.</p></div>
+			<p className="muted">Projects and tasks could not be read, so the links stay as they are{initial.projectId ? ` (${label(initial.projectId)}${initial.taskId ? `, ${label(initial.taskId)}` : ''})` : initial.taskId ? ` (${label(initial.taskId)})` : ' (none)'}.</p></div>
 	);
 
 	return (
