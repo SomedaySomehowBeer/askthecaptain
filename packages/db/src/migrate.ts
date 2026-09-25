@@ -11,10 +11,12 @@ export async function listMigrations(): Promise<{ name: string; sql: string }[]>
 	return Promise.all(names.map(async (name) => ({ name, sql: await readFile(new URL(name, `file://${migrationsDir}`), 'utf8') })));
 }
 
-export async function applyMigrations(sql: Sql, log: (line: string) => void = () => undefined): Promise<string[]> {
+/** `through` (a migration file name) stops after that migration; tests use it to seed a database as it
+ *  was before a data migration. Releases always apply everything. */
+export async function applyMigrations(sql: Sql, log: (line: string) => void = () => undefined, through?: string): Promise<string[]> {
 	await sql`create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())`;
 	const applied = new Set((await sql<{ name: string }[]>`select name from schema_migrations`).map((row) => row.name));
-	const pending = (await listMigrations()).filter((migration) => !applied.has(migration.name));
+	const pending = (await listMigrations()).filter((migration) => !applied.has(migration.name) && (through === undefined || migration.name <= through));
 	for (const migration of pending) {
 		await sql.begin(async (tx) => {
 			await tx.unsafe(migration.sql);

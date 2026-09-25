@@ -42,13 +42,13 @@ export type TaskStatus = 'suggested' | 'open' | 'in_progress' | 'done' | 'cancel
 /** One line of a project's brief, citing the thread or note it rests on when it has one. */
 export type BriefLine = { text: string; evidence: { kind: 'mail_thread' | 'note'; id: string } | null };
 export type Brief = { what: BriefLine[]; standing: BriefLine[]; people: BriefLine[]; questions: BriefLine[] };
-export type Project = { id: string; name: string; description: string; stages: string[]; stage: 'idea' | 'underway'; brief: Brief; briefUpdatedAt: string | null; state: 'proposed' | 'active' | 'archived'; ownerId: string | null; systemKind: 'obligations' | null; archivedAt: string | null; createdAt: string; updatedAt: string };
+export type Project = { id: string; name: string; description: string; stages: string[]; stage: 'idea' | 'underway'; brief: Brief; briefUpdatedAt: string | null; state: 'proposed' | 'active' | 'archived'; ownerId: string | null; archivedAt: string | null; createdAt: string; updatedAt: string };
 export type Evidence = { id: string; taskId: string; kind: 'mail' | 'file' | 'url'; reference: string; label: string; attachedBy: string | null; attachedAt: string };
-export type Task = { id: string; projectId: string; parentId: string | null; title: string; body: string; status: TaskStatus; ownerId: string | null; ownerName: string | null; due: string | null;
+export type Task = { id: string; projectId: string | null; parentId: string | null; title: string; body: string; status: TaskStatus; ownerId: string | null; ownerName: string | null; due: string | null;
 	sourceKind: 'person' | 'mail' | 'series' | 'run' | 'note'; sourceId: string | null; seriesId: string | null; periodStart: string | null; periodEnd: string | null; evidenceRequired: boolean;
 	completedBy: string | null; completedAt: string | null; createdAt: string; updatedAt: string; evidence: Evidence[] };
 export type Recurrence = 'monthly' | 'quarterly' | 'yearly' | 'weekdays' | 'custom';
-export type Series = { id: string; projectId: string; title: string; body: string; ownerId: string | null; evidenceRequired: boolean; recurrence: Recurrence; everyMonths: number | null;
+export type Series = { id: string; projectId: string | null; title: string; body: string; ownerId: string | null; evidenceRequired: boolean; recurrence: Recurrence; everyMonths: number | null;
 	anchor: string; dueOffsetDays: number; pausedAt: string | null; nextDue: string | null; createdAt: string; updatedAt: string };
 /** A thread or note linked to a project (D22): at most ten per project, newest link first, with the project's total. */
 export type ProjectSource = { projectId: string; kind: 'mail_thread' | 'note'; id: string; title: string; at: string | null; linkedBy: 'rule' | 'model' | 'person'; total: number };

@@ -17,7 +17,7 @@ test.describe('temporary work controls', () => {
 		await page.goto(`${webUrl()}/commitments`);
 		await expect(page.getByRole('heading', { name: 'Commitments', level: 1 })).toBeVisible();
 		await expect(page.locator('.notice--failed')).toHaveCount(0);
-		await expect(page.getByRole('heading', { name: 'Obligations' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Without a project' })).toBeVisible();
 		const initialDocuments = documents;
 		const title = `Send price list ${Date.now()}`;
 		// Exact label match: the Done buttons' aria-labels also contain the word "task".
@@ -34,16 +34,16 @@ test.describe('temporary work controls', () => {
 		expect(documents).toBe(initialDocuments);
 	});
 
-	test('a recurring duty in the deadline book produces this period\'s task', async ({ page }) => {
+	test('recurring work without a project produces this period\'s task', async ({ page }) => {
 		await page.goto(`${webUrl()}/commitments`);
 		const duty = `Excise return ${Date.now()}`;
-		const book = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Obligations' }) });
-		await book.locator('summary', { hasText: 'Add a recurring duty' }).click();
-		const form = book.locator('form').filter({ has: page.getByLabel('Duty') });
-		await form.getByLabel('Duty').fill(duty);
+		const book = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Without a project' }) });
+		await book.locator('summary', { hasText: 'Add recurring work' }).click();
+		const form = book.locator('form').filter({ has: page.getByLabel('Title') });
+		await form.getByLabel('Title').fill(duty);
 		await form.getByLabel('First period starts').fill('2020-01-01');
 		await form.getByLabel('Due, days after the period ends').fill('21');
-		await form.getByRole('button', { name: 'Add recurring duty' }).click();
+		await form.getByRole('button', { name: 'Add recurring work' }).click();
 		await expect(book.locator('.line').filter({ hasText: duty })).toContainText('monthly');
 		// The period label is this month in the organisation's timezone, which the runner's clock need
 		// not share at a month boundary: check the occurrence exists and is labelled with a month.

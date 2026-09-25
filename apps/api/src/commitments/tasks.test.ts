@@ -12,8 +12,10 @@ it("steps are a task's checklist: one level deep, in its project, and they follo
 		const cans = await c.createProject(f.actor, f.org, { name: 'Cans for October' }); const other = await c.createProject(f.actor, f.org, { name: 'Other' });
 		const art = await c.createTask(f.actor, f.org, { title: 'Send final artwork', projectId: cans.id });
 		const step1 = await c.createTask(f.actor, f.org, { title: 'Export PDF', parentId: art.id });
-		const step2 = await c.createTask(f.actor, f.org, { title: 'Email CanCo', parentId: art.id, projectId: other.id });
-		assert.equal(step1.parentId, art.id); assert.equal(step2.projectId, cans.id, 'a step is in its parent project whatever was asked');
+		await assert.rejects(c.createTask(f.actor, f.org, { title: 'Email CanCo', parentId: art.id, projectId: other.id }), { code: 'step_project' }, 'a step cannot ask for another project');
+		await assert.rejects(c.createTask(f.actor, f.org, { title: 'Email CanCo', parentId: art.id, projectId: null }), { code: 'step_project' }, 'or for none');
+		const step2 = await c.createTask(f.actor, f.org, { title: 'Email CanCo', parentId: art.id, projectId: cans.id });
+		assert.equal(step1.parentId, art.id); assert.equal(step1.projectId, cans.id); assert.equal(step2.projectId, cans.id, 'a step is in its parent project');
 		await assert.rejects(c.createTask(f.actor, f.org, { title: 'Too deep', parentId: step1.id }), { code: 'step_depth' });
 		await assert.rejects(c.updateTask(f.actor, f.org, step1.id, { projectId: other.id }), { code: 'step_project' });
 		await assert.rejects(f.tx(sql => sql`update tasks set parent_id = ${step1.id} where id = ${art.id}`), /step/, 'the trigger refuses a second level either way round');

@@ -8,7 +8,8 @@ export type Harness = { owner: Sql; app: Sql; databaseUrl: string; close(): Prom
 
 export const databaseUrl = process.env.DATABASE_URL;
 
-export async function freshDatabase(): Promise<Harness> {
+/** `through` leaves the database at that migration; call `applyMigrations(owner)` to apply the rest. */
+export async function freshDatabase(options: { through?: string } = {}): Promise<Harness> {
 	if (!databaseUrl) throw new Error('DATABASE_URL is required');
 	const admin = postgres(databaseUrl, { max: 1 });
 	const name = `captain_test_${randomBytes(6).toString('hex')}`;
@@ -27,7 +28,7 @@ export async function freshDatabase(): Promise<Harness> {
 	const ownerUrl = new URL(base); ownerUrl.pathname = `/${name}`;
 	const appUrl = new URL(ownerUrl); appUrl.username = 'app'; appUrl.password = 'app';
 	const owner = postgres(ownerUrl.toString(), { max: 2, transform: postgres.camel });
-	await applyMigrations(owner);
+	await applyMigrations(owner, undefined, options.through);
 	const app = postgres(appUrl.toString(), { max: 4, transform: postgres.camel });
 	return {
 		owner, app, databaseUrl: ownerUrl.toString(),

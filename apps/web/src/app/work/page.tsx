@@ -17,7 +17,7 @@ function titleFor(filters: WorkFilters) {
 
 function TaskRow({ task, today, meId, owners, projects }: { task: WorkTask; today: string | null; meId: string; owners: Map<string, string>; projects: Map<string, Project> }) {
 	const due = today ? describeDue(task.due, today) : { text: task.due ? `due ${task.due}` : 'no date', urgency: null };
-	const project = projects.get(task.projectId);
+	const project = task.projectId ? projects.get(task.projectId) : undefined;
 	const owner = task.ownerId === meId ? 'You' : task.ownerId ? owners.get(task.ownerId) ?? 'Another member' : 'No owner';
 	const href = workTaskHref(task);
 	const content = (<>
@@ -26,7 +26,7 @@ function TaskRow({ task, today, meId, owners, projects }: { task: WorkTask; toda
 					<span className={due.urgency ? `due--${due.urgency}` : undefined}>{task.status === 'done' ? 'done' : due.text}</span>
 					{task.status !== 'open' && task.status !== 'done' ? <span>{statusWords[task.status as keyof typeof statusWords] ?? task.status}</span> : null}
 					<span>{owner}</span>
-					{project ? <span>{project.systemKind === 'obligations' ? 'Obligations' : project.name}</span> : null}
+					{project ? <span>{project.name}</span> : null}
 				</span>
 				{task.tags.length ? <span className="work-task__tags">{task.tags.map((tag) => <span key={tag.id} className="chip">{tag.name}</span>)}</span> : null}
 				{href ? null : <span className="muted">Cancelled tasks are not listed on Commitments, so this one has no page to open.</span>}
@@ -99,7 +99,7 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 									<select id="work-project" name="projectId" defaultValue={filters.projectId ?? ''}>
 										<option value="">Any project</option>
 										{filters.projectId && !projectOffered ? <option value={filters.projectId}>{projectLabel(selectedProject)}</option> : null}
-										{activeProjects.map((p) => <option key={p.id} value={p.id}>{p.systemKind === 'obligations' ? 'Obligations' : p.name}</option>)}
+										{activeProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
 									</select></div>
 							) : filters.projectId ? <input type="hidden" name="projectId" value={filters.projectId} /> : null}
 						</div>

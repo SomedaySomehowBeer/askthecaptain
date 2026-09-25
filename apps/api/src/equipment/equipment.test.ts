@@ -253,7 +253,13 @@ it('links must be eligible work in this tenant; owners must be active members', 
 	const linked = await json<Reservation>(book(tank.id, { ...slot(), projectId: project, taskId: task, ownerId: member.user.id }), 201);
 	assert.equal(linked.projectId, project); assert.equal(linked.taskId, task); assert.equal(linked.ownerId, member.user.id);
 	assert.equal((await book(tank.id, { ...slot(), projectId: project })).status, 201, 'a project alone is enough');
-	assert.equal((await book(tank.id, { ...slot(), taskId: task })).status, 400, 'a task needs its project');
+	assert.equal((await book(tank.id, { ...slot(), taskId: task })).status, 404, "a task's project must be named with it");
+	// A standalone task links with no project, and not with one it does not belong to (D7).
+	const standalone = (await json<{ id: string; projectId: string | null }>(request('POST', `${base()}/tasks`, owner, { title: 'Clean the tank' }), 201));
+	assert.equal(standalone.projectId, null);
+	const loose = await json<Reservation>(book(tank.id, { ...slot(), taskId: standalone.id }), 201);
+	assert.deepEqual([loose.projectId, loose.taskId], [null, standalone.id]);
+	assert.equal((await book(tank.id, { ...slot(), projectId: project, taskId: standalone.id })).status, 404, 'a standalone task is not in that project');
 	const otherProject = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Winter stout' }), 201)).id;
 	const step = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Mill grain', parentId: task }), 201)).id;
 	const cancelledTask = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Dropped', projectId: project, status: 'cancelled' }), 201)).id;
@@ -488,4 +494,37 @@ it('equipment tables appear in the organisation export and go with a deleted org
 	await lifecycle.delete({ userId: outsider.user.id, email: 'equipment-outsider@example.test', requestId: 'equipment-delete' }, otherOrg, 'Other business');
 	assert.equal((await db.owner`select * from equipment where organisation_id = ${otherOrg}`).length, 0);
 	assert.equal((await db.owner`select * from equipment_reservations where organisation_id = ${otherOrg}`).length, 0);
+});
+
+it('a linked task that changes project takes its confirmed reservations with it, with a new revision; history stays', async () => {
+	const vessel = await makeEquipment('Bright tank 3');
+	const autumn = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Autumn release' }), 201)).id;
+	const winter = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Winter release' }), 201)).id;
+	const moving = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Carbonate the release', projectId: autumn }), 201)).id;
+	const live = await json<Reservation>(book(vessel.id, { startsAt: '2032-03-01T00:00:00Z', endsAt: '2032-03-01T04:00:00Z', projectId: autumn, taskId: moving }), 201);
+	const past = await json<Reservation>(book(vessel.id, { startsAt: '2032-03-02T00:00:00Z', endsAt: '2032-03-02T04:00:00Z', projectId: autumn, taskId: moving }), 201);
+	await json(cancel(past, past.revision));
+	const read = async (id: string) => (await db.owner<{ projectId: string | null; taskId: string | null; revision: number }[]>`select project_id, task_id, revision from equipment_reservations where id = ${id}`)[0]!;
+
+	// Out of any project: the reservation keeps its task and now names no project either.
+	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { projectId: null }));
+	assert.deepEqual(await read(live.id), { projectId: null, taskId: moving, revision: live.revision + 1 });
+	assert.deepEqual(await read(past.id), { projectId: autumn, taskId: moving, revision: past.revision + 1 }, 'a cancelled reservation keeps its history (only its cancellation moved the revision)');
+	const [followed] = await db.owner`select actor_kind, detail from audit_events where subject_id = ${live.id} and action = 'equipment.reservation_updated' order by created_at desc limit 1`;
+	assert.equal(followed!.actorKind, 'person');
+	assert.deepEqual((followed!.detail as { cause: string; before: unknown; after: unknown }).before, { projectId: autumn });
+
+	// A client still holding the old revision cannot write the old project back.
+	assert.equal((await json<Failure>(edit(live, { title: 'Stale' }), 409)).code, 'stale_revision');
+	const current = { ...live, projectId: null, revision: live.revision + 1 };
+	assert.equal((await json<Reservation>(edit(current, { title: 'Carbonate' }))).projectId, null);
+
+	// Into another project: it follows again; an edit that names the task's old project is refused.
+	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { projectId: winter }));
+	const now = await read(live.id);
+	assert.equal(now.projectId, winter);
+	assert.equal((await edit({ ...current, revision: now.revision }, { projectId: null })).status, 404, "the reservation must name its task's project");
+	// Other fields only: no reservation moves, no revision bump.
+	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { title: 'Carbonate the winter release' }));
+	assert.equal((await read(live.id)).revision, now.revision);
 });

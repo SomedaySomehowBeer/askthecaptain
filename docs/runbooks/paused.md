@@ -19,6 +19,21 @@ and standby behaviour to the one-machine limit, and record what changed here. Do
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
 
+## Legacy-data inventory (25 September 2026, UTC)
+
+Before the optional-project cleanup, the sole staging API machine ran a temporary read-only count
+command using its existing image and migration-owner connection, with autostart off and restart
+policy `no`. No old workers ran during the check. The first targeted count completed at 04:51:51Z;
+the full table count at 05:01:58Z. One full-count attempt failed on identifier quoting before any
+write; it was corrected and repeated. No database content or credentials were printed.
+
+The counts and the owner's subsequent authorisation to delete old-version Captain data are in the
+[reset contract](../plans/optional-work-projects-2026-09.md). No database reset or new code deployment
+is claimed by this inventory entry. After inspection, the machine was verified stopped with its
+original image, original service/restart settings and explicit normal command `node dist/index.js`.
+Fly merges an empty `init` object, so restoring `{}` did not clear the temporary command; setting
+that normal command explicitly did. One API machine remained throughout. Production was untouched.
+
 ## Session recovery release (25 September 2026, UTC)
 
 Job: **own commitments**. Reviewed #130 passed full CI and merged as

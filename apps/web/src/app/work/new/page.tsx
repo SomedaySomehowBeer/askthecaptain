@@ -21,13 +21,13 @@ export default async function NewTaskPage({ searchParams }: { searchParams: Prom
 	const owners: OwnerOption[] = [{ id: meId, label: 'You' }, ...(members.ok ? members.value.members : [])
 		.filter((m) => m.status === 'active' && m.userId !== meId).map((m) => ({ id: m.userId, label: m.name || m.email }))];
 	const active = overview.ok ? overview.value.projects.filter((p) => p.state === 'active') : [];
-	const projects: ProjectOption[] | null = overview.ok ? active.map((p) => ({ id: p.id, label: p.systemKind === 'obligations' ? 'Obligations (no project)' : p.name })) : null;
+	const projects: ProjectOption[] | null = overview.ok ? active.map((p) => ({ id: p.id, label: p.name })) : null;
 	const wanted = typeof suggested === 'string' && uuid.test(suggested) && active.some((p) => p.id === suggested) ? suggested : undefined;
-	const projectId = wanted ?? active.find((p) => p.systemKind === 'obligations')?.id ?? active[0]?.id ?? '';
+	const projectId = wanted ?? '';
 	return (
 		<Page title="New task">
 			{!members.ok ? <Notice tone="attention">Other members could not be read ({members.error.message}), so the task can only be yours for now.</Notice> : null}
-			{!overview.ok ? <Notice tone="attention">Projects could not be read ({overview.error.message}). A task saved now goes to Obligations; move it on Commitments later.</Notice> : null}
+			{!overview.ok ? <Notice tone="attention">Projects could not be read ({overview.error.message}). You can create the task without a project.</Notice> : null}
 			<section className="card"><NewTaskForm owners={owners} ownerId={meId} projects={projects} projectId={projectId} /></section>
 		</Page>
 	);

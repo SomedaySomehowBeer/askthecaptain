@@ -14,12 +14,12 @@ export const metadata: Metadata = { title: 'Commitments' };
 const isOpen = (task: Task) => task.status === 'open' || task.status === 'in_progress';
 
 /** A task with, when it has one, its checklist of steps nested beneath it (D7). */
-function TaskLine({ task, steps, today, timezone, showProject }: { task: Task; steps?: Task[]; today: string; timezone: string; showProject?: Project }) {
+function TaskLine({ task, steps, today, timezone, showProject, preview = false }: { task: Task; steps?: Task[]; today: string; timezone: string; showProject?: Project; preview?: boolean }) {
 	const due = describeDue(task.due, today);
 	const doneWhen = task.completedAt ? `done ${shortDate(dateIn(task.completedAt, timezone))}` : null;
 	const stepsDone = steps?.filter((s) => s.status === 'done').length ?? 0;
 	return (
-		<li id={showProject ? undefined : `task-${task.id}`} className={`task${task.status === 'done' ? ' task--done' : ''}`}>
+		<li id={preview ? undefined : `task-${task.id}`} className={`task${task.status === 'done' ? ' task--done' : ''}`}>
 			<div className="task__body">
 				<span className="task__title">{task.title}</span>
 				<span className="task__meta">
@@ -78,13 +78,12 @@ function ProjectCard({ project, tasks, series, projects, today, timezone }: { pr
 	// Steps sit under their task; only top-level tasks make the lists.
 	const top = tasks.filter((t) => !t.parentId); const stepsOf = (id: string) => tasks.filter((t) => t.parentId === id);
 	const open = top.filter(isOpen); const suggested = top.filter((t) => t.status === 'suggested'); const done = top.filter((t) => t.status === 'done');
-	const deadlineBook = project.systemKind === 'obligations';
 	const hasBrief = briefHeadings.some(([key]) => project.brief[key].length > 0);
 	return (
 		<section className={`card${project.archivedAt ? ' card--archived' : ''}`} aria-labelledby={`project-${project.id}`}>
 			<div className="row row--between">
-				<div className="row"><h2 id={`project-${project.id}`}>{project.name}</h2>{project.stage === 'idea' && !deadlineBook ? <span className="chip">idea</span> : null}</div>
-				{deadlineBook ? <span className="chip">deadline book</span> : (
+				<div className="row"><h2 id={`project-${project.id}`}>{project.name}</h2>{project.stage === 'idea' ? <span className="chip">idea</span> : null}</div>
+				{(
 					<SaveForm action={setProjectArchived}><input type="hidden" name="id" value={project.id} /><input type="hidden" name="archived" value={project.archivedAt ? 'false' : 'true'} />
 						<button className="button button--ghost button--small" type="submit">{project.archivedAt ? 'Restore' : 'Archive'}</button></SaveForm>
 				)}
@@ -92,21 +91,37 @@ function ProjectCard({ project, tasks, series, projects, today, timezone }: { pr
 			{project.description ? <p className="secondary">{project.description}</p> : null}
 			{project.archivedAt ? <p className="muted">Archived {shortDate(dateIn(project.archivedAt, timezone))}. Nothing new can be added until it is restored.</p> : null}
 			<BriefView project={project} />
-			{deadlineBook || project.archivedAt ? null : <details className="disclosure"><summary>{hasBrief ? 'Edit the brief' : 'Write a brief'}</summary><BriefForm project={project} /></details>}
+			{project.archivedAt ? null : <details className="disclosure"><summary>{hasBrief ? 'Edit the brief' : 'Write a brief'}</summary><BriefForm project={project} /></details>}
 			{suggested.length > 0 ? <ul className="bare">{suggested.map((task) => <TaskLine key={task.id} task={task} steps={stepsOf(task.id)} today={today} timezone={timezone} />)}</ul> : null}
 			{open.length > 0 ? <ul className="bare">{open.map((task) => <TaskLine key={task.id} task={task} steps={stepsOf(task.id)} today={today} timezone={timezone} />)}</ul>
-				: <p className="muted">{deadlineBook ? 'Nothing is due. Add a recurring duty below and its next occurrence appears here.' : 'Nothing open here.'}</p>}
-			{deadlineBook || series.length > 0 ? (
+				: <p className="muted">Nothing open here.</p>}
+			{!project.archivedAt || series.length > 0 ? (
 				<div className="stack">
-					<h3>Recurring duties</h3>
-					{series.length > 0 ? <ul className="bare">{series.map((s) => <SeriesLine key={s.id} series={s} />)}</ul> : <p className="muted">None yet. The excise return, the BAS, a licence renewal: anything owed on a date, every period.</p>}
-					{project.archivedAt ? null : <details className="disclosure"><summary>Add a recurring duty</summary><SeriesForm projects={projects} projectId={project.id} /></details>}
+					<h3>Recurring work</h3>
+					{series.length > 0 ? <ul className="bare">{series.map((s) => <SeriesLine key={s.id} series={s} />)}</ul> : <p className="muted">No recurring work yet.</p>}
+					{project.archivedAt ? null : <details className="disclosure"><summary>Add recurring work</summary><SeriesForm projects={projects} projectId={project.id} /></details>}
 				</div>
 			) : null}
 			{project.archivedAt ? null : <details className="disclosure"><summary>Add a task</summary><TaskForm projects={projects} projectId={project.id} compact /></details>}
 			{done.length > 0 ? <details className="disclosure"><summary>Done ({done.length})</summary><ul className="bare">{done.map((task) => <TaskLine key={task.id} task={task} steps={stepsOf(task.id)} today={today} timezone={timezone} />)}</ul></details> : null}
 		</section>
 	);
+}
+
+/** Temporary legacy handoff: show standalone records until Work detail routes replace this page. */
+function StandaloneWork({ tasks, series, projects, today, timezone }: { tasks: Task[]; series: Series[]; projects: Project[]; today: string; timezone: string }) {
+	const top = tasks.filter((task) => !task.parentId);
+	const active = top.filter((task) => isOpen(task) || task.status === 'suggested');
+	const done = top.filter((task) => task.status === 'done');
+	const stepsOf = (id: string) => tasks.filter((task) => task.parentId === id);
+	return <section className="card" aria-labelledby="standalone-work">
+		<h2 id="standalone-work">Without a project</h2>
+		{active.length ? <ul className="bare">{active.map((task) => <TaskLine key={task.id} task={task} steps={stepsOf(task.id)} today={today} timezone={timezone} />)}</ul> : <p className="muted">No open tasks without a project.</p>}
+		<h3>Recurring work</h3>
+		{series.length ? <ul className="bare">{series.map((item) => <SeriesLine key={item.id} series={item} />)}</ul> : <p className="muted">No recurring work without a project.</p>}
+		<details className="disclosure"><summary>Add recurring work</summary><SeriesForm projects={projects} /></details>
+		{done.length ? <details className="disclosure"><summary>Done ({done.length})</summary><ul className="bare">{done.map((task) => <TaskLine key={task.id} task={task} steps={stepsOf(task.id)} today={today} timezone={timezone} />)}</ul></details> : null}
+	</section>;
 }
 
 export default async function CommitmentsPage({ searchParams }: { searchParams: Promise<{ shopifyOffset?: string }> }) {
@@ -132,16 +147,16 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 	const live = projects.filter((p) => p.state === 'active'); const archived = projects.filter((p) => p.state === 'archived'); const proposed = projects.filter((p) => p.state === 'proposed');
 	const attention = tasks.filter((t) => isOpen(t) && t.due && describeDue(t.due, today).urgency !== 'later' && !projects.find((p) => p.id === t.projectId)?.archivedAt);
 	const nothingYet = tasks.length === 0 && series.length === 0;
-	const byProject = (id: string) => ({ tasks: tasks.filter((t) => t.projectId === id), series: series.filter((s) => s.projectId === id) });
+	const byProject = (id: string | null) => ({ tasks: tasks.filter((t) => t.projectId === id), series: series.filter((s) => s.projectId === id) });
 	return (
-		<Page title="Commitments" lede={nothingYet ? 'One list of what the business owes: projects, tasks and the duties that come round every period.' : me.organisation.organisationName}>
+		<Page title="Commitments" lede={nothingYet ? 'Tasks and recurring work, with an optional project.' : me.organisation.organisationName}>
 			<RevealTask />
 			{nothingYet ? (
-				<Notice title="Nothing is owed yet.">Add a task to any project, or a recurring duty to the deadline book.</Notice>
+				<Notice title="No tasks yet.">Add a task or recurring work. Choose a project when it helps organise the work.</Notice>
 			) : attention.length > 0 ? (
 				<section className="card" aria-labelledby="attention">
 					<h2 id="attention">Due this week</h2>
-					<ul className="bare">{attention.map((task) => <TaskLine key={task.id} task={task} today={today} timezone={timezone} showProject={projects.find((p) => p.id === task.projectId)} />)}</ul>
+					<ul className="bare">{attention.map((task) => <TaskLine key={task.id} task={task} today={today} timezone={timezone} preview showProject={projects.find((p) => p.id === task.projectId)} />)}</ul>
 				</section>
 			) : (
 				<Notice title="Nothing is due this week.">Everything open has a later date or none. The full list is below.</Notice>
@@ -152,10 +167,11 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 				<h2>Add a task</h2>
 				<TaskForm projects={live} compact />
 			</section>
+			<StandaloneWork projects={live} today={today} timezone={timezone} {...byProject(null)} />
 			{live.map((project) => <ProjectCard key={project.id} project={project} projects={live} today={today} timezone={timezone} {...byProject(project.id)} />)}
 			<section className="card" id="new-project">
 				<h2>New project</h2>
-				<p className="secondary">A project is a name for a stream of work: Wholesale, Production, the new taproom. Tasks and duties belong to one.</p>
+				<p className="secondary">A project is a name for a stream of work: Wholesale, Production, the new taproom. Tasks and recurring work can belong to a project or stand alone.</p>
 				<ProjectForm />
 			</section>
 			{archived.length > 0 ? (

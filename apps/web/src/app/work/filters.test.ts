@@ -57,10 +57,9 @@ test('selected tags missing from the loaded list, or from a failed read, stay se
 });
 
 test('a selected project that cannot be offered keeps its name and says why', () => {
-	assert.equal(projectLabel({ name: 'Summer lager', state: 'active', systemKind: null }), 'Summer lager');
-	assert.equal(projectLabel({ name: 'Summer lager', state: 'archived', systemKind: null }), 'Summer lager (archived)');
-	assert.equal(projectLabel({ name: 'Taproom', state: 'proposed', systemKind: null }), 'Taproom (proposed)');
-	assert.equal(projectLabel({ name: 'Obligations', state: 'active', systemKind: 'obligations' }), 'Obligations');
+	assert.equal(projectLabel({ name: 'Summer lager', state: 'active' }), 'Summer lager');
+	assert.equal(projectLabel({ name: 'Summer lager', state: 'archived' }), 'Summer lager (archived)');
+	assert.equal(projectLabel({ name: 'Taproom', state: 'proposed' }), 'Taproom (proposed)');
 	assert.equal(projectLabel(undefined), 'Unknown project');
 });
 

@@ -11,9 +11,12 @@ export const workQuery = z.object({
  offset: z.coerce.number().int().min(0).max(1_000_000).default(0), limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 export type WorkQuery = z.infer<typeof workQuery>;
-export type WorkTask = { id: string; projectId: string; title: string; ownerId: string | null; status: string; due: string | null; tags: { id: string; name: string }[] };
+export type WorkTask = { id: string; projectId: string | null; title: string; ownerId: string | null; status: string; due: string | null; tags: { id: string; name: string }[] };
 const tagColumns = 'id, name, created_at, updated_at';
-/** Person-scoped labels and task links. The existing task/project remains the only work record. */
+/** Person-scoped labels and task links. The existing task remains the only work record. A top-level task is
+ *  eligible when it has no project, or its project is active (not archived or proposed). */
+const eligible = 'from tasks t left join projects p on p.organisation_id = t.organisation_id and p.id = t.project_id';
+const eligibleWhere = '(t.project_id is null or (p.archived_at is null and p.state = \'active\'))';
 export class TagsService {
  readonly #db: Sql;
  constructor(db: Sql) { this.#db = db; }
@@ -36,10 +39,10 @@ export class TagsService {
  /** A bounded catalogue for one task; never infer its assignments from a filtered Work page. */
  options(actor: Actor, organisationId: string, taskId: string, offset: number, limit: number) {
   return this.tx(actor, organisationId, async tx => {
-   const [task] = await tx<{ id: string; title: string }[]>`select t.id, t.title from tasks t
-    join projects p on p.id = t.project_id and p.organisation_id = t.organisation_id
-    where t.id = ${taskId} and t.parent_id is null and p.archived_at is null and p.state = 'active'
-    for share of t, p`;
+   // `for share of t` only: a standalone task has no project row, and locking p through an outer join is refused.
+   const [task] = await tx<{ id: string; title: string }[]>`select t.id, t.title ${tx.unsafe(eligible)}
+    where t.id = ${taskId} and t.parent_id is null and ${tx.unsafe(eligibleWhere)}
+    for share of t`;
    if (!task) throw notFound();
    const rows = await tx<{ id: string; name: string; attached: boolean }[]>`select tag.id, tag.name,
     exists (select 1 from task_tags link where link.organisation_id = tag.organisation_id
@@ -69,9 +72,14 @@ export class TagsService {
   }
  }
  private async task(tx: TransactionSql, taskId: string) {
-  const [task] = await tx`select t.id from tasks t join projects p on p.id = t.project_id and p.organisation_id = t.organisation_id
-   where t.id = ${taskId} and t.parent_id is null and p.archived_at is null and p.state = 'active' for update of t for share of p`;
+  const [task] = await tx<{ id: string; projectId: string | null }[]>`select t.id, t.project_id ${tx.unsafe(eligible)}
+   where t.id = ${taskId} and t.parent_id is null and ${tx.unsafe(eligibleWhere)} for update of t`;
   if (!task) throw notFound();
+  // Hold the project against a concurrent archive, as the inner join's `for share of p` did.
+  if (task.projectId) {
+   const [project] = await tx`select id from projects where id = ${task.projectId} and archived_at is null and state = 'active' for share`;
+   if (!project) throw notFound();
+  }
  }
  setLink(actor: Actor, organisationId: string, taskId: string, tagId: string, attached: boolean) {
   return this.tx(actor, organisationId, async tx => {
@@ -90,7 +98,7 @@ export class TagsService {
  work(actor: Actor, organisationId: string, raw: unknown) {
   const query = workQuery.parse(raw);
   return this.tx(actor, organisationId, async tx => {
-   const conditions = [tx`t.organisation_id = ${organisationId}`, tx`t.parent_id is null`, tx`p.archived_at is null`, tx`p.state = 'active'`];
+   const conditions = [tx`t.organisation_id = ${organisationId}`, tx`t.parent_id is null`, tx`${tx.unsafe(eligibleWhere)}`];
    if (query.ownerId) conditions.push(tx`t.owner_id = ${query.ownerId}`);
    if (query.projectId) conditions.push(tx`t.project_id = ${query.projectId}`);
    conditions.push(query.status ? tx`t.status = ${query.status}` : tx`t.status <> 'cancelled'`);
@@ -100,7 +108,7 @@ export class TagsService {
     where tt.organisation_id = t.organisation_id and tt.task_id = t.id and tt.tag_id in ${tx(tagIds)})`);
    const where = conditions.reduce((a, b) => tx`${a} and ${b}`);
    const rows = await tx<Omit<WorkTask, 'tags'>[]>`select t.id, t.project_id, t.title, t.owner_id, t.status, t.due::text
-    from tasks t join projects p on p.organisation_id = t.organisation_id and p.id = t.project_id
+    ${tx.unsafe(eligible)}
     where ${where} order by t.due nulls last, t.id limit ${query.limit + 1} offset ${query.offset}`;
    const page = rows.slice(0, query.limit);
    const links = page.length ? await tx<{ taskId: string; id: string; name: string }[]>`select tt.task_id, tag.id, tag.name

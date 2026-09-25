@@ -30,8 +30,11 @@ future reservations permits archival; previous history is retained. Restoration 
 A reservation has a client-generated UUID, equipment, title (trimmed, 1–200 characters), kind
 `booking` or `maintenance`, status `confirmed` or `cancelled`, actual start/end instants, integer
 setup/cleanup minutes, calculated occupied boundaries, revision and creator. It may link a project,
-a task and an accountable person. A task link requires its matching project; new/edited links must
-refer to a top-level, non-cancelled task in an active project and an active member respectively.
+a task and an accountable person. Under the [optional-project increment](optional-work-projects-2026-09.md),
+a task link requires the same project as its task, including null for standalone work. New/edited
+links require a top-level, non-cancelled task, an active project when one is named, and an active
+member respectively. Moving a task updates its confirmed reservation links and revisions;
+cancelled reservations keep their historical links.
 An edit rechecks all links: clear or replace a now-ineligible link before saving. Cancellation and
 an unchanged create retry still work after linked work is archived or an owner is removed.
 
