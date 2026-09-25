@@ -6,7 +6,7 @@ import { initialsOf } from '../lib/nav.ts';
 import { readSession } from '../lib/session.ts';
 
 /** Three shared workspace sections, with account controls outside the primary navigation. */
-export async function Shell({ children }: { children: React.ReactNode }) {
+export async function Shell({ children, parent }: { children: React.ReactNode; parent?: { href: string; label: string } }) {
 	// The frame never redirects: pages decide that. Without a confirmed session it shows no avatar.
 	const session = await readSession();
 	const me = session.state === 'signed-in' ? session.current : null;
@@ -14,7 +14,7 @@ export async function Shell({ children }: { children: React.ReactNode }) {
 	return (
 		<div className="shell">
 			<header className="topbar">
-				<WorkspaceCrumb />
+				<WorkspaceCrumb parent={parent} />
 				<Suspense><TabBar variant="top" scope={scope} /></Suspense>
 				{me ? <Link className="avatar" href="/settings" aria-label={`${me.me.user.name || me.me.user.email}, settings`} title={me.me.user.email}>{initialsOf(me.me.user.name, me.me.user.email)}</Link> : null}
 			</header>

@@ -27,3 +27,14 @@ export function initialsOf(name: string, email: string): string {
 	if (words.length === 0) return (email[0] ?? '?').toUpperCase();
 	return ((words[0]![0] ?? '') + (words.length > 1 ? words[words.length - 1]![0] ?? '' : '')).toUpperCase();
 }
+
+/** Structural parents for routes without record context. Record pages supply their real parent. */
+export function routeParent(pathname: string): { href: string; label: string } | undefined {
+	const taskTags = pathname.match(/^\/work\/tasks\/([0-9a-f-]+)\/tags$/i);
+	if (taskTags) return { href: `/work/tasks/${taskTags[1]}`, label: 'task' };
+	if (/^\/work\/projects\/[^/]+$/.test(pathname)) return { href: '/work/projects', label: 'Projects' };
+	if (/^\/work\/series\/[^/]+$/.test(pathname)) return { href: '/work/series', label: 'Recurring work' };
+	if (pathname === '/work/new' || /^\/work\/tasks\/[^/]+$/.test(pathname)) return { href: '/work', label: 'Work' };
+	if (pathname.startsWith('/resources/equipment/')) return { href: '/resources/equipment', label: 'Equipment schedule' };
+	return undefined;
+}

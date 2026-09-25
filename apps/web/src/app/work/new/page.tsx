@@ -28,7 +28,7 @@ export default async function NewTaskPage({ searchParams }: { searchParams: Prom
 	const wanted = typeof suggested === 'string' && uuid.test(suggested) && suggestedProject?.ok && suggestedProject.value.state === 'active' ? suggested : undefined;
 	const projectId = wanted ?? '';
 	return (
-		<Page title="New task">
+		<Page title="New task" parent={wanted&&suggestedProject?.ok?{href:`/work/projects/${wanted}`,label:suggestedProject.value.name}:undefined}>
 			{!members.ok ? <Notice tone="attention">Other members could not be read ({members.error.message}), so the task can only be yours for now.</Notice> : null}
 			{!overview.ok ? <Notice tone="attention">Projects could not be read ({overview.error.message}). You can create the task without a project.</Notice> : null}
 			<section className="card"><NewTaskForm owners={owners} ownerId={meId} projects={projects} projectId={projectId} /></section>
