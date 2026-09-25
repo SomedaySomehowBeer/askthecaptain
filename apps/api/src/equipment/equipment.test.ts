@@ -431,10 +431,17 @@ it('two direct transactions inserting overlapping occupancy at once: the constra
 		await directInsert(tx, tank.id, member.user.id, starts, ends);
 		await tx`select pg_sleep(0.3)`; // hold the uncommitted row while the other transaction arrives
 	});
-	const results = await Promise.allSettled([attempt('2031-10-01T00:00:00Z', '2031-10-01T02:00:00Z'), attempt('2031-10-01T01:00:00Z', '2031-10-01T03:00:00Z')]);
-	assert.equal(results.filter(r => r.status === 'fulfilled').length, 1);
-	const refused = results.find(r => r.status === 'rejected') as PromiseRejectedResult;
-	assert.equal((refused.reason as { code?: string }).code, '23P01');
+	const ranges = [['2031-10-01T00:00:00Z', '2031-10-01T02:00:00Z'], ['2031-10-01T01:00:00Z', '2031-10-01T03:00:00Z']] as const;
+	const results = await Promise.allSettled(ranges.map(([starts, ends]) => attempt(starts, ends)));
+	assert.equal(results.filter(r => r.status === 'fulfilled').length, 1, 'exactly one transaction commits');
+	const loser = results.findIndex(r => r.status === 'rejected');
+	const code = ((results[loser] as PromiseRejectedResult).reason as { code?: string }).code;
+	// Two raw inserts can each wait on the other's uncommitted row in the exclusion index, so Postgres may
+	// abort the loser as a deadlock (40P01) instead of an exclusion violation (23P01). Either way the
+	// constraint admitted one row. Retrying the loser now, against the committed winner, must be refused
+	// by the constraint itself. (The service locks the equipment row first, so its writers never race here.)
+	assert.ok(code === '23P01' || code === '40P01', `unexpected loser code ${code}`);
+	if (code === '40P01') await assert.rejects(attempt(...ranges[loser]!), (e: { code?: string }) => e.code === '23P01');
 	assert.equal((await db.owner`select count(*)::int as n from equipment_reservations where equipment_id = ${tank.id}`)[0]!.n, 1);
 });
 
