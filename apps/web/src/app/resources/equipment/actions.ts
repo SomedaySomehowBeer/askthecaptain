@@ -36,6 +36,7 @@ async function session(): Promise<{ token: string; org: string } | { ok: false; 
 
 function refresh(equipmentId?: string, reservationId?: string) {
 	revalidatePath('/resources/equipment'); revalidatePath('/resources/equipment/manage');
+	revalidatePath('/work/projects', 'layout');
 	if (equipmentId && reservationId) revalidatePath(`/resources/equipment/${equipmentId}/reservations/${reservationId}`);
 }
 

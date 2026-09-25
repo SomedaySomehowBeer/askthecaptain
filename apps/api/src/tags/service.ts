@@ -13,7 +13,7 @@ export const workQuery = z.object({
 export type WorkQuery = z.infer<typeof workQuery>;
 export type WorkTask = { id: string; projectId: string | null; seriesId: string | null; title: string; ownerId: string | null; status: string; due: string | null; revision: number; tags: { id: string; name: string }[] };
 const tagColumns = 'id, name, created_at, updated_at';
-/** Person-scoped labels and task links. The existing task remains the only work record. A top-level task is
+/** Shared organisation labels and task links. The existing task remains the only work record. A top-level task is
  *  eligible when it has no project, or its project is active (not archived or proposed). */
 const eligible = 'from tasks t left join projects p on p.organisation_id = t.organisation_id and p.id = t.project_id';
 const eligibleWhere = '(t.project_id is null or (p.archived_at is null and p.state = \'active\'))';
@@ -23,7 +23,7 @@ export class TagsService {
  private async tx<T>(actor: Actor, organisationId: string, work: (tx: TransactionSql) => Promise<T>): Promise<T> {
   await roleOf(this.#db, actor.userId, organisationId);
   return withTenant(this.#db, { organisationId, userId: actor.userId }, async tx => {
-   // Lock membership through the write so removal cannot race a person-scoped operation.
+   // Lock membership through the write so removal cannot race an operation by that person.
    const [member] = await tx`select user_id from memberships where organisation_id = ${organisationId}
     and user_id = ${actor.userId} and status = 'active' for share`;
    if (!member) throw notFound();

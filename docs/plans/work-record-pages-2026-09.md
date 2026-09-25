@@ -133,3 +133,33 @@ Confirmed row changes announce completion/reopening in a status region that surv
 or regrouping. Keyboard focus moves to that confirmation when it remains on the operated checkbox;
 it does not interrupt someone who has moved to another control. The same behaviour applies to
 checklists. Pending rows say Saving; refused evidence completion links to the task's source editor.
+
+## Project overview and schedule alignment
+
+Implement the existing project.png composition with Overview, Tasks and Schedule links. The
+overview shows compact owner/state context, a bounded cross-tag open/in-progress task preview, and actual equipment
+bookings. Tasks retains paged current/completed and cancelled work plus in-place completion.
+Schedule lists this project's bookings in an explicit business-timezone window with pagination;
+it links to the shared equipment timeline to inspect availability across every project. A filtered
+project booking list never establishes equipment availability or implies the absence of conflicts.
+No invented launch date, progress percentage, unconfirmed request, chat or file section is shown.
+Description remains plain shared context; secondary editing/recurrence actions stay available.
+
+`GET /projects/:projectId/reservations` authenticates active membership and reads under forced RLS
+through the equipment service. It checks the project exists (including archived history), accepts
+strict `from`, `to`, `offset`, `limit` parameters using the existing bounded reservation-window
+validation, and returns confirmed reservations overlapping the window by occupied time (including
+setup/cleanup), ordered by occupied start and ID. Each row includes its equipment name and archive
+state. The response includes `nextOffset`, `from`, `to` and the organisation timezone. It never
+returns other-project or cancelled bookings and is not an availability API. No schema change.
+
+Overview previews label their bounds and link to full paged views. Owner/tag context comes from
+authorised reads; unavailable reads render explicit failures rather than empty counts. Archived
+equipment reservations remain visible. Browser checks cover all three project views, task completion,
+project/task/reservation navigation, pagination, empty/failed reads and responsive populated screens.
+Postgres tests cover tenant isolation, inactive members, archived/missing projects, interval bounds,
+cancelled/other-project exclusions, deterministic paging and strict query validation.
+
+The overview merges the first six open and first six in-progress tasks by due date then ID and
+shows at most six. A failed source fails the preview; completed/cancelled/suggested history remains
+in Tasks. Tags are shared organisation labels (migration 0035), not personal categories.

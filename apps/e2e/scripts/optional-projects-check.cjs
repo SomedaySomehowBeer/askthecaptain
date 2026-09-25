@@ -88,12 +88,12 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   const projectName=`Browser project ${Date.now()}`;
   await goto('/work/projects/new');await page.getByLabel('Name',{exact:true}).fill(projectName);await page.getByRole('button',{name:'Create project',exact:true}).click();
   await expect(page).toHaveURL(/\/work\/projects\/[0-9a-f-]+$/);const projectPath=new URL(page.url()).pathname;
-  await expect(page.getByText('No tasks on this page.',{exact:true})).toBeVisible();
+  await expect(page.getByText('No open or in-progress tasks in this project.',{exact:true})).toBeVisible();
   await page.getByText('Edit project',{exact:true}).click();await page.getByLabel('Archived',{exact:true}).check();await page.getByRole('button',{name:'Save changes',exact:true}).click();
-  await expect(page.getByText(/^archived ·/,{exact:true})).toBeVisible();
+  await expect(page.locator('.project-context').filter({hasText:'archived ·'})).toBeVisible();
   await goto('/work/projects?state=archived');await expect(page.getByRole('link',{name:new RegExp(projectName)})).toBeVisible();
   await goto(projectPath);await page.getByText('Edit project',{exact:true}).click();await page.getByLabel('Archived',{exact:true}).uncheck();await page.getByRole('button',{name:'Save changes',exact:true}).click();
-  await expect(page.getByText(/^active ·/,{exact:true})).toBeVisible();
+  await expect(page.locator('.project-context').filter({hasText:'active ·'})).toBeVisible();
   console.log('PASS projects create/archive/restore and bounded history');
 
   await goto('/work/series/new');const seriesTitle=`Recurring inspection ${Date.now()}`;
