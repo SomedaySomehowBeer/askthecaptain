@@ -96,7 +96,7 @@ export function BriefForm({ project }: { project: Project }) {
 				<select id={`${id}-stage`} name="stage" defaultValue={project.stage}><option value="idea">Idea: being considered</option><option value="underway">Underway: work has begun</option></select></div>
 			{briefFields.map(([key, label]) => <div className="field" key={key}><label htmlFor={`${id}-${key}`}>{label}, one line each</label>
 				<textarea id={`${id}-${key}`} name={key} rows={3} maxLength={15000} defaultValue={project.brief[key].map((line) => line.text).join('\n')} /></div>)}
-			<p className="muted">A line written by discovery keeps its link to the mail or note it came from while its text is unchanged.</p>
+			<p className="muted">A line keeps any earlier citation while its text is unchanged.</p>
 			<Feedback state={state} />
 			<div className="row"><button className="button button--primary" type="submit" disabled={pending} aria-busy={pending || undefined}>{pending ? 'Saving…' : 'Save brief'}</button></div>
 		</form>

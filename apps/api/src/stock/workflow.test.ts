@@ -6,7 +6,7 @@ import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
 import { BossEngine, type HandlerContext } from '@captain/engine';
 import { definitions } from '@captain/steps';
 import { stocktakeFixture } from '../../test/stocktake-fixture.ts';
-import { until, result } from '../../test/triage-fixture.ts';
+import { until } from '../../test/workflow-fixture.ts';
 import { createApp } from '../app.ts';
 import { AuthService } from '../auth/service.ts';
 import { OrganisationService } from '../organisations/service.ts';
@@ -22,7 +22,7 @@ async function supplier(f: Fixture, emails: string[] = ['orders@supplier.test'])
  return String(company!.id);
 }
 const item = (f: Fixture, name = 'Malt', extra = {}) => f.stock.save(f.actor, f.org, { name, location: 'Store', unitLabel: 'bags', reorderPoint: '5', ...extra });
-it('real runner wakes from a member’s HTTP count, reorders only below threshold and drafts standalone mail in the enabling person’s name', async () => {
+it('real runner wakes from a member’s HTTP count, reorders only below threshold in the enabling person’s name without mail or inference', async () => {
  const f = await stocktakeFixture(db); try {
   assert.deepEqual(f.registry.missing(definitions.find(d => d.key === 'stocktake')!), []);
   const a = await item(f, 'A malt', { preferredSupplierId: await supplier(f) }); const b = await item(f, 'B cans'); await item(f, 'Elsewhere', { location: 'Cold room' });
@@ -34,28 +34,24 @@ it('real runner wakes from a member’s HTTP count, reorders only below threshol
   const request = (path: string, token: string, body: unknown) => app.request(`/v1/organisations/${f.org}/${path}`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await request('workflows/stocktake/run', member, {})).status, 403); assert.equal((await request('workflows/stocktake/run', outsider, {})).status, 404);
   assert.equal((await request('workflows/stocktake/run', owner, { parameters: { nonsense: true } })).status, 400);
-  f.provider.responses.push(result({ body: 'Could you advise availability and a suitable order quantity for malt?' }));
   const response = await request('workflows/stocktake/run', owner, { parameters: { location: 'Store' } }); assert.equal(response.status, 202); const { runId } = await response.json() as { runId: string };
   await state(f, runId, 'waiting'); assert.equal(f.pushes.length, 1); assert.equal(f.pushes[0]!.tag, `stock:${a.id}`); assert.equal(f.pushes[0]!.url, '/resources/inventory#stock');
   assert.equal((await request(`stock/${a.id}/count`, member, { count: '2.5' })).status, 201);
   await until(() => f.tx(tx => tx`select wait_key from workflow_run_steps where run_id = ${runId} and state = 'waiting'`), rows => rows.some(r => r.waitKey === `stock:${b.id}`));
   await f.stock.count(f.member, f.org, b.id, { count: '8' }); await state(f, runId, 'succeeded');
+  assert.equal((await f.tx(tx => tx`select * from outbox`)).length, 0);
+  assert.equal((await f.tx(tx => tx`select * from model_usage`)).length, 0);
   const tasks = await f.tx(tx => tx`select * from tasks`); assert.equal(tasks.length, 1); assert.equal(tasks[0]!.title, 'Reorder A malt (2.5 bags left, reorder at 5)'); assert.equal(tasks[0]!.createdBy, f.userId); assert.equal(tasks[0]!.sourceId, runId);
   const [due] = await f.tx(tx => tx`select (current_timestamp at time zone timezone)::date + 7 as due from organisations where id = ${f.org}`); assert.equal(String(tasks[0]!.due), String(due!.due));
-  const drafts = await f.outbox.list(f.actor, f.org); assert.equal(drafts.length, 1); assert.equal(drafts[0]!.threadId, null); assert.deepEqual(drafts[0]!.to, ['orders@supplier.test']); assert.equal(drafts[0]!.createdBy, runId); assert.equal(f.sends(), 0);
   assert.equal((await f.tx(tx => tx`select * from stock_counts`)).length, 3); assert.equal(f.pushes.length, 2);
   const observed = await f.tx(tx => tx`select detail from audit_events where action = 'stock.count_observed'`); assert.equal(observed.length, 2); assert.equal(observed[0]!.detail.countedBy, f.member.userId);
-  const input = f.provider.requests.at(-1)!; assert.match(JSON.stringify(input), /untrustedStock/); assert.doesNotMatch(JSON.stringify(input), /fixture-token|sprites.app|orders@supplier/);
-  assert.equal((await f.tx(tx => tx`select tier from model_usage where step_key = 'draftOrderEmail'`))[0]!.tier, 'large');
   assert.match(JSON.stringify(await f.tx(tx => tx`select output from workflow_run_steps where run_id = ${runId}`)), /Shopify is not connected/);
  } finally { await f.engine.close(); }
 });
-it('missing or ambiguous supplier email skips inference and drafts; observations and tasks are idempotent receipts', async () => {
+it('Supplier addresses are irrelevant; observations and tasks are idempotent receipts', async () => {
  const f = await stocktakeFixture(db); try {
   const a = await item(f, 'Malt', { preferredSupplierId: await supplier(f, ['one@supplier.test', 'two@supplier.test']) }); const { runId } = await f.startStocktake(); await state(f, runId, 'waiting');
   await f.stock.count(f.member, f.org, a.id, { count: '0' }); await state(f, runId, 'succeeded');
-  assert.equal((await f.outbox.list(f.actor, f.org)).length, 0); assert.equal((await f.tx(tx => tx`select * from model_usage where step_key = 'draftOrderEmail'`)).length, 0);
-  assert.match(JSON.stringify(await f.tx(tx => tx`select detail from audit_events where action = 'outbox.skipped'`)), /No unambiguous supplier email/);
   const steps = await f.tx(tx => tx`select path, key, output from workflow_run_steps where run_id = ${runId}`);
   const stockItem = steps.find(s => s.key === 'stock.items')!.output[0], count = steps.find(s => s.key === 'stock.counted')!.output;
   const [run] = await f.tx(tx => tx`select enablement_id from workflow_runs where id = ${runId}`);

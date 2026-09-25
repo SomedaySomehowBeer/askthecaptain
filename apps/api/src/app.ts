@@ -1,38 +1,21 @@
+import { legacyRetired, retiredRoutes } from './retirement/routes.ts';
 import { TagsService } from './tags/service.ts';
 import { tagsRoutes } from './tags/routes.ts';
 import { equipmentRoutes } from './equipment/routes.ts';
 import { EquipmentService } from './equipment/service.ts';
-import { AnswerService } from './answers/service.ts';
-import { answerRoutes } from './answers/routes.ts';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { shopifyRoutes } from './shopify/routes.ts';
 import type { ShopifyConnections } from './shopify/connections.ts';
 import type { ShopifySync } from './shopify/sync.ts';
-import { BriefService } from './briefs/service.ts';
 import { StockService } from './stock/service.ts';
 import { stockRoutes } from './stock/routes.ts';
-import { outboxRoutes, threadRoutes } from './triage/routes.ts';
-import { discoveryRoutes } from './discovery/routes.ts';
-import type { DiscoveryService } from './discovery/service.ts';
-import type { TriageService } from './triage/service.ts';
-import { notesRoutes } from './notes/routes.ts';
-import type { NotesService } from './notes/service.ts';
-import type { OutboxService } from './triage/outbox.ts';
 import { xeroRoutes } from './xero/routes.ts';
 import type { XeroConnections } from './xero/connections.ts';
 import type { XeroSync } from './xero/sync.ts';
-import { gmailPushRoutes, type GmailPush } from './mail/push.ts';
-import type { GmailWatch } from './mail/watch.ts';
 import { contactsRoutes } from './contacts/routes.ts';
 import { ContactsService } from './contacts/service.ts';
-import { calendarRoutes } from './calendar/routes.ts';
-import { CalendarService } from './calendar/service.ts';
-import type { CalendarSync } from './calendar/sync.ts';
 import { inferenceRoutes } from './inference/routes.ts';
 import type { InferenceService } from './inference/service.ts';
-import { mailRoutes } from './mail/routes.ts';
-import { MailService } from './mail/service.ts';
-import type { MailSync } from './mail/sync.ts';
 import { connectionRoutes } from './connections/routes.ts';
 import type { ConnectionService } from './connections/service.ts';
 import { randomUUID } from 'node:crypto';
@@ -52,7 +35,7 @@ import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
 
-export type Deps = { discovery?: DiscoveryService; stock?: StockService; shopifyConnections?: ShopifyConnections; shopifySync?: ShopifySync; shopifyScheduleEnabled?: boolean; outbox?: OutboxService; triage?: TriageService; notes?: NotesService; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; mailSync?: MailSync; gmailPush?: GmailPush; gmailWatch?: GmailWatch; mailScheduleEnabled?: boolean; calendarSync?: CalendarSync; calendarScheduleEnabled?: boolean; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
+export type Deps = { stock?: StockService; shopifyConnections?: ShopifyConnections; shopifySync?: ShopifySync; shopifyScheduleEnabled?: boolean; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
@@ -123,7 +106,7 @@ export function createApp(deps: Deps) {
 		return c.redirect(await deps.xeroConnections.finish(c.req.query('code') ?? '', c.req.query('state') ?? '', c.req.query('error'), c.get('requestId')));
 	});
 	app.route('/', connectionRoutes(deps));
-	app.route('/', gmailPushRoutes(deps.gmailPush));
+	app.all('/webhooks/gmail', () => { throw legacyRetired(); });
 
 	const signedIn = new Hono<Vars>();
 	signedIn.use('*', async (c, next) => {
@@ -194,32 +177,17 @@ export function createApp(deps: Deps) {
 		const input = z.object({ token: z.string().min(1) }).parse(await c.req.json());
 		return c.json(await deps.organisations.accept({ ...actor(c), email: c.get('session').user.email }, input.token));
 	});
+	signedIn.route('/', retiredRoutes(deps.db));
 	signedIn.route('/', xeroRoutes(deps));
 	signedIn.route('/', shopifyRoutes(deps));
 	signedIn.route('/', stockRoutes(deps.stock ?? new StockService(deps.db)));
 	signedIn.route('/', contactsRoutes(new ContactsService(deps.db)));
-	if (deps.outbox) signedIn.route('/', outboxRoutes(deps.outbox));
-	if (deps.triage) signedIn.route('/', threadRoutes(deps.triage));
-	if (deps.discovery) signedIn.route('/', discoveryRoutes(deps.discovery));
-	if (deps.notes) signedIn.route('/', notesRoutes(deps.notes));
 	signedIn.route('/', inferenceRoutes(deps.inference));
 	signedIn.route('/', commitmentsRoutes(deps.commitments));
 	signedIn.route('/', tagsRoutes(new TagsService(deps.db)));
 	signedIn.route('/', equipmentRoutes(new EquipmentService(deps.db)));
-	signedIn.get('/v1/organisations/:id/mail/watch', async (c) => {
-		if (!deps.gmailWatch) { await deps.organisations.get(actor(c), uuid.parse(c.req.param('id'))); return c.json({ configured: false, polling: Boolean(deps.mailScheduleEnabled), status: 'off', expiresAt: null, error: null }); }
-		return c.json(await deps.gmailWatch.status(actor(c), uuid.parse(c.req.param('id')), Boolean(deps.mailScheduleEnabled)));
-	});
-	signedIn.post('/v1/organisations/:id/mail/watch', async (c) => {
-		if (!deps.gmailWatch) throw new HttpError(503, 'push_unavailable', 'Live mail updates are not configured.');
-		return c.json(await deps.gmailWatch.renew(uuid.parse(c.req.param('id')), actor(c)));
-	});
 	if (deps.workflows) signedIn.route('/', workflowRoutes(deps.workflows));
 	if (deps.push) signedIn.route('/', pushRoutes(deps.push));
-	signedIn.get('/v1/organisations/:id/briefs/latest', async c => c.json(await new BriefService(deps.db).latest({ userId: c.get('session').userId, requestId: c.get('requestId') }, z.uuid().parse(c.req.param('id')), deps.workflows ? deps.workflows.runnerProblem('morning-brief') : 'The workflow runner is stopped. Ask the operator to start it.')));
-	signedIn.route('/', mailRoutes(new MailService(deps.db, deps.mailSync, deps.mailScheduleEnabled, () => deps.workflows?.runnerProblem('inbox-triage') ?? null)));
-	signedIn.route('/', answerRoutes(new AnswerService(deps.db, deps.inference, limiter)));
-	signedIn.route('/', calendarRoutes(new CalendarService(deps.db, deps.calendarSync, deps.calendarScheduleEnabled, () => deps.workflows ? deps.workflows.runnerProblem('calendar-prep') : 'The workflow runner is stopped. Ask the operator to start it.')));
 	app.route('/', signedIn);
 
 	app.notFound((c) => c.json({ ok: false, code: 'not_found', error: 'not found' }, 404));

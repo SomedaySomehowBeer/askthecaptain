@@ -2,13 +2,12 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
 import { CommitmentsService } from './service.ts';
-import { NotesService } from '../notes/service.ts';
-import { triageFixture } from '../../test/triage-fixture.ts';
+import { workflowFixture } from '../../test/workflow-fixture.ts';
 const it = databaseUrl ? test : test.skip; let db: Harness;
 before(async () => { if (databaseUrl) db = await freshDatabase(); }); after(async () => { await db?.close(); });
 
 it("steps are a task's checklist: one level deep, in its project, and they follow it when it moves, is accepted, completed or cancelled", async () => {
-	const f = await triageFixture(db); try {
+	const f = await workflowFixture(db); try {
 		const c = new CommitmentsService(db.app);
 		const cans = await c.createProject(f.actor, f.org, { name: 'Cans for October' }); const other = await c.createProject(f.actor, f.org, { name: 'Other' });
 		const art = await c.createTask(f.actor, f.org, { title: 'Send final artwork', projectId: cans.id });
@@ -40,16 +39,19 @@ it("steps are a task's checklist: one level deep, in its project, and they follo
 	} finally { await f.engine.close(); }
 });
 
-it('the brief and stage are saved by a person; a line may cite only a thread or note that exists here', async () => {
-	const f = await triageFixture(db); try {
-		const c = new CommitmentsService(db.app); const notes = new NotesService(db.app, null);
+it('the brief and stage are saved by a person; existing citations survive but new personal-source links are refused', async () => {
+	const f = await workflowFixture(db); try {
+		const c = new CommitmentsService(db.app);
 		const taproom = await c.createProject(f.actor, f.org, { name: 'City taproom' });
 		assert.equal(taproom.stage, 'underway'); assert.deepEqual(taproom.brief, { what: [], standing: [], people: [], questions: [] });
-		const note = await notes.create(f.actor, f.org, { title: 'Site visit', body: 'The George St site has a bar licence already.', projectId: taproom.id });
-		const brief = { what: [{ text: 'A second taproom in the city.', evidence: null }], standing: [{ text: 'Two sites seen.', evidence: { kind: 'note' as const, id: note.id } }], people: [], questions: [{ text: 'Which site?', evidence: null }] };
+		// Existing evidence remains addressable during retirement; no Notes product is started.
+		const [note] = await f.tx(tx => tx`insert into notes (organisation_id, title, body, author_id) values (${f.org}, 'Site visit', 'Site has a licence', ${f.userId}) returning id`);
+		const brief = { what: [{ text: 'A second taproom in the city.', evidence: null }], standing: [{ text: 'Two sites seen.', evidence: { kind: 'note' as const, id: note!.id } }], people: [], questions: [{ text: 'Which site?', evidence: null }] };
+		await assert.rejects(c.updateProject(f.actor, f.org, taproom.id, { brief }), { code: 'evidence_retired' });
+		await f.tx(tx => tx`update projects set brief = ${tx.json(brief)} where id = ${taproom.id}`);
 		const saved = await c.updateProject(f.actor, f.org, taproom.id, { stage: 'idea', brief });
 		assert.equal(saved.stage, 'idea'); assert.deepEqual(saved.brief, brief); assert.ok(saved.briefUpdatedAt instanceof Date);
-		await assert.rejects(c.updateProject(f.actor, f.org, taproom.id, { brief: { ...brief, people: [{ text: 'Sam', evidence: { kind: 'mail_thread', id: note.id } }] } }), { code: 'evidence_unknown' });
+		await assert.rejects(c.updateProject(f.actor, f.org, taproom.id, { brief: { ...brief, people: [{ text: 'Sam', evidence: { kind: 'mail_thread', id: note!.id } }] } }), { code: 'evidence_retired' });
 		const [event] = await f.tx(sql => sql`select action, detail from audit_events where subject_id = ${taproom.id} and action = 'project.brief_updated'`);
 		assert.deepEqual(event!.detail, { stage: 'idea', lines: { what: 1, standing: 1, people: 0, questions: 1 } });
 		assert.equal((await c.overview(f.actor, f.org)).projects.find(p => p.id === taproom.id)!.stage, 'idea');
@@ -57,7 +59,7 @@ it('the brief and stage are saved by a person; a line may cite only a thread or 
 });
 
 it('project responses expose the database state used by Work filters and Commitments sections', async () => {
- const f = await triageFixture(db); try {
+ const f = await workflowFixture(db); try {
   const c = new CommitmentsService(db.app);
   const project = await c.createProject(f.actor, f.org, { name: 'Visible launch' });
   assert.equal(project.state, 'active');

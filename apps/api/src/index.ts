@@ -1,14 +1,6 @@
-import { CalendarPrepService } from './calendar-prep/service.ts';
 import { ChaseService } from './chase/service.ts';
-import { BriefService } from './briefs/service.ts';
 import { StocktakeService } from './stock/workflow.ts';
 import { StockService } from './stock/service.ts';
-import { TriageService } from './triage/service.ts';
-import { NotesService } from './notes/service.ts';
-import { httpEmbedClient } from '@captain/retrieval';
-import { IndexService, startIndexSchedule } from './retrieval/service.ts';
-import { DiscoveryService } from './discovery/service.ts';
-import { OutboxService } from './triage/outbox.ts';
 import { startAttachmentExpiry } from './triage/expiry.ts';
 import { ShopifyConnector } from '@captain/connectors/shopify';
 import { ShopifyConnections } from './shopify/connections.ts';
@@ -16,14 +8,10 @@ import { ShopifySync, startShopifySchedule } from './shopify/sync.ts';
 import { XeroConnector } from '@captain/connectors/xero';
 import { XeroConnections } from './xero/connections.ts';
 import { XeroSync, startXeroSchedule } from './xero/sync.ts';
-import { BossEngine } from '@captain/engine';
-import { definitions } from '@captain/steps';
-import { GmailPush, startGmailPushSchedule } from './mail/push.ts';
-import { GmailWatch } from './mail/watch.ts';
-import { CalendarSync, startCalendarSchedule } from './calendar/sync.ts';
+import { BossEngine, Registry } from '@captain/engine';
+import { definitions, retiredWorkflowVersions } from '@captain/steps';
 import { InferenceService } from './inference/service.ts';
 import { SpritesClient } from './inference/sprites.ts';
-import { MailSync, startMailSchedule } from './mail/sync.ts';
 import { GoogleConnector } from '@captain/connectors';
 import { ConnectionService } from './connections/service.ts';
 import { masterKey } from './connections/encryption.ts';
@@ -51,35 +39,19 @@ const google = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 if (!google) console.warn('[api] Google sign-in is not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)');
 const connections = new ConnectionService(db, env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 	? new GoogleConnector(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/connections/google/callback', env.API_URL).toString()) : null,
-	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
+	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null);
 const inference = new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, undefined, env.SPRITES_API_TOKEN ? new SpritesClient(env.SPRITES_API_TOKEN) : null);
 if (!env.SPRITES_API_TOKEN) console.warn('[api] Sprites is not configured (SPRITES_API_TOKEN); inference runtimes cannot be created');
 const pushKeys = env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY && env.WEB_PUSH_SUBJECT ? { publicKey: env.WEB_PUSH_PUBLIC_KEY, privateKey: env.WEB_PUSH_PRIVATE_KEY, subject: env.WEB_PUSH_SUBJECT } : null;
 if (!pushKeys) console.warn('[api] Web Push is not configured (WEB_PUSH_PUBLIC_KEY / WEB_PUSH_PRIVATE_KEY / WEB_PUSH_SUBJECT)');
 const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, pushKeys?.publicKey ?? null);
-const briefs = new BriefService(db);
-const triage = new TriageService(db, connections, inference);
-const registry = new StocktakeService(db, inference, push).register(new ChaseService(db).register(briefs.register(triage.registry(), inference, push), inference, push));
-new CalendarPrepService(db).register(registry, inference);
-const engine = new BossEngine(db, env.DATABASE_URL, registry, definitions);
+const registry = new StocktakeService(db, push).register(new ChaseService(db).register(new Registry(), push));
+const engine = new BossEngine(db, env.DATABASE_URL, registry, definitions, 86400000, retiredWorkflowVersions);
 const stock = new StockService(db, (tx, org, event, data, key) => engine.emit(tx, org, event, data, key));
-const outbox = new OutboxService(db, connections, (tx, org, run, key) => engine.wake(tx, org, run, key));
-const index = new IndexService(db, env.EMBED_URL && env.EMBED_TOKEN ? httpEmbedClient(env.EMBED_URL, env.EMBED_TOKEN) : null);
-const discovery = new DiscoveryService(db, inference, index, push, (tx, org, event, data) => engine.emit(tx, org, event, data)); discovery.register(registry);
-const notes = new NotesService(db, (tx, org, event, data) => engine.emit(tx, org, event, data), org => index.fill(org, { budget: 64, messages: false }));
-const stopIndex = startIndexSchedule(index, env.INDEX_DISABLED === '1' || !index.available);
 const stopAttachmentExpiry = startAttachmentExpiry(db);
 if (env.WORKFLOWS_DISABLED !== '1') await engine.open().catch(async () => { console.error('[api] workflow runner unavailable; follow docs/runbooks/workflow-runner.md'); await engine.close(); });
-const mailSync = new MailSync(db, connections, undefined, (tx, org, event, data) => engine.emit(tx, org, event, data), org => index.fill(org, { budget: 512 }));
-const pushConfig = env.GMAIL_PUBSUB_TOPIC && env.GMAIL_PUSH_AUDIENCE ? { topic: env.GMAIL_PUBSUB_TOPIC, audience: env.GMAIL_PUSH_AUDIENCE } : undefined;
-const gmailWatch = new GmailWatch(db, connections, pushConfig);
-const gmailPush = pushConfig ? new GmailPush(db, mailSync, pushConfig) : undefined;
-const stopGmailPush = startGmailPushSchedule(gmailPush, gmailWatch);
-const stopMailSync = startMailSchedule(mailSync, env.MAIL_SYNC_DISABLED === '1');
 const commitments = new CommitmentsService(db);
 const stopSeries = startSeriesSchedule(new SeriesRoutine(db, commitments), env.SERIES_DISABLED === '1');
-const calendarSync = new CalendarSync(db, connections);
-const stopCalendarSync = startCalendarSchedule(calendarSync, env.CALENDAR_SYNC_DISABLED === '1');
 const shopifyConnections = new ShopifyConnections(db, env.SHOPIFY_CLIENT_ID && env.SHOPIFY_CLIENT_SECRET ? new ShopifyConnector(env.SHOPIFY_CLIENT_ID, env.SHOPIFY_CLIENT_SECRET, new URL('/connections/shopify/callback', env.API_URL).toString()) : null, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, env.APP_URL);
 const shopifySync = new ShopifySync(shopifyConnections);
 const stopShopifySync = startShopifySchedule(shopifySync, env.SHOPIFY_SYNC_DISABLED === '1' || !shopifyConnections.available);
@@ -97,9 +69,9 @@ const lifecycle = new OrganisationLifecycle(db, [
 	async (actor, organisationId) => { await inference.remove(actor, organisationId).catch(() => undefined); }
 ]);
 const passkeys = new PasskeyService(db, simpleWebAuthn(env.APP_URL));
-const app = createApp({ discovery, stock, triage, notes, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, outbox, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, gmailWatch, gmailPush, connections, calendarSync, calendarScheduleEnabled: env.CALENDAR_SYNC_DISABLED !== '1', mailSync, mailScheduleEnabled: env.MAIL_SYNC_DISABLED !== '1', auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
+const app = createApp({ stock, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, connections, auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
-const shutdown = () => { server.close(); void Promise.all([stopShopifySync(), stopAttachmentExpiry(), stopIndex(), stopXeroSync(), stopMailSync(), stopCalendarSync(), stopGmailPush(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
+const shutdown = () => { server.close(); void Promise.all([stopShopifySync(), stopAttachmentExpiry(), stopXeroSync(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

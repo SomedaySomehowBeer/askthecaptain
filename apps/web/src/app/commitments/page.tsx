@@ -2,14 +2,11 @@ import { RevealTask } from './RevealTask.tsx';
 import { SaveForm } from './SaveForm.tsx';
 import { StockSection } from './Stock.tsx';
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Notice } from '../../components/Notice.tsx';
 import { Page, requireCurrent } from '../../components/Page.tsx';
-import { api, load, type Commitments, type Project, type ProjectSource, type Series, type Task } from '../../lib/api.ts';
+import { api, load, type Commitments, type Project, type Series, type Task } from '../../lib/api.ts';
 import { dateIn, describeDue, recurrenceWords, shortDate } from '../../lib/dates.ts';
 import { setProjectArchived, setSeriesPaused, setTaskStatus } from './actions.ts';
-import { decideProject } from './discovery-actions.ts';
-import { FindProjects } from './FindProjects.tsx';
 import { BriefForm, ProjectForm, SeriesForm, StepForm, TaskForm } from './Forms.tsx';
 
 export const metadata: Metadata = { title: 'Commitments' };
@@ -64,57 +61,20 @@ function SeriesLine({ series }: { series: Series }) {
 	);
 }
 
-const linkedByWords = (linkedBy: ProjectSource['linkedBy']) => linkedBy === 'person' ? 'chosen by a person' : linkedBy === 'model' ? 'named by triage' : 'linked by a rule';
-/** The mail and notes triage or a person filed under this project (D22): the newest ten, each a link to its page. */
-function ProjectSources({ links, timezone }: { links: ProjectSource[]; timezone: string }) {
-	if (links.length === 0) return null;
-	const total = links[0]!.total;
-	return (
-		<div className="stack">
-			<h3>From mail and notes</h3>
-			<ul className="bare">{links.map((link) => <li key={link.kind + link.id}>
-				<Link href={link.kind === 'mail_thread' ? `/inbox/${link.id}` : `/notes/${link.id}`}>{link.title || (link.kind === 'mail_thread' ? '(No subject)' : 'Untitled note')}</Link>
-				<span className="muted"> — {link.kind === 'mail_thread' ? 'mail' : 'note'}, {linkedByWords(link.linkedBy)}{link.at ? `, ${shortDate(dateIn(link.at, timezone))}` : ''}</span>
-			</li>)}</ul>
-			{total > links.length ? <p className="muted">And {total - links.length} more.</p> : null}
-		</div>
-	);
-}
-
 const briefHeadings: [keyof Project['brief'], string][] = [['what', 'What this is'], ['standing', 'Where it stands'], ['people', 'Who is involved'], ['questions', 'Open questions']];
-/** The brief: what this is, where it stands, who is involved, open questions; each line links to the mail or note it cites. */
+/** The brief: what this is, where it stands, who is involved, open questions. Citations to mail or
+ *  notes belonged to the retired assistant (#133) and are not linked from here. */
 function BriefView({ project }: { project: Project }) {
 	const sections = briefHeadings.filter(([key]) => project.brief[key].length > 0);
 	if (sections.length === 0) return null;
 	return (
 		<div className="stack brief">{sections.map(([key, heading]) => <div key={key}><h3>{heading}</h3>
-			<ul className="bare">{project.brief[key].map((line, i) => <li key={i}>{line.text}{line.evidence ? <> <Link className="muted" href={line.evidence.kind === 'mail_thread' ? `/inbox/${line.evidence.id}` : `/notes/${line.evidence.id}`}>({line.evidence.kind === 'mail_thread' ? 'mail' : 'note'})</Link></> : null}</li>)}</ul>
+			<ul className="bare">{project.brief[key].map((line, i) => <li key={i}>{line.text}</li>)}</ul>
 		</div>)}</div>
 	);
 }
 
-/** A proposed project (D22): what Captain found, with its evidence, for a person to accept or discard. Nothing in it is active. */
-function ProposalCard({ project, tasks, links, today, timezone }: { project: Project; tasks: Task[]; links: ProjectSource[]; today: string; timezone: string }) {
-	const top = tasks.filter((t) => !t.parentId); const stepsOf = (id: string) => tasks.filter((t) => t.parentId === id);
-	return (
-		<section className="card card--proposal" aria-labelledby={`proposal-${project.id}`}>
-			<div className="row row--between">
-				<div className="row"><h2 id={`proposal-${project.id}`}>{project.name}</h2><span className="chip">proposed</span>{project.stage === 'idea' ? <span className="chip">idea</span> : null}</div>
-				<div className="row">
-					<SaveForm action={decideProject}><input type="hidden" name="id" value={project.id} /><input type="hidden" name="decision" value="accept" /><button className="button button--primary button--small" type="submit" aria-label={`Accept "${project.name}"`}>Accept</button></SaveForm>
-					<SaveForm action={decideProject}><input type="hidden" name="id" value={project.id} /><input type="hidden" name="decision" value="discard" /><button className="button button--ghost button--small" type="submit" aria-label={`Discard "${project.name}"`}>Discard</button></SaveForm>
-				</div>
-			</div>
-			{project.description ? <p className="secondary">{project.description}</p> : null}
-			<BriefView project={project} />
-			<ProjectSources links={links} timezone={timezone} />
-			{top.length > 0 ? <div className="stack"><h3>Tasks it would open</h3><ul className="bare">{top.map((task) => <TaskLine key={task.id} task={task} steps={stepsOf(task.id)} today={today} timezone={timezone} />)}</ul></div> : <p className="muted">{project.stage === 'idea' ? 'An idea: its whole substance is the brief above.' : 'No tasks yet.'}</p>}
-			<p className="muted">Accept makes it a project with these tasks open. Discard puts it away and Captain will not propose this name again.</p>
-		</section>
-	);
-}
-
-function ProjectCard({ project, tasks, series, links, projects, today, timezone }: { project: Project; tasks: Task[]; series: Series[]; links: ProjectSource[]; projects: Project[]; today: string; timezone: string }) {
+function ProjectCard({ project, tasks, series, projects, today, timezone }: { project: Project; tasks: Task[]; series: Series[]; projects: Project[]; today: string; timezone: string }) {
 	// Steps sit under their task; only top-level tasks make the lists.
 	const top = tasks.filter((t) => !t.parentId); const stepsOf = (id: string) => tasks.filter((t) => t.parentId === id);
 	const open = top.filter(isOpen); const suggested = top.filter((t) => t.status === 'suggested'); const done = top.filter((t) => t.status === 'done');
@@ -133,7 +93,6 @@ function ProjectCard({ project, tasks, series, links, projects, today, timezone 
 			{project.archivedAt ? <p className="muted">Archived {shortDate(dateIn(project.archivedAt, timezone))}. Nothing new can be added until it is restored.</p> : null}
 			<BriefView project={project} />
 			{deadlineBook || project.archivedAt ? null : <details className="disclosure"><summary>{hasBrief ? 'Edit the brief' : 'Write a brief'}</summary><BriefForm project={project} /></details>}
-			<ProjectSources links={links} timezone={timezone} />
 			{suggested.length > 0 ? <ul className="bare">{suggested.map((task) => <TaskLine key={task.id} task={task} steps={stepsOf(task.id)} today={today} timezone={timezone} />)}</ul> : null}
 			{open.length > 0 ? <ul className="bare">{open.map((task) => <TaskLine key={task.id} task={task} steps={stepsOf(task.id)} today={today} timezone={timezone} />)}</ul>
 				: <p className="muted">{deadlineBook ? 'Nothing is due. Add a recurring duty below and its next occurrence appears here.' : 'Nothing open here.'}</p>}
@@ -167,17 +126,18 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 			</Page>
 		);
 	}
-	const { projects, tasks, series, links, today, timezone } = loaded.value;
-	// Proposed projects are shown as proposals, never as live ones (D22).
+	const { projects, tasks, series, today, timezone } = loaded.value;
+	// Proposed projects came from the retired project discovery (#133): they are never live, and
+	// their accept/discard controls are gone, so the page only says how many exist.
 	const live = projects.filter((p) => p.state === 'active'); const archived = projects.filter((p) => p.state === 'archived'); const proposed = projects.filter((p) => p.state === 'proposed');
 	const attention = tasks.filter((t) => isOpen(t) && t.due && describeDue(t.due, today).urgency !== 'later' && !projects.find((p) => p.id === t.projectId)?.archivedAt);
 	const nothingYet = tasks.length === 0 && series.length === 0;
-	const byProject = (id: string) => ({ tasks: tasks.filter((t) => t.projectId === id), series: series.filter((s) => s.projectId === id), links: links.filter((l) => l.projectId === id) });
+	const byProject = (id: string) => ({ tasks: tasks.filter((t) => t.projectId === id), series: series.filter((s) => s.projectId === id) });
 	return (
 		<Page title="Commitments" lede={nothingYet ? 'One list of what the business owes: projects, tasks and the duties that come round every period.' : me.organisation.organisationName}>
 			<RevealTask />
 			{nothingYet ? (
-				<Notice title="Nothing is owed yet.">Add a task to any project, or a recurring duty to the deadline book. When mail is connected, triage will add suggested tasks here too.</Notice>
+				<Notice title="Nothing is owed yet.">Add a task to any project, or a recurring duty to the deadline book.</Notice>
 			) : attention.length > 0 ? (
 				<section className="card" aria-labelledby="attention">
 					<h2 id="attention">Due this week</h2>
@@ -186,7 +146,8 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 			) : (
 				<Notice title="Nothing is due this week.">Everything open has a later date or none. The full list is below.</Notice>
 			)}
-			{proposed.map((project) => <ProposalCard key={project.id} project={project} today={today} timezone={timezone} tasks={tasks.filter((t) => t.projectId === project.id)} links={links.filter((l) => l.projectId === project.id)} />)}
+			{proposed.length > 0 ? <Notice title={proposed.length === 1 ? 'One proposed project is not shown.' : `${proposed.length} proposed projects are not shown.`}>
+				They were suggested by project discovery, which has been retired. They are not active and nothing in them was changed.</Notice> : null}
 			<section className="card">
 				<h2>Add a task</h2>
 				<TaskForm projects={live} compact />
@@ -196,7 +157,6 @@ export default async function CommitmentsPage({ searchParams }: { searchParams: 
 				<h2>New project</h2>
 				<p className="secondary">A project is a name for a stream of work: Wholesale, Production, the new taproom. Tasks and duties belong to one.</p>
 				<ProjectForm />
-				{me.organisation.role === 'member' ? null : <FindProjects />}
 			</section>
 			{archived.length > 0 ? (
 				<details className="disclosure"><summary>Archived projects ({archived.length})</summary>

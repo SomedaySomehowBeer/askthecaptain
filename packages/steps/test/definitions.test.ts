@@ -8,13 +8,12 @@ test('every shipped definition is valid and has a stable digest', () => {
 		assert.deepEqual(validateDefinition(definition), [], definition.key);
 		assert.equal(digestOf(definition), digestOf(structuredClone(definition)), `${definition.key} digest is deterministic`);
 	}
-	assert.deepEqual(definitions.map((d) => d.key), ['inbox-triage', 'morning-brief', 'chase-due', 'calendar-prep', 'stocktake', 'discover-projects']);
+	assert.deepEqual(definitions.map((d) => d.key), ['chase-due', 'stocktake']);
 });
 
 test('requirements are collected from every step, including nested ones', () => {
-	assert.deepEqual(requirementsOf(definitions[0]!).sort(), ['connection:google', 'inference']);
-	assert.deepEqual(requirementsOf(definitions[1]!).sort(), ['inference', 'push']);
-	assert.deepEqual(requirementsOf(definitions[4]!).sort(), ['connection:google', 'inference', 'push']);
+	assert.deepEqual(requirementsOf(definitions[0]!).sort(), ['push']);
+	assert.deepEqual(requirementsOf(definitions[1]!).sort(), ['push']);
 });
 
 test('a definition that names an unknown step, the wrong kind, or an unsaved reference is refused', () => {
@@ -46,12 +45,11 @@ test('predicates evaluate over saved outputs, the loop item and parameters', () 
 });
 
 test('parameters are checked against their specs and defaults are filled', () => {
-	const specs = definitions[2]!.parameters;
-	assert.deepEqual(resolveParameters(specs, {}), { values: { windowDays: 7, remindDaysBefore: 2, chaseInvoicesAfterDays: 14, chaseAgainAfterDays: 7 }, problems: [] });
+	const specs = definitions[0]!.parameters;
+	assert.deepEqual(resolveParameters(specs, {}), { values: { windowDays: 7, remindDaysBefore: 2 }, problems: [] });
 	assert.deepEqual(resolveParameters(specs, { windowDays: 1.5 }).problems, [{ path: 'windowDays', message: 'must be a whole number' }]);
 	const bad = resolveParameters(specs, { windowDays: 90, remindDaysBefore: 'two', extra: 1 });
 	assert.deepEqual(bad.problems.map((p) => p.path).sort(), ['extra', 'remindDaysBefore', 'windowDays']);
-	const stock = resolveParameters(definitions[4]!.parameters, { location: '  ' });
+	const stock = resolveParameters(definitions[1]!.parameters, { location: '  ' });
 	assert.deepEqual(stock.problems, [{ path: 'location', message: 'is required' }]);
-	assert.deepEqual(resolveParameters(definitions[0]!.parameters, { replyStyle: 'Warm, short.' }).values, { replyStyle: 'Warm, short.', draftReplies: true, draftThreshold: 3 });
 });

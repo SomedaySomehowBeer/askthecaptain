@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { webUrl } from '../targets.ts';
 
-/** The Commitments tab as a signed-in person. Needs a session token for the deployment under test
+/** Temporary task/project/series controls until the optional-project and Work-detail increment. Needs a session token for the deployment under test
  *  in E2E_SESSION_TOKEN (issued straight into the database; there is no API for it). Without one
  *  the check is skipped, and the skip is visible in the report rather than passing quietly. */
 const token = process.env.E2E_SESSION_TOKEN?.trim();
 const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-test.describe('commitments', () => {
+test.describe('temporary work controls', () => {
 	test.skip(!token, 'E2E_SESSION_TOKEN is not set; signed-in checks need a session');
 	test.beforeEach(async ({ context }) => { await context.addCookies([{ name: 'captain_session', value: token!, url: webUrl() }]); });
 

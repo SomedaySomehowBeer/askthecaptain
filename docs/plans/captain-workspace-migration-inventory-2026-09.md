@@ -1,6 +1,9 @@
 # Captain implementation inventory and scope cleanup
 
 Status: corrected 25 September 2026. Supersedes #116's compatibility and retention gates.
+The [first code retirement](assistant-runtime-retirement-2026-09.md) implements removal of the
+assistant UI/runtime/API paths and revises task/stock workflows. Rows below record the audited
+starting state and remaining cleanup contracts; they do not claim every listed source file remains.
 Outcome: manage shared work without keeping the old personal-assistant application.
 The [plan](../plan.md) decides product scope; the [audit](captain-scope-audit-2026-09-25.md)
 records why this inventory was corrected. The [original inventory](legacy-assistant-history.md)

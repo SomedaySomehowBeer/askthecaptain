@@ -20,7 +20,7 @@ export default async function NotificationsPage() {
 		load(() => api<{ subscriptions: Subscription[] }>(`/v1/organisations/${org}/push/subscriptions`, { token: me.token }))
 	]);
 	return (
-		<Page title="Notifications" lede="The morning brief, reminders and escalations arrive as pushes to the devices you choose. Nothing else is sent to a device, and never mail content.">
+		<Page title="Notifications" lede="Reminders, escalations and stock count requests arrive as pushes to the devices you choose. Nothing else is sent to a device, and never mail content.">
 			<section className="card">
 				<h2>This device</h2>
 				{!config.ok ? <Notice tone="failed" title="Push could not be checked.">{config.error.message}</Notice>

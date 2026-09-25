@@ -1,4 +1,0 @@
-export type Note = { id: string; title: string; body: string; authorId: string; authorName: string | null; eventId: string | null; contactId: string | null; companyId: string | null; projectId: string | null; taskId: string | null;
- contactName: string | null; companyName: string | null; projectName: string | null; taskTitle: string | null; triageCategory: string | null; triageSummary: string | null; archivedAt: string | null; createdAt: string; updatedAt: string };
-export const firstLine = (note: Note) => note.title || note.body.split('\n').find(l => l.trim())?.trim().slice(0, 120) || '(Empty note)';
-export const linksInWords = (note: Note) => [note.projectName && `Project: ${note.projectName}`, note.taskTitle && `Task: ${note.taskTitle}`, note.contactName && `Contact: ${note.contactName}`, note.companyName && `Company: ${note.companyName}`, note.eventId && 'An event'].filter(Boolean) as string[];

@@ -9,10 +9,9 @@ import { shortDate } from '../../../lib/dates.ts';
 import { WorkflowForm } from './WorkflowForm.tsx';
 import { triggerWords } from './steps.ts';
 import { WorkflowSteps } from './WorkflowSteps.tsx';
+import { isRetiredWorkflow } from './retired.ts';
 
 export const metadata: Metadata = { title: 'Workflows' };
-
-const jobs: Record<number, string> = { 1: 'triage the inbox', 2: 'draft correspondence', 3: 'keep the calendar', 4: 'own commitments', 5: 'chase', 6: 'brief and answer' };
 
 function stepNote(step: WorkflowRunDetail['steps'][number]) {
  const output = step.output;
@@ -39,14 +38,19 @@ async function WorkflowContent({ me, searchParams }: { me: Awaited<ReturnType<ty
 	const definitionOf = (key: string) => offered.ok ? offered.value.workflows.find((w) => w.definition.key === key)?.definition ?? null : null;
 	return (
 		<Page title="Workflows" lede="What Captain does for you, and on whose say-so. Turning one on is the authorisation: it acts in your name and can do nothing you could not.">
-			{!offered.ok ? <Notice tone="failed" title="The workflows could not be read.">{offered.error.message}</Notice> : offered.value.workflows.map((item) => (
+			{!offered.ok ? <Notice tone="failed" title="The workflows could not be read.">{offered.error.message}</Notice> : offered.value.workflows.map((item) => isRetiredWorkflow(item.definition.key, item.definition.version) ? (
+				<section className="card card--inset" key={item.definition.key} aria-labelledby={`wf-${item.definition.key}`}>
+					<div className="row row--between"><h2 id={`wf-${item.definition.key}`}>{item.definition.name}</h2><span className="chip">retired</span></div>
+					<p className="secondary">This workflow belonged to the retired personal assistant and can no longer be turned on or run. Its past activity is still listed below.</p>
+				</section>
+			) : (
 				<section className="card" key={item.definition.key} aria-labelledby={`wf-${item.definition.key}`}>
 					<div className="row row--between">
 						<h2 id={`wf-${item.definition.key}`}>{item.definition.name}</h2>
 						<span className="chip">{item.enablement?.enabled ? 'on' : 'off'}</span>
 					</div>
 					<p className="secondary">{item.definition.description}</p>
-					<p className="muted">Runs {item.definition.triggers.map(triggerWords).join(', and ')}. Moves “{jobs[item.definition.job]}” sooner.
+					<p className="muted">Runs {item.definition.triggers.map(triggerWords).join(', and ')}.
 						{item.enablement?.enabled && item.enablement.enabledByName ? ` On since ${shortDate(item.enablement.updatedAt.slice(0, 10))}, in ${item.enablement.enabledByName}'s name.` : ''}</p>
 					<details className="disclosure" open><summary>What it does, step by step</summary><WorkflowSteps definition={item.definition} catalog={catalog} /></details>
 					{item.unmet.length > 0 ? <Notice tone={item.enablement?.enabled ? 'attention' : 'quiet'} title={item.enablement?.enabled ? 'This workflow cannot run right now.' : 'Not ready to turn on yet.'}>It needs {item.unmet.map((u) => u.words).join(' and ')}.</Notice> : null}
@@ -69,7 +73,8 @@ async function WorkflowContent({ me, searchParams }: { me: Awaited<ReturnType<ty
      <p>{detail.value.state}{detail.value.reason ? `: ${detail.value.reason}` : ''}</p>
      <RunSteps detail={detail.value} definition={definitionOf(detail.value.definitionKey)} catalog={catalog} />
      {detail.value.steps.length ? <details className="disclosure"><summary>Every step as it ran</summary><ol>{detail.value.steps.map(step => <li key={step.path}><strong>{step.key}</strong>{step.itemIndex === null ? '' : ` · item ${step.itemIndex + 1}`} — {step.state}{step.error ? <p className="form__error">{step.error}</p> : null}{stepNote(step) ? <p className="muted">{stepNote(step)}</p> : null}</li>)}</ol></details> : <p className="muted">No steps have started yet.</p>}
-     {canManage ? <div className="row">{detail.value.state === 'paused' ? <RunControl id={detail.value.id} action="resume" /> : null}{!['succeeded', 'failed', 'cancelled'].includes(detail.value.state) ? <RunControl id={detail.value.id} action="cancel" /> : null}</div> : <p className="muted">Owners and admins resume or cancel runs.</p>}
+     {isRetiredWorkflow(detail.value.definitionKey, detail.value.definitionVersion) ? <p className="muted">This workflow is retired: its run can be cancelled but not resumed.</p> : null}
+     {canManage ? <div className="row">{detail.value.state === 'paused' && !isRetiredWorkflow(detail.value.definitionKey, detail.value.definitionVersion) ? <RunControl id={detail.value.id} action="resume" /> : null}{!['succeeded', 'failed', 'cancelled'].includes(detail.value.state) ? <RunControl id={detail.value.id} action="cancel" /> : null}</div> : <p className="muted">Owners and admins resume or cancel runs.</p>}
     </section> : null}
 			</section>
 		</Page>

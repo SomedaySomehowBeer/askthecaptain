@@ -46,19 +46,19 @@ it('the catalogue is synced from code, idempotently, and offered with what each 
 	assert.equal(rows.length, definitions.length);
 	const offered = await body<{ workflows: Offered[]; catalog: Record<string, { kind: string; does: string; until: string | null }> }>(await json('GET', `/v1/organisations/${orgId}/workflows`, owner.token), 200);
 	assert.deepEqual(offered.workflows.map((w) => w.definition.key), definitions.map((d) => d.key));
-	assert.equal(offered.catalog['gmail.newThreads']?.does, 'reads mail threads that arrived since the last run');
-	assert.equal(offered.catalog['outbox.sent']?.until, 'the draft is sent or discarded');
-	const triage = offered.workflows.find((w) => w.definition.key === 'inbox-triage')!;
-	assert.deepEqual(triage.unmet.map((u) => u.requirement).sort(), ['connection:google', 'inference']);
+	assert.equal(offered.catalog['gmail.newThreads'], undefined);
+	assert.equal(offered.catalog['outbox.sent'], undefined);
+	const triage = offered.workflows.find((w) => w.definition.key === 'chase-due')!;
+	assert.deepEqual(triage.unmet.map((u) => u.requirement).sort(), ['push']);
 	assert.equal(triage.enablement, null);
 });
 
 it('a workflow cannot be turned on until its requirements are met; parameters are saved either way', async () => {
-	const refused = await json('PUT', `/v1/organisations/${orgId}/workflows/inbox-triage`, owner.token, { enabled: true, parameters: { replyStyle: 'Warm.' } });
-	assert.equal(refused.status, 400); assert.match(((await refused.json()) as { error: string }).error, /needs a connected Google account and an inference runtime/);
-	const saved = await body<{ enabled: boolean; parameters: Record<string, unknown> }>(await json('PUT', `/v1/organisations/${orgId}/workflows/inbox-triage`, owner.token, { enabled: false, parameters: { replyStyle: 'Warm.' } }), 200);
-	assert.equal(saved.enabled, false); assert.deepEqual(saved.parameters, { replyStyle: 'Warm.', draftReplies: true, draftThreshold: 3 });
-	// Every shipped workflow needs inference, which has not shipped, so none can be turned on yet: the honest state.
+	const refused = await json('PUT', `/v1/organisations/${orgId}/workflows/chase-due`, owner.token, { enabled: true, parameters: { windowDays: 10 } });
+	assert.equal(refused.status, 400); assert.match(((await refused.json()) as { error: string }).error, /needs .*push/);
+	const saved = await body<{ enabled: boolean; parameters: Record<string, unknown> }>(await json('PUT', `/v1/organisations/${orgId}/workflows/chase-due`, owner.token, { enabled: false, parameters: { windowDays: 10 } }), 200);
+	assert.equal(saved.enabled, false); assert.deepEqual(saved.parameters, { windowDays: 10, remindDaysBefore: 2 });
+	// No push subscription is configured.
 	assert.equal((await json('PUT', `/v1/organisations/${orgId}/workflows/chase-due`, owner.token, { enabled: true, parameters: { windowDays: 10 } })).status, 400);
 	const bad = await json('PUT', `/v1/organisations/${orgId}/workflows/stocktake`, owner.token, { enabled: false, parameters: { location: '', extra: 1 } });
 	assert.equal(bad.status, 400); assert.match(((await bad.json()) as { error: string }).error, /location is required/);
@@ -72,7 +72,7 @@ it('members may read but not change; strangers see nothing; the journal is empty
 	const invited = await body<{ token: string }>(await json('POST', `/v1/organisations/${orgId}/invitations`, owner.token, { email: 'pat@example.com', role: 'member' }), 201);
 	await body(await json('POST', '/v1/invitations/accept', member.token, { token: invited.token }), 200);
 	assert.equal((await json('GET', `/v1/organisations/${orgId}/workflows`, member.token)).status, 200);
-	assert.equal((await json('PUT', `/v1/organisations/${orgId}/workflows/inbox-triage`, member.token, { enabled: false })).status, 403);
+	assert.equal((await json('PUT', `/v1/organisations/${orgId}/workflows/chase-due`, member.token, { enabled: false })).status, 403);
 	const stranger = await signIn({ subject: 'g-3', email: 'sam@example.com', name: 'Sam' });
 	assert.equal((await json('GET', `/v1/organisations/${orgId}/workflows`, stranger.token)).status, 404);
 	const runs = await body<{ runs: unknown[] }>(await json('GET', `/v1/organisations/${orgId}/workflows/runs`, owner.token), 200);

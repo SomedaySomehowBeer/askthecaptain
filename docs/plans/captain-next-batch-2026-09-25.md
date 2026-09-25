@@ -119,3 +119,9 @@ without creating a second release machine, and record health checks and rollback
 resumption remains a separate operation. Files/DAM, richer reporting and Pip implementation stay
 in their existing later slices; [Pip #119](https://github.com/SomedaySomehowBeer/askthecaptain/issues/119)
 does not block Captain.
+
+## First retirement implementation
+
+See the [runtime retirement contract](assistant-runtime-retirement-2026-09.md) for removed
+assistant entry points, task-reminder v4 and stocktake v3, run/schedule cancellation and staging
+cutover. This does not mark the optional-project/Obligations or Work detail-page increments done.

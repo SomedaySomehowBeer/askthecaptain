@@ -14,5 +14,5 @@ export async function savePerson(_: Result | undefined, form: FormData): Promise
  try {
   await api(`/v1/organisations/${me.organisation.organisationId}/${kind}${id ? `/${encodeURIComponent(id)}` : ''}`, { token: me.token, method: id ? 'PATCH' : 'POST', body });
  } catch (error) { return { error: error instanceof ApiError ? error.message : 'Could not save. Try again.' }; }
- revalidatePath('/settings/contacts'); revalidatePath('/inbox', 'layout'); return { ok: true };
+ revalidatePath('/settings/contacts', 'layout'); return { ok: true };
 }

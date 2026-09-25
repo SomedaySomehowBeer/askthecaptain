@@ -1,11 +1,10 @@
-import { awaitStep, branch, defineWorkflow, each, infer, manual, notify, read, text, weekly, write } from '../definition.ts';
+import { awaitStep, branch, defineWorkflow, each, manual, notify, read, text, weekly, write } from '../definition.ts';
 
 /** Plan §6 and D15: weekly or on demand, ask the counter for each item at the location and record
- *  the count; when a count is below the reorder point, raise a task in Purchasing and draft an
- *  order email to the preferred supplier. Connected commerce stock is read, not counted. */
+ *  the count; when a count is below the reorder point, raise a reorder task in the selected project. Connected commerce stock is read, not counted. */
 export const stocktake = defineWorkflow({
-	key: 'stocktake', version: 2, name: 'Stocktake', job: 4,
-	description: 'Asks for a count of each stock item, records it, and raises an order when something is below its reorder point.',
+	key: 'stocktake', version: 3, name: 'Stocktake', job: 4,
+	description: 'Asks for a count of each stock item, records it, and creates a reorder task when something is below its reorder point.',
 	triggers: [weekly('mon', '08:00'), manual()],
 	parameters: {
 		location: text('The location to count.', { required: true, maxLength: 200 }),
@@ -19,8 +18,6 @@ export const stocktake = defineWorkflow({
 			write('stock.recordCount', { args: { item: { ref: 'item' }, count: { ref: 'count' } } }),
 			branch({ truthy: 'count.belowReorderPoint' }, [
 				write('tasks.createInProject', { args: { project: { param: 'purchasingProject' }, item: { ref: 'item' }, count: { ref: 'count' } } }),
-				infer('draftOrderEmail', { schema: 'draft', tier: 'large', when: { truthy: 'item.preferredSupplier.email' }, args: { item: { ref: 'item' }, count: { ref: 'count' } }, as: 'draft' }),
-				write('outbox.create', { args: { supplier: { ref: 'item.preferredSupplier' }, subject: { ref: 'item.name' }, draft: { ref: 'draft' } } })
 			])
 		]),
 		read('shopify.stockLevels', { as: 'shopStock' }),

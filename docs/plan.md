@@ -239,16 +239,16 @@ Settings → Activity only when they fail.
 
 ### Definition disposition
 
-The existing definition catalogue is an implementation fact, not the target workflow backlog:
+The runtime retirement increment removes the assistant catalogue. Its disposition is:
 
 | Existing path | Required disposition |
 |---|---|
-| `inbox-triage`, `discover-projects`, `calendar-prep` | Retire; no Captain replacement mailbox/discovery/preparation requirement |
-| `morning-brief` and Today questions | Do not transplant their personal mail/calendar/outbox source selectors; business summaries/questions need explicit shared-source contracts |
-| `chase-due` | Retain business task reminders/escalation in a revised definition; remove email-draft branch and Google dependency |
-| `stocktake` | Retain counted-stock requests/reorder tasks; remove supplier-email draft branch and unrelated Google/inference prerequisites |
+| `inbox-triage`, `discover-projects`, `calendar-prep` | Removed; no Captain replacement mailbox/discovery/preparation requirement |
+| `morning-brief` and Today questions | Removed. Do not transplant their personal mail/calendar/outbox source selectors; business summaries/questions need explicit shared-source contracts |
+| `chase-due` v4 | Shared task reminders/escalation only; no email-draft branch or Google/Xero/inference dependency |
+| `stocktake` v3 | Counted-stock requests/reorder tasks and optional Shopify quantities; no supplier draft or Google/inference dependency |
 | Series materialisation | Keep as system housekeeping; remove Obligations/project requirement |
-| Mail/watch/calendar/index routines | Retire legacy ingestion, webhook/event triggers and automatic personal contact harvesting; keep source-independent infrastructure only where used |
+| Mail/watch/calendar/index routines | Removed from API startup and entry points, together with mail-derived contact harvesting; attachment-text expiry remains housekeeping |
 
 A retirement PR must cover catalogue enablement, scheduled/event/manual triggers, queued retries,
 waiting/paused immutable run snapshots and user-facing recovery. Hiding a toggle or removing a handler
@@ -413,8 +413,8 @@ mandatory in the first usable workflow. Web and iOS need two-person acceptance; 
 checks start during mobile development and broader Android release follows.
 
 Implemented: web shell, filtered Work/task creation, tags, counted inventory access, equipment
-API/web and session recovery. Not complete: Work detail/project/series replacement, legacy
-retirement, saved views, linked chat, files/DAM, native application and device acceptance.
+API/web, session recovery, and the assistant UI/API/runtime retirement with revised task/stock
+workflows. Not complete: Work detail/project/series replacement, Obligations/storage cleanup, saved views, linked chat, files/DAM, native application and device acceptance.
 Do not call the remaining screens implemented because mockups or bundle exports exist.
 
 The old phases 0–5 and six jobs are historical. Their completed issues document earlier work;
@@ -491,3 +491,7 @@ and superseded decisions. Runbooks for those paths are maintenance references wh
 exists, not instructions to add/enable them for the workspace. Closed issues retain their original
 historical scope; the audit lists their disposition. The current plan wins over proposals, old
 runbooks, the unedited design mirror and obsolete issue wording.
+
+The [assistant runtime retirement increment](plans/assistant-runtime-retirement-2026-09.md) specifies
+the first #133 implementation, revised task/stock workflows and mandatory stopped-worker cutover.
+It leaves optional projects and replacement Work detail pages as explicit subsequent work.
