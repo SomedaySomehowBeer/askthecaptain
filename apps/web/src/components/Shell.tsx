@@ -3,11 +3,13 @@ import { Suspense } from 'react';
 import { WorkspaceCrumb } from './WorkspaceCrumb.tsx';
 import { TabBar } from './TabBar.tsx';
 import { initialsOf } from '../lib/nav.ts';
-import { current } from '../lib/session.ts';
+import { readSession } from '../lib/session.ts';
 
 /** Three shared workspace sections, with account controls outside the primary navigation. */
 export async function Shell({ children }: { children: React.ReactNode }) {
-	const me = await current();
+	// The frame never redirects: pages decide that. Without a confirmed session it shows no avatar.
+	const session = await readSession();
+	const me = session.state === 'signed-in' ? session.current : null;
 	const scope = `${me?.me.user.id ?? 'signed-out'}:${me?.organisation?.organisationId ?? 'no-organisation'}`;
 	return (
 		<div className="shell">

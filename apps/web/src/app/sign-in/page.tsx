@@ -4,7 +4,7 @@ import { Captain } from '../../components/Captain.tsx';
 import { Notice } from '../../components/Notice.tsx';
 import { api, load } from '../../lib/api.ts';
 import { apiUrl } from '../../lib/env.ts';
-import { current } from '../../lib/session.ts';
+import { readSession } from '../../lib/session.ts';
 
 export const metadata: Metadata = { title: 'Sign in' };
 
@@ -17,7 +17,8 @@ const said: Record<string, string> = {
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ return_to?: string; error?: string }> }) {
 	const params = await searchParams;
-	if (await current()) redirect(params.return_to?.startsWith('/') ? params.return_to : '/');
+	const session = await readSession();
+	if (session.state === 'signed-in') redirect(params.return_to?.startsWith('/') && !params.return_to.startsWith('//') ? params.return_to : '/');
 	const providers = await load(() => api<{ google: boolean }>('/auth/providers'));
 	const returnTo = params.return_to && params.return_to.startsWith('/') && !params.return_to.startsWith('//') ? params.return_to : '/';
 	const start = new URL('/auth/google/start', apiUrl); start.searchParams.set('return_to', returnTo);
@@ -28,6 +29,8 @@ export default async function SignInPage({ searchParams }: { searchParams: Promi
 				<h1>Ask The Captain</h1>
 				<p>A shared workspace for your business.</p>
 			</header>
+			{session.state === 'unavailable' ? <Notice tone="attention" title="Captain can’t check your session right now.">
+				If you were signed in, your saved sign-in has been kept; Captain’s service did not answer, so it can’t check it. Try again in a moment.{' '}<a href={returnTo}>Try again</a></Notice> : null}
 			{params.error ? <Notice tone="attention">{said[params.error] ?? 'Sign-in did not finish. Try again.'}</Notice> : null}
 			{!providers.ok ? <Notice tone="failed" title="Captain cannot reach its API.">Sign-in is not possible just now. Try again in a minute.</Notice>
 				: !providers.value.google ? <Notice tone="attention" title="Sign-in is not set up.">Google sign-in has not been configured for this installation yet.</Notice>

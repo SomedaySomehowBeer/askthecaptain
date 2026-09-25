@@ -1,12 +1,12 @@
 'use server';
+import { requireCurrent } from '../../../components/Page.tsx';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { api, ApiError } from '../../../lib/api.ts';
-import { current } from '../../../lib/session.ts';
 
 export type Result = { error?: string; ok?: boolean; message?: string };
 const fail = (error: unknown): Result => ({ error: error instanceof ApiError ? error.message : 'That did not work.' });
-async function who() { const me = await current(); if (!me?.organisation) redirect('/sign-in?return_to=/settings/notifications'); return { token: me.token, org: me.organisation.organisationId }; }
+async function who() { const me = await requireCurrent('/settings/notifications'); return { token: me.token, org: me.organisation.organisationId }; }
 
 /** The browser hands the server its push subscription; the server registers it with the API. The
  *  VAPID private key never leaves the API, and the API never sees the person's cookie. */

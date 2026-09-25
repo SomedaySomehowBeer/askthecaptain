@@ -1,11 +1,12 @@
 'use server';
+import { requireSignedIn } from '../../components/Page.tsx';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { api, ApiError } from '../../lib/api.ts';
-import { cookieOptions, current, organisationCookie } from '../../lib/session.ts';
+import { cookieOptions, organisationCookie } from '../../lib/session.ts';
 
 export async function createOrganisation(_: { error?: string } | undefined, form: FormData): Promise<{ error?: string }> {
-	const me = await current(); if (!me) redirect('/sign-in?return_to=/welcome');
+	const me = await requireSignedIn('/welcome');
 	const name = String(form.get('name') ?? '').trim();
 	const timezone = String(form.get('timezone') ?? '').trim() || undefined;
 	if (!name) return { error: 'Give the organisation a name.' };

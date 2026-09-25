@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { api, ApiError } from '../../../lib/api.ts';
-import { current } from '../../../lib/session.ts';
+import { actionSession } from '../../../lib/session.ts';
 import { resolveLocal } from './time.ts';
 import { uuid, type Equipment, type Reservation } from './types.ts';
 
@@ -27,11 +27,12 @@ function outcome(error: unknown): Outcome<never> {
 	return { ok: false, kind: 'refused', error: error.message };
 }
 
-async function session() {
-	const me = await current();
-	return me?.organisation ? { token: me.token, org: me.organisation.organisationId } : null;
+/** The session for a write, or a definite refusal: when the session is missing or cannot be
+ *  checked, the write is never sent, so "nothing was sent" is true (not an uncertain outcome). */
+async function session(): Promise<{ token: string; org: string } | { ok: false; kind: 'refused'; error: string }> {
+	const s = await actionSession();
+	return s.ok ? { token: s.token, org: s.org } : { ok: false, kind: 'refused', error: s.error };
 }
-const signedOut = { ok: false, kind: 'refused', error: 'Your session has ended. Sign in again; nothing was saved.' } as const;
 
 function refresh(equipmentId?: string, reservationId?: string) {
 	revalidatePath('/resources/equipment'); revalidatePath('/resources/equipment/manage');
@@ -43,7 +44,7 @@ function refresh(equipmentId?: string, reservationId?: string) {
 export async function createEquipment(form: FormData): Promise<Outcome<Equipment>> {
 	const name = text(form, 'name');
 	if (!name || name.length > 100) return { ok: false, kind: 'refused', error: 'Give the equipment a name of up to 100 characters.' };
-	const s = await session(); if (!s) return signedOut;
+	const s = await session(); if ('ok' in s) return s;
 	try {
 		const value = await api<Equipment>(`/v1/organisations/${s.org}/equipment`, { method: 'POST', token: s.token, body: { name } });
 		refresh(); return { ok: true, value };
@@ -61,7 +62,7 @@ export async function updateEquipment(form: FormData): Promise<Outcome<Equipment
 		body = { name };
 	} else if (change === 'archive' || change === 'restore') body = { archived: change === 'archive' };
 	else return { ok: false, kind: 'refused', error: 'That change was not understood.' };
-	const s = await session(); if (!s) return signedOut;
+	const s = await session(); if ('ok' in s) return s;
 	try {
 		const value = await api<Equipment>(`/v1/organisations/${s.org}/equipment/${id}`, { method: 'PATCH', token: s.token, body: { expectedRevision: Number(revision), ...body } });
 		refresh(); return { ok: true, value };
@@ -107,7 +108,7 @@ function schedule(form: FormData, timeZone: string): Record<string, unknown> | {
 export async function createReservation(form: FormData): Promise<Outcome<Reservation>> {
 	const equipmentId = text(form, 'equipmentId'); const id = text(form, 'id');
 	if (!uuid.test(equipmentId) || !uuid.test(id)) return { ok: false, kind: 'refused', error: 'That reservation form is not valid. Open it again from the schedule.' };
-	const s = await session(); if (!s) return signedOut;
+	const s = await session(); if ('ok' in s) return s;
 	let zone: string;
 	try { zone = await timezone(s); } catch { return { ok: false, kind: 'refused', error: 'The organisation’s timezone could not be read, so nothing was sent. Try again.' }; }
 	// The times were typed against the zone the form showed; never reinterpret them in another.
@@ -123,7 +124,7 @@ export async function createReservation(form: FormData): Promise<Outcome<Reserva
 export async function replaceReservation(form: FormData): Promise<Outcome<Reservation>> {
 	const equipmentId = text(form, 'equipmentId'); const id = text(form, 'reservationId'); const revision = text(form, 'expectedRevision');
 	if (!uuid.test(equipmentId) || !uuid.test(id) || !revisionPattern.test(revision)) return { ok: false, kind: 'refused', error: 'That reservation form is not valid. Reload it.' };
-	const s = await session(); if (!s) return signedOut;
+	const s = await session(); if ('ok' in s) return s;
 	let zone: string;
 	try { zone = await timezone(s); } catch { return { ok: false, kind: 'refused', error: 'The organisation’s timezone could not be read, so nothing was sent. Try again.' }; }
 	// The times were typed against the zone the form showed; never reinterpret them in another.
@@ -143,7 +144,7 @@ export async function replaceReservation(form: FormData): Promise<Outcome<Reserv
 export async function cancelReservation(form: FormData): Promise<Outcome<Reservation>> {
 	const equipmentId = text(form, 'equipmentId'); const id = text(form, 'reservationId'); const revision = text(form, 'expectedRevision');
 	if (!uuid.test(equipmentId) || !uuid.test(id) || !revisionPattern.test(revision)) return { ok: false, kind: 'refused', error: 'That reservation is not valid. Reload it.' };
-	const s = await session(); if (!s) return signedOut;
+	const s = await session(); if ('ok' in s) return s;
 	try {
 		const value = await api<Reservation>(`/v1/organisations/${s.org}/equipment/${equipmentId}/reservations/${id}/cancel`, { method: 'POST', token: s.token, body: { expectedRevision: Number(revision) } });
 		refresh(equipmentId, id); return { ok: true, value };
@@ -154,7 +155,7 @@ export async function cancelReservation(form: FormData): Promise<Outcome<Reserva
  *  is missing (the same request can be sent again), or cannot be read yet (stay pending). */
 export async function checkReservation(equipmentId: string, id: string): Promise<{ state: 'found'; reservation: Reservation } | { state: 'missing' | 'unavailable' }> {
 	if (!uuid.test(equipmentId) || !uuid.test(id)) return { state: 'unavailable' };
-	const s = await session(); if (!s) return { state: 'unavailable' };
+	const s = await session(); if ('ok' in s) return { state: 'unavailable' };
 	try { return { state: 'found', reservation: await api<Reservation>(`/v1/organisations/${s.org}/equipment/${equipmentId}/reservations/${id}`, { token: s.token }) }; }
 	catch (error) { return error instanceof ApiError && error.status === 404 ? { state: 'missing' } : { state: 'unavailable' }; }
 }

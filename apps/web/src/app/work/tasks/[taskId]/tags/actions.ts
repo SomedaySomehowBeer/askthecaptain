@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { api, ApiError } from '../../../../../lib/api.ts';
-import { current } from '../../../../../lib/session.ts';
+import { actionSession } from '../../../../../lib/session.ts';
 import { uuid } from '../../../tags/pagination.ts';
 
 export type LinkResult = { attached: boolean } | { error: string };
@@ -11,10 +11,10 @@ export type LinkResult = { attached: boolean } | { error: string };
 export async function setTaskTag(form: FormData): Promise<LinkResult> {
 	const taskId = String(form.get('taskId') ?? ''); const tagId = String(form.get('tagId') ?? ''); const attach = String(form.get('attach') ?? '');
 	if (!uuid.test(taskId) || !uuid.test(tagId) || (attach !== 'true' && attach !== 'false')) return { error: 'That change was not understood. Refresh the page.' };
-	const me = await current();
-	if (!me?.organisation) return { error: 'Your session has ended. Sign in again, then try once more.' };
+	const session = await actionSession();
+	if (!session.ok) return { error: session.error };
 	try {
-		const result = await api<{ attached: boolean }>(`/v1/organisations/${me.organisation.organisationId}/tasks/${taskId}/tags/${tagId}`, { method: attach === 'true' ? 'PUT' : 'DELETE', token: me.token });
+		const result = await api<{ attached: boolean }>(`/v1/organisations/${session.org}/tasks/${taskId}/tags/${tagId}`, { method: attach === 'true' ? 'PUT' : 'DELETE', token: session.token });
 		revalidatePath('/work'); revalidatePath('/work/tags'); revalidatePath(`/work/tasks/${taskId}/tags`);
 		return { attached: result.attached };
 	} catch (error) {
