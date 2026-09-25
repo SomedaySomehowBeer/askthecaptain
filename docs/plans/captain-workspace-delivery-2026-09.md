@@ -6,7 +6,7 @@ Outcomes: **manage shared work** and **understand and follow up**.
 
 The [product proposal](../proposals/2026-09-22-captain-and-pip.md) defines the intended
 Captain/Pip split. This plan turns that direction into reviewable slices. The adopted [plan](../plan.md)
-(D1–D25) reconciles the product/navigation/design decisions; this sequence does not itself migrate
+(D1–D26) reconciles the product/navigation/design decisions; this sequence does not itself migrate
 production or require Pip before Captain is useful. Production remains paused; [operational status](../runbooks/paused.md) records the owner’s staging-only authorisation (at most one machine per app).
 
 The [next batch and assignments](captain-next-batch-2026-09-25.md) records delivered service-failure

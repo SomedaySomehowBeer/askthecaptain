@@ -168,7 +168,7 @@ These target semantics do not claim the old schema has already changed.
 | Tasks | Title/body, status, owner, due date, optional project, evidence and one-level checklist | Optional projects (0038, #136) and revisions with copied occurrence evidence requirements (0039, #138) shipped; the authorised legacy reset is complete, not a recurring deployment step |
 | Recurring work | Series generate ordinary tasks; no artificial project required; edits affect future occurrences | Standalone materialisation shipped in #136; rule revisions and copied occurrence evidence requirements shipped in #138 |
 | Tags | Flat organisation labels; many per task, stable identity on rename, no permissions or inherited duplication | Migration 0035 and API/web controls implemented; [tag contract](plans/workspace-task-tags-2026-09.md) records its original project restrictions, superseded by #136 standalone-task eligibility |
-| Saved views | Named, versioned filters over authorised records | Planned; schema/sharing/revisions need their own contract |
+| Saved views | Named, versioned private Work filters in `saved_views`; no stored task results or access grants | [Reviewed contract](plans/saved-work-views-2026-09.md), D26; implementation pending; shared views require a separate increment |
 | Equipment | Exclusive resources and bookings/maintenance with occupied start/end, setup/cleanup, revision and work/person links | Migration 0036 and web shipped; [contract](plans/equipment-reservations-2026-09.md); standalone task links and revision-aware project movement added by #136 |
 | Chat | Conversations, participants, messages, links, pins, stars and read positions with separate stable IDs | Planned; D25 access/retry contract before tables |
 | Evidence | Business source links and deliberately shared correspondence with source-qualified identity and provenance | Existing generic evidence references reusable but need a bounded sharing/access contract; no mailbox archive |
@@ -471,11 +471,14 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 | D23 | Shared item discussion is D25 chat, not a Notes/comments subsystem. Business evidence retains source identity; handle an actual note reference deliberately when affected, without invented messages or a requirement to retain Notes as a product. Captain is not a document editor. |
 | D24 | Equipment scheduling is core. Continuous interval timelines support hours/days/weeks, resource scrolling and focal zoom. The server atomically prevents overlapping confirmed occupancy, including setup/cleanup/maintenance; unconfirmed, unknown and unloaded periods are explicit. Filters cannot hide competing resource occupancy. |
 | D25 | Shared chat links bidirectionally to work and file versions. Item chats show the latest six chronological messages plus shared pins referencing original IDs. Stars are personal conversation bookmarks. Membership/access, retry-safe sends, reconnect/read state, pin auditing and source-linked summaries are specified before implementation; summaries remain D2 infer outputs. |
+| D26 | Saved Work views are private, named, versioned filters evaluated for their owner. They never grant record access; filter/name content remains private in audit/export. Writes require revisions, create retry IDs survive content-clearing tombstones, and filter drafts preserve their original revision and explicit clears. Work defaults to My work. Shared views require a separate contract. |
 
 
 ## 14. Open implementation decisions and historical authority
 
-- Saved filters and linked chat: bounded reads, revisions, participants/access,
+- Saved filters: implement the [reviewed private-view contract](plans/saved-work-views-2026-09.md);
+  organisation-shared views still need their own contract.
+- Linked chat: bounded reads, revisions, participants/access,
   retry identity, history/read state and summaries as specified in the delivery contracts.
 - Files: provider/version identity, permissions, preview/extraction retention and explicitly shared
   correspondence contract. Provider originals and version-scoped chat are adopted; the entire

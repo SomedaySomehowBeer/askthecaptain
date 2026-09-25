@@ -52,11 +52,10 @@ assets still need removal. Saved-view and linked-chat contracts are the next fea
    Inspect only the actual affected records/run state before a data/runtime change; do not
    invent a migration requirement or wait for Pip. Delivered through #135/#136/#138; remaining
    retired storage/code removal stays tracked in #133. Each part is a small reviewed PR.
-3. **Saved Work views.** Review a small filter contract before migration: named, versioned
-   filters, initially personal within an organisation, with strict supported fields and bounded
-   counts. Saving a view never grants record access. Define deleted tags/projects, revoked
+3. **Saved Work views.** Implement the [reviewed contract](saved-work-views-2026-09.md): named,
+   versioned private Work filters, with strict supported fields and bounded counts. Saving a view never grants record access. The contract defines deleted tags/projects, revoked
    membership, stale updates, default-view behaviour and migration/export/deletion handling.
-   Then deliver API/RLS and web controls as separate small PRs. Shared views follow an explicit
+   Deliver API/RLS and web controls as separate small PRs; this contract does not claim either shipped. Shared views follow an explicit
    sharing contract; browser-session tab restoration is not persistent saved views.
 4. **Linked-chat contract, then API.** Settle the cases below before adding tables. First API
    increment establishes conversations, membership, messages and task/project links. Follow

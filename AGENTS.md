@@ -2,7 +2,7 @@
 
 This file is for every agent and person who writes code here. Read it, then read
 [`docs/plan.md`](docs/plan.md). The plan is the source of truth for what Captain is and how it is
-built; its decisions (D1–D25) change only by a reviewed pull request that edits the plan.
+built; its decisions (D1–D26) change only by a reviewed pull request that edits the plan.
 
 ## The test for any piece of work
 
