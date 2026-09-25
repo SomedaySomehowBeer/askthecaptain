@@ -441,7 +441,7 @@ it('two direct transactions inserting overlapping occupancy at once: the constra
 	// constraint admitted one row. Retrying the loser now, against the committed winner, must be refused
 	// by the constraint itself. (The service locks the equipment row first, so its writers never race here.)
 	assert.ok(code === '23P01' || code === '40P01', `unexpected loser code ${code}`);
-	if (code === '40P01') await assert.rejects(attempt(...ranges[loser]!), (e: { code?: string }) => e.code === '23P01');
+	if (code === '40P01') await assert.rejects(attempt(ranges[loser]![0], ranges[loser]![1]), (e: { code?: string }) => e.code === '23P01');
 	assert.equal((await db.owner`select count(*)::int as n from equipment_reservations where equipment_id = ${tank.id}`)[0]!.n, 1);
 });
 
