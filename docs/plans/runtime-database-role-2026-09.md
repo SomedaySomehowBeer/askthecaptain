@@ -1,6 +1,7 @@
 # Runtime database role repair
 
-Status: proposed repair, 26 September 2026. Outcomes: protect shared work and private views (D6,
+Status: repair merged in [#162](https://github.com/SomedaySomehowBeer/askthecaptain/pull/162),
+26 September 2026; staging migration prepared, credential activation pending. Outcomes: protect shared work and private views (D6,
 D26), and unblock linked chat (D25). Chat is held separately on `feat/linked-chat-core`.
 
 ## Observed problem and containment
@@ -20,8 +21,9 @@ A transactional, intentionally rolled-back repair probe tried revoking `neon_sup
 `app`. Neon refused with SQLSTATE 42501. Nothing changed. Removing BYPASSRLS alone would leave
 other administrative memberships, so it is not an adequate repair.
 
-The existing staging API machine `80e39ea6416e18` is stopped with autostart disabled. Its image,
-secrets and data are unchanged. Web remains on #159; authenticated workspace operations are
+The existing staging API machine `80e39ea6416e18` was stopped with autostart disabled for
+containment. Its guarded image and non-login role migration were subsequently prepared as
+recorded in [the runbook](../runbooks/paused.md); credentials remain unchanged and HTTP remains stopped. Web remains on #159; authenticated workspace operations are
 unavailable while the API is contained. No production or embedding machine was changed.
 
 ## Bounded implementation

@@ -1,0 +1,30 @@
+Source: 6977fac47dce97cdd0ec2829367fccd671bc7851
+ Tasks:    10 successful, 10 total
+@captain/engine:test: # tests 20
+@captain/engine:test: # pass 20
+@captain/engine:test: # fail 0
+@captain/model:test: # tests 11
+@captain/model:test: # pass 11
+@captain/model:test: # fail 0
+@captain/web:test: # tests 74
+@captain/web:test: # pass 74
+@captain/web:test: # fail 0
+@captain/retrieval:test: # tests 7
+@captain/retrieval:test: # pass 7
+@captain/retrieval:test: # fail 0
+@captain/db:test: # tests 68
+@captain/db:test: # pass 68
+@captain/db:test: # fail 0
+@captain/connectors:test: # tests 17
+@captain/connectors:test: # pass 17
+@captain/connectors:test: # fail 0
+@captain/steps:test: # tests 5
+@captain/steps:test: # pass 5
+@captain/steps:test: # fail 0
+@captain/api:test: # tests 156
+@captain/api:test: # pass 156
+@captain/api:test: # fail 0
+ Tasks:    8 successful, 8 total
+API build: passed (tsc -p tsconfig.build.json)
+{"organisations":1,"migrations":38,"latest":"0041_runtime_role.sql","policies":69,"mismatches":0,"restored_grants":false}
+RESTORE_SCHEMA_POLICY_PROOF_PASS; application grant replay is still required
