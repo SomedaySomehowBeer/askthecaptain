@@ -7,6 +7,13 @@ import { canManage, roleOf, type Actor } from '../tenant.ts';
  *  sprite secrets, device keys, token hashes. An export is the business's data, not its credentials. */
 const secretColumns = new Set(['access_token_encrypted', 'refresh_token_encrypted', 'connection_encrypted', 'p256dh', 'auth', 'token_hash', 'pending_encrypted', 'data_key_wrapped']);
 const identifier = /^[a-z_][a-z0-9_]*$/;
+/** Rows an export leaves out on top of row security. Saved views are personal (D26): row security already limits
+ *  them to the exporter's own, and a tombstone is a reserved id with no content, not the business's data. */
+const exportOnly: Record<string, string> = { saved_views: 'deleted_at is null' };
+/** Tables left out of a deletion's row counts. Row security limits a count of saved views to the deleting owner's own
+ *  rows, which is not the organisation's total, and no elevated query counts other members' private views. The
+ *  foreign-key cascade still removes every member's views and tombstones with the organisation. */
+const uncounted = new Set(['saved_views']);
 
 export type TenantTable = { name: string; columns: string[] };
 export type Revoker = (actor: Actor, organisationId: string) => Promise<void>;
@@ -41,10 +48,12 @@ export class OrganisationLifecycle {
 			await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, action: 'organisation.exported', subjectType: 'organisation', subjectId: organisationId, requestId: actor.requestId, detail: { tables: tables.map((t) => t.name) } });
 			return org!;
 		});
-		yield JSON.stringify({ kind: 'captain-export', version: 1, exportedAt: new Date().toISOString(), keys: 'camelCase, as the API returns them', organisation, tables: tables.map((t) => t.name) }) + '\n';
+		yield JSON.stringify({ kind: 'captain-export', version: 1, exportedAt: new Date().toISOString(), keys: 'camelCase, as the API returns them', organisation, tables: tables.map((t) => t.name),
+			notes: ['saved_views holds only the exporting person’s own live saved views. Other members’ private views and deleted views are not exported, so this is not a complete backup of personal views.'] }) + '\n';
 		const counts: Record<string, number> = {};
 		for (const table of tables) {
-			const rows = await withTenant(this.#db, { organisationId, userId: actor.userId }, (tx) => tx.unsafe(`select ${table.columns.map((c) => `"${c}"`).join(', ')} from "${table.name}" where organisation_id = $1`, [organisationId]));
+			const only = exportOnly[table.name];
+			const rows = await withTenant(this.#db, { organisationId, userId: actor.userId }, (tx) => tx.unsafe(`select ${table.columns.map((c) => `"${c}"`).join(', ')} from "${table.name}" where organisation_id = $1${only ? ` and ${only}` : ''}`, [organisationId]));
 			counts[table.name] = rows.length;
 			for (const row of rows) yield JSON.stringify({ table: table.name, row }) + '\n';
 		}
@@ -62,7 +71,7 @@ export class OrganisationLifecycle {
 		const tables = await this.tables();
 		const rowCounts: Record<string, number> = {};
 		await withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
-			for (const table of tables) { const rows = await tx.unsafe<{ count: number }[]>(`select count(*)::int as count from "${table.name}" where organisation_id = $1`, [organisationId]); rowCounts[table.name] = rows[0]?.count ?? 0; }
+			for (const table of tables) { if (uncounted.has(table.name)) continue; const rows = await tx.unsafe<{ count: number }[]>(`select count(*)::int as count from "${table.name}" where organisation_id = $1`, [organisationId]); rowCounts[table.name] = rows[0]?.count ?? 0; }
 			await tx`insert into organisation_deletions (deleted_organisation_id, name, deleted_by, deleted_by_email, row_counts) values (${organisationId}, ${org.name}, ${actor.userId}, ${actor.email}, ${tx.json(rowCounts as never)})`;
 			await tx`delete from organisations where id = ${organisationId}`;
 		});

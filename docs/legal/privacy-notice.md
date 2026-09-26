@@ -118,10 +118,14 @@ hours. These are configured processes, not evidence that every scheduled run suc
 .github/workflows/backup.yml; infra/tofu/neon.tf; docs/runbooks/backup-and-restore.md. -->
 
 An owner/admin can use Settings → Your data → Download everything at any time while authorised and
-the service is available. The export includes tenant tables without credentials. The owner can delete
+the service is available. The export includes tenant tables without credentials. For private saved
+Work views it includes only the exporting person's own live views, not other members' views or
+content-free deletion tombstones; it is not a complete backup of personal views. Removing a member
+keeps their views stored but inaccessible until that membership is reactivated. Deleting the
+membership or organisation removes its saved views by cascade. The owner can delete
 the organisation there by typing its name. This removes its live tenant records, including journals
 and audit records, and retains one platform deletion record: organisation ID/name, deleting person's
-ID/email, time and row counts. Provider revocation is attempted, not guaranteed. Existing provider
+ID/email, time and row counts (excluding private saved views). Provider revocation is attempted, not guaranteed. Existing provider
 records and delivered messages remain outside Captain; Sprite removal and login revocation require
 operator action. Platform identities, sign-in records and existing backups are not erased by that
 organisation deletion.

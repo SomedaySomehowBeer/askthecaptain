@@ -34,6 +34,13 @@ reveal a token; keep the key in Fly's secrets and nowhere else, and treat the bu
 
 ## Neon's own restore
 
+An owner/admin tenant export is different from an operator database backup. Exports include only
+the exporting person's live saved Work views; other members' private views and content-free
+deletion tombstones are omitted. They cannot restore every member's personal views. A database
+backup includes those rows and needs the operator access controls described above. Organisation
+deletion cascades through all saved views, but its recorded row counts omit this private table
+rather than presenting the deleting owner's visible count as a total.
+
 Neon keeps point-in-time history for the branch. For a mistake in the last hours (a bad migration,
 a wrong delete) this is the first choice: in the Neon console, restore the branch to a timestamp,
 or create a branch from that timestamp and read from it. No dump is needed.
