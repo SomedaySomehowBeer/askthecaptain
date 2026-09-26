@@ -86,6 +86,8 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
  // <main> hidden next to the visible loading one, so a plain CSS `main` can match two and fail strict mode at once.
  // The role locator ignores the hidden one and retries until the real content is swapped in.
  const main = (on = page) => on.getByRole('main');
+ /** The All/Unread/Starred chips of the page on screen (role locators skip the hidden, still-streaming copy). */
+ const chipNav = (on = page) => main(on).getByRole('navigation', { name: 'Show' });
  const group = (title, on = page) => on.getByRole('region', { name: title, exact: true });
  const rowIds = async (title, on = page) => on.getByRole('list', { name: title, exact: true }).locator('a.chat-row')
   .evaluateAll(links => links.map(a => a.getAttribute('href').split('/').pop()));
@@ -437,13 +439,16 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   await goto('/chat?filter=unread');
   await expect(page.locator('a.chat-row .chat-row__unread').first()).toHaveText('1');
   assert.doesNotMatch(await page.locator('.tabbar').first().innerText().catch(() => ''), /\d/, 'no badge on the tab bar');
-  assert.doesNotMatch(await page.locator('.chat-filters').innerText(), /\d/, 'no counts on the filter chips');
+  await expect(chipNav()).toBeVisible();
+  assert.doesNotMatch(await chipNav().innerText(), /\d/, 'no counts on the filter chips');
   console.log('PASS All/Unread/Starred × About the work/Team page independently and match the API');
 
   // A linked view shows only its group and pages with its own cursor.
   for (const [linked, name, other, key] of [[true, 'About the work', 'Team conversations', 'work'], [false, 'Team conversations', 'About the work', 'team']]) {
    const first = await apiPage('unread', linked);
    await goto(`/chat?filter=unread&linked=${linked}`);
+   // Wait for the real page (not the loading screen, which has no groups) before asserting a group is absent.
+   await expect(group(name)).toBeVisible();
    await expect(group(other)).toHaveCount(0);
    await expect.poll(() => rowIds(name)).toEqual(first.conversations.map(c => c.id));
    await group(name).getByRole('link', { name: 'More', exact: true }).click();
@@ -467,13 +472,24 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   console.log('PASS a cursor from another view or an unreadable cursor fails only its group');
 
   // Layouts: list, a linked view, views and new, at four widths. Chips and the plus stay reachable; nothing overflows.
+  // Each page is measured only once its own content is visible: while it streams in under chat/loading.tsx the
+  // incoming page is hidden (zero-sized), so measuring earlier reads the loading screen or 0px chips.
+  const shown = {
+   list: () => expect(chipNav()).toBeVisible(),
+   'unread-team': () => expect(group('Team conversations')).toBeVisible(),
+   views: () => expect(group('Linked to work')).toBeVisible(),
+   new: () => expect(title()).toBeVisible()
+  };
   for (const [name, route] of [['list', '/chat'], ['unread-team', '/chat?filter=unread&linked=false'], ['views', '/chat/views'], ['new', `/chat/new?link=task:${taskId}`]]) {
    for (const width of [360, 390, 430, 1440]) {
     await page.setViewportSize({ width, height: 874 });
     await goto(route);
+    await shown[name]();
     await noOverflow();
     if (name === 'list' || name === 'unread-team') {
-     for (const height of await page.locator('.chat-filter').evaluateAll(chips => chips.map(c => c.getBoundingClientRect().height))) assert.ok(height >= 44, `filter chip ${height}px at ${width}`);
+     const chipLinks = chipNav().getByRole('link');
+     await expect(chipLinks).toHaveCount(3);
+     for (const height of await chipLinks.evaluateAll(chips => chips.map(c => c.getBoundingClientRect().height))) assert.ok(height >= 44, `filter chip ${height}px at ${width}`);
      await expect(page.getByRole('link', { name: 'Back to Views' })).toBeVisible();
     }
     if (name === 'new') await expect(page.locator('.chat-plus')).toHaveCount(0);

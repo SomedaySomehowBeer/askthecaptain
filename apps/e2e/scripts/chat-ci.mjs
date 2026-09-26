@@ -19,7 +19,15 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const out = path.resolve(process.env.CHAT_CI_OUT ?? path.join(root, 'apps/e2e/chat-ci-output'));
-const suites = ['chat-views-check.cjs', 'chat-check.cjs'];
+/** Both suites by default (CI). For a focused local rerun, name suites as arguments, e.g.
+ *  `node apps/e2e/scripts/chat-ci.mjs chat-check.cjs`; only these exact names, each at most once, run in the
+ *  default order. Anything else is refused before any child starts. */
+const allSuites = ['chat-views-check.cjs', 'chat-check.cjs'];
+const asked = process.argv.slice(2);
+const unknown = asked.filter(name => !allSuites.includes(name));
+if (unknown.length) throw new Error(`Unknown suite(s): ${unknown.join(', ')}. Choose from: ${allSuites.join(', ')}.`);
+if (new Set(asked).size !== asked.length) throw new Error(`A suite is named more than once: ${asked.join(', ')}.`);
+const suites = asked.length ? allSuites.filter(name => asked.includes(name)) : allSuites;
 /** Per-suite limit: 12 minutes by default and at most, so two suites plus setup fit the 40-minute CI job. */
 const maxSuiteMs = 12 * 60_000;
 const askedMs = Number(process.env.CHAT_CI_SUITE_TIMEOUT_MS ?? maxSuiteMs);
@@ -152,6 +160,7 @@ let web = null, failed = 0;
 try {
 	await mkdir(out, { recursive: true });
 	if (await portOpen(WEB) || await portOpen(API)) throw new Error('ports 3034 and 8084 must be free before chat-ci starts');
+	log(`suites: ${suites.join(', ')}${asked.length ? ' (chosen on the command line)' : ''}`);
 	log('starting the production web server on 127.0.0.1:3034');
 	const nextCli = path.join(root, 'apps/web/node_modules/next/dist/bin/next');
 	if (!(await exists(nextCli))) throw new Error(`Next CLI not found at ${path.relative(root, nextCli)}; run pnpm install first`);

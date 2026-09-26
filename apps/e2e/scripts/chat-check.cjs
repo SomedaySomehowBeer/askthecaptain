@@ -526,7 +526,10 @@ const POLL = 15000, TICK = { timeout: POLL * 2 + 5000 }, TOTAL = 120;
   await expect(page.getByRole('button', { name: 'Save title' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Leave conversation' })).toBeDisabled();
   await unconfirmed.getByRole('button', { name: 'Check again' }).click();
-  await expect(unconfirmed).toBeVisible();
+  // The notice stays visible while Checking. Wait for the failed read to settle before restoring the API;
+  // otherwise the first check can succeed after the mode changes and there is correctly no second button.
+  await expect(unconfirmed.getByRole('button', { name: 'Check again' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Save title' })).toBeDisabled();
   await mode('');
   await unconfirmed.getByRole('button', { name: 'Check again' }).click();
   await expect(page.getByText('Title saved.')).toBeVisible();
@@ -649,9 +652,15 @@ const POLL = 15000, TICK = { timeout: POLL * 2 + 5000 }, TOTAL = 120;
   await goto(`/chat/${main.id}`);
   await plant(mainKey, pendingFor(fixture.userId, main.id, 'Kept across expiry'));
   await goto(`/chat/${other.id}`);
+  await box().fill('After expiry');
+  await expect(composer().getByRole('button', { name: 'Send' })).toBeEnabled();
+  // Exercise expiry discovered by this write. The separately tested poll must not win the race and correctly
+  // disable Send before the click; temporarily blur, then restore focus once the write has discovered expiry.
+  await blur();
   await context.clearCookies();
-  await box().fill('After expiry'); await composer().getByRole('button', { name: 'Send' }).click();
+  await composer().getByRole('button', { name: 'Send' }).click();
   await expect(page.getByRole('link', { name: 'Sign in again' }).first()).toBeVisible();
+  await unblur();
   await expect(composer().getByRole('button', { name: 'Send' })).toBeDisabled();
   await expect(box()).toHaveValue('After expiry');
   const expired = await storedRecord(sendKey(fixture.userId, other.id));
@@ -672,7 +681,16 @@ const POLL = 15000, TICK = { timeout: POLL * 2 + 5000 }, TOTAL = 120;
   // Layouts: thread (pins, composer above the tab bar, no floating button), panel, project overview.
   for (const [name, route] of [['thread', `/chat/${main.id}`], ['panel', `/work/tasks/${taskId}`], ['project', `/work/projects/${fixture.projectId}`]]) {
    for (const width of [360, 390, 430, 1440]) {
-    await page.setViewportSize({ width, height: 874 }); await goto(route); await noOverflow();
+    await page.setViewportSize({ width, height: 874 }); await goto(route);
+    // Next can briefly retain hidden incoming markup alongside a loading screen. Measure the rendered content.
+    if (name === 'thread') {
+     await expect(page.locator('.chat-header')).toBeVisible();
+     await expect(composer()).toBeVisible();
+    } else {
+     await expect(panel.locator('.chat-message')).toHaveCount(6);
+     await expect(panel.locator('form.chat-compose--panel')).toBeVisible();
+    }
+    await noOverflow();
     if (name === 'thread') {
      const layout = await page.evaluate(() => { const c = document.querySelector('.chat-compose--thread')?.getBoundingClientRect(), t = document.querySelector('.tabbar')?.getBoundingClientRect(); return { composer: c?.bottom ?? 0, tabbar: t && t.height ? t.top : innerHeight }; });
      assert.ok(layout.composer <= layout.tabbar + 1, `composer clears the tab bar at ${width}`);
