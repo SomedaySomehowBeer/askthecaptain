@@ -20,7 +20,9 @@ records deliberately; never claim a live data audit from a code inventory.
   instruction, input data and an output schema. The output is validated before any code sees it.
   The model gets no tools, makes no writes, and never sees a credential, a token or a key.
 - **Writes are plain writes.** A person's write is role-checked inside Row Level Security and
-  recorded in `audit_events`. A workflow's write happens in the name of the person who enabled the
+  recorded in `audit_events`, except private chat records (D25), which are recorded in the
+  participant-scoped, append-only `chat_audit_events` so audit never reveals a private conversation
+  to nonparticipants. A workflow's write happens in the name of the person who enabled the
   workflow (D4). There is no approval layer, no signed request, no confirmation token. Where a
   person should see something before it happens, the record carries a review state (for example, a suggested task).
 - **No autonomous correspondence (D5).** Workflows never send external mail. The legacy outbox
