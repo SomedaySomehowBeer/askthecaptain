@@ -16,8 +16,13 @@ configuration change was made.
   operations finished. Verification then stopped because the classifier expected FATAL, while
   Neon emitted ERROR. Direct Postgres verification established SQLSTATE 28P01 for the old login.
   [#165](https://github.com/SomedaySomehowBeer/askthecaptain/pull/165) corrects only that exact
-  password-failure classification, with 44 passing fixtures and green CI. Resumption must skip
-  the reset because the old password is already rejected.
+  password-failure classification, with 44 passing fixtures and green CI. The first resume skipped
+  the reset, then correctly refused state drift outside the role.
+- [Scoped-refresh fix](https://github.com/SomedaySomehowBeer/askthecaptain/pull/166): an ephemeral
+  override removes the project dependency during the refresh, with the same strict state gates.
+  All 47 offline fixtures pass. A local builtin-only OpenTofu probe confirms that project+role
+  refresh becomes role-only, including when an output references both resources. Shell probes
+  confirm a preexisting override survives refusal and the run’s own file is removed on failure.
 
 [#164](https://github.com/SomedaySomehowBeer/askthecaptain/pull/164) documents the provider-specific
 activation method and contains the reviewed manual retirement/state-reconciliation workflow.

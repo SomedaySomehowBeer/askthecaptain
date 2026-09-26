@@ -52,7 +52,28 @@ the explicitly scoped owner reference: 26 tasks, 1 project, 5 equipment, 5 tags 
 views. These were counts only; no record content was read or changed. This proves existing-record database access; no authenticated browser session was available.
 Shared Chrome at 390 and 1440 pixels rendered Google sign-in without overflow or page errors.
 
-Retirement of the old credential is recorded separately below once its manual operation finishes.
+## Old administrative credential retirement (26 September 2026, UTC)
+
+The old `app` password was reset once in
+[run 36235270751](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36235270751);
+both Neon operations finished at **10:16:38Z**. That run stopped before any state write because
+its classifier did not recognise Neon's ERROR-severity password rejection. [#165](https://github.com/SomedaySomehowBeer/askthecaptain/pull/165)
+corrected that classifier; a separate direct connection confirmed SQLSTATE 28P01.
+
+[Resume 36235804814](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36235804814)
+skipped another reset, proved rejection of the old password, found zero `app` sessions, verified
+the restricted role and `/readyz`, then refused drift outside the role. No state was written.
+[#166](https://github.com/SomedaySomehowBeer/askthecaptain/pull/166) narrows the refresh with an
+exclusively created temporary override of the already-validated project/branch IDs. All strict
+password-only and no-managed-change gates remain. The temporary override can remove the role's
+stored project dependency until the next normal configuration apply; tracked configuration stays
+unchanged. State reconciliation is pending; the current state/output still hold the retired password.
+
+The `app` role remains administrative, with a new unused password held by Neon. Retirement
+invalidates the former distributed credential; it does not disable that role. Neither staging
+app uses the new administrative password. Production remains paused with its old credential,
+which must be replaced before any future resume. See the
+[validation record](../validation/runtime-activation-2026-09-26/README.md).
 
 ## Runtime-role repair preparation — historical (26 September 2026, UTC)
 

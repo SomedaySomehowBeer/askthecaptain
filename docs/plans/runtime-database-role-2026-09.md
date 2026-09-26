@@ -1,7 +1,8 @@
 # Runtime database role repair
 
 Status: repair merged in [#162](https://github.com/SomedaySomehowBeer/askthecaptain/pull/162),
-26 September 2026; restricted staging login activated, old-credential retirement in progress. Outcomes: protect shared work and private views (D6,
+26 September 2026; restricted staging login activated; old administrative password reset and proven rejected;
+infrastructure state reconciliation pending. Outcomes: protect shared work and private views (D6,
 D26), and unblock linked chat (D25). Chat is held separately on `feat/linked-chat-core`.
 
 ## Observed problem and containment
@@ -93,14 +94,20 @@ this repair. No customer content is reset, deleted, or converted.
    Terraform-managed credential state as an owner operation. The manual-only
    `.github/workflows/retire-elevated-runtime.yml` implements that authorised step for the fixed
    project and role: check identity/readiness, reset once, wait for Neon operations, prove the old
-   password is rejected and refresh only the password in state. It rejects managed infrastructure
-   changes or unrelated state drift. The `app` role remains administrative and unused; rotating its
-   password does not disable the role. Do not rerun a completed retirement just to repeat a check.
+   password is rejected and refresh only the password in state. A rejected-password baseline
+   skips the reset on resume. It rejects managed infrastructure
+   changes or unrelated state drift. The scoped refresh uses a temporary override of the validated
+   project/branch IDs to remove the project dependency during that operation; it never changes
+   tracked Terraform configuration. Cleanup removes only the file created by that run. The stored
+   role dependency may be absent until the next normal configuration apply. The `app` role remains administrative and unused; rotating its
+   password does not disable the role. Neon retains the new, unused administrative password, and
+   a successful refresh records it in state and the legacy URL output; neither is a runtime login.
+   Retirement invalidates the distributed credential, not the role’s ability to sign in. Do not rerun a completed retirement just to repeat a check.
 7. Resume the separately reviewed chat migration/API increment only after this gate passes.
 
 The repository's existing Terraform `neon_role.app` resource is retained, to avoid a destructive
 state change. Its generated URL is no longer a suitable runtime connection; future operators must
 use the SQL-created role. No `tofu apply`, credential rotation or provider support request is
 performed by implementation PR #162. The separately authorised activation and #164 retirement
-workflow do change credentials; the latter applies only a checked refresh-only state plan. If activation fails, keep the API stopped; reverting to the
+workflow (with #165 rejection-classifier and #166 scoped-refresh fixes) do change credentials; the latter applies only a checked refresh-only state plan. If activation fails, keep the API stopped; reverting to the
 administrative runtime connection is not an acceptable availability rollback.
