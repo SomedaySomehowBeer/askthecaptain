@@ -31,7 +31,7 @@ records the bounded task-detail contract and implementation, corrected to remove
 compatibility. [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) tracks scope
 cleanup: runtime retirement (#135), optional projects/reset (#136), and Work record replacement
 (#138) are implemented and deployed. Empty retired storage, the retrieval package, connector capabilities and deployment
-assets still need removal. Saved-view and linked-chat contracts are the next feature increments.
+assets still need removal. Private saved views are delivered (#153/#154); linked chat is the next feature increment.
 
 The populated-demo reliability/design follow-up is now delivered through #143/#145/#147 and
 #149/#150: checkable work, parent navigation, project Overview/Tasks/Schedule, continuous
