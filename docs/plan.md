@@ -168,7 +168,7 @@ These target semantics do not claim the old schema has already changed.
 | Tasks | Title/body, status, owner, due date, optional project, evidence and one-level checklist | Optional projects (0038, #136) and revisions with copied occurrence evidence requirements (0039, #138) shipped; the authorised legacy reset is complete, not a recurring deployment step |
 | Recurring work | Series generate ordinary tasks; no artificial project required; edits affect future occurrences | Standalone materialisation shipped in #136; rule revisions and copied occurrence evidence requirements shipped in #138 |
 | Tags | Flat organisation labels; many per task, stable identity on rename, no permissions or inherited duplication | Migration 0035 and API/web controls implemented; [tag contract](plans/workspace-task-tags-2026-09.md) records its original project restrictions, superseded by #136 standalone-task eligibility |
-| Saved views | Named, versioned private Work filters in `saved_views`; no stored task results or access grants | [Reviewed contract](plans/saved-work-views-2026-09.md), D26; implementation pending; shared views require a separate increment |
+| Saved views | Named, versioned private Work filters in `saved_views`; no stored task results or access grants | [Reviewed contract](plans/saved-work-views-2026-09.md), D26; private API/web delivered in #153/#154; shared views require a separate increment |
 | Equipment | Exclusive resources and bookings/maintenance with occupied start/end, setup/cleanup, revision and work/person links | Migration 0036 and web shipped; [contract](plans/equipment-reservations-2026-09.md); standalone task links and revision-aware project movement added by #136 |
 | Chat | Conversations, participants, messages, links, pins, stars and read positions with separate stable IDs | Planned; D25 access/retry contract before tables |
 | Evidence | Business source links and deliberately shared correspondence with source-qualified identity and provenance | Existing generic evidence references reusable but need a bounded sharing/access contract; no mailbox archive |
@@ -412,16 +412,16 @@ do not invent an unreviewed dark palette or require a Claude Design round-trip f
 Follow the [delivery plan](plans/captain-workspace-delivery-2026-09.md) and
 [next batch](plans/captain-next-batch-2026-09-25.md). The next work corrects the scope debt before
 adding more legacy-backed screens. Assistant navigation/runtime retirement, optional projects and
-Work details are delivered; remaining retired storage/code cleanup continues alongside saved
-views/chat and the Expo client. Equipment scheduling is
+Work details and private saved views are delivered; remaining retired storage/code cleanup continues
+alongside linked chat and the Expo client. Equipment scheduling is
 mandatory in the first usable workflow. Web and iOS need two-person acceptance; Android smoke
 checks start during mobile development and broader Android release follows.
 
 Implemented: web shell, filtered Work/task creation, tags, counted inventory access, equipment
 API/web, session recovery, and the assistant UI/API/runtime retirement with revised task/stock
 workflows, optional projects/Obligations removal, and revision-aware Work task/project/series
-pages (#138). Not complete: remaining retired assistant storage/connector cleanup, saved views,
-linked chat, files/DAM, native application and device acceptance.
+pages (#138), and private saved Work views (#153/#154). Not complete: remaining retired assistant
+storage/connector cleanup, linked chat, files/DAM, native application and device acceptance.
 Do not call the remaining screens implemented because mockups or bundle exports exist.
 
 The old phases 0–5 and six jobs are historical. Their completed issues document earlier work;
@@ -476,8 +476,8 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 
 ## 14. Open implementation decisions and historical authority
 
-- Saved filters: implement the [reviewed private-view contract](plans/saved-work-views-2026-09.md);
-  organisation-shared views still need their own contract.
+- Saved filters: the [reviewed private-view contract](plans/saved-work-views-2026-09.md) is implemented
+  in API/web (#153/#154); organisation-shared views still need their own contract.
 - Linked chat: bounded reads, revisions, participants/access,
   retry identity, history/read state and summaries as specified in the delivery contracts.
 - Files: provider/version identity, permissions, preview/extraction retention and explicitly shared

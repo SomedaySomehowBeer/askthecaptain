@@ -68,8 +68,8 @@ not shared views or Chat/Files delivery.
 3. **Saved Work views.** Implement the [reviewed contract](saved-work-views-2026-09.md): named,
    versioned private Work filters, with strict supported fields and bounded counts. Saving a view never grants record access. The contract defines deleted tags/projects, revoked
    membership, stale updates, default-view behaviour and migration/export/deletion handling.
-   Deliver API/RLS and web controls as separate small PRs; this contract does not claim either shipped. Shared views follow an explicit
-   sharing contract; browser-session tab restoration is not persistent saved views.
+   Delivered in #153 (API/RLS) and #154 (web), released to staging on 26 September. Shared
+   views still require an explicit sharing contract; browser-session tab restoration is separate.
 4. **Linked-chat contract, then API.** Settle the cases below before adding tables. First API
    increment establishes conversations, membership, messages and task/project links. Follow
    with shared pins, personal stars and read position using the same identities. Each migration
@@ -145,5 +145,5 @@ and #138 (below).
 The [optional-project/reset increment](optional-work-projects-2026-09.md) implements task/series
 null projects, checklist and equipment links, and a separately invoked staging legacy-data reset
 authorised by the owner. The [Work record increment](work-record-pages-2026-09.md) shipped in
-#138; release evidence is in the [operational record](../runbooks/paused.md). Saved views and
-linked-chat contracts follow it.
+#138; release evidence is in the [operational record](../runbooks/paused.md). Private saved views
+followed in #153/#154; linked chat remains the next feature increment.

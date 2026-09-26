@@ -42,7 +42,8 @@ Only the existing staging machines were updated:
 
 Images are in their respective `registry.fly.io/askthecaptain-<app>-staging` repositories,
 built and pushed from clean worktrees. Every web Docker input was compared with the final merge
-and was identical; the final difference was a browser-harness correction outside the image.
+and was identical: `7e60a1e` preceded the final reviewed head `162f41e` by only the
+browser-harness correction outside the image.
 API runtime inputs are unchanged by the web PR. No fixture data or credentials entered either image.
 
 Both staging machines were stopped with autostart off. The existing API was updated with the

@@ -123,7 +123,7 @@ hosted data, changes secrets or sends external messages. Native-device acceptanc
 - [x] Two implementation PRs merged with green CI.
 - [x] Staging migration/deployment verified and recorded; #141 updated with actual results.
 
-## Running assignments
+## Completed assignments
 
 - **Opus A:** `Captain saved views API`, background session `5b494281`, worktree
   `/tmp/captain-saved-views-api`, branch `feat/saved-views-api`.
@@ -131,15 +131,16 @@ hosted data, changes secrets or sends external messages. Native-device acceptanc
   `/tmp/captain-saved-views-web`, branch `feat/saved-views-web`.
 
 Both were observed working, and their actual assistant-message model was verified as
-`claude-opus-5-5`. Supervision uses `claude agents`, `claude logs <id>` and `claude attach <id>`.
+`claude-opus-5-5`. Initial supervision used `claude agents`, `claude logs <id>` and `claude attach <id>`.
 Initial plan-review checkpoints and final handoffs are in `/tmp/captain-saved-views/` as
 `api-status.md`, `web-status.md`, `api-handoff.md` and `web-handoff.md` when written.
 These local session details are execution evidence, not shipped functionality.
 
-Both Claude sessions are attached in Herdr's **Monitor** tab as `saved-views-api` and
+Both Claude sessions were attached in Herdr's **Monitor** tab as `saved-views-api` and
 `saved-views-web`. A local development watcher in `/tmp/captain-saved-views/monitor.py`
-records settled/blocked states and notifies the same coordinator session; it never answers
-approval dialogs. This is delegation supervision, not a Captain application process.
+recorded settled/blocked states and notified the same coordinator session without answering
+approval dialogs. It was stopped after the completed batch to prevent stale wake-ups. This was
+local delegation supervision, not a Captain application process.
 
 Backend proof: 60 database tests and 151 API tests passed against disposable Postgres with no
 skips. Final strict-query/collision corrections passed API typecheck and all 14 saved-view API
