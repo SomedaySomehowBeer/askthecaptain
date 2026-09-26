@@ -42,7 +42,7 @@ current migration list; never edit a merged migration. Register the service in t
   Preserve same-ID create retries; hidden ID conflicts never reveal someone else's data.
 - Resolve reference names in bounded batches, separately from reading the saved record. Missing
   or unavailable references never remove a filter term. Newer versions remain inapplicable.
-- Audit only view identity/version/revision. Owner exports contain only that owner's live views.
+- Audit only view identity/version/revision. Owner/admin exports contain only the exporting person's live views.
   Prove removal/reactivation, account/organisation cascades and content-free tombstones with SQL
   using the real non-bypassing runtime role.
 
@@ -79,10 +79,16 @@ For the reference-failure case left structurally open by §6, preserve its norma
   or `{ id, state: 'unavailable' }`. A failed batch marks each selected ID unavailable.
 - `references.project` is `null` for no project, otherwise `{ id, state: 'available', name,
   projectState }`, `{ id, state: 'missing' }` or `{ id, state: 'unavailable' }`.
+- Inapplicable/newer-version detail returns `references: null`; the client checks applicability
+  before reading references or parsing the filter.
 - `reason` is `null` when applicable, otherwise an explanatory string. A newer-version filter is
   untrusted/unknown to the old client and must not be cast into the version-1 shape.
 
 This specifies failure representation without changing the contract's permissions or filtering.
+Organisation-deletion counts omit private saved views rather than report the deleting owner's
+RLS-limited count as an organisation total; the cascade still deletes all rows. The existing
+owner/admin export permission stays intact, with each exporter seeing only their own live views.
+
 Agents report any mismatch in their handoff; Codex resolves it in the reviewed contract before
 merging dependent code. No new shared package is needed.
 
@@ -126,3 +132,7 @@ Both were observed working, and their actual assistant-message model was verifie
 Initial plan-review checkpoints and final handoffs are in `/tmp/captain-saved-views/` as
 `api-status.md`, `web-status.md`, `api-handoff.md` and `web-handoff.md` when written.
 These local session details are execution evidence, not shipped functionality.
+
+Both agents completed their initial plan reviews with no blocking findings. The review corrected
+the contract's outdated export-role description and clarified unsupported-version references and
+private deletion-count handling before implementation review.
