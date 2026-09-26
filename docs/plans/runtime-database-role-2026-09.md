@@ -1,7 +1,7 @@
 # Runtime database role repair
 
 Status: repair merged in [#162](https://github.com/SomedaySomehowBeer/askthecaptain/pull/162),
-26 September 2026; staging migration prepared, credential activation pending. Outcomes: protect shared work and private views (D6,
+26 September 2026; restricted staging login activated, old-credential retirement in progress. Outcomes: protect shared work and private views (D6,
 D26), and unblock linked chat (D25). Chat is held separately on `feat/linked-chat-core`.
 
 ## Observed problem and containment
@@ -23,8 +23,8 @@ other administrative memberships, so it is not an adequate repair.
 
 The existing staging API machine `80e39ea6416e18` was stopped with autostart disabled for
 containment. Its guarded image and non-login role migration were subsequently prepared as
-recorded in [the runbook](../runbooks/paused.md); credentials remain unchanged and HTTP remains stopped. Web remains on #159; authenticated workspace operations are
-unavailable while the API is contained. No production or embedding machine was changed.
+recorded in [the runbook](../runbooks/paused.md). After explicit owner authorisation, staging
+activated the restricted login and resumed HTTP. Web remains on #159. No production or embedding machine was changed.
 
 ## Bounded implementation
 
@@ -101,5 +101,6 @@ this repair. No customer content is reset, deleted, or converted.
 The repository's existing Terraform `neon_role.app` resource is retained, to avoid a destructive
 state change. Its generated URL is no longer a suitable runtime connection; future operators must
 use the SQL-created role. No `tofu apply`, credential rotation or provider support request is
-performed by this implementation PR. If activation fails, keep the API stopped; reverting to the
+performed by implementation PR #162. The separately authorised activation and #164 retirement
+workflow do change credentials; the latter applies only a checked refresh-only state plan. If activation fails, keep the API stopped; reverting to the
 administrative runtime connection is not an acceptable availability rollback.

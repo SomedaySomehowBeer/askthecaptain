@@ -23,8 +23,9 @@ For recovery outside the release step, apply the database migrations and run
 `MIGRATION_DATABASE_URL=… pnpm --filter @captain/engine queue:install` using the migration-owner
 connection. The installer safely reruns pg-boss **12.32.0** migrations, creates missing queues and
 reapplies grants without replacing existing jobs or schedules. It installs metadata in
-`workflow_queue`, workflow queues and a failure queue, and grants the non-bypassing `app` role
-access. The running API uses `DATABASE_URL` with that app role, never the owner connection.
+`workflow_queue`, workflow queues and a failure queue, and grants queue access to `captain_runtime`
+and legacy `app`. The running API uses `DATABASE_URL` with SQL-created `captain_runtime`, never
+the owner connection or administrative `app` login.
 Production deployment and the manual fallback remain the operator's actions.
 
 The worker refuses schema creation/migration at startup. If startup fails, the API stays available
