@@ -1,0 +1,49 @@
+name: retire-elevated-runtime
+# One-off, owner-authorised operation (docs/plans/runtime-database-role-2026-09.md, step 6): invalidate the
+# password of the Neon-made administrative `app` role once the staging API runs as SQL-created
+# `captain_runtime`, then reconcile the Terraform state of `neon_role.app` with a reviewed, refresh-only plan.
+# Manual only. It never provisions: the only Neon write is one reset_password call, and the only state write
+# applies a refresh-only plan that has been checked to change nothing but that role's password.
+# See .github/scripts/retire-elevated-runtime.sh for the gates, and do not rerun a completed run.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type exactly: reset app password on royal-glitter-10514027'
+        required: true
+        type: string
+permissions:
+  contents: read
+# Shares the tofu workflow's group: nothing else reads or writes the state while this runs.
+concurrency:
+  group: tofu
+  cancel-in-progress: false
+jobs:
+  retire:
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'reset app password on royal-glitter-10514027'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults: { run: { working-directory: infra/tofu } }
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_cloudflare_zone_id: ${{ secrets.TF_VAR_cloudflare_zone_id }}
+      BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+      PG_BIN: /usr/lib/postgresql/18/bin
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate retirement guards
+        run: |
+          bash -n ../../.github/scripts/retire-elevated-runtime.sh ../../.github/scripts/retire-elevated-runtime-lib.sh ../../.github/scripts/retire-elevated-runtime.test.sh
+          bash ../../.github/scripts/retire-elevated-runtime.test.sh
+      - name: Postgres 18 client tools
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-18
+      - uses: opentofu/setup-opentofu@v1
+        with: { tofu_version: 1.10.5, tofu_wrapper: false }
+      - run: tofu init -input=false -backend-config="access_key=${{ secrets.TIGRIS_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.TIGRIS_SECRET_KEY }}"
+      - name: Retire the elevated runtime credential and reconcile its state
+        run: bash ../../.github/scripts/retire-elevated-runtime.sh

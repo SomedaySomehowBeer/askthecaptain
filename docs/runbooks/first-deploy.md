@@ -13,7 +13,8 @@ infrastructure applies, secrets and DNS are the owner's.
 3. **Infrastructure.** Merge a change under `infra/tofu/` so the `captain` database exists on the
    one Neon branch. Read the sensitive outputs locally with `tofu output -raw <name>`.
 4. **Fly secrets** on `askthecaptain-api-staging`, the live API (D17):
-   `DATABASE_URL` (`neon_app_database_url`), `MIGRATION_DATABASE_URL` (`neon_owner_database_url`),
+   `DATABASE_URL` (SQL-created `captain_runtime`, following the [activation procedure](../plans/runtime-database-role-2026-09.md)),
+   `MIGRATION_DATABASE_URL` (`neon_owner_database_url`),
    `APP_URL=https://app.askthecaptain.app`, `API_URL=https://api-staging.askthecaptain.app`,
    `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `MASTER_KEY` (32 random bytes, base64:
    `openssl rand -base64 32`), one per environment, never reused. The web apps need no secrets; their environment is
