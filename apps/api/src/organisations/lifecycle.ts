@@ -14,8 +14,10 @@ const exportOnly: Record<string, string> = { saved_views: 'deleted_at is null' }
  *  rows, which is not the organisation's total, and no elevated query counts other members' private views. The
  *  foreign-key cascade still removes every member's views and tombstones with the organisation. Chat is the same
  *  (linked-chat contract §10): row security shows only the deleting person's own conversations, so a count would
- *  mislead; the cascade removes every conversation, message, link, participant and chat-audit row regardless. */
-const uncounted = new Set(['saved_views', 'conversations', 'conversation_participants', 'conversation_links', 'messages', 'chat_audit_events']);
+ *  mislead; the cascade removes every conversation, message, link, participant and chat-audit row regardless. Pins,
+ *  stars and read positions (PR C) are the same, and stars and reads are personal besides. */
+const uncounted = new Set(['saved_views', 'conversations', 'conversation_participants', 'conversation_links', 'messages', 'chat_audit_events',
+	'message_pins', 'conversation_stars', 'conversation_reads']);
 
 export type TenantTable = { name: string; columns: string[] };
 export type Revoker = (actor: Actor, organisationId: string) => Promise<void>;

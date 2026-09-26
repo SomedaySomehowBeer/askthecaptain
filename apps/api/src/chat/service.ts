@@ -5,8 +5,9 @@ import { HttpError, badRequest, forbidden, notFound } from '../errors.ts';
 import { canManage, roleOf, type Actor } from '../tenant.ts';
 import { lockMemberships, type LockedMembership, type MembershipLock } from './locks.ts';
 
-/** Linked chat, PR B (adopted contract `docs/plans/linked-chat-2026-09.md`, D25): private conversations of explicitly
+/** Linked chat (adopted contract `docs/plans/linked-chat-2026-09.md`, D25). PR B: private conversations of explicitly
  *  named, active members, linked to tasks and projects, holding plain-text messages with client retry identities.
+ *  PR C (§13): author-only edits, shared pins, personal stars and read positions, and unread counts.
  *
  *  Row security and the migration's transition triggers are the authority for every read and write (contract §9);
  *  this service repeats the checks only to answer with useful errors, follows the global lock order (§6), and audits
@@ -14,6 +15,9 @@ import { lockMemberships, type LockedMembership, type MembershipLock } from './l
 
 export const participantLimit = 50;
 export const linkLimit = 10;
+export const pinLimit = 50;
+/** Unread counts stop here: the API returns at most 51 and the web shows "50+" (contract §13, D5). */
+export const unreadCap = 51;
 const uuid = z.string().uuid().transform(value => value.toLowerCase());
 const revision = z.number().int().min(1).max(2_147_483_646);
 const queryRevision = z.coerce.number().int().min(1).max(2_147_483_646);
@@ -38,9 +42,19 @@ export const messagesQuery = z.object({ latest: upTo(100).optional(), after: cou
  .refine(q => [q.latest, q.after, q.before].filter(v => v !== undefined).length === 1, 'Supply exactly one of latest, after or before.')
  .refine(q => q.latest === undefined || q.limit === undefined, 'latest is its own limit.');
 export const changesQuery = z.object({ after: counter.default(0), limit: upTo(100).default(100) }).strict();
+export const editMessage = z.object({ expectedRevision: revision, body: z.string() }).strict();
+export const pinMessage = z.object({ messageId: uuid }).strict();
+export const readPosition = z.object({ seq: z.number().int().min(0).max(2_147_483_647) }).strict();
 
 export type LinkKind = 'task' | 'project';
-export type ConversationSummary = { id: string; title: string; revision: number; lastSeq: number; lastChange: number; lastMessageAt: Date | null; createdAt: Date };
+/** `starred`, `lastReadSeq` and `unread` are the caller's own (§13): unread counts live messages by others above the
+ *  read position, capped at `unreadCap`. */
+export type ConversationSummary = { id: string; title: string; revision: number; lastSeq: number; lastChange: number; lastMessageAt: Date | null; createdAt: Date;
+ starred: boolean; lastReadSeq: number; unread: number };
+/** A pin references its message and never copies the text. `unpinnedAt` is null while it is live. */
+export type Pin = { id: string; conversationId: string; messageId: string; changeSeq: number; pinnedBy: string | null; pinnedAt: Date;
+ unpinnedBy: string | null; unpinnedAt: Date | null };
+export type Change = { changeSeq: number; kind: 'message'; message: Message } | { changeSeq: number; kind: 'pin'; pin: Pin };
 export type Participant = { userId: string; name: string; addedAt: Date };
 export type Link = { id: string; kind: LinkKind; targetId: string; title: string; state: string; createdAt: Date };
 export type ConversationDetail = ConversationSummary & { createdBy: string | null; participants: Participant[]; links: Link[] };
@@ -59,6 +73,8 @@ const staleMessage = () => conflict('stale_revision', 'This message changed sinc
 const participantUnavailable = () => badRequest('participant_unavailable', 'Everyone added must be an active member of this organisation. Nobody was added.');
 const linkTargetUnavailable = () => badRequest('link_target_unavailable', 'That task or project is not in this organisation.');
 const invalidBody = () => badRequest('invalid_body', 'A message is 1 to 4,000 characters of plain text.');
+const alreadyPinned = () => conflict('message_already_pinned', 'That message is already pinned. Reload the pins to see it.');
+const deletedMessage = () => conflict('message_deleted', 'That message was deleted, so it cannot be pinned.');
 
 /** Unique violations map to a 409 only by exact constraint name (contract §9.4); anything else stays an error. */
 const messageIdConstraints = new Set(['messages_pkey', 'messages_organisation_id_id_key']);
@@ -91,6 +107,7 @@ class MessageIdTaken extends Error {}
 
 const summaryColumns = 'c.id, c.title, c.revision, c.last_seq, c.last_change, c.last_message_at, c.created_at';
 const messageColumns = 'id, conversation_id, seq, change_seq, author_id, body, created_at, edited_at, deleted_at, deleted_by, revision';
+const pinColumns = 'id, conversation_id, message_id, change_seq, pinned_by, pinned_at, unpinned_by, unpinned_at';
 
 /** Trimmed at the ends, 1–4,000 code points and at most 16 KB of UTF-8 (contract §5). */
 export function normaliseBody(raw: string): string {
@@ -144,6 +161,7 @@ export class ChatService {
   catch (error) {
    const name = uniqueConstraint(error);
    if (name === 'conversation_links_target') throw conflict('link_exists', 'That task or project is already linked to this conversation.');
+   if (name === 'message_pins_live_message') throw alreadyPinned();
    if (name && conversationIdConstraints.has(name)) throw conversationIdUnavailable();
    if (name && messageIdConstraints.has(name)) throw messageIdUnavailable();
    // Any other constraint, named or not, stays a 500 (contract §9.4), without its content reaching the logs.
@@ -181,9 +199,34 @@ export class ChatService {
   return row;
  }
 
- private audit(tx: TransactionSql, organisationId: string, actor: Actor, conversationId: string, action: string, subject: { kind: string; id: string }, detail: Record<string, unknown>) {
+ /** One chat-audit row per write (§10). Personal rows (stars, reads) are visible only to their actor. */
+ private audit(tx: TransactionSql, organisationId: string, actor: Actor, conversationId: string, action: string, subject: { kind: string; id: string }, detail: Record<string, unknown>, personal = false) {
   return tx`insert into chat_audit_events (organisation_id, conversation_id, actor_id, action, subject_kind, subject_id, personal, request_id, detail)
-   values (${organisationId}, ${conversationId}, ${actor.userId}, ${action}, ${subject.kind}, ${subject.id}, false, ${actor.requestId}, ${tx.json(detail as never)})`;
+   values (${organisationId}, ${conversationId}, ${actor.userId}, ${action}, ${subject.kind}, ${subject.id}, ${personal}, ${actor.requestId}, ${tx.json(detail as never)})`;
+ }
+
+ /** Moves `last_change` by one for a message or pin change (never with `revision`, §9.4) and returns the new number. */
+ private async nextChange(tx: TransactionSql, conversationId: string): Promise<number> {
+  const [row] = await tx<{ lastChange: number }[]>`update conversations set last_change = last_change + 1 where id = ${conversationId} returning last_change`;
+  if (!row) throw notFound();
+  return row.lastChange;
+ }
+
+ /** The caller's own view of a conversation (§13), for any query over `conversations c`: the join to their active
+  *  participant row (`p`) and optional private read row (`r`), and the columns built from them. The read position is
+  *  `max(read_start_seq, last_read_seq or 0)`: a missing read row uses the fixed participation baseline, never the
+  *  conversation's moving `last_seq`. Unread counts stop at `unreadCap`. */
+ private personal(tx: TransactionSql, me: string) {
+  const position = () => tx`greatest(p.read_start_seq, coalesce(r.last_read_seq, 0))`;
+  return {
+   from: tx`conversations c
+    join conversation_participants p on p.conversation_id = c.id and p.user_id = ${me}::uuid and p.state = 'active'
+    left join conversation_reads r on r.conversation_id = c.id and r.user_id = ${me}::uuid`,
+   columns: tx`exists (select 1 from conversation_stars s where s.conversation_id = c.id and s.user_id = ${me}::uuid) as starred,
+    ${position()} as last_read_seq,
+    (select count(*)::int from (select 1 from messages m where m.conversation_id = c.id and m.seq > ${position()}
+      and m.deleted_at is null and m.author_id is distinct from ${me}::uuid limit ${unreadCap}) counted) as unread`,
+  };
  }
 
  private async bumpRevision(tx: TransactionSql, conversationId: string, rename?: string): Promise<number> {
@@ -202,9 +245,10 @@ export class ChatService {
   if (!row) throw linkTargetUnavailable();
  }
 
- private async detailIn(tx: TransactionSql, organisationId: string, conversationId: string): Promise<ConversationDetail> {
-  const [conversation] = await tx<(ConversationSummary & { createdBy: string | null })[]>`select ${tx.unsafe(summaryColumns)}, c.created_by
-   from conversations c where c.organisation_id = ${organisationId} and c.id = ${conversationId}`;
+ private async detailIn(tx: TransactionSql, organisationId: string, conversationId: string, me: string): Promise<ConversationDetail> {
+  const own = this.personal(tx, me);
+  const [conversation] = await tx<(ConversationSummary & { createdBy: string | null })[]>`select ${tx.unsafe(summaryColumns)}, c.created_by, ${own.columns}
+   from ${own.from} where c.organisation_id = ${organisationId} and c.id = ${conversationId}`;
   if (!conversation) throw notFound();
   const participants = await tx<Participant[]>`select p.user_id, u.name, p.added_at from conversation_participants p join users u on u.id = p.user_id
    where p.conversation_id = ${conversationId} and p.state = 'active' order by lower(u.name), p.user_id`;
@@ -223,11 +267,11 @@ export class ChatService {
   const query = listQuery.parse(raw);
   const after = query.cursor ? decodeCursor(query.cursor) : null;
   return this.snapshot(actor, organisationId, async tx => {
-   const rows = await tx<(ConversationSummary & { activityKey: string })[]>`select ${tx.unsafe(summaryColumns)},
+   const own = this.personal(tx, actor.userId);
+   const rows = await tx<(ConversationSummary & { activityKey: string })[]>`select ${tx.unsafe(summaryColumns)}, ${own.columns},
      to_char(coalesce(c.last_message_at, c.created_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as activity_key
-    from conversations c
+    from ${own.from}
     where c.organisation_id = ${organisationId}
-     and exists (select 1 from conversation_participants p where p.conversation_id = c.id and p.user_id = ${actor.userId} and p.state = 'active')
      ${after ? tx`and (coalesce(c.last_message_at, c.created_at), c.id) < (${after[0]}::timestamptz, ${after[1]}::uuid)` : tx``}
     order by coalesce(c.last_message_at, c.created_at) desc, c.id desc limit ${query.limit + 1}`;
    const page = rows.slice(0, query.limit);
@@ -237,7 +281,7 @@ export class ChatService {
  }
 
  get(actor: Actor, organisationId: string, conversationId: string): Promise<ConversationDetail> {
-  return this.snapshot(actor, organisationId, tx => this.detailIn(tx, organisationId, conversationId));
+  return this.snapshot(actor, organisationId, tx => this.detailIn(tx, organisationId, conversationId, actor.userId));
  }
 
  /** Create through the bootstrap (contract §6, §9.2): lock the caller and every named participant first; only a
@@ -255,7 +299,7 @@ export class ChatService {
    if (others.length + 1 > participantLimit) throw conflict('participant_limit', `A conversation can have up to ${participantLimit} people.`);
    const { people } = await this.lockPeople(tx, organisationId, actor, new Map(others.map(id => [id, 'share' as const])));
    const [bootstrap] = await tx<{ result: string }[]>`select chat_create_conversation(${input.id}::uuid, ${input.title}::text, ${fingerprint}::bytea) as result`;
-   if (bootstrap?.result === 'matched') return { conversation: await this.detailIn(tx, organisationId, input.id), created: false };
+   if (bootstrap?.result === 'matched') return { conversation: await this.detailIn(tx, organisationId, input.id, actor.userId), created: false };
    if (bootstrap?.result !== 'created') throw conversationIdUnavailable();
    if (others.some(id => people.get(id)?.status !== 'active')) throw participantUnavailable();
    for (const link of links) await this.requireTarget(tx, organisationId, link);
@@ -269,7 +313,7 @@ export class ChatService {
      values (${organisationId}, ${input.id}, ${link.kind}, ${link.kind === 'task' ? link.targetId : null}, ${link.kind === 'project' ? link.targetId : null}, ${actor.userId}) returning id`;
     await this.audit(tx, organisationId, actor, input.id, 'chat.link_added', { kind: 'link', id: row!.id }, { conversationId: input.id, linkId: row!.id, targetKind: link.kind, targetId: link.targetId, revision: current });
    }
-   return { conversation: await this.detailIn(tx, organisationId, input.id), created: true };
+   return { conversation: await this.detailIn(tx, organisationId, input.id, actor.userId), created: true };
   });
  }
 
@@ -283,7 +327,7 @@ export class ChatService {
     const next = await this.bumpRevision(tx, conversationId, input.title);
     await this.audit(tx, organisationId, actor, conversationId, 'chat.conversation_updated', { kind: 'conversation', id: conversationId }, { conversationId, revision: next });
    }
-   return this.detailIn(tx, organisationId, conversationId);
+   return this.detailIn(tx, organisationId, conversationId, actor.userId);
   });
  }
 
@@ -303,7 +347,7 @@ export class ChatService {
    const known = new Map(existing.map(row => [row.userId, row.state]));
    const fresh = targets.filter(id => !known.has(id));
    const returning = targets.filter(id => known.has(id) && known.get(id) !== 'active');
-   if (fresh.length + returning.length === 0) return this.detailIn(tx, organisationId, conversationId);
+   if (fresh.length + returning.length === 0) return this.detailIn(tx, organisationId, conversationId, actor.userId);
    const [{ active } = { active: 0 }] = await tx<{ active: number }[]>`select count(*)::int as active from conversation_participants where conversation_id = ${conversationId} and state = 'active'`;
    if (active + fresh.length + returning.length > participantLimit) throw conflict('participant_limit', `A conversation can have up to ${participantLimit} people.`);
    for (const userId of fresh) await tx`insert into conversation_participants (organisation_id, conversation_id, user_id, state, added_by)
@@ -313,7 +357,7 @@ export class ChatService {
    const next = await this.bumpRevision(tx, conversationId);
    const added = [...fresh, ...returning].sort();
    await this.audit(tx, organisationId, actor, conversationId, 'chat.participant_added', { kind: 'conversation', id: conversationId }, { conversationId, userIds: added, revision: next });
-   return this.detailIn(tx, organisationId, conversationId);
+   return this.detailIn(tx, organisationId, conversationId, actor.userId);
   });
  }
 
@@ -360,7 +404,7 @@ export class ChatService {
     values (${organisationId}, ${conversationId}, ${input.kind}, ${input.kind === 'task' ? input.targetId : null}, ${input.kind === 'project' ? input.targetId : null}, ${actor.userId}) returning id`;
    const next = await this.bumpRevision(tx, conversationId);
    await this.audit(tx, organisationId, actor, conversationId, 'chat.link_added', { kind: 'link', id: row!.id }, { conversationId, linkId: row!.id, targetKind: input.kind, targetId: input.targetId, revision: next });
-   return this.detailIn(tx, organisationId, conversationId);
+   return this.detailIn(tx, organisationId, conversationId, actor.userId);
   });
  }
 
@@ -375,7 +419,7 @@ export class ChatService {
    if (!row) throw notFound();
    const next = await this.bumpRevision(tx, conversationId);
    await this.audit(tx, organisationId, actor, conversationId, 'chat.link_removed', { kind: 'link', id: row.id }, { conversationId, linkId: row.id, targetKind: row.targetKind, targetId: row.targetId, revision: next });
-   return this.detailIn(tx, organisationId, conversationId);
+   return this.detailIn(tx, organisationId, conversationId, actor.userId);
   });
  }
 
@@ -425,23 +469,154 @@ export class ChatService {
   });
  }
 
- /** Tombstone: the author, or an owner or admin who is a participant. The body and hash go; identity and order stay. */
+ /** Tombstone: the author, or an owner or admin who is a participant. The body and hash go; identity and order stay.
+  *  A live pin on the message is unpinned in the same transaction with the next change number, so the unpin always
+  *  follows the tombstone in the change feed (§5, §8). One request, one audit row, naming the unpinned pin (D2).
+  *  Lock order (§6): membership, conversation, message, pin. */
  deleteMessage(actor: Actor, organisationId: string, conversationId: string, messageId: string, raw: unknown): Promise<Message> {
   const { expectedRevision } = revisionQuery.parse(raw);
   const me = actor.userId.toLowerCase();
   return this.write(actor, organisationId, async tx => {
    const { me: membership } = await this.lockPeople(tx, organisationId, actor);
    await this.lockConversation(tx, organisationId, conversationId);
-   const [message] = await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)} from messages where id = ${messageId} and conversation_id = ${conversationId} for update`;
+   const [message] = await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)} from messages
+    where organisation_id = ${organisationId} and id = ${messageId} and conversation_id = ${conversationId} for update`;
    if (!message || message.deletedAt) throw notFound();
    if (message.revision !== expectedRevision) throw staleMessage();
    if (message.authorId !== me && !canManage(membership.role)) throw forbidden('only the author, or an owner or admin in this conversation, can delete a message');
-   const [next] = await tx<{ lastChange: number }[]>`update conversations set last_change = last_change + 1 where id = ${conversationId} returning last_change`;
+   const tombstoned = await this.nextChange(tx, conversationId);
    const [tombstone] = await tx<MessageRow[]>`update messages set body = null, sent_body_sha256 = null, deleted_at = now(), deleted_by = ${actor.userId},
-     revision = revision + 1, change_seq = ${next!.lastChange}
+     revision = revision + 1, change_seq = ${tombstoned}
     where id = ${messageId} returning ${tx.unsafe(messageColumns)}`;
-   await this.audit(tx, organisationId, actor, conversationId, 'chat.message_deleted', { kind: 'message', id: messageId }, { conversationId, messageId, seq: tombstone!.seq, revision: tombstone!.revision });
+   const [pin] = await tx<{ id: string }[]>`select id from message_pins
+    where organisation_id = ${organisationId} and conversation_id = ${conversationId} and message_id = ${messageId} and unpinned_at is null for update`;
+   if (pin) {
+    const unpinned = await this.nextChange(tx, conversationId);
+    await tx`update message_pins set unpinned_at = now(), unpinned_by = ${actor.userId}, change_seq = ${unpinned} where id = ${pin.id}`;
+   }
+   await this.audit(tx, organisationId, actor, conversationId, 'chat.message_deleted', { kind: 'message', id: messageId },
+    { conversationId, messageId, seq: tombstone!.seq, revision: tombstone!.revision, ...(pin ? { unpinnedPinId: pin.id } : {}) });
    return publicMessage(tombstone!);
+  });
+ }
+
+ /** Author-only edit (§5): a new body, `edited_at`, the next revision and change number. The send hash is kept, so a
+  *  retried send still returns this (edited) message. Moderators cannot edit; a tombstone cannot be edited. The same
+  *  body at the current revision writes nothing, audit included (§13). */
+ editMessage(actor: Actor, organisationId: string, conversationId: string, messageId: string, raw: unknown): Promise<Message> {
+  const input = editMessage.parse(raw);
+  const body = normaliseBody(input.body);
+  const me = actor.userId.toLowerCase();
+  return this.write(actor, organisationId, async tx => {
+   await this.lockPeople(tx, organisationId, actor);
+   await this.lockConversation(tx, organisationId, conversationId);
+   const [message] = await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)} from messages
+    where organisation_id = ${organisationId} and id = ${messageId} and conversation_id = ${conversationId} for update`;
+   if (!message || message.deletedAt) throw notFound();
+   if (message.authorId !== me) throw forbidden('only the author can edit a message');
+   if (message.revision !== input.expectedRevision) throw staleMessage();
+   if (message.body === body) return publicMessage(message);
+   const changed = await this.nextChange(tx, conversationId);
+   const [edited] = await tx<MessageRow[]>`update messages set body = ${body}, edited_at = now(), revision = revision + 1, change_seq = ${changed}
+    where id = ${messageId} returning ${tx.unsafe(messageColumns)}`;
+   await this.audit(tx, organisationId, actor, conversationId, 'chat.message_edited', { kind: 'message', id: messageId },
+    { conversationId, messageId, seq: edited!.seq, revision: edited!.revision });
+   return publicMessage(edited!);
+  });
+ }
+
+ /** Every live pin, in pin order, from one snapshot (§13). */
+ pins(actor: Actor, organisationId: string, conversationId: string): Promise<{ conversation: { id: string; revision: number; lastChange: number }; pins: Pin[] }> {
+  return this.snapshot(actor, organisationId, async tx => {
+   const [conversation] = await tx<{ id: string; revision: number; lastChange: number }[]>`select id, revision, last_change
+    from conversations where organisation_id = ${organisationId} and id = ${conversationId}`;
+   if (!conversation) throw notFound();
+   const pins = await tx<Pin[]>`select ${tx.unsafe(pinColumns)} from message_pins
+    where organisation_id = ${organisationId} and conversation_id = ${conversationId} and unpinned_at is null order by change_seq`;
+   return { conversation, pins };
+  });
+ }
+
+ /** Any participant pins a live message, up to `pinLimit` live pins (checked under the conversation lock). Pins have
+  *  server ids: a retried or duplicate pin is `409 message_already_pinned` (D4), and a tombstone `409 message_deleted`
+  *  (D3). Lock order (§6): membership, conversation, message, pin. */
+ pin(actor: Actor, organisationId: string, conversationId: string, raw: unknown): Promise<Pin> {
+  const { messageId } = pinMessage.parse(raw);
+  return this.write(actor, organisationId, async tx => {
+   await this.lockPeople(tx, organisationId, actor);
+   await this.lockConversation(tx, organisationId, conversationId);
+   const [message] = await tx<{ deletedAt: Date | null }[]>`select deleted_at from messages
+    where organisation_id = ${organisationId} and id = ${messageId} and conversation_id = ${conversationId} for share`;
+   if (!message) throw notFound();
+   if (message.deletedAt) throw deletedMessage();
+   const [live] = await tx`select 1 from message_pins where conversation_id = ${conversationId} and message_id = ${messageId} and unpinned_at is null`;
+   if (live) throw alreadyPinned();
+   const [{ pinned } = { pinned: 0 }] = await tx<{ pinned: number }[]>`select count(*)::int as pinned from message_pins where conversation_id = ${conversationId} and unpinned_at is null`;
+   if (pinned >= pinLimit) throw conflict('pin_limit', `A conversation can have up to ${pinLimit} pinned messages.`);
+   const changeSeq = await this.nextChange(tx, conversationId);
+   const [pin] = await tx<Pin[]>`insert into message_pins (organisation_id, conversation_id, message_id, pinned_by, change_seq)
+    values (${organisationId}, ${conversationId}, ${messageId}, ${actor.userId}, ${changeSeq}) returning ${tx.unsafe(pinColumns)}`;
+   await this.audit(tx, organisationId, actor, conversationId, 'chat.pin_added', { kind: 'pin', id: pin!.id }, { conversationId, pinId: pin!.id, messageId, changeSeq });
+   return pin!;
+  });
+ }
+
+ /** Any participant unpins a live pin, with a fresh change number. */
+ unpin(actor: Actor, organisationId: string, conversationId: string, pinId: string): Promise<Pin> {
+  return this.write(actor, organisationId, async tx => {
+   await this.lockPeople(tx, organisationId, actor);
+   await this.lockConversation(tx, organisationId, conversationId);
+   const [live] = await tx<{ messageId: string }[]>`select message_id from message_pins
+    where organisation_id = ${organisationId} and id = ${pinId} and conversation_id = ${conversationId} and unpinned_at is null for update`;
+   if (!live) throw notFound();
+   const changeSeq = await this.nextChange(tx, conversationId);
+   const [pin] = await tx<Pin[]>`update message_pins set unpinned_at = now(), unpinned_by = ${actor.userId}, change_seq = ${changeSeq}
+    where id = ${pinId} returning ${tx.unsafe(pinColumns)}`;
+   await this.audit(tx, organisationId, actor, conversationId, 'chat.pin_removed', { kind: 'pin', id: pinId }, { conversationId, pinId, messageId: live.messageId, changeSeq });
+   return pin!;
+  });
+ }
+
+ /** A personal, idempotent star (§13). Only a change writes, and its audit row is personal; a no-op writes nothing (D1).
+  *  It follows the ordinary write order (membership, conversation) and moves no counter. */
+ setStar(actor: Actor, organisationId: string, conversationId: string, starred: boolean): Promise<{ starred: boolean }> {
+  return this.write(actor, organisationId, async tx => {
+   await this.lockPeople(tx, organisationId, actor);
+   await this.lockConversation(tx, organisationId, conversationId);
+   const changed = starred
+    ? await tx`insert into conversation_stars (organisation_id, conversation_id, user_id) values (${organisationId}, ${conversationId}, ${actor.userId})
+      on conflict do nothing returning user_id`
+    : await tx`delete from conversation_stars where conversation_id = ${conversationId} and user_id = ${actor.userId} returning user_id`;
+   if (changed.length) await this.audit(tx, organisationId, actor, conversationId, starred ? 'chat.star_set' : 'chat.star_cleared',
+    { kind: 'star', id: conversationId }, { conversationId }, true);
+   return { starred };
+  });
+ }
+
+ /** The caller's read position (§13): stores `max(position, min(seq, last_seq))` only when that moves it forward, where
+  *  the position is `max(read_start_seq, last_read_seq or 0)`. Only an advance writes, with a personal audit row (D1).
+  *  Returns the position and the capped unread count at it. */
+ markRead(actor: Actor, organisationId: string, conversationId: string, raw: unknown): Promise<{ lastReadSeq: number; unread: number }> {
+  const { seq } = readPosition.parse(raw);
+  return this.write(actor, organisationId, async tx => {
+   await this.lockPeople(tx, organisationId, actor);
+   const conversation = await this.lockConversation(tx, organisationId, conversationId);
+   const [row] = await tx<{ readStartSeq: number; lastReadSeq: number | null }[]>`select p.read_start_seq, r.last_read_seq from conversation_participants p
+    left join conversation_reads r on r.conversation_id = p.conversation_id and r.user_id = p.user_id
+    where p.conversation_id = ${conversationId} and p.user_id = ${actor.userId} and p.state = 'active'`;
+   if (!row) throw notFound();
+   const current = Math.max(row.readStartSeq, row.lastReadSeq ?? 0);
+   const target = Math.min(seq, conversation.lastSeq);
+   let position = current;
+   if (target > current) {
+    await tx`insert into conversation_reads (organisation_id, conversation_id, user_id, last_read_seq) values (${organisationId}, ${conversationId}, ${actor.userId}, ${target})
+     on conflict (conversation_id, user_id) do update set last_read_seq = excluded.last_read_seq`;
+    await this.audit(tx, organisationId, actor, conversationId, 'chat.read_advanced', { kind: 'read', id: conversationId }, { conversationId, lastReadSeq: target }, true);
+    position = target;
+   }
+   const [{ unread } = { unread: 0 }] = await tx<{ unread: number }[]>`select count(*)::int as unread from (select 1 from messages
+    where conversation_id = ${conversationId} and seq > ${position} and deleted_at is null and author_id is distinct from ${actor.userId}::uuid limit ${unreadCap}) counted`;
+   return { lastReadSeq: position, unread };
   });
  }
 
@@ -470,22 +645,30 @@ export class ChatService {
   });
  }
 
- /** Changes after a cursor, in `change_seq` order, bounded by the snapshot's high-water mark (contract §8). Each row
-  *  appears at its latest change; clients upsert by id. `next` never passes an undelivered change. */
+ /** Changes after a cursor, in `change_seq` order, bounded by the snapshot's high-water mark (contract §8). Messages
+  *  and pins share the conversation's change numbers, so both are fetched `limit + 1` deep in the same window and
+  *  merged: the first `limit + 1` of the merge are exactly the first of the combined stream. Each row appears at its
+  *  latest change; clients upsert by id. `next` never passes an undelivered change. */
  changes(actor: Actor, organisationId: string, conversationId: string, raw: unknown): Promise<{ conversation: { id: string; revision: number; lastSeq: number; highWater: number };
-  changes: { changeSeq: number; kind: 'message'; message: Message }[]; next: number; complete: boolean }> {
+  changes: Change[]; next: number; complete: boolean }> {
   const query = changesQuery.parse(raw);
   return this.snapshot(actor, organisationId, async tx => {
    const [conversation] = await tx<{ id: string; revision: number; lastSeq: number; lastChange: number }[]>`select id, revision, last_seq, last_change
     from conversations where organisation_id = ${organisationId} and id = ${conversationId}`;
    if (!conversation) throw notFound();
-   const found = await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)} from messages where conversation_id = ${conversationId}
+   const messages = await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)} from messages where conversation_id = ${conversationId}
     and change_seq > ${query.after} and change_seq <= ${conversation.lastChange} order by change_seq limit ${query.limit + 1}`;
+   const pins = await tx<Pin[]>`select ${tx.unsafe(pinColumns)} from message_pins where conversation_id = ${conversationId}
+    and change_seq > ${query.after} and change_seq <= ${conversation.lastChange} order by change_seq limit ${query.limit + 1}`;
+   const found: Change[] = [
+    ...messages.map(row => ({ changeSeq: row.changeSeq, kind: 'message' as const, message: publicMessage(row) })),
+    ...pins.map(pin => ({ changeSeq: pin.changeSeq, kind: 'pin' as const, pin })),
+   ].sort((a, b) => a.changeSeq - b.changeSeq).slice(0, query.limit + 1);
    const more = found.length > query.limit;
    const page = found.slice(0, query.limit);
    return {
     conversation: { id: conversation.id, revision: conversation.revision, lastSeq: conversation.lastSeq, highWater: conversation.lastChange },
-    changes: page.map(row => ({ changeSeq: row.changeSeq, kind: 'message' as const, message: publicMessage(row) })),
+    changes: page,
     next: more ? page.at(-1)!.changeSeq : conversation.lastChange,
     complete: !more,
    };
@@ -498,9 +681,9 @@ export class ChatService {
   return this.snapshot(actor, organisationId, async tx => {
    await this.requireTarget(tx, organisationId, { kind, targetId }).catch(error => { if (error instanceof HttpError) throw notFound(); throw error; });
    const column = kind === 'task' ? tx`l.task_id` : tx`l.project_id`;
-   const conversations = await tx<ConversationSummary[]>`select ${tx.unsafe(summaryColumns)} from conversations c
+   const own = this.personal(tx, actor.userId);
+   const conversations = await tx<ConversationSummary[]>`select ${tx.unsafe(summaryColumns)}, ${own.columns} from ${own.from}
     where c.organisation_id = ${organisationId}
-     and exists (select 1 from conversation_participants p where p.conversation_id = c.id and p.user_id = ${actor.userId} and p.state = 'active')
      and exists (select 1 from conversation_links l where l.conversation_id = c.id and ${column} = ${targetId})
     order by coalesce(c.last_message_at, c.created_at) desc, c.id desc limit 20`;
    return { conversations };

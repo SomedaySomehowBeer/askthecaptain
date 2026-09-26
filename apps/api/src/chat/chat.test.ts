@@ -20,11 +20,15 @@ let db: Harness, app: ReturnType<typeof createApp>;
 type Person = { token: string; user: { id: string } };
 type Participant = { userId: string; name: string };
 type Link = { id: string; kind: 'task' | 'project'; targetId: string; title: string; state: string };
-type Detail = { id: string; title: string; revision: number; lastSeq: number; lastChange: number; createdBy: string | null; participants: Participant[]; links: Link[] };
-type Message = { id: string; conversationId: string; seq: number; changeSeq: number; authorId: string | null; body: string | null; deletedAt: string | null; revision: number };
+type Detail = { id: string; title: string; revision: number; lastSeq: number; lastChange: number; createdBy: string | null; participants: Participant[]; links: Link[];
+ starred: boolean; lastReadSeq: number; unread: number };
+type Message = { id: string; conversationId: string; seq: number; changeSeq: number; authorId: string | null; body: string | null; deletedAt: string | null; editedAt: string | null; revision: number };
+type Pin = { id: string; conversationId: string; messageId: string; changeSeq: number; pinnedBy: string | null; unpinnedBy: string | null; unpinnedAt: string | null };
 type Page = { conversation: { id: string; revision: number; lastSeq: number; lastChange: number }; messages: Message[]; hasMore: boolean };
-type Changes = { conversation: { highWater: number }; changes: { changeSeq: number; kind: 'message'; message: Message }[]; next: number; complete: boolean };
+type Change = { changeSeq: number; kind: 'message'; message: Message } | { changeSeq: number; kind: 'pin'; pin: Pin };
+type Changes = { conversation: { highWater: number }; changes: Change[]; next: number; complete: boolean };
 type Failure = { ok: false; code: string; error: string };
+const messageOf = (change: Change): Message => { assert.equal(change.kind, 'message'); return (change as Extract<Change, { kind: 'message' }>).message; };
 let owner: Person, member: Person, admin: Person, third: Person, outsider: Person, org: string, otherOrg: string;
 const google: IdentityProvider & { next: { subject: string; email: string; name: string } } = {
  next: { subject: 'owner', email: 'owner@example.test', name: 'Owner' },
@@ -182,7 +186,7 @@ it('creates a linked conversation, sends and reads messages, and shows it only t
  assert.deepEqual(latest.messages.map(m => m.id), [first.id, second.id]); assert.equal(latest.hasMore, false);
  assert.equal(latest.conversation.lastSeq, 2); assert.equal(latest.conversation.revision, 1, 'sends never move the revision');
  const synced = await json<Changes>(changes(member, created.id, 'after=0'));
- assert.deepEqual(synced.changes.map(c => c.message.id), [first.id, second.id]); assert.equal(synced.complete, true); assert.equal(synced.next, synced.conversation.highWater);
+ assert.deepEqual(synced.changes.map(c => messageOf(c).id), [first.id, second.id]); assert.equal(synced.complete, true); assert.equal(synced.next, synced.conversation.highWater);
 
  // Work to chat: the participant sees it from the task and the project; a non-participant sees nothing, not even a count.
  assert.deepEqual((await json<{ conversations: { id: string }[] }>(request('GET', `${base()}/tasks/${task}/conversations`, member))).conversations.map(c => c.id), [created.id]);
@@ -333,7 +337,7 @@ it('concurrent sends get dense, unique seq values and the change feed converges 
  let cursor = 0, complete = false, rounds = 0;
  while (!complete && rounds++ < 50) {
   const batch = await json<Changes>(changes(owner, chat.id, `after=${cursor}&limit=1`));
-  for (const change of batch.changes) { const known = seen.get(change.message.id); if (!known || known.changeSeq < change.changeSeq) seen.set(change.message.id, change); }
+  for (const change of batch.changes) { const message = messageOf(change); const known = seen.get(message.id); if (!known || known.changeSeq < change.changeSeq) seen.set(message.id, { changeSeq: change.changeSeq, message }); }
   assert.ok(batch.next >= cursor); cursor = batch.next; complete = batch.complete;
  }
  assert.equal(seen.size, 12);
@@ -472,15 +476,31 @@ it('export includes only the exporter’s conversations and says so; deletion le
  const mineId = randomUUID(), theirsId = randomUUID();
  await json(create(lead, { id: mineId, title: 'Mine', participantIds: [], links: [] }, exportOrg), 201);
  await json(create(colleague, { id: theirsId, title: 'Theirs', participantIds: [], links: [] }, exportOrg), 201);
+ // PR C personal state: each stars and reads their own conversation; a shared one carries both people's rows.
+ const sharedId = randomUUID();
+ await json(create(lead, { id: sharedId, title: 'Shared', participantIds: [colleague.user.id], links: [] }, exportOrg), 201);
+ const said = await json<Message>(request('POST', `${chats(exportOrg)}/${sharedId}/messages`, colleague, { id: randomUUID(), body: 'Hello' }), 201);
+ await json(request('POST', `${chats(exportOrg)}/${sharedId}/pins`, colleague, { messageId: said.id }), 201);
+ for (const [person, conversation] of [[lead, mineId], [lead, sharedId], [colleague, theirsId], [colleague, sharedId]] as const) {
+  await json(request('POST', `${chats(exportOrg)}/${conversation}/star`, person));
+  await json(request('POST', `${chats(exportOrg)}/${conversation}/read`, person, { seq: 1 }));
+ }
  const response = await request('GET', `${base(exportOrg)}/export`, lead);
  assert.equal(response.status, 200);
  const lines = (await response.text()).trim().split('\n').map(line => JSON.parse(line) as { notes?: string[]; table?: string; row?: Record<string, unknown> });
  assert.match(lines[0]!.notes!.join(' '), /not a complete chat backup/);
  const conversations = lines.filter(l => l.table === 'conversations').map(l => l.row!.id);
- assert.deepEqual(conversations, [mineId]);
+ assert.deepEqual(conversations.sort(), [mineId, sharedId].sort());
+ // Stars and read positions: only the exporter's own, even in a conversation both people share.
+ for (const table of ['conversation_stars', 'conversation_reads']) {
+  const rows = lines.filter(l => l.table === table).map(l => l.row!);
+  assert.ok(rows.length > 0 && rows.every(row => (row.userId ?? row.user_id) === lead.user.id), table);
+ }
+ assert.equal(lines.filter(l => l.table === 'message_pins').length, 1, 'shared pins in the exporter’s conversations are exported');
  assert.ok(!JSON.stringify(lines).includes(theirsId), 'no trace of another member’s conversation, including its audit');
  const deleted = await json<{ rowCounts: Record<string, number> }>(request('DELETE', base(exportOrg), lead, { name: 'Export Brewing' }));
- for (const table of ['conversations', 'conversation_participants', 'conversation_links', 'messages', 'chat_audit_events']) assert.ok(!(table in deleted.rowCounts), table);
+ for (const table of ['conversations', 'conversation_participants', 'conversation_links', 'messages', 'chat_audit_events', 'message_pins', 'conversation_stars', 'conversation_reads'])
+  assert.ok(!(table in deleted.rowCounts), table);
  assert.equal((await db.owner`select 1 from conversations where organisation_id = ${exportOrg}`).length, 0, 'the cascade removed every member’s conversations');
 });
 
@@ -494,4 +514,295 @@ it('chat writes have their own bounded limit; reads do not count against it', as
  assert.equal(statuses.filter(s => s === 201).length, 30);
  const last = await request('POST', `${chats()}/${chat.id}/messages`, owner, { id: randomUUID(), body: 'over' }, limited);
  assert.equal(last.status, 429); assert.ok(Number(last.headers.get('retry-after')) >= 1);
+ // PR C writes share the same limit; their reads do not.
+ for (const [method, path, data] of [['POST', 'star', undefined], ['POST', 'read', { seq: 1 }], ['POST', 'pins', { messageId: randomUUID() }]] as const)
+  assert.equal((await request(method, `${chats()}/${chat.id}/${path}`, owner, data, limited)).status, 429, path);
+ assert.equal((await request('GET', `${chats()}/${chat.id}/pins`, owner, undefined, limited)).status, 200);
+});
+
+// PR C (contract §5, §8, §13, §16): author edits, shared pins, personal stars and read positions. ------------------
+
+const edit = (person: Person, conversation: string, message: string, expectedRevision: number, body: string) =>
+ request('PATCH', `${chats()}/${conversation}/messages/${message}`, person, { expectedRevision, body });
+const pinIt = (person: Person, conversation: string, messageId: string) => request('POST', `${chats()}/${conversation}/pins`, person, { messageId });
+const unpinIt = (person: Person, conversation: string, pinId: string) => request('DELETE', `${chats()}/${conversation}/pins/${pinId}`, person);
+const pinsOf = (person: Person, conversation: string) => request('GET', `${chats()}/${conversation}/pins`, person);
+const star = (person: Person, conversation: string, on: boolean) => request(on ? 'POST' : 'DELETE', `${chats()}/${conversation}/star`, person);
+const read = (person: Person, conversation: string, seq: number) => request('POST', `${chats()}/${conversation}/read`, person, { seq });
+const tombstone = (person: Person, conversation: string, message: string, expectedRevision: number) =>
+ request('DELETE', `${chats()}/${conversation}/messages/${message}?expectedRevision=${expectedRevision}`, person);
+const counters = async (conversation: string) => ({ ...(await db.owner<{ lastSeq: number; lastChange: number; revision: number }[]>`
+ select last_seq, last_change, revision from conversations where id = ${conversation}`)[0]! });
+const personalAudit = (person: Person, conversation: string) => asApp(person, tx => tx<{ action: string; actorId: string }[]>`
+ select action, actor_id from chat_audit_events where conversation_id = ${conversation} and personal order by created_at, id`);
+
+it('authors edit their own messages; moderators cannot; stale, deleted and unchanged edits write nothing', async () => {
+ const id = randomUUID();
+ const body = { id, title: 'Edits', participantIds: [member.user.id, admin.user.id], links: [] };
+ await json(create(owner, body), 201);
+ const messageId = randomUUID();
+ const sent = await json<Message>(send(member, id, 'First draft', messageId), 201);
+ const before = await counters(id);
+ const edited = await json<Message>(edit(member, id, messageId, 1, '  Second draft  '));
+ assert.equal(edited.body, 'Second draft'); assert.equal(edited.revision, 2); assert.ok(edited.editedAt);
+ assert.equal(edited.seq, sent.seq, 'an edit keeps its place');
+ assert.equal(edited.changeSeq, before.lastChange + 1);
+ assert.deepEqual(await counters(id), { ...before, lastChange: before.lastChange + 1 }, 'an edit moves only last_change');
+
+ // Nobody else edits: not an admin participant (a moderator), not the owner.
+ for (const other of [admin, owner]) assert.equal((await edit(other, id, messageId, 2, 'Rewritten')).status, 403);
+ assert.equal((await json<Page>(page(owner, id, 'latest=1'))).messages[0]!.body, 'Second draft');
+ assert.equal((await json<Failure>(edit(member, id, messageId, 1, 'Late'), 409)).code, 'stale_revision');
+ assert.equal((await json<Failure>(edit(member, id, messageId, 2, '   '), 400)).code, 'invalid_body');
+ // The same body at the current revision is a no-op: no write, no audit row.
+ const trail = (await chatAudit(id)).length, now = await counters(id);
+ const unchanged = await json<Message>(edit(member, id, messageId, 2, 'Second draft '));
+ assert.equal(unchanged.revision, 2); assert.equal(unchanged.changeSeq, edited.changeSeq);
+ assert.deepEqual(await counters(id), now); assert.equal((await chatAudit(id)).length, trail);
+
+ // Retries after an edit: the send returns the current (edited) message; the create still matches.
+ const retried = await json<Message>(send(member, id, 'First draft', messageId), 200);
+ assert.equal(retried.body, 'Second draft'); assert.equal(retried.revision, 2);
+ assert.equal((await json<Detail>(create(owner, body), 200)).id, id);
+ assert.deepEqual(await counters(id), now, 'neither retry wrote anything');
+
+ // A tombstone cannot be edited, even by its author.
+ await json(tombstone(member, id, messageId, 2));
+ assert.equal((await edit(member, id, messageId, 3, 'Back again')).status, 404);
+ const audit = await chatAudit(id);
+ assert.equal(audit.filter(a => a.action === 'chat.message_edited').length, 1);
+ assert.ok(!JSON.stringify(audit).includes('draft'), 'the edit audit carries ids and counters only');
+});
+
+it('any participant pins and unpins; duplicates, tombstones and hidden messages are refused', async () => {
+ const chat = await newChat(owner, 'Pins', [member]), other = await newChat(owner, 'Elsewhere');
+ const [one, two] = [await json<Message>(send(member, chat.id, 'Pin me'), 201), await json<Message>(send(owner, chat.id, 'Delete me'), 201)];
+ const elsewhere = await json<Message>(send(owner, other.id, 'Not here'), 201);
+ const before = await counters(chat.id);
+ const pinned = await json<Pin>(pinIt(member, chat.id, one.id), 201);
+ assert.equal(pinned.messageId, one.id); assert.equal(pinned.pinnedBy, member.user.id); assert.equal(pinned.unpinnedAt, null);
+ assert.equal(pinned.changeSeq, before.lastChange + 1);
+ assert.deepEqual(await counters(chat.id), { ...before, lastChange: before.lastChange + 1 }, 'a pin moves only last_change');
+ assert.deepEqual((await json<{ pins: Pin[] }>(pinsOf(owner, chat.id))).pins.map(p => p.id), [pinned.id]);
+ // Pins have server ids: a retried or second pin of the same message is refused, and nothing is written.
+ assert.equal((await json<Failure>(pinIt(owner, chat.id, one.id), 409)).code, 'message_already_pinned');
+ assert.equal((await counters(chat.id)).lastChange, before.lastChange + 1);
+ // Any participant unpins, once.
+ const unpinned = await json<Pin>(unpinIt(owner, chat.id, pinned.id));
+ assert.equal(unpinned.unpinnedBy, owner.user.id); assert.ok(unpinned.unpinnedAt); assert.equal(unpinned.changeSeq, before.lastChange + 2);
+ assert.equal((await unpinIt(owner, chat.id, pinned.id)).status, 404);
+ assert.deepEqual((await json<{ pins: Pin[] }>(pinsOf(member, chat.id))).pins, []);
+ await json(pinIt(owner, chat.id, one.id), 201);
+ // A visible tombstone is its own 409; a message that is missing, or in another conversation, is the usual 404.
+ await json(tombstone(owner, chat.id, two.id, 1));
+ assert.equal((await json<Failure>(pinIt(member, chat.id, two.id), 409)).code, 'message_deleted');
+ assert.equal((await pinIt(member, chat.id, randomUUID())).status, 404);
+ assert.equal((await pinIt(owner, chat.id, elsewhere.id)).status, 404);
+ // Non-participants see and change nothing.
+ for (const response of [pinsOf(third, chat.id), pinIt(third, chat.id, one.id), unpinIt(third, chat.id, pinned.id), star(third, chat.id, true), read(third, chat.id, 1),
+  edit(third, chat.id, one.id, 1, 'x')]) assert.equal((await response).status, 404);
+ assert.deepEqual((await chatAudit(chat.id)).map(a => a.action).filter(a => a.startsWith('chat.pin')), ['chat.pin_added', 'chat.pin_removed', 'chat.pin_added']);
+});
+
+it('a conversation holds at most fifty live pins, including under concurrent pins', async () => {
+ const chat = await newChat(owner, 'Pinboard', [member]);
+ const sent: Message[] = [];
+ for (let i = 0; i < 51; i++) sent.push(await json<Message>(send(owner, chat.id, `Notice ${i}`), 201));
+ for (let i = 0; i < 48; i++) await json(pinIt(owner, chat.id, sent[i]!.id), 201);
+ await json(pinIt(owner, chat.id, sent[48]!.id), 201);
+ // At 49: two people pin different messages at once; the conversation lock lets exactly one reach 50.
+ const race = await Promise.all([pinIt(owner, chat.id, sent[49]!.id), pinIt(member, chat.id, sent[50]!.id)]);
+ assert.deepEqual(race.map(r => r.status).sort(), [201, 409]);
+ assert.equal(((await race.find(r => r.status === 409)!.json()) as Failure).code, 'pin_limit');
+ const board = await json<{ pins: Pin[] }>(pinsOf(member, chat.id));
+ assert.equal(board.pins.length, 50, 'every live pin, in one read');
+ assert.deepEqual(board.pins.map(p => p.changeSeq), [...board.pins.map(p => p.changeSeq)].sort((a, b) => a - b));
+ const loser = race.findIndex(r => r.status === 409) === 0 ? sent[49]! : sent[50]!;
+ assert.equal((await json<Failure>(pinIt(owner, chat.id, loser.id), 409)).code, 'pin_limit');
+ // Unpinning makes room again.
+ await json(unpinIt(member, chat.id, board.pins[0]!.id));
+ await json(pinIt(owner, chat.id, loser.id), 201);
+});
+
+it('deleting a pinned message unpins it atomically, numbered after the tombstone, with one audit row', async () => {
+ const chat = await newChat(owner, 'Delete pinned', [member]);
+ const message = await json<Message>(send(member, chat.id, 'Pinned then deleted'), 201);
+ const pin = await json<Pin>(pinIt(owner, chat.id, message.id), 201);
+ const mark = (await counters(chat.id)).lastChange;
+ const auditBefore = (await chatAudit(chat.id)).length;
+ const deleted = await json<Message>(tombstone(member, chat.id, message.id, 1));
+ assert.equal(deleted.changeSeq, mark + 1);
+ assert.deepEqual((await json<{ pins: Pin[] }>(pinsOf(owner, chat.id))).pins, [], 'no live pin on a tombstone');
+ // Paged one change at a time, the tombstone arrives first and the unpin after it.
+ const first = await json<Changes>(changes(owner, chat.id, `after=${mark}&limit=1`));
+ assert.equal(first.complete, false); assert.equal(first.next, mark + 1);
+ assert.equal(messageOf(first.changes[0]!).body, null);
+ const second = await json<Changes>(changes(owner, chat.id, `after=${first.next}&limit=1`));
+ assert.equal(second.complete, true);
+ const unpin = second.changes[0]!;
+ assert.equal(unpin.kind, 'pin'); assert.equal(unpin.changeSeq, mark + 2);
+ assert.equal(unpin.kind === 'pin' ? unpin.pin.id : null, pin.id);
+ assert.ok(unpin.kind === 'pin' && unpin.pin.unpinnedAt);
+ // One request, one audit row: chat.message_deleted naming the pin, no separate chat.pin_removed.
+ const written = (await chatAudit(chat.id)).slice(auditBefore);
+ assert.deepEqual(written.map(a => a.action), ['chat.message_deleted']);
+ assert.equal(written[0]!.detail.unpinnedPinId, pin.id);
+});
+
+it('a failure between the tombstone and the unpin rolls the whole DELETE back, and a retry then succeeds', async () => {
+ const chat = await newChat(owner, 'Rollback', [member]);
+ const text = `Stays live ${randomUUID()}`;
+ const message = await json<Message>(send(member, chat.id, text), 201);
+ const pin = await json<Pin>(pinIt(member, chat.id, message.id), 201);
+ const before = await counters(chat.id), auditBefore = await chatAudit(chat.id);
+ // Test-only, owner-installed: a BEFORE UPDATE trigger on this one fixture pin that refuses the unpin, so the real
+ // DELETE fails after its tombstone was written. If the service ever committed the tombstone separately from the
+ // unpin, the message would stay deleted here. No production code is involved.
+ const name = `chat_test_refuse_unpin_${randomUUID().replaceAll('-', '')}`;
+ await db.owner.unsafe(`create function ${name}() returns trigger language plpgsql as $$
+  begin
+   if old.unpinned_at is null and new.unpinned_at is not null then raise exception 'refused by the test fixture'; end if;
+   return new;
+  end $$`);
+ const logged: unknown[][] = [];
+ const original = console.error;
+ try {
+  await db.owner.unsafe(`create trigger ${name} before update on message_pins for each row when (old.id = '${pin.id}') execute function ${name}()`);
+  console.error = (...args: unknown[]) => { logged.push(args); };
+  const failed = await tombstone(member, chat.id, message.id, 1);
+  assert.equal(failed.status, 500);
+  assert.deepEqual(await failed.json(), { ok: false, code: 'internal', error: 'something went wrong on our side' });
+  assert.equal(logged.length, 1, 'the server logged the unexpected error once');
+  const line = inspect(logged[0], { depth: 10, showHidden: true });
+  assert.ok(!line.includes(text), 'no message content in the log');
+  assert.ok(!line.includes('refused by the test fixture') && !line.includes(name), 'no driver message or trigger name in the log');
+  assert.match(line, /SQLSTATE P0001/, 'the log keeps the SQLSTATE');
+ } finally {
+  console.error = original;
+  await db.owner.unsafe(`drop trigger if exists ${name} on message_pins`);
+  await db.owner.unsafe(`drop function if exists ${name}()`);
+ }
+ // Nothing of the DELETE survived: counters, the message, the pin and the audit trail are as they were.
+ assert.deepEqual(await counters(chat.id), before);
+ const live = (await json<Page>(page(owner, chat.id, 'latest=1'))).messages[0]!;
+ assert.equal(live.body, text); assert.equal(live.deletedAt, null); assert.equal(live.revision, 1);
+ assert.deepEqual((await json<{ pins: Pin[] }>(pinsOf(owner, chat.id))).pins.map(p => [p.id, p.unpinnedAt]), [[pin.id, null]]);
+ assert.equal((await chatAudit(chat.id)).length, auditBefore.length);
+ // With the fixture gone, the same request succeeds: tombstone then unpin, one audit row naming the pin.
+ const deleted = await json<Message>(tombstone(member, chat.id, message.id, 1));
+ assert.equal(deleted.body, null); assert.equal(deleted.changeSeq, before.lastChange + 1);
+ assert.deepEqual((await json<{ pins: Pin[] }>(pinsOf(owner, chat.id))).pins, []);
+ assert.deepEqual(await counters(chat.id), { ...before, lastChange: before.lastChange + 2 });
+ const written = (await chatAudit(chat.id)).slice(auditBefore.length);
+ assert.deepEqual(written.map(a => a.action), ['chat.message_deleted']);
+ assert.equal(written[0]!.detail.unpinnedPinId, pin.id);
+});
+
+it('the change feed converges across edits and pins made between pages', async () => {
+ const chat = await newChat(owner, 'Converge', [member]);
+ const sent: Message[] = [];
+ for (let i = 0; i < 4; i++) sent.push(await json<Message>(send(i % 2 ? owner : member, chat.id, `Line ${i}`), 201));
+ const seen = new Map<string, Change>();
+ const upsert = (change: Change) => {
+  const key = change.kind === 'message' ? `message:${change.message.id}` : `pin:${change.pin.id}`;
+  const known = seen.get(key); if (!known || known.changeSeq < change.changeSeq) seen.set(key, change);
+ };
+ const firstPage = await json<Changes>(changes(owner, chat.id, 'after=0&limit=2'));
+ firstPage.changes.forEach(upsert);
+ // Between pages: the first line is edited (it reappears at a later number) and the third is pinned.
+ await json(edit(member, chat.id, sent[0]!.id, 1, 'Line 0, corrected'));
+ await json(pinIt(owner, chat.id, sent[2]!.id), 201);
+ let cursor = firstPage.next, complete = firstPage.complete, rounds = 0;
+ while (!complete && rounds++ < 20) {
+  const batch = await json<Changes>(changes(owner, chat.id, `after=${cursor}&limit=2`));
+  batch.changes.forEach(upsert); assert.ok(batch.next >= cursor); cursor = batch.next; complete = batch.complete;
+ }
+ const messages = [...seen.values()].filter(c => c.kind === 'message').map(messageOf).sort((a, b) => a.seq - b.seq);
+ assert.deepEqual(messages, (await json<Page>(page(owner, chat.id, 'after=0&limit=100'))).messages, 'the client copy equals the server');
+ assert.equal(messages[0]!.body, 'Line 0, corrected');
+ const pins = [...seen.values()].filter(c => c.kind === 'pin');
+ assert.equal(pins.length, 1);
+ assert.equal(cursor, (await counters(chat.id)).lastChange);
+});
+
+it('stars are personal and idempotent; only changes are audited, and only the actor sees those rows', async () => {
+ const chat = await newChat(owner, 'Stars', [member]);
+ assert.deepEqual(await json(star(member, chat.id, true)), { starred: true });
+ assert.deepEqual(await json(star(member, chat.id, true)), { starred: true });
+ assert.equal((await json<Detail>(detail(member, chat.id))).starred, true);
+ assert.equal((await json<Detail>(detail(owner, chat.id))).starred, false, 'a star is the starring person’s alone');
+ const listed = await json<{ conversations: Detail[] }>(request('GET', chats(), member));
+ assert.equal(listed.conversations.find(c => c.id === chat.id)!.starred, true);
+ await json(star(member, chat.id, false)); await json(star(member, chat.id, false));
+ assert.deepEqual((await personalAudit(member, chat.id)).map(a => a.action), ['chat.star_set', 'chat.star_cleared'], 'no-ops write nothing');
+ assert.equal((await personalAudit(owner, chat.id)).length, 0, 'another participant sees none of it');
+ const before = await counters(chat.id);
+ await json(star(member, chat.id, true));
+ assert.deepEqual(await counters(chat.id), before, 'a star moves no counter or revision');
+ // Hidden while not participating, back after an explicit re-add.
+ await json(removePerson(member, chat.id, member, before.revision));
+ assert.equal((await star(member, chat.id, false)).status, 404);
+ await json(addPeople(owner, chat.id, before.revision + 1, [member]));
+ assert.equal((await json<Detail>(detail(member, chat.id))).starred, true);
+});
+
+it('read positions start at the participation baseline, never move back, and bound unread counts', async () => {
+ const reader = await signIn('chat-reader', 'Rita Reader'), late = await signIn('chat-late', 'Lars Late');
+ await join(reader); await join(late);
+ const chat = await newChat(owner, 'Reading', [reader]);
+ for (let i = 0; i < 3; i++) await json(send(owner, chat.id, `Update ${i}`), 201);
+ let seen = await json<Detail>(detail(reader, chat.id));
+ assert.deepEqual([seen.lastReadSeq, seen.unread], [0, 3], 'created at 0: everything since is unread');
+ assert.equal((await json<Detail>(detail(owner, chat.id))).unread, 0, 'your own messages are never unread');
+ assert.deepEqual(await json(read(reader, chat.id, 2)), { lastReadSeq: 2, unread: 1 });
+ assert.deepEqual(await json(read(reader, chat.id, 1)), { lastReadSeq: 2, unread: 1 }, 'never back');
+ assert.deepEqual(await json(read(reader, chat.id, 999)), { lastReadSeq: 3, unread: 0 }, 'clamped to last_seq');
+ assert.deepEqual(await json(read(reader, chat.id, 3)), { lastReadSeq: 3, unread: 0 });
+ assert.deepEqual((await personalAudit(reader, chat.id)).map(a => a.action), ['chat.read_advanced', 'chat.read_advanced'], 'only advances are audited');
+ assert.equal((await personalAudit(owner, chat.id)).length, 0);
+ const before = await counters(chat.id);
+ // Deleted messages are not unread.
+ const gone = await json<Message>(send(owner, chat.id, 'Retracted'), 201);
+ assert.equal((await json<Detail>(detail(reader, chat.id))).unread, 1);
+ await json(tombstone(owner, chat.id, gone.id, 1));
+ assert.equal((await json<Detail>(detail(reader, chat.id))).unread, 0);
+
+ // A later add starts at that moment's last_seq, and it stays fixed: with no private read row, new messages count.
+ const at = (await counters(chat.id)).lastSeq;
+ await json(addPeople(owner, chat.id, before.revision, [late]));
+ seen = await json<Detail>(detail(late, chat.id));
+ assert.deepEqual([seen.lastReadSeq, seen.unread], [at, 0], 'no history flood on joining');
+ await json(send(owner, chat.id, 'After you joined'), 201); await json(send(reader, chat.id, 'Welcome'), 201);
+ seen = await json<Detail>(detail(late, chat.id));
+ assert.deepEqual([seen.lastReadSeq, seen.unread], [at, 2], 'the baseline did not follow last_seq');
+ assert.equal((await db.owner`select 1 from conversation_reads where conversation_id = ${chat.id} and user_id = ${late.user.id}`).length, 0, 'no private read row was written for them');
+
+ // Re-add resets the baseline, so an older private read row cannot bring back old unread messages.
+ await json(read(late, chat.id, at + 1));
+ const revision = (await counters(chat.id)).revision;
+ await json(removePerson(late, chat.id, late, revision));
+ for (let i = 0; i < 3; i++) await json(send(owner, chat.id, `While away ${i}`), 201);
+ await json(addPeople(owner, chat.id, revision + 1, [late]));
+ seen = await json<Detail>(detail(late, chat.id));
+ assert.deepEqual([seen.lastReadSeq, seen.unread], [(await counters(chat.id)).lastSeq, 0]);
+
+ // A former member's message still counts as someone else's.
+ const leaver = await signIn('chat-read-leaver', 'Lou Leaver'); await join(leaver);
+ const revisionNow = (await counters(chat.id)).revision;
+ await json(addPeople(owner, chat.id, revisionNow, [leaver]));
+ await json(send(leaver, chat.id, 'Last words'), 201);
+ await db.owner`delete from users where id = ${leaver.user.id}`;
+ assert.equal((await json<Page>(page(owner, chat.id, 'latest=1'))).messages[0]!.authorId, null);
+ assert.equal((await json<Detail>(detail(late, chat.id))).unread, 1);
+});
+
+it('unread counts stop at 51, in the list, detail and work-to-chat', async () => {
+ const task = await makeTask('Busy thread');
+ const chat = await newChat(owner, 'Flooded', [member], [{ kind: 'task', targetId: task }]);
+ for (let i = 0; i < 53; i++) await json(send(owner, chat.id, `Flood ${i}`), 201);
+ assert.equal((await json<Detail>(detail(member, chat.id))).unread, 51);
+ assert.equal((await json<{ conversations: Detail[] }>(request('GET', chats(), member))).conversations.find(c => c.id === chat.id)!.unread, 51);
+ assert.equal((await json<{ conversations: Detail[] }>(request('GET', `${base()}/tasks/${task}/conversations`, member))).conversations[0]!.unread, 51);
+ assert.deepEqual(await json(read(member, chat.id, 1)), { lastReadSeq: 1, unread: 51 });
+ assert.deepEqual(await json(read(member, chat.id, 50)), { lastReadSeq: 50, unread: 3 });
 });
