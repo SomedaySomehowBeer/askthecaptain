@@ -35,3 +35,6 @@ screen-reader acceptance or an authenticated hosted Google round trip. Full-page
 fixed bottom navigation at its viewport position; this is a capture artifact, not a second tab bar.
 
 [Opened date on phone](phone.png) · [Scrolled six months ahead](six-months-ahead.png).
+
+Final result: typecheck, 44 web tests, production build and all eight browser groups passed.
+The final browser processes exited 0; reciprocal review and CI cleared #149 before merge.

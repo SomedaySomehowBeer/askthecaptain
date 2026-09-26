@@ -1,8 +1,9 @@
 # Staging resumed; production paused (2026-09-24)
 
 Captain's staging workspace is available at **https://app.askthecaptain.app/work**. API and web
-run the reviewed project overview and linked equipment schedule (#147, image source `ac28154`,
-merged as `ad74d7e`), including the earlier Work record and task/list corrections.
+retain the reviewed workspace: web now includes the continuous equipment schedule and project
+status filters (#149/#150, image source `709f89e`); API remains on #147 (`ac28154`).
+The earlier Work record and task/list corrections remain included.
 Tasks, projects and recurring work have their own Work pages; the Commitments overview is retired.
 The old-version database content was reset earlier on 25 September under explicit owner
 permission; **this release did not run another reset**. Embedding and production remain stopped.
@@ -21,6 +22,55 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Equipment scrolling and project task-history release (26 September 2026, UTC)
+
+Workspace outcomes: **allocate resources** and **manage shared work**. Both increments received
+reciprocal Claude/root review and green CI before squash merge:
+
+- [#149](https://github.com/SomedaySomehowBeer/askthecaptain/pull/149), merged as
+  `126ed437a5e30a6d155bf7cc341dceb712384c4c`; [CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36204078160)
+  passed in 3m27s. Equipment scrolls one calendar month before through six months after the opened
+  date, with date navigation beyond it, bounded lazy occupancy reads and virtualised hourly rendering.
+- [#150](https://github.com/SomedaySomehowBeer/askthecaptain/pull/150), merged as
+  `e0f016b61efc1c57bdd551a354a4b171baf7e031`; [CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36204696471)
+  passed in 2m50s. Project Tasks defaults to Open and separates In progress, Suggested, Completed,
+  Cancelled and All except cancelled. Paging and keyboard feedback preserve the selected view.
+
+By **00:28Z**, only existing web machine `9185776e7cd3d8` was updated to
+`registry.fly.io/askthecaptain-web-staging:git-709f89e`, digest
+`sha256:4adc477af6914c0339b1d6cdb257e3522d1b2df343abe4c29357afcacccc5300`.
+The image was built from clean archive `709f89e22fc671959cc1ba383a17a9d5ea293d8b` before the
+last test-harness-only correction. Every Docker input (web, packages, patches and root build
+configuration) was compared against the final merge and was identical; the source Git trees as a
+whole are not claimed identical. No local fixture data or credentials entered the image.
+
+API remains the sole `80e39ea6416e18`, image `git-ac28154`, digest
+`sha256:00823060f5fb7b0e63d3de14c4fedd06be7ba64afbb2305ca07865db82dc39db`.
+Before/after configuration comparison passed: exactly one machine per staging app, only the web
+image changed. Normal commands, autostart, idle stop and zero minimum-running settings remain.
+API readiness returned `200 {"ok":true}`. Idle stopping is expected; hosted checks woke the web.
+Production's existing machines and the embedding machine were observed stopped and not modified.
+No migration, reset, customer-record write, secret change or additional application machine was
+part of this release; the demo remains the user's test data.
+
+Validation: workspace typecheck, 44 web tests and production builds passed. All **14 local browser
+groups** passed against the real API and disposable Postgres: three scrolling, five existing
+equipment, two task-history and four existing project overview/schedule groups. The final runs
+exited 0. Browser checks found and corrected range re-anchoring after URL changes and oversized
+hourly rendering after zoom. Test-only fixes wait for routed requests on teardown and use monotonic
+read counts despite a bounded statistics buffer. The first overview process ended with SIGTERM
+after its four PASS lines; a fresh rerun then exposed setup exhausting the normal per-IP request
+window. Moving its existing cooldown before bulk booking setup preserved all assertions and
+application limits; the final complete rerun exited 0. Task-owned local servers were stopped and
+the disposable fixture removed; shared Chrome was left running.
+
+[Calendar screenshots and scope](../validation/equipment-scroll-2026-09-26/README.md) and
+[task-history proof](../validation/project-history-2026-09-26/README.md) cover 360/390/430 and
+1440-pixel layouts. Hosted Chrome checks passed signed-out equipment/Work/project/recurrence
+redirects, Google sign-in entry, phone/desktop layout and absence of browser exceptions. They do
+not establish an authenticated hosted session or a full Google round trip. Native-device gestures,
+screen-reader acceptance and remaining search/filter/Files/Chat work remain outside this release.
 
 ## Project overview and schedule release (25 September 2026, UTC)
 

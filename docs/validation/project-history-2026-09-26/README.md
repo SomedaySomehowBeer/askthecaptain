@@ -25,3 +25,9 @@ full-page screenshots retain fixed controls at their viewport position.
 The dedicated two-group browser check passed with exit 0, including four responsive widths and
 no browser exceptions. [Phone task filters](phone.png) show the Open default and history controls.
 Workspace typecheck, 44 web tests and production build also passed.
+
+The four existing overview/schedule groups also passed in a clean full run with exit 0. An earlier
+run terminated after its assertions; the clean rerun exposed the normal request limiter during
+bulk setup. Moving the existing cooldown before that setup preserved the tests and application
+limits. Final reciprocal review and CI cleared #150. The web image source and identical Docker
+inputs are recorded in the [release record](../../runbooks/paused.md).
