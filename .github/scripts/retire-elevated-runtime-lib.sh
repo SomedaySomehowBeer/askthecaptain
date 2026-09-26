@@ -48,7 +48,7 @@ PY
 classify_auth() {
 	if [ "$1" -eq 0 ]; then echo accepted
 	# Postgres quotes the user with "…"; Neon's proxy may use '…'. Either way it must be this role.
-	elif grep -Eq "FATAL: +password authentication failed for user [\"']?app[\"']?( |\$)" "$2"; then echo rejected
+	elif grep -Eq "(FATAL|ERROR): +password authentication failed for user [\"']?app[\"']?( |\$)" "$2"; then echo rejected
 	else echo unknown; fi
 }
 
