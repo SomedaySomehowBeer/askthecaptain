@@ -81,7 +81,13 @@ still held the retired password: the role-only target omitted that output's othe
 [#167](https://github.com/SomedaySomehowBeer/askthecaptain/pull/167) adds a separate output-only
 repair, with refresh disabled, exactly three resource no-ops, and checks that only the sensitive
 legacy URL changes to the value independently derived from state. The repair has no reset path.
-Its execution is pending; the role's stored password is current but the legacy output is stale.
+[Output repair 36237043270](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36237043270)
+finished at **10:51:37Z**. Every resource was a no-op; only the legacy URL output changed. The
+whole-state comparison passed, all resource values/credentials and other outputs were unchanged,
+and recorded dependencies were unchanged. An independent read confirmed both connection outputs
+match their respective role credentials, host, database and branch (state serial 22; the role has
+one recorded dependency). No password was reset again. The output-repair workflow was then disabled;
+both one-off workflows remain disabled. Staging `/readyz` returned `200 {"ok":true}` afterward.
 
 The `app` role remains administrative, with a new unused password held by Neon and in the
 sensitive Terraform state in Tigris. Retirement

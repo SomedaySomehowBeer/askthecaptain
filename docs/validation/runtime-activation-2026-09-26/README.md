@@ -29,7 +29,11 @@ configuration change was made.
   stale. [#167](https://github.com/SomedaySomehowBeer/askthecaptain/pull/167) contains the reviewed
   output-only repair, with 54 passing fixtures plus all 47 retirement fixtures. A disposable
   builtin-only OpenTofu test repaired a deliberately stale output with resource no-ops; its
-  before/after state passed the same whole-state comparison. Hosted output repair is pending.
+  before/after state passed the same whole-state comparison.
+- [Successful output repair](output-repair.txt): run 36237043270 updated only the legacy URL at
+  10:51:37Z, with all resource values/credentials and other outputs unchanged. Whole-state and
+  dependency checks passed; an independent connection-output consistency check passed afterward
+  at state serial 22. Both one-off workflows are disabled; staging readiness remains 200.
 
 [#164](https://github.com/SomedaySomehowBeer/askthecaptain/pull/164) documents the provider-specific
 activation method and contains the reviewed manual retirement/state-reconciliation workflow.

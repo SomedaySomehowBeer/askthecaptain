@@ -4,3 +4,8 @@ askthecaptain-api: 2 machines; 68303d3f3562e8 stopped,28744717c04598 stopped
 askthecaptain-web: 2 machines; 82d17ddb771d38 stopped,7817206bd65778 stopped
 askthecaptain-embed: 1 machines; 82d1dd0b021908 stopped
 Only staging API normal autostart restored; other configurations unchanged.
+
+Final recheck after reviewed output-repair implementation:
+Staging API and web each still have their same single machine and image, autostart=true, idle-stop=true.
+Both were stopped by idle-stop at the snapshot; a subsequent API readiness request woke it and returned 200.
+Production API/web and embedding remain stopped with autostart=false; their images are unchanged.

@@ -2,7 +2,7 @@
 
 Status: repair merged in [#162](https://github.com/SomedaySomehowBeer/askthecaptain/pull/162),
 26 September 2026; restricted staging login activated; old administrative password reset and proven rejected;
-role state refreshed; final legacy connection-output reconciliation pending. Outcomes: protect shared work and private views (D6,
+role state and legacy connection output reconciled; both one-off workflows disabled. Outcomes: protect shared work and private views (D6,
 D26), and unblock linked chat (D25). Chat is held separately on `feat/linked-chat-core`.
 
 ## Observed problem and containment

@@ -1,0 +1,10 @@
+2026-09-26T10:51:34.5278811Z [reconcile] state read; the output does not yet match neon_role.app
+2026-09-26T10:51:35.8793177Z [reconcile] plan: every resource a no-op; only neon_app_database_url changes, to the state-derived URL
+2026-09-26T10:51:36.8245455Z [reconcile] saved plan applied
+2026-09-26T10:51:37.1667918Z [reconcile] resource attributes unchanged; neon_role.app recorded dependencies: unchanged
+2026-09-26T10:51:37.1974584Z [reconcile] done: the output is the URL generated from neon_role.app; every resource and other output unchanged
+Run: 36237043270 (success)
+Independent post-run check: STATE_CONNECTIONS_CONSISTENT; role and owner URL outputs match resource credentials, host, database and branch.
+State serial: 22; neon_role.app dependency entries: 1.
+retire-elevated-runtime and reconcile-retired-output workflows disabled after their successful runs.
+Post-repair staging /readyz: 200 {"ok":true}
