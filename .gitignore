@@ -15,4 +15,5 @@ infra/tofu/*.tfstate*
 # Playwright output
 apps/e2e/test-results/
 apps/e2e/playwright-report/
+apps/e2e/chat-ci-output/
 infra/embed/models

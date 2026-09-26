@@ -8,6 +8,7 @@ import { TaskListFeedback } from '../../TaskListFeedback.tsx';
 import { ChecklistItem } from '../../ChecklistItem.tsx';
 import { TaskFields } from '../../Fields.tsx';
 import { offset, type TaskDetail } from '../../records.ts';
+import { ItemChatPanel } from '../../../../components/chat/ItemChatPanel.tsx';
 import '../../work.css';
 import './task-detail.css';
 export const metadata={title:'Task'};
@@ -46,6 +47,7 @@ export default async function TaskPage({params,searchParams}:{params:Promise<{ta
   {d.checklist.nextOffset!==null?<Link href={next('checklistOffset',d.checklist.nextOffset)}>Next checklist items</Link>:null}
   <details className="disclosure"><summary>Add checklist item</summary><RecordForm key={`checklist-${t.revision}`} kind="tasks" id={t.id} revision={t.revision} operation="checklist" label="Add checklist item"><label className="field">Checklist item<input name="title" maxLength={200} required/></label></RecordForm></details>
  </TaskListFeedback></section>:null}
+ <div className="task-detail__section"><ItemChatPanel me={me} kind="task" targetId={t.id} href={href}/></div>
  <section className="task-detail__action" aria-label="Task status">
   {primary?<RecordForm key={`primary-${t.revision}`} kind="tasks" id={t.id} revision={t.revision} operation="status" label={primary.label}><input type="hidden" name="status" value={primary.status}/></RecordForm>:null}
   <p className="muted">Completing a task does not confirm an equipment booking.{t.evidenceRequired?' This task requires evidence to complete.':''}</p>

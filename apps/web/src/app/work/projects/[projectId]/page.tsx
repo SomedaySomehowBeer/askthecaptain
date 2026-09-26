@@ -9,6 +9,7 @@ import { offset } from '../../records.ts';
 import { todayInZone, shiftDate, zonedDay } from '../../../resources/equipment/time.ts';
 import { ProjectTasks, initials } from './ProjectTasks.tsx';
 import { ProjectBookings, type ProjectReservationPage, type ProjectWindow } from './ProjectBookings.tsx';
+import { ItemChatPanel } from '../../../../components/chat/ItemChatPanel.tsx';
 import '../../work.css';
 import './project.css';
 
@@ -58,6 +59,7 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
   {!members.ok && view !== 'schedule' ? <Notice tone="failed" title="People could not be read">Owner names are unavailable. Refresh to try again.</Notice> : null}
   {tasks ? <ProjectTasks result={tasks} href={href} overview={overview} start={start} status={status} owners={owners} peopleAvailable={members.ok} today={today}/> : null}
   {view !== 'tasks' ? <ProjectBookings result={bookings} window={window} problem={problem} invalidWindow={organisation.ok} href={href} overview={overview} start={start}/> : null}
+  {overview ? <ItemChatPanel me={me} kind="project" targetId={p.id} href={href}/> : null}
   <details className="project-actions"><summary>Project actions</summary><div className="stack"><Link href={`/work/series?projectId=${p.id}`}>Recurring work in this project</Link>{p.state === 'active' ? <><Link href={`/work/new?projectId=${p.id}`}>New task</Link><Link href={`/work/series/new?projectId=${p.id}`}>New recurring work</Link></> : null}</div></details>
   <details className="project-edit"><summary>Edit project</summary><RecordForm kind="projects" id={p.id} revision={p.revision} key={p.revision}><ProjectFields project={p}/></RecordForm></details>
   {p.state === 'active' ? <Link className="work-plus" href={`/work/new?projectId=${p.id}`} aria-label="New task in this project">+</Link> : null}

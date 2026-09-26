@@ -1,6 +1,6 @@
 # Staging resumed; production paused (2026-09-27)
 
-**Staging runs on the restricted `captain_runtime` database login**, with the #171 chat API
+**Staging runs on the restricted `captain_runtime` database login**, with the #173 chat API
 image (retaining the #162 guard) and #159 web image. The workspace is at https://app.askthecaptain.app/work. One existing
 machine per staging app is retained, with normal autostart and idle stop. Production and the
 embedding service remain paused; automatic deploy and backup workflows remain disabled.
@@ -11,7 +11,7 @@ The owner authorised the credential switch and retirement of the former administ
 credential on 26 September. See the activation record below and the
 [repair plan](../plans/runtime-database-role-2026-09.md). Earlier containment/preparation records
 are history, not instructions to revert to the elevated login. No additional customer-data reset
-was performed. Chat storage/API (core, pins and personal state) is deployed; the Chat web screen remains unavailable.
+was performed. Chat storage/API (core, pins, personal state and #173 read projections) is deployed; the Chat web screen remains unavailable.
 
 ## Staging authorisation (24 September 2026)
 
@@ -26,6 +26,32 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Chat read API release (27 September Perth / 26 September 2026, UTC)
+
+Reviewed [#173](https://github.com/SomedaySomehowBeer/askthecaptain/pull/173) merged as
+`bea3baf81ea4ff5860d32013f54629da0bd85c34`; source `1bac5b75d2e23c2fe4451fb69b0cd90410182361`
+has the same tree. [CI 36267925576](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36267925576)
+passed. Local verification passed 41 focused API/app/lifecycle tests, workspace typecheck,
+and **419 regression tests** across eight packages with no failed/skipped or cached test runs.
+The clean-source API image build also passed. Claude Opus independently reviewed the API and
+web contract, with findings resolved before merge.
+
+Image: `registry.fly.io/askthecaptain-api-staging:git-1bac5b7@sha256:062d5098887f759fc35db4ab74dcb51d7f6854ebce0517c94e18dd897a44c3b6`.
+Only existing API machine `80e39ea6416e18` changed, and only its image. No schema change or
+migration/queue installation was needed; schema 0043 is retained. Normal command, autostart,
+idle stop and restart settings were preserved. Readiness returned `200 {"ok":true}`.
+
+A read-only deployed probe confirmed the safe `captain_runtime` login, eight forced-RLS chat tables,
+the deployed list filter schema and readiness. It made no data writes and read no business content;
+the temporary remote script was removed. Fleet comparison verified exactly one machine in each
+staging app, unchanged web/production/embedding configurations and identities, and production/
+embedding remaining stopped. No credentials, DNS, infrastructure or workflow changes occurred.
+See the [validation record](../validation/chat-read-api-2026-09-27/README.md).
+
+This adds filtered conversation lists, bounded message excerpts/link summaries, author names and
+hydrated live pins at the API. The real Chat web screens are still being implemented. Retain 0043,
+the restricted runtime and all PR C write/lifecycle guarantees on any rollback.
 
 ## Chat pins and personal state release (27 September Perth / 26 September 2026, UTC)
 

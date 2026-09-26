@@ -1,7 +1,7 @@
 # Default business views and linked chat: next assignments
 
 Status: By tag (default business views) shipped to staging in web-only #159. The linked-chat
-contract is adopted in #160; core API shipped in #169 and personal state/pins in #171. The web amendment is next.
+contract is adopted in #160; core API shipped in #169 and personal state/pins in #171. The web amendment was adopted in #172, its read API prerequisite shipped in #173, and web implementation is active.
 26 September 2026. Private saved Work views are already delivered
 in #153/#154; [release evidence](../runbooks/paused.md) records their actual scope. This batch
 addresses the missing default business views and prepares the next linked-chat increment.
@@ -82,8 +82,16 @@ inspection and tests; an idle agent alone proves nothing.
 
 ## Current web assignments
 
-Follow the [web delivery amendment](linked-chat-web-2026-09.md). First ship the bounded read API
-projections/filters, then the real web screens with independent list and thread/panel ownership.
+Follow the [web delivery amendment](linked-chat-web-2026-09.md). The bounded read API
+projections/filters shipped in #173. Current implementation ownership:
+
+- `business-views`: shared chat types/actions, pending sends, polling/change merge, conversation list,
+  grouped views and creation; pure module tests and API client's Retry-After handling.
+- `linked-chat`: full thread/details, shared chat components, task/project panels and browser script.
+- Codex: sign-out cleanup, disposable API browser fixture, release records, integration checks,
+  reciprocal reviews, PRs and staging release.
+
+Agents use disjoint files on the primary checkout and run no builds/tests/git/deploy operations.
 The same two Opus sessions remain in Herdr Monitor, with Codex coordinating reviews and serial
 checks. The release runbook records actual staging scope; backend delivery does not enable Chat UI.
 
@@ -135,5 +143,8 @@ work before assigning the next stage. Stop the watcher when this batch is comple
 - [x] Default business views (#159) reviewed, verified, merged and released to staging.
 - [x] Linked-chat contract peer-reviewed through revision 5 (r3/r4 findings resolved).
 - [x] Linked-chat adopting plan PR #160 merged, with the `AGENTS.md` and `docs/plan.md` audit amendments.
-- [ ] Chat PR B execution gates proven (contract §17): owner check, Neon PostgreSQL version, trigger reads, race/lock/rollback tests.
-- [ ] First linked-chat implementation slice (PR B) reviewed, verified and released to staging.
+- [x] Chat PR B execution gates proven (contract §17): owner check, Neon PostgreSQL version, trigger reads, race/lock/rollback tests.
+- [x] First linked-chat implementation slice (PR B, #169) reviewed, verified and released to staging.
+- [x] PR C pins/personal-state (#171) reviewed, verified and released to staging.
+- [x] Web amendment (#172) adopted and read API prerequisite (#173) released.
+- [ ] Real web Chat implementation, two-person browser acceptance and staging web release.
