@@ -170,14 +170,14 @@ These target semantics do not claim the old schema has already changed.
 | Tags | Flat organisation labels; many per task, stable identity on rename, no permissions or inherited duplication | Migration 0035 and API/web controls implemented; [tag contract](plans/workspace-task-tags-2026-09.md) records its original project restrictions, superseded by #136 standalone-task eligibility |
 | Saved views | Named, versioned private Work filters in `saved_views`; no stored task results or access grants | [Reviewed contract](plans/saved-work-views-2026-09.md), D26; private API/web delivered in #153/#154; shared views require a separate increment |
 | Equipment | Exclusive resources and bookings/maintenance with occupied start/end, setup/cleanup, revision and work/person links | Migration 0036 and web shipped; [contract](plans/equipment-reservations-2026-09.md); standalone task links and revision-aware project movement added by #136 |
-| Chat | Conversations, participants, messages, links, pins, stars and read positions with separate stable IDs | Planned; D25 access/retry contract before tables |
+| Chat | Conversations, participants, messages, links, pins, stars and read positions with separate stable IDs: `conversations`, `conversation_participants`, `conversation_links`, `messages`, `chat_audit_events`; then `message_pins`, `conversation_stars`, `conversation_reads` | [Adopted contract](plans/linked-chat-2026-09.md), D25; not implemented. Core storage/API, then pins/stars/read state, then web, each in its own PR |
 | Evidence | Business source links and deliberately shared correspondence with source-qualified identity and provenance | Existing generic evidence references reusable but need a bounded sharing/access contract; no mailbox archive |
 | Files/DAM | Provider originals, version identities, work links, version-scoped review/chat | Planned; no byte store or imported Embrace backend |
 | Inventory | Counted ingredients, consumables and finished product, with count time/person and explicit authority | Count services exist. Provider-owned quantities remain provider-owned; finished product does not require Shopify |
 | Counterparties | Shared people/companies and business-provider references | Existing services reusable; stop automatic personal mailbox harvesting with legacy sync |
 | Accounting | Xero invoice/payment/contact cache with source timestamps and completeness | Existing first-party connector; Xero remains accounting authority |
 | Notifications | Captain business notifications on authorised task/resource/chat state | Web Push exists; native delivery is a separate implementation |
-| Workflow/inference/audit | Enablements, immutable run snapshots, step journals, usage, budgets and audit events | Existing infrastructure; legacy definitions do not become new product scope |
+| Workflow/inference/audit | Enablements, immutable run snapshots, step journals, usage, budgets and audit events | Existing infrastructure; legacy definitions do not become new product scope. Private chat writes are audited in participant-scoped `chat_audit_events` (D25) |
 
 No separate Notes/comments product is required by the new workspace. Item discussion is D25 chat.
 If an actual retained evidence link points to an authored note, resolve that identity deliberately;
@@ -473,7 +473,7 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 | D22 | Retired product decision: automatic mail/note project discovery is legacy. Projects are managed in Work; any later suggestion over deliberately shared business evidence needs a separate reviewed contract and does not restore mailbox discovery. |
 | D23 | Shared item discussion is D25 chat, not a Notes/comments subsystem. Business evidence retains source identity; handle an actual note reference deliberately when affected, without invented messages or a requirement to retain Notes as a product. Captain is not a document editor. |
 | D24 | Equipment scheduling is core. Continuous interval timelines support hours/days/weeks, resource scrolling and focal zoom. The server atomically prevents overlapping confirmed occupancy, including setup/cleanup/maintenance; unconfirmed, unknown and unloaded periods are explicit. Filters cannot hide competing resource occupancy. |
-| D25 | Shared chat links bidirectionally to work and file versions. Item chats show the latest six chronological messages plus shared pins referencing original IDs. Stars are personal conversation bookmarks. Membership/access, retry-safe sends, reconnect/read state, pin auditing and source-linked summaries are specified before implementation; summaries remain D2 infer outputs. |
+| D25 | Shared chat links bidirectionally to work and file versions (file-version links follow the Files contract). Item chats show the latest six chronological messages plus shared pins referencing original IDs. Stars are personal conversation bookmarks. Membership/access, retry-safe sends, reconnect/read state, pin auditing and source-linked summaries are specified before implementation; summaries remain D2 infer outputs. Chat writes, including personal stars and read positions, are audited in the participant-scoped `chat_audit_events`; the tenant-wide `audit_events` receives no chat identifiers. The [linked-chat contract](plans/linked-chat-2026-09.md) specifies the first increments. |
 | D26 | Saved Work views are private, named, versioned filters evaluated for their owner. They never grant record access; filter/name content remains private in audit/export. Writes require revisions, create retry IDs survive content-clearing tombstones, and filter drafts preserve their original revision and explicit clears. Work defaults to My work. Shared views require a separate contract. |
 
 
@@ -481,8 +481,11 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 
 - Saved filters: the [reviewed private-view contract](plans/saved-work-views-2026-09.md) is implemented
   in API/web (#153/#154); organisation-shared views still need their own contract.
-- Linked chat: bounded reads, revisions, participants/access,
-  retry identity, history/read state and summaries as specified in the delivery contracts.
+- Linked chat: the [adopted contract](plans/linked-chat-2026-09.md) specifies bounded reads,
+  revisions, participants/access, retry identity, cursors, read state, pins, participant-scoped
+  audit and export/deletion for the first three increments. Implementation has not started. Its
+  PR B execution gates (§17) are proven by real-Postgres tests. Summaries, files, notifications and
+  native delivery need their own contracts.
 - Files: provider/version identity, permissions, preview/extraction retention and explicitly shared
   correspondence contract. Provider originals and version-scoped chat are adopted; the entire
   older files/sidebars/paper-record proposal is not.

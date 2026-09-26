@@ -1,6 +1,8 @@
 # Default business views and linked chat: next assignments
 
-Status: planning in progress, 26 September 2026. Private saved Work views are already delivered
+Status: By tag (default business views) is implemented in web-only #159. The linked-chat contract
+is reviewed and adopted by a separate plan PR, pending merge; chat implementation has not started.
+26 September 2026. Private saved Work views are already delivered
 in #153/#154; [release evidence](../runbooks/paused.md) records their actual scope. This batch
 addresses the missing default business views and prepares the next linked-chat increment.
 Outcomes: **manage shared work** and **discuss work**. Tracking: [default views #156](https://github.com/SomedaySomehowBeer/askthecaptain/issues/156)
@@ -16,6 +18,12 @@ navigation from editable organisation-shared saved views. The selected
 [contract](default-business-views-2026-09.md) is **By tag**: list all existing organisation tags,
 using their IDs and current names, linking to Everyone · Open. New organisations use the existing
 explicit Tags screen; no tags, bindings or special department slots are silently created.
+
+**The two increments are separate.** By tag ([contract](default-business-views-2026-09.md),
+adopted in #158) is a web-only change in #159: no API, schema, migration or setup writes. Linked
+chat ([contract](linked-chat-2026-09.md), revision 5) is a later, independent increment with its own
+adopting plan PR. That PR amends `AGENTS.md` and `docs/plan.md` for participant-scoped
+`chat_audit_events`. Neither PR depends on the other, and #159 carries no chat change.
 
 Two people can discuss a task or project in one linked conversation. Full Chat and item previews
 must share message identities and enforce the same audience. Chat works before summaries or
@@ -81,6 +89,9 @@ work before assigning the next stage. Stop the watcher when this batch is comple
 - [x] Both Opus agents assigned and observed working in Herdr Monitor.
 - [x] Background supervisor running for these exact agents and coordinator session.
 - [x] By tag contract complete and independently reviewed; chat remains proposed with review findings.
-- [ ] By tag contract adopted in #158 and web implementation dispatched; chat adoption remains separate.
-- [ ] Default business views implemented, reviewed, verified and released to staging.
-- [ ] First linked-chat implementation slice reviewed, verified and released to staging.
+- [x] By tag contract adopted in #158 and web implementation dispatched; chat adoption remains separate.
+- [ ] Default business views (#159) reviewed, verified, merged and released to staging.
+- [x] Linked-chat contract peer-reviewed through revision 5 (r3/r4 findings resolved).
+- [ ] Linked-chat adopting plan PR merged, with the `AGENTS.md` and `docs/plan.md` audit amendments.
+- [ ] Chat PR B execution gates proven (contract §17): owner check, Neon PostgreSQL version, trigger reads, race/lock/rollback tests.
+- [ ] First linked-chat implementation slice (PR B) reviewed, verified and released to staging.
