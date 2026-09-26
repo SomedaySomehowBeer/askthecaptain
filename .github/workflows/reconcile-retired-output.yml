@@ -1,0 +1,42 @@
+name: reconcile-retired-output
+# One-off state repair after the retired-credential rotation (docs/plans/runtime-database-role-2026-09.md,
+# step 6): update the legacy `neon_app_database_url` output so it matches neon_role.app's password in state.
+# Manual only. No reset, no Neon or database call, no refresh and no infrastructure change: one plan with refresh
+# off, checked to change only that output, applied. See .github/scripts/reconcile-retired-output.sh.
+# Disable this workflow after its one successful run.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type exactly: refresh retired app output from state'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: tofu
+  cancel-in-progress: false
+jobs:
+  reconcile:
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'refresh retired app output from state'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults: { run: { working-directory: infra/tofu } }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate guards
+        run: |
+          for script in reconcile-retired-output.sh reconcile-retired-output.test.sh retire-elevated-runtime-lib.sh; do bash -n "../../.github/scripts/$script"; done
+          bash ../../.github/scripts/reconcile-retired-output.test.sh
+      - uses: opentofu/setup-opentofu@v1
+        with: { tofu_version: 1.10.5, tofu_wrapper: false }
+      - run: tofu init -input=false -backend-config="access_key=${{ secrets.TIGRIS_ACCESS_KEY }}" -backend-config="secret_key=${{ secrets.TIGRIS_SECRET_KEY }}"
+      # Retain the provider credentials used by tofu.yml for configuration compatibility; refresh is off,
+      # and the plan gates forbid resource changes. Only this step sees these tokens.
+      - name: Reconcile the legacy output from state
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_VAR_cloudflare_zone_id: ${{ secrets.TF_VAR_cloudflare_zone_id }}
+          BETTERUPTIME_API_TOKEN: ${{ secrets.BETTERUPTIME_API_TOKEN }}
+        run: bash ../../.github/scripts/reconcile-retired-output.sh
