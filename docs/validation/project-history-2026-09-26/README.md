@@ -21,3 +21,7 @@ updated test and feature received a second read-only review. No new saved-view v
 schema, dependency or hosted data changes are involved. This is not native-device, screen-reader
 or authenticated hosted acceptance. The earlier overview captures remain historical evidence;
 full-page screenshots retain fixed controls at their viewport position.
+
+The dedicated two-group browser check passed with exit 0, including four responsive widths and
+no browser exceptions. [Phone task filters](phone.png) show the Open default and history controls.
+Workspace typecheck, 44 web tests and production build also passed.
