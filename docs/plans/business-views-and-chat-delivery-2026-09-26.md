@@ -1,7 +1,7 @@
 # Default business views and linked chat: next assignments
 
 Status: By tag (default business views) shipped to staging in web-only #159. The linked-chat
-contract is adopted in #160; core API shipped in #169 and personal state/pins in #171. The web amendment was adopted in #172, its read API prerequisite shipped in #173, and web implementation is active.
+contract is adopted in #160; core API shipped in #169 and personal state/pins in #171. The web amendment was adopted in #172, its read API prerequisite shipped in #173, and web #174 is released to staging with local/CI two-person browser acceptance.
 26 September 2026. Private saved Work views are already delivered
 in #153/#154; [release evidence](../runbooks/paused.md) records their actual scope. This batch
 addresses the missing default business views and prepares the next linked-chat increment.
@@ -80,10 +80,10 @@ The two existing Opus sessions keep their disjoint files and review each other's
 background monitor captures status/approval states without answering them. Completion requires
 inspection and tests; an idle agent alone proves nothing.
 
-## Current web assignments
+## Web assignments (implemented in #174)
 
 Follow the [web delivery amendment](linked-chat-web-2026-09.md). The bounded read API
-projections/filters shipped in #173. Current implementation ownership:
+projections/filters shipped in #173. Implementation ownership:
 
 - `business-views`: shared chat types/actions, pending sends, polling/change merge, conversation list,
   grouped views and creation; pure module tests and API client's Retry-After handling.
@@ -147,4 +147,6 @@ work before assigning the next stage. Stop the watcher when this batch is comple
 - [x] First linked-chat implementation slice (PR B, #169) reviewed, verified and released to staging.
 - [x] PR C pins/personal-state (#171) reviewed, verified and released to staging.
 - [x] Web amendment (#172) adopted and read API prerequisite (#173) released.
-- [ ] Real web Chat implementation, two-person browser acceptance and staging web release.
+- [x] Real web Chat implementation and local/CI two-person browser acceptance (#174).
+- [x] Staging web release (#174), anonymous protected-route and sign-in checks.
+- [ ] Hosted signed-in two-person acceptance and measured multi-user polling capacity; native delivery remains separate.

@@ -1,6 +1,8 @@
 # Linked chat web delivery — 27 September 2026
 
-Status: adopted by this reviewed plan amendment, after core API #169 and personal state/pins #171.
+Status: adopted in #172, after core API #169 and personal state/pins #171. Read API #173 and
+web #174 are released to staging; [validation](../validation/chat-web-2026-09-27/README.md) records
+local/CI acceptance and limits of hosted checks.
 Outcome: **discuss work** (D25), following D6/D11/D14. This defines the web implementation;
 none of these screens is delivered by adopting this plan. Linked-chat storage/behaviour remains
 in the [main contract](linked-chat-2026-09.md). Two Claude Opus reviews and root's decisions are
@@ -129,7 +131,8 @@ No change to limits, lock order or write behaviour; write responses gain the sam
   user change; another organisation's pending record hidden and restored); poll scheduler (visible/focused only, idle stop, 60 s backoff,
   Retry-After cap, single loop); change merge (upsert, higher `changeSeq` wins, pin on a known tombstone hidden);
   unread marker ("50+" at 51, never a sum); body limits; uncertain-write reconciliation mapping.
-- **Browser** (`apps/e2e/scripts/chat-check.cjs`; real API + disposable Postgres; two signed-in people; the opt-in
+- **Browser** (`apps/e2e/scripts/chat-views-check.cjs` for lists/views/create and `chat-check.cjs` for
+  threads/details/panels, run sequentially by `chat-ci.mjs` and CI `chat-browser`; real API + disposable Postgres; two signed-in people; the opt-in
   fixture rate-limit clock only for bulk setup and the 429 case):
   - create with people and links; send/receive via polling; edit, delete, pin, unpin;
   - a task panel shows every pin plus the latest six; its inline composer's pending send is the same record the full
@@ -154,15 +157,18 @@ fixtures while the read API is reviewed, but publishes no placeholder interactio
 Root coordinates serial checks, peer review and staging release; agents do not run builds,
 commit, merge or deploy. The existing Herdr monitor remains active and never answers approvals.
 
-For web implementation, the two existing agents own disjoint files:
+For web implementation, the two existing agents owned disjoint files (Codex subsequently owned
+final integration and thread-browser corrections):
 
 - **Agent 1: API amendments, data layer, list.** `apps/api/src/chat/{service,routes}.ts` and `chat.test.ts` (A1–A4);
   `apps/web/src/lib/api.ts` (`retryAfter`); new `apps/web/src/app/chat/{types,actions,pending,poll,feed}.ts` and
-  their tests; `app/chat/{page,views/page,new/*}.tsx`; list styles. Lands `types.ts` and `actions.ts` signatures first.
+  their tests; `app/chat/{page,views/page,new/*}.tsx`; list styles, `results.ts`, `list-url.ts`, loading/new forms and `chat-views-check.cjs`. Landed
+  `types.ts` and `actions.ts` signatures first.
 - **Agent 2: thread, details, panels, browser.** `app/chat/[conversationId]/**` (thread, details), `components/chat/*`
   (MessageList, Composer, PinsBlock, MessageMenu, ItemChatPanel), the Chat sections in `work/tasks/[taskId]/page.tsx`
   and `work/projects/[projectId]/page.tsx`, thread styles, `apps/e2e/scripts/chat-check.cjs`, validation captures.
-  Consumes Agent 1's types and actions; neither edits the other's files.
+  Also `feed-state`, viewer guards and `chat-ci.mjs`; consumes Agent 1's types and actions.
+  Codex owned sign-out cleanup, fixture failure modes, CI wiring and final styles/integration.
 
 ## 6. Acceptance and release boundary
 

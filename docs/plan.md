@@ -173,7 +173,7 @@ These target semantics do not claim the old schema has already changed.
 | Tags | Flat organisation labels; many per task, stable identity on rename, no permissions or inherited duplication | Migration 0035 and API/web controls implemented; [tag contract](plans/workspace-task-tags-2026-09.md) records its original project restrictions, superseded by #136 standalone-task eligibility |
 | Saved views | Named, versioned private Work filters in `saved_views`; no stored task results or access grants | [Reviewed contract](plans/saved-work-views-2026-09.md), D26; private API/web delivered in #153/#154; shared views require a separate increment |
 | Equipment | Exclusive resources and bookings/maintenance with occupied start/end, setup/cleanup, revision and work/person links | Migration 0036 and web shipped; [contract](plans/equipment-reservations-2026-09.md); standalone task links and revision-aware project movement added by #136 |
-| Chat | Conversations, participants, messages, links, pins, stars and read positions with separate stable IDs: `conversations`, `conversation_participants`, `conversation_links`, `messages`, `chat_audit_events`; then `message_pins`, `conversation_stars`, `conversation_reads` | [Adopted contract](plans/linked-chat-2026-09.md), D25; not implemented. Core storage/API, then pins/stars/read state, then web, each in its own PR |
+| Chat | Conversations, participants, messages, links, pins, stars and read positions with separate stable IDs: `conversations`, `conversation_participants`, `conversation_links`, `messages`, `chat_audit_events`; then `message_pins`, `conversation_stars`, `conversation_reads` | [Adopted contract](plans/linked-chat-2026-09.md), D25; API #169/#171/#173 and web #174 released to staging. Files, summaries and native delivery remain separate |
 | Evidence | Business source links and deliberately shared correspondence with source-qualified identity and provenance | Existing generic evidence references reusable but need a bounded sharing/access contract; no mailbox archive |
 | Files/DAM | Provider originals, version identities, work links, version-scoped review/chat | Planned; no byte store or imported Embrace backend |
 | Inventory | Counted ingredients, consumables and finished product, with count time/person and explicit authority | Count services exist. Provider-owned quantities remain provider-owned; finished product does not require Shopify |
@@ -488,8 +488,8 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 - Linked chat: the [adopted contract](plans/linked-chat-2026-09.md) specifies bounded reads,
   revisions, participants/access, retry identity, cursors, read state, pins, participant-scoped
   audit and export/deletion for the first three increments. Core storage/API shipped in #169 on
-  the restricted staging runtime; the Chat screen remains unavailable. PR C (#171) shipped pins/stars/read positions/edits to staging; the
-  [web delivery amendment](plans/linked-chat-web-2026-09.md) defines PR D. Its bounded read API prerequisite shipped in #173; real web screens are in progress.
+  the restricted staging runtime. PR C (#171) shipped pins/stars/read positions/edits to staging; the
+  [web delivery amendment](plans/linked-chat-web-2026-09.md) defines PR D. Its bounded read API prerequisite shipped in #173; web #174 is released to staging, with local and CI two-person browser acceptance. Hosted checks cover anonymous protection and sign-in, not an authenticated two-person session.
   PR B execution gates (§17) passed real-Postgres and hosted rollback-only checks. Summaries, files, notifications and
   native delivery need their own contracts.
 - Files: provider/version identity, permissions, preview/extraction retention and explicitly shared

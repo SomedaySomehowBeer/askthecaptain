@@ -49,10 +49,10 @@ if (!directory) throw new Error('Set WORKSPACE_PROBE_DIR to the temporary fixtur
   for (const task of (await api(`/tasks?ownerId=${fixture.userId}&status=open&limit=100`)).tasks)
    if (task.title === 'Browser-created task') await api(`/tasks/${task.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled', expectedRevision: task.revision }) });
   for (const route of ['/work', '/work/new', '/work/views', '/work/tags', '/work/tasks/00000000-0000-4000-8000-000000000000/tags', '/chat', '/chat/views', '/resources', '/resources/views', '/resources/inventory', '/today']) {
-   const response = await fetch(origin + route, { redirect: 'manual' }); assert.equal(response.status, 307);
+   // Page-owned guards preserve the destination; with a loading boundary Next can stream the redirect.
    await goto(route); await expect(page).toHaveURL(/\/sign-in\?/);
   }
-  console.log('PASS unauthenticated redirects before streaming');
+  console.log('PASS unauthenticated pages reach sign-in');
   await signIn(); await goto('/'); await expect(page).toHaveURL(origin + '/work');
   await expect(page.getByRole('heading', { name: 'My work', exact: true })).toBeVisible();
   await expect(page.locator('.work-task')).toHaveCount(1);

@@ -1,7 +1,7 @@
 # Staging resumed; production paused (2026-09-27)
 
 **Staging runs on the restricted `captain_runtime` database login**, with the #173 chat API
-image (retaining the #162 guard) and #159 web image. The workspace is at https://app.askthecaptain.app/work. One existing
+image (retaining the #162 guard) and #174 web image. The workspace is at https://app.askthecaptain.app/work. One existing
 machine per staging app is retained, with normal autostart and idle stop. Production and the
 embedding service remain paused; automatic deploy and backup workflows remain disabled.
 Any API rollback must retain `captain_runtime` and the #162 role guard. Before any future production
@@ -11,7 +11,8 @@ The owner authorised the credential switch and retirement of the former administ
 credential on 26 September. See the activation record below and the
 [repair plan](../plans/runtime-database-role-2026-09.md). Earlier containment/preparation records
 are history, not instructions to revert to the elevated login. No additional customer-data reset
-was performed. Chat storage/API (core, pins, personal state and #173 read projections) is deployed; the Chat web screen remains unavailable.
+was performed. Chat storage/API and the #174 web screens are deployed. Local/CI two-person browser acceptance passed;
+hosted checks cover anonymous routes/sign-in, not a signed-in multi-user session.
 
 ## Staging authorisation (24 September 2026)
 
@@ -26,6 +27,44 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Chat web release (27 September Perth / 26 September 2026, UTC)
+
+Reviewed [#174](https://github.com/SomedaySomehowBeer/askthecaptain/pull/174) merged as
+`c2a6d8b998cb8fe094eadd62b6209e17fdc091e8`; source `dd50c6dc24eb50def58da4575cbd4e5785c6947c`
+has the same tree, `a280cb5f04fd13ab8a417fb16ea087e8d40e71a6`.
+[CI 36272989702](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36272989702)
+passed workspace typecheck, 471 Postgres tests, 13 infra tests, React retry regression, web build
+and both complete two-person Chat browser suites. Both suites also passed locally, with mobile
+and desktop layouts. The two Claude Opus agents implemented disjoint files and reviewed each
+other; all blocking findings were resolved. See [validation](../validation/chat-web-2026-09-27/README.md).
+
+The clean-source Linux/amd64 web image was pushed as
+`registry.fly.io/askthecaptain-web-staging:git-dd50c6d@sha256:bd6a216d2e990c18851d43fe589f9b7a1c07efc8a02162606f86ccc144095ddf`
+(image index). Fly resolved its amd64 manifest and installed
+`registry.fly.io/askthecaptain-web-staging:git-dd50c6d@sha256:3223733620b09ae7181636b7f5482f05042cb8e96ad2a63d9cb1e3e332478816`
+on existing web machine `9185776e7cd3d8`. Only its image changed. Normal command, environment,
+restart, autostart and idle stop were preserved. The web machine has no configured health check;
+actual hosted browser checks and API readiness were run after the successful update.
+
+Chrome at 390 and 1440 pixels confirmed Chat list/filter, views, new-with-task, thread and details
+routes require sign-in and preserve their canonical return paths; no overflow or page errors.
+API readiness returned `200 {"ok":true}`. Chat and task-conversation API routes returned 401 to
+anonymous requests. No authenticated hosted session was available: full interaction, polling and
+multi-person behaviour are local/CI evidence only, and staging polling capacity is unmeasured.
+The smoke test also exposed an older Work layout bug: task/project sign-in redirects returned
+to `/work`. The follow-up removes that redundant layout guard while retaining every page's own
+guard, with exact task/project return-path browser regressions; its release is recorded separately.
+
+Fleet comparison found one machine per staging app, unchanged API image/configuration and unchanged
+production/embedding machine identities/configurations; production/embedding stayed stopped. No
+migration, API deployment, credential, DNS or infrastructure change occurred. Automatic deployment
+and backup stay disabled. Existing demo/work records were preserved; browser fixtures were local
+and disposable. API #173, migration 0043 and `captain_runtime` remain in place.
+
+Web-only rollback: restore the saved #159 web image/configuration on this same machine if needed;
+it hides the new Chat UI but does not remove data. Keep the deployed chat-aware API and schema.
+The retained old web digest is `sha256:a6b581dbe2ecc0abb00c202bd0f8d4d8d2d1da4a9056c11d4118495ae6b7401c`.
 
 ## Chat read API release (27 September Perth / 26 September 2026, UTC)
 
