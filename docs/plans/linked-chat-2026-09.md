@@ -416,8 +416,9 @@ bug. Unknown constraint names are never mapped to a `409`.
     participates in, and only that person's stars and read positions; other members' conversations
     are not exported, so this is not a complete chat backup."
   - No `exportOnly` filter is needed: content-free tombstones are exported as tombstones.
-- **Root's documents.** The privacy notice and export documentation need matching chat lines (item
-  8).
+- **Root's documents.** Export documentation describes the participant-scoped limit. The historical,
+  unpublished privacy draft remains owner-owned: prepare the chat access, audit, retention and
+  export facts for the owner in #27, without editing or publishing legal text (scope audit §3).
 
 ## 11. Required plan and AGENTS amendment (blocking adoption)
 
