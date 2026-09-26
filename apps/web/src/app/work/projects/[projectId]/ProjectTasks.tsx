@@ -8,17 +8,17 @@ import type { WorkPage } from '../../types.ts';
 
 export const initials = (name: string) => name.trim().split(/\s+/).slice(0, 2).map(word => word[0] ?? '').join('').toUpperCase();
 
-export function ProjectTasks({ result, href, overview, start, cancelled, owners, peopleAvailable, today }: {
- result: Loaded<WorkPage>; href: string; overview: boolean; start: number; cancelled: boolean;
+export function ProjectTasks({ result, href, overview, start, status, owners, peopleAvailable, today }: {
+ result: Loaded<WorkPage>; href: string; overview: boolean; start: number; status: 'open' | 'in_progress' | 'suggested' | 'done' | 'cancelled' | 'all';
  owners: Map<string, string>; peopleAvailable: boolean; today: string | null;
 }) {
- const listHref = `${href}?view=tasks${cancelled ? '&status=cancelled' : ''}`;
+ const listHref = `${href}?view=tasks${overview ? '&status=all' : status === 'open' ? '' : `&status=${status}`}`;
  const returnHref = overview ? href : `${listHref}&offset=${start}`;
  return <section className="project-section" aria-label={overview ? 'Across the project' : 'Project tasks'}>
-  <div className="project-section__heading"><h2>{overview ? 'Across the project' : 'Tasks'}</h2>{overview ? <Link href={listHref}>All tasks <span aria-hidden="true">›</span></Link> : null}</div>
-  {!overview ? <nav className="project-task-filters" aria-label="Task history"><Link href={`${href}?view=tasks`} aria-current={!cancelled ? 'page' : undefined}>Current and completed tasks</Link><Link href={`${href}?view=tasks&status=cancelled`} aria-current={cancelled ? 'page' : undefined}>Cancelled tasks</Link></nav> : null}
+  <div className="project-section__heading"><h2>{overview ? 'Across the project' : 'Tasks'}</h2>{overview ? <Link href={listHref}>Tasks <span aria-hidden="true">›</span></Link> : null}</div>
+  {!overview ? <nav className="project-task-filters" aria-label="Task status">{([['open','Open'],['in_progress','In progress'],['suggested','Suggested'],['done','Completed'],['cancelled','Cancelled']] as const).map(([value,label]) => <Link key={value} href={`${href}?view=tasks${value === 'open' ? '' : `&status=${value}`}`} aria-current={status === value ? 'page' : undefined}>{label}</Link>)}<Link href={`${href}?view=tasks&status=all`} aria-current={status === 'all' ? 'page' : undefined}>All except cancelled</Link></nav> : null}
   {overview ? <p className="project-note">Open and in-progress work · earliest due first</p> : null}
-  <TaskListFeedback>
+  <TaskListFeedback key={status}>
    {!result.ok ? <Notice title="Tasks could not be read" tone="failed" action={{ href: returnHref, label: 'Try again' }}>{result.error.message}</Notice> : <>
     {result.value.tasks.length ? <ul className={`bare work-list work-list--card ${overview ? 'project-stream' : ''}`}>
      {result.value.tasks.map(task => {
@@ -34,8 +34,8 @@ export function ProjectTasks({ result, href, overview, start, cancelled, owners,
        <span className="work-task__meta">{task.tags.map(tag => <span className="chip" key={tag.id}>{tag.name}</span>)}<span>{ownerLabel}</span><span>{task.status.replaceAll('_', ' ')}</span></span>
       </TaskCheckRow>;
      })}
-    </ul> : <p className="project-empty">{overview ? 'No open or in-progress tasks in this project.' : 'No tasks on this page.'}</p>}
-    {overview && result.value.nextOffset !== null ? <p className="project-note">Showing the first six open or in-progress tasks by due date. <Link href={listHref}>View all project tasks</Link>.</p> : null}
+    </ul> : <p className="project-empty">{overview ? 'No open or in-progress tasks in this project.' : `No ${status === 'all' ? '' : status === 'done' ? 'completed ' : status.replaceAll('_', ' ') + ' '}tasks on this page.`}</p>}
+    {overview && result.value.nextOffset !== null ? <p className="project-note">Showing the first six open or in-progress tasks by due date. <Link href={listHref}>View project tasks</Link>.</p> : null}
     {!overview ? <nav className="row" aria-label="Task pages">{start > 0 ? <Link href={`${listHref}&offset=${Math.max(0, start - 50)}`}>Previous tasks</Link> : null}{result.value.nextOffset !== null ? <Link href={`${listHref}&offset=${result.value.nextOffset}`}>Next tasks</Link> : null}</nav> : null}
    </>}
   </TaskListFeedback>

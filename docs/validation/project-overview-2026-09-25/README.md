@@ -35,3 +35,10 @@ The review corrected historical completed tasks crowding the preview, former-mem
 schedule recovery links. Browser inspection corrected the schedule selector's label and plus styling.
 Booking times retain explicit offsets across a clock change. This is not full native-device,
 screen-reader, Files/Chat or overall mockup acceptance. Remaining design work stays in #142.
+
+These are full-page captures: fixed bottom navigation and the plus retain their viewport positions
+partway through the image. The page has bottom padding so content can scroll clear of those controls.
+
+The [26 September task-history follow-up](../project-history-2026-09-26/README.md) changes the
+Tasks default to Open and adds explicit status views. The overview links to All except cancelled;
+these earlier captures show the prior task-list behaviour.

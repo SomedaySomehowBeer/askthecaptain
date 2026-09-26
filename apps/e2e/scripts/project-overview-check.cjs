@@ -57,11 +57,11 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
    await page.screenshot({path:path.join(directory,`project-${view}-${width}.png`),fullPage:true});
   }
   console.log('PASS populated overview, cross-tag work, project-only bookings and all three views at four widths');
-  await goto(projectPath+'?view=tasks');
+  await goto(projectPath+'?view=tasks&status=all');
   const checkbox=page.getByRole('checkbox',{name:'Complete Confirm packaging slot',exact:true});
   await checkbox.focus();await checkbox.press('Space');await expect(checkbox).toBeChecked();
   await expect(page.getByRole('status',{name:'Work updates'})).toBeFocused();
-  await expect(page).toHaveURL(origin+projectPath+'?view=tasks');
+  await expect(page).toHaveURL(origin+projectPath+'?view=tasks&status=all');
   assert.equal((await api(`/tasks/${tasks[0].id}`)).task.status,'done');
   await checkbox.click();await expect(checkbox).not.toBeChecked();
   await page.getByRole('link',{name:/^Confirm packaging slot/}).click();await expect(page).toHaveURL(origin+`/work/tasks/${tasks[0].id}`);
@@ -98,5 +98,5 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   await expect(page.locator('.project-context')).toContainText('archived');await expect(page.getByRole('link',{name:'New task in this project',exact:true})).toHaveCount(0);await expect(page.locator('.project-bookings > li')).toHaveCount(3);
   await expect(page.getByRole('link',{name:'Back to Projects',exact:true})).toHaveAttribute('href','/work/projects?state=archived');
   assert.deepEqual(errors,[]);console.log('PASS independent read failures, empty project and archived history without fake availability');
- } catch(error){await page.screenshot({path:path.join(directory,'project-failure.png'),fullPage:true}).catch(()=>{});console.error('PAGE',page.url(),await page.locator('main').innerText().catch(()=>''));throw error;} finally {await writeFile(path.join(directory,'mode'),'');await context.close();await browser.close();}
+ } catch(error){await page.screenshot({path:path.join(directory,'project-failure.png'),fullPage:true}).catch(()=>{});console.error('PAGE',page.url(),await page.locator('main').innerText().catch(()=>''));throw error;} finally {await writeFile(path.join(directory,'mode'),'');await context.unrouteAll({behavior: 'wait'});await context.close();await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1});

@@ -27,7 +27,8 @@ async function preview(root: string, projectId: string, token: string): Promise<
 export default async function ProjectPage({ params, searchParams }: { params: Promise<{ projectId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
  const { projectId } = await params, href = `/work/projects/${projectId}`, me = await requireCurrent(href), s = await searchParams;
  const view = s.view === 'tasks' || s.view === 'schedule' ? s.view : s.status === 'cancelled' || s.offset !== undefined ? 'tasks' : 'overview';
- const start = offset(s.offset), cancelled = s.status === 'cancelled', root = `/v1/organisations/${me.organisation.organisationId}`;
+ const status = s.status === 'in_progress' || s.status === 'suggested' || s.status === 'done' || s.status === 'cancelled' || s.status === 'all' ? s.status : 'open';
+ const start = offset(s.offset), root = `/v1/organisations/${me.organisation.organisationId}`;
  const [result, members, organisation] = await Promise.all([
   load(() => api<Project>(`${root}/projects/${projectId}`, { token: me.token })),
   load(() => api<{ members: Member[] }>(`${root}/members`, { token: me.token })),
@@ -47,7 +48,7 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
   window = { date, span, from: zonedDay(date, zone), to: zonedDay(shiftDate(date, span), zone), zone };
  } catch (error) { problem = error instanceof Error ? error.message : 'Choose a valid schedule date.'; }
  const [tasks, bookings] = await Promise.all([
-  overview ? preview(root, projectId, me.token) : view === 'tasks' ? load(() => api<WorkPage>(`${root}/tasks?projectId=${projectId}${!overview && cancelled ? '&status=cancelled' : ''}&offset=${overview ? 0 : start}&limit=${overview ? 6 : 50}`, { token: me.token })) : null,
+  overview ? preview(root, projectId, me.token) : view === 'tasks' ? load(() => api<WorkPage>(`${root}/tasks?projectId=${projectId}${status === 'all' ? '' : `&status=${status}`}&offset=${start}&limit=50`, { token: me.token })) : null,
   view !== 'tasks' && window ? load(() => api<ProjectReservationPage>(`${root}/projects/${projectId}/reservations?${new URLSearchParams({ from: window.from, to: window.to, offset: String(overview ? 0 : start), limit: overview ? '3' : '50' })}`, { token: me.token })) : null
  ]);
  return <Page title={p.name} parent={{ href: `/work/projects${p.state === 'archived' ? '?state=archived' : ''}`, label: 'Projects' }}>
@@ -55,7 +56,7 @@ export default async function ProjectPage({ params, searchParams }: { params: Pr
   <nav className="project-tabs" aria-label="Project views">{(['overview', 'tasks', 'schedule'] as const).map(tab => <Link key={tab} href={tab === 'overview' ? href : `${href}?view=${tab}`} aria-current={view === tab ? 'page' : undefined}>{tab[0]!.toUpperCase() + tab.slice(1)}</Link>)}</nav>
   {overview && p.description ? <p className="work-record-body project-description">{p.description}</p> : null}
   {!members.ok && view !== 'schedule' ? <Notice tone="failed" title="People could not be read">Owner names are unavailable. Refresh to try again.</Notice> : null}
-  {tasks ? <ProjectTasks result={tasks} href={href} overview={overview} start={start} cancelled={cancelled} owners={owners} peopleAvailable={members.ok} today={today}/> : null}
+  {tasks ? <ProjectTasks result={tasks} href={href} overview={overview} start={start} status={status} owners={owners} peopleAvailable={members.ok} today={today}/> : null}
   {view !== 'tasks' ? <ProjectBookings result={bookings} window={window} problem={problem} invalidWindow={organisation.ok} href={href} overview={overview} start={start}/> : null}
   <details className="project-actions"><summary>Project actions</summary><div className="stack"><Link href={`/work/series?projectId=${p.id}`}>Recurring work in this project</Link>{p.state === 'active' ? <><Link href={`/work/new?projectId=${p.id}`}>New task</Link><Link href={`/work/series/new?projectId=${p.id}`}>New recurring work</Link></> : null}</div></details>
   <details className="project-edit"><summary>Edit project</summary><RecordForm kind="projects" id={p.id} revision={p.revision} key={p.revision}><ProjectFields project={p}/></RecordForm></details>

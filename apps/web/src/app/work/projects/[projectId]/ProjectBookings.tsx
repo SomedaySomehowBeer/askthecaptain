@@ -30,7 +30,7 @@ export function ProjectBookings({ result, window, problem, invalidWindow, href, 
    <input type="hidden" name="view" value="schedule"/>
    <div className="field"><label htmlFor="project-date">Starting date</label><input id="project-date" name="date" type="date" defaultValue={window.date} required min="1900-01-01" max="2199-12-30"/></div>
    <div className="field"><label htmlFor="project-span">Window</label><select id="project-span" name="span" defaultValue={window.span}>{[1,7,14,28].map(span => <option key={span} value={span}>{span} {span === 1 ? 'day' : 'days'}</option>)}</select></div>
-   <button className="button button--ghost" type="submit">Show bookings</button>
+   <button className="button button--secondary" type="submit">Show bookings</button>
   </form> : null}
   {problem || !window ? <Notice title="Schedule could not be read" tone="failed" action={{ href: invalidWindow ? scheduleHref : overview ? href : scheduleHref, label: invalidWindow ? 'Open today’s project schedule' : 'Try again' }}>{problem ?? 'The business time zone is unavailable.'}</Notice> : <>
    <p className="project-note">{shortDate(window.date)} – {shortDate(shiftDate(window.date, window.span - 1))} · {window.zone}</p>
