@@ -70,8 +70,10 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
 - **Convergence.** Upsert by entity ID keeping the higher `changeSeq`; a `revision` change refetches
   detail; gaps are detected only by `seq`. A pin change whose message is absent triggers a bounded
   `GET /pins` refresh. Reconcile an uncertain edit/delete with `messages?after=<seq-1>&limit=1`,
-  stars with detail, and pins with `GET /pins`. Initial independently fetched message/pin snapshots
-  must not advance the change cursor past the older message snapshot; catch up before claiming current state.
+  stars with detail, and pins with `GET /pins`. For independently fetched message/pin snapshots,
+  start the change cursor at the smaller `lastChange`, then catch up before claiming current state.
+  Changes below the loaded message window update the cache without creating holes in the visible
+  stream; new messages above the window append in sequence.
 - **Read position.** `POST read` at most once per 15 s, only from the full thread, for the highest message displayed
   while visible (IntersectionObserver), only when it moves forward. Never from a panel, list or background poll.
   A failed or rate-limited advance does not lock the composer or retry automatically; a later
@@ -87,7 +89,6 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
   access loss (404) for that conversation, sign-out or a different signed-in user. Another organisation's
   records for the same user stay hidden and are restored only when that scope returns; switching
   organisation never sends or silently deletes them. Malformed records are discarded.
-
 - **UI limits.** Explain and enforce 49 other people at create, 20 per add request, 50 participants
   total, 10 links and 50 live pins. Map server error codes to actionable states. Shared pins keep
   original message IDs; their block may show the actual live pin count. The message stream has one
