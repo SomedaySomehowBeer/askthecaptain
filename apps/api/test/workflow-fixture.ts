@@ -13,8 +13,7 @@ export async function workflowFixture(db: Harness) {
  await db.owner`insert into memberships (organisation_id, user_id, role) values (${org}, ${userId}, 'owner'), (${org}, ${member!.id}, 'member')`;
  const tx = <T>(fn: Parameters<typeof withTenant<T>>[2]) => withTenant(db.app, { organisationId: org, userId }, fn);
  const registry = new Registry(); await installQueues(db.databaseUrl, definitions);
- const url = new URL(db.databaseUrl); url.username = 'app'; url.password = 'app';
- const engine = new BossEngine(db.app, url.toString(), registry, definitions, 86400000, retiredWorkflowVersions);
+ const engine = new BossEngine(db.app, db.runtimeUrl, registry, definitions, 86400000, retiredWorkflowVersions);
  const workflows = new WorkflowService(db.app, null, engine); await workflows.sync(); await engine.open();
  return { org, userId, actor, member: { userId: String(member!.id), requestId: randomUUID() }, stranger: { userId: String(stranger!.id), requestId: randomUUID() }, tx, db, registry, engine, workflows };
 }

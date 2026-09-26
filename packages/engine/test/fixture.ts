@@ -75,8 +75,8 @@ export async function fixture(db: Harness, fault?: 'database' | 'provider' | 'fa
   await tx(async sql => { await sql`insert into engine_spike.labels (organisation_id, run_id, thread_id, idempotency_key) values (${organisationId}, ${runId}, ${(args.thread as { id: string }).id}, ${idempotencyKey}) on conflict do nothing`; });
   if (fault === 'provider' && !failed) { failed = true; throw Error('Injected lost response after provider commit'); } return { labelled: true };
  } });
- const url = new URL(db.databaseUrl); url.username = 'app'; url.password = 'app';
- const make = (dayMs = 10000) => new BossEngine(db.app, url.toString(), registry, [definition], dayMs);
+ // Workers connect as the harness runtime role, the same one as db.app.
+ const make = (dayMs = 10000) => new BossEngine(db.app, db.runtimeUrl, registry, [definition], dayMs);
  const engine = make(); await engine.open(); await engine.boss.updateQueue('workflow_inbox-triage', { retryDelay: 1, retryLimit: 2, retryBackoff: false });
  const start = () => tx(sql => engine.start(sql, tenant.organisationId, definition.key));
  const state = async (runId: string) => (await tx(sql => sql`select * from workflow_runs where id = ${runId}`))[0]!;

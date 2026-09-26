@@ -72,14 +72,16 @@ jobs:
           set -euo pipefail
           export PGPASSWORD="$PGPASSWORD_REHEARSAL"
           "$PG_BIN/pg_restore" --list "/tmp/captain-$STAMP.dump" | grep -c 'TABLE DATA' | xargs -I{} echo "{} tables with data in the archive"
-          # RLS policies in the dump reference the runtime role, even with ACLs omitted.
-          "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -c "do \$\$ begin if not exists (select 1 from pg_roles where rolname = 'app') then create role app nologin; end if; end \$\$"
+          # RLS policies in the dump reference both runtime roles, even with ACLs omitted. In this
+          # throwaway copy they only need to exist: no login, no attributes, no memberships.
+          "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -v ON_ERROR_STOP=1 -c "do \$\$ declare r text; begin foreach r in array array['app', 'captain_runtime'] loop if not exists (select 1 from pg_roles where rolname = r) then execute format('create role %I nologin nosuperuser nobypassrls nocreaterole nocreatedb noreplication noinherit', r); end if; end loop; end \$\$"
           "$PG_BIN/pg_restore" --host=localhost --username=postgres --dbname=rehearsal --no-owner --no-privileges --exit-on-error "/tmp/captain-$STAMP.dump"
           "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -c "select count(*) from organisations" > /tmp/orgs-restored.txt
           echo "organisations: source $(cat /tmp/orgs-source.txt), restored $(cat /tmp/orgs-restored.txt)"
           test "$(cat /tmp/orgs-source.txt)" = "$(cat /tmp/orgs-restored.txt)"
           "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -c "select count(*) from schema_migrations" | xargs -I{} echo "{} migrations recorded in the restored copy"
           "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -c "select count(*) from pg_policies" | xargs -I{} echo "{} row security policies restored"
+          "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -c "select count(*) from pg_policies where 'captain_runtime' = any(roles)" | xargs -I{} echo "{} of them name captain_runtime"
       - name: Keep the dump, prune old ones
         run: |
           set -euo pipefail

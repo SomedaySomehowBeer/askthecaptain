@@ -17,7 +17,7 @@ on demand (*Actions → backup → Run workflow*):
 
 1. reads the owner connection string from the infrastructure state, exactly as the deploy does;
 2. takes a logical dump of the whole database (`pg_dump`, custom format, zstd), stripping owner
-   assignments and ACLs; policy definitions still reference roles such as `app`;
+   assignments and ACLs; policy definitions still reference roles such as `app` and `captain_runtime`;
 3. **rehearses the restore** into a fresh Postgres 18 inside the job, checks the archive lists its
    tables, restores with `--exit-on-error`, and compares the organisation count with the source;
    a difference fails the run;
@@ -52,19 +52,25 @@ When Neon's history does not reach far enough, or the project itself is gone:
 1. Fetch the dump: `aws s3 cp s3://askthecaptain-tofu-state/backups/captain-<stamp>.dump .` with
    the Tigris keys and `AWS_ENDPOINT_URL=https://fly.storage.tigris.dev`.
 2. Create the target: a new Neon project or branch (`infra/tofu` recreates the project, database and
-   `app` role from nothing; apply it first if the project is gone).
+   legacy `app` role from nothing; applying infrastructure remains an owner operation).
 3. Restore as the owner: `pg_restore --dbname="$MIGRATION_DATABASE_URL" --no-owner --no-privileges
-   --exit-on-error captain-<stamp>.dump`. The `app` role must exist before restoring (the migration
-   creates it; so does `infra/tofu`).
+   --exit-on-error captain-<stamp>.dump`. Both `app` and SQL-created `captain_runtime` must exist
+   before restoring policies. Create the latter with NOLOGIN, NOSUPERUSER, NOBYPASSRLS,
+   NOCREATEROLE, NOCREATEDB, NOREPLICATION and no role memberships; never through the Neon API.
 4. Confirm: `psql "$MIGRATION_DATABASE_URL" -c "select count(*) from organisations"` and
    `select name from schema_migrations order by 1` end with the latest migration.
 5. Before pointing an API at the restored data, restore and verify the required runtime-role
    grants against the migration definitions. The archive omits ACLs; migrations already recorded
    in `schema_migrations` will not run again to recreate grants. Test an authorised application
    read/write and cross-tenant denial on the scratch restore. The automated count check alone
-   does not prove application access. Prepare/review the grant restoration as part of the drill.
+   does not prove application access. Prepare/review the grant restoration as part of the drill;
+   a reusable complete grant-replay script remains a tracked prerequisite before hosted backups
+   resume. Migration 0041 alone cannot repair an ACL-free restore, because it copies grants
+   already present on the legacy role.
 6. Point the API at it: set `DATABASE_URL` and `MIGRATION_DATABASE_URL` on the Fly app to the new
-   connection strings (`tofu output -raw …`), then redeploy or restart. The release step re-runs
+   connection strings: runtime uses SQL-created `captain_runtime`, migrations use the owner.
+   Do not use the administrative `neon_app_database_url` output. Verify runtime flags, membership,
+   object ownership and RLS before activation. The release step re-runs
    migrations and the queue installation; both are idempotent.
 7. Tell people: anything written after the dump's timestamp is gone; mail and calendar re-sync from
    the providers on the next run (their cursors are in the dump and re-sync from that point).

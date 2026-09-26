@@ -40,6 +40,13 @@ it('health answers without a session', async () => {
 	assert.equal((await app.request('/v1/me')).status, 401);
 });
 
+it('readiness rejects an administrative database connection without exposing role details', async () => {
+	const unsafe = createApp({ db: db.owner, auth, organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app) });
+	const response = await unsafe.request('/readyz');
+	assert.equal(response.status, 503);
+	assert.deepEqual(await response.json(), { ok: false, reason: 'database role is unsafe' });
+});
+
 it('Google sign-in hands the web a one-time code that becomes a session', async () => {
 	const signed = await signIn({ subject: 'g-1', email: 'owner@example.com', name: 'Olive Owner' });
 	assert.match(signed.token, /^sess_/); assert.equal(signed.returnTo, '/settings');
