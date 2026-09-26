@@ -99,7 +99,8 @@ this repair. No customer content is reset, deleted, or converted.
    changes or unrelated state drift. The scoped refresh uses a temporary override of the validated
    project/branch IDs to remove the project dependency during that operation; it never changes
    tracked Terraform configuration. Cleanup removes only the file created by that run. The stored
-   role dependency may be absent until the next normal configuration apply. The `app` role remains administrative and unused; rotating its
+   role dependency may be absent until the next normal configuration apply; in this run it was
+   retained (one recorded dependency). The `app` role remains administrative and unused; rotating its
    password does not disable the role. Neon retains the new, unused administrative password, and
    the scoped refresh records it in the role state. The separate output repair below updates the
    legacy URL too. Both are sensitive values in the Tigris state bucket, and neither is a runtime login.
@@ -116,7 +117,8 @@ The repository's existing Terraform `neon_role.app` resource is retained, to avo
 state change. Its generated URL is no longer a suitable runtime connection; future operators must
 use the SQL-created role. No `tofu apply`, credential rotation or provider support request is
 performed by implementation PR #162. The separately authorised activation and #164 retirement
-workflow (with #165 rejection-classifier and #166 scoped-refresh fixes) do change credentials; the latter applies only a checked refresh-only state plan. If activation fails, keep the API stopped; reverting to the
+workflow (with #165 rejection-classifier and #166 scoped-refresh fixes) do change credentials; the latter applies only a checked refresh-only state plan. #167 additionally applied one
+checked output-only plan with refresh off. If activation fails, keep the API stopped; reverting to the
 administrative runtime connection is not an acceptable availability rollback.
 
 ## Remaining credential separation
