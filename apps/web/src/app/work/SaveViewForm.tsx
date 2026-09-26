@@ -36,6 +36,7 @@ export function SaveViewForm({ filter, words, scope, summary = 'Save this view',
 	const [said, setSaid] = useState<Said>(null);
 	const [storageNote, setStorageNote] = useState<string | null>(null);
 	const [restored, setRestored] = useState(false);
+	const [keepOpen, setKeepOpen] = useState(false);
 	// Nothing can be sent until this tab's pending record has been looked for, so a hydrating form can never send a
 	// fresh id ahead of an unconfirmed one.
 	const [ready, setReady] = useState(false);
@@ -88,6 +89,7 @@ export function SaveViewForm({ filter, words, scope, summary = 'Save this view',
 	/** `retry` resends an identity that is already unconfirmed (and already locked); anything else is a new create. */
 	function send(sent: Identity, retry: boolean) {
 		if (sending.current || !ready) return;
+		setKeepOpen(true);
 		// Written before the request leaves, so a reload mid-save still knows this identity.
 		storage.current ??= tabStorage();
 		const kept = savePending(storage.current, scope, sent);
@@ -143,6 +145,7 @@ export function SaveViewForm({ filter, words, scope, summary = 'Save this view',
 	/** The only way to a new create id, and the only way an unreadable tab record is cleared: the person asks for a
 	 *  new view explicitly. */
 	function startNew() {
+		setKeepOpen(true);
 		resolved();
 		pendingId.current = newViewId();
 		setIdentity((previous) => previous ? { ...previous, id: pendingId.current!, filter, words } : previous);
@@ -152,7 +155,7 @@ export function SaveViewForm({ filter, words, scope, summary = 'Save this view',
 
 	const fieldId = `save-view-name-${summary === 'Save this view' ? 'work' : 'draft'}`;
 	return (
-		<details className="disclosure work-save-view" open={startOpen || locked || undefined}>
+		<details className="disclosure work-save-view" open={startOpen || keepOpen || locked || undefined}>
 			<summary>{summary}</summary>
 			<form className="form" onSubmit={submit} method="post" aria-busy={pending || undefined}>
 				{restored ? <p className="muted">This save began before the page reloaded. It keeps the filter it was sent with, which may differ from the list on this page.</p> : null}
