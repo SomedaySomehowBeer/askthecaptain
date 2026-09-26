@@ -2,7 +2,9 @@ import { apiUrl } from './env.ts';
 
 export class ApiError extends Error {
 	readonly status: number; readonly code: string; readonly requestId: string | null;
-	constructor(status: number, code: string, message: string, requestId: string | null) { super(message); this.status = status; this.code = code; this.requestId = requestId; this.name = 'ApiError'; }
+	/** Whole seconds from a `Retry-After` header on the failed response, else null. Not capped here. */
+	readonly retryAfter: number | null;
+	constructor(status: number, code: string, message: string, requestId: string | null, retryAfter: number | null = null) { super(message); this.status = status; this.code = code; this.requestId = requestId; this.retryAfter = retryAfter; this.name = 'ApiError'; }
 	get offline() { return this.status === 0; }
 	get unauthorised() { return this.status === 401; }
 }
@@ -13,6 +15,11 @@ export type Role = 'owner' | 'admin' | 'member';
 export type Organisation = { id: string; name: string; timezone: string; locale: string; createdAt: string; role: Role };
 export type Member = { userId: string; name: string; email: string; role: Role; status: string; since: string };
 export type Invitation = { id: string; email: string; role: Exclude<Role, 'owner'>; invitedBy: string; expiresAt: string; createdAt: string };
+
+/** A `Retry-After` value in whole seconds; the HTTP-date form and anything else read as null. */
+export function retryAfterSeconds(header: string | null): number | null {
+	return header !== null && /^\d+$/.test(header.trim()) ? Number(header.trim()) : null;
+}
 
 /** One call to the API. Throws `ApiError` with the API's own code and message, or status 0 when the
  *  API could not be reached at all. */
@@ -25,7 +32,7 @@ export async function api<T>(path: string, options: { token?: string; method?: s
 	} catch { throw new ApiError(0, 'offline', 'Captain could not reach its API just now.', null); }
 	if (!response.ok) {
 		const detail = (await response.json().catch(() => ({}))) as { code?: string; error?: string };
-		throw new ApiError(response.status, detail.code ?? 'error', detail.error ?? 'That did not work.', response.headers.get('x-request-id'));
+		throw new ApiError(response.status, detail.code ?? 'error', detail.error ?? 'That did not work.', response.headers.get('x-request-id'), retryAfterSeconds(response.headers.get('retry-after')));
 	}
 	return (await response.json()) as T;
 }

@@ -89,7 +89,9 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
   scoped to user/organisation/conversation in tab sessionStorage. A 429 keeps the same ID and an editable
   draft; a 5xx, timeout or network failure keeps it locked until reconciled. Stale-revision forms
   retain editable text and show current state. Clear on confirmed completion, explicit discard,
-  access loss (404) for that conversation, sign-out or a different signed-in user. Another organisation's
+  access loss (404) for that conversation, explicit sign-out or a different signed-in user.
+  An expired session (401) stops polling and locks writes with a sign-in action, preserving scoped
+  pending identities for the same person to reconcile after signing back in. Another organisation's
   records for the same user stay hidden and are restored only when that scope returns; switching
   organisation never sends or silently deletes them. Malformed records are discarded.
 - **UI limits.** Explain and enforce 49 other people at create, 20 per add request, 50 participants

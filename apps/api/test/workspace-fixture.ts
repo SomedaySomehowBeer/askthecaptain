@@ -106,11 +106,13 @@ try {
         values (${unreadableViewId}, ${org.id}, ${owner.user.id}, 'Unreadable view', 1, '{"owner":"me"}')`;
     await writeFile(`${directory}/data.json`, JSON.stringify({ fastRateWindows, unreadableViewId, memberToken: pat.token, memberUserId: pat.user.id, newerViewId, fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id, retiredRun: oldRun!.id }), { mode: 0o600, flag: 'wx' });
     let mutationRequests = 0, reservationReadCount = 0;
+    let chatRequestCount = 0;
+    const chatRequests: { sequence: number; method: string; path: string; query: string }[] = [];
     const reservationReads: { sequence: number; equipmentId: string; from: string | null; to: string | null }[] = [];
     const server = serve({ hostname: '127.0.0.1', port: 8084, fetch: async (req, bindings) => {
         const mode = await readFile(`${directory}/mode`, 'utf8').catch(() => '');
         const url = new URL(req.url);
-        if (url.pathname === '/__fixture/stats') return Response.json({ mutationRequests, reservationReadCount, reservationReads });
+        if (url.pathname === '/__fixture/stats') return Response.json({ mutationRequests, reservationReadCount, reservationReads, chatRequestCount, chatRequests });
         const equipmentRead = /\/equipment\/([^/]+)\/reservations$/.exec(url.pathname);
         if (equipmentRead && req.method === 'GET') {
             reservationReads.push({ sequence: ++reservationReadCount, equipmentId: equipmentRead[1]!, from: url.searchParams.get('from'), to: url.searchParams.get('to') });
@@ -126,6 +128,38 @@ try {
             }
             const status = mode === 'session-expired' ? 401 : mode === 'session-rate-limited' ? 429 : 503;
             return Response.json({ code: 'fixture_session_failure', error: 'Fixture session lookup failed' }, { status, headers: status === 429 ? { 'retry-after': '1' } : {} });
+        }
+
+        // Chat faults run only in this loopback fixture over its disposable database. They never
+        // fabricate a successful write: uncertain modes lose only the real handler's 2xx response.
+        const chatPath = url.pathname.startsWith(`${base}/conversations`);
+        const chatSend = chatPath && /\/conversations\/[^/]+\/messages$/.test(url.pathname) && req.method === 'POST';
+        const chatMutation = chatPath && /\/conversations\/[^/]+/.test(url.pathname)
+            && !['GET', 'HEAD'].includes(req.method) && !url.pathname.endsWith('/read') && !chatSend;
+        const chatOtherWrite = chatPath && (
+            (/\/messages\/[^/]+$/.test(url.pathname) && ['PATCH', 'DELETE'].includes(req.method)) ||
+            (/\/pins(?:\/[^/]+)?$/.test(url.pathname) && ['POST', 'DELETE'].includes(req.method)) ||
+            (/\/star$/.test(url.pathname) && ['POST', 'DELETE'].includes(req.method)));
+        if (chatPath) {
+            chatRequests.push({ sequence: ++chatRequestCount, method: req.method, path: url.pathname, query: url.search });
+            if (chatRequests.length > 256) chatRequests.shift();
+        }
+        if (chatSend && mode === 'chat-send-rate-limited')
+            return Response.json({ code: 'rate_limited', error: 'Wait before sending again.' }, { status: 429, headers: { 'retry-after': '7' } });
+        if (chatMutation && mode === 'chat-write-rate-limited')
+            return Response.json({ code: 'rate_limited', error: 'Wait before changing this again.' }, { status: 429, headers: { 'retry-after': '7' } });
+        if (mode === 'chat-write-unresolved' && req.method === 'GET' && chatPath && url.pathname !== `${base}/conversations`)
+            return Response.json({ code: 'fixture_chat_failure', error: 'Fixture reconciliation unavailable' }, { status: 503 });
+        if (req.method === 'GET' && chatPath && (
+            (mode === 'chat-changes-failed' && url.pathname.endsWith('/changes')) ||
+            (mode === 'chat-list-failed' && url.pathname === `${base}/conversations`)))
+            return Response.json({ code: 'fixture_chat_failure', error: 'Fixture chat read unavailable' }, { status: 503 });
+        if ((chatSend && mode === 'chat-send-uncertain') || (chatOtherWrite && mode === 'chat-write-uncertain')
+            || (mode === 'chat-create-uncertain' && req.method === 'POST' && url.pathname === `${base}/conversations`)
+            || (chatMutation && mode === 'chat-write-unresolved')) {
+            const result = await app.fetch(req);
+            if (!result.ok) return result;
+            return Response.json({ code: 'fixture_chat_uncertain', error: 'Fixture lost chat write response' }, { status: 503 });
         }
 
         const viewList = url.pathname === `${base}/views`;

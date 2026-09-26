@@ -489,7 +489,7 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   revisions, participants/access, retry identity, cursors, read state, pins, participant-scoped
   audit and export/deletion for the first three increments. Core storage/API shipped in #169 on
   the restricted staging runtime; the Chat screen remains unavailable. PR C (#171) shipped pins/stars/read positions/edits to staging; the
-  [web delivery amendment](plans/linked-chat-web-2026-09.md) defines PR D next.
+  [web delivery amendment](plans/linked-chat-web-2026-09.md) defines PR D. Its bounded read API prerequisite shipped in #173; real web screens are in progress.
   PR B execution gates (§17) passed real-Postgres and hosted rollback-only checks. Summaries, files, notifications and
   native delivery need their own contracts.
 - Files: provider/version identity, permissions, preview/extraction retention and explicitly shared
