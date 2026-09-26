@@ -1,0 +1,6 @@
+askthecaptain-api-staging: 1 machines; 80e39ea6416e18 started
+askthecaptain-web-staging: 1 machines; 9185776e7cd3d8 stopped
+askthecaptain-api: 2 machines; 68303d3f3562e8 stopped,28744717c04598 stopped
+askthecaptain-web: 2 machines; 82d17ddb771d38 stopped,7817206bd65778 stopped
+askthecaptain-embed: 1 machines; 82d1dd0b021908 stopped
+Only staging API normal autostart restored; other configurations unchanged.
