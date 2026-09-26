@@ -93,7 +93,12 @@ try {
         values (${org.id}, ${oldEnablement!.id}, 'chase-due', 3, 'fixture-historical', '{}', ${owner.user.id}, 'cancelled', 'Retired personal-assistant version') returning id`;
     await db.owner`insert into workflow_run_steps (organisation_id, run_id, path, kind, key, state)
         values (${org.id}, ${oldRun!.id}, 'steps.2', 'infer', 'draftChaser', 'succeeded')`;
-    await writeFile(`${directory}/data.json`, JSON.stringify({ fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id, retiredRun: oldRun!.id }), { mode: 0o600, flag: 'wx' });
+    const newerViewId = randomUUID(), unreadableViewId = randomUUID();
+    await db.owner`insert into saved_views (id, organisation_id, owner_id, name, filter_version, filter)
+        values (${newerViewId}, ${org.id}, ${owner.user.id}, 'Future view', 2, '{"mode":"board"}')`;
+    await db.owner`insert into saved_views (id, organisation_id, owner_id, name, filter_version, filter)
+        values (${unreadableViewId}, ${org.id}, ${owner.user.id}, 'Unreadable view', 1, '{"owner":"me"}')`;
+    await writeFile(`${directory}/data.json`, JSON.stringify({ unreadableViewId, memberToken: pat.token, memberUserId: pat.user.id, newerViewId, fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id, retiredRun: oldRun!.id }), { mode: 0o600, flag: 'wx' });
     let mutationRequests = 0, reservationReadCount = 0;
     const reservationReads: { sequence: number; equipmentId: string; from: string | null; to: string | null }[] = [];
     const server = serve({ hostname: '127.0.0.1', port: 8084, fetch: async (req, bindings) => {
@@ -117,6 +122,32 @@ try {
             return Response.json({ code: 'fixture_session_failure', error: 'Fixture session lookup failed' }, { status, headers: status === 429 ? { 'retry-after': '1' } : {} });
         }
 
+        const viewList = url.pathname === `${base}/views`;
+        const viewDetail = url.pathname.startsWith(`${base}/views/`);
+        if (req.method === 'GET' && ((mode === 'views-list-failed' && viewList) || (mode === 'view-read-failed' && viewDetail)))
+            return Response.json({ code: 'fixture_view_failure', error: 'Fixture saved views unavailable' }, { status: 503 });
+        if (req.method === 'GET' && viewDetail && ['view-references-unavailable', 'view-references-missing'].includes(mode)) {
+            const result = await app.fetch(req);
+            if (!result.ok) return result;
+            const value = await result.json() as { references: { tags: { id: string }[]; project: { id: string } | null } | null };
+            if (value.references) {
+                const state = mode === 'view-references-missing' ? 'missing' : 'unavailable';
+                return Response.json({ ...value, references: {
+                    tags: value.references.tags.map(({ id }) => ({ id, state })),
+                    project: value.references.project ? { id: value.references.project.id, state } : null
+                } });
+            }
+            return Response.json(value);
+        }
+        if (mode === 'view-patch-failed' && viewDetail && req.method === 'PATCH')
+            return Response.json({ code: 'fixture_view_failure', error: 'Fixture saved view handler not reached' }, { status: 503 });
+        if ((mode === 'view-save-uncertain' && viewList && req.method === 'POST')
+            || (mode === 'view-patch-uncertain' && viewDetail && req.method === 'PATCH')
+            || (mode === 'view-delete-uncertain' && viewDetail && req.method === 'DELETE')) {
+            const result = await app.fetch(req); // Commit using the real service, then lose only its successful response.
+            if (!result.ok) return result;
+            return Response.json({ code: 'fixture_view_uncertain', error: 'Fixture lost saved view response' }, { status: 503 });
+        }
         if (mode === 'equipment-failed' && req.method === 'GET' && url.pathname.endsWith('/equipment'))
             return Response.json({ error: 'Fixture equipment unavailable' }, { status: 503 });
         if (mode === 'reservations-failed' && req.method === 'GET' && url.pathname.endsWith('/reservations'))
