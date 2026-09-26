@@ -1,7 +1,9 @@
 # Saved Work views: implementation assignments
 
-Status: backend merged in [#153](https://github.com/SomedaySomehowBeer/askthecaptain/pull/153)
-on 26 September 2026; web integration/browser validation in progress. Not deployed.
+Status: backend [#153](https://github.com/SomedaySomehowBeer/askthecaptain/pull/153) and
+web [#154](https://github.com/SomedaySomehowBeer/askthecaptain/pull/154) merged with green CI
+on 26 September 2026. Staging migration and release verified; see the
+[release record](../runbooks/paused.md#private-saved-work-views-release-26-september-2026-utc).
 Workspace outcome: **manage shared work**. Tracking: #141, under D26 and the
 [contract adopted in #140](saved-work-views-2026-09.md). This is the next feature
 increment after the #149/#150 calendar and task-history corrections.
@@ -117,11 +119,11 @@ hosted data, changes secrets or sends external messages. Native-device acceptanc
 
 - [x] Both Opus agents started and model selection verified (`claude-opus-5-5`).
 - [x] Backend implementation and reciprocal review complete; real-Postgres checks green (#153).
-- [ ] Web implementation and reciprocal review complete; integrated browser checks green.
-- [ ] Two implementation PRs merged with green CI.
-- [ ] Staging migration/deployment verified and recorded; #141 updated with actual results.
+- [x] Web implementation and reciprocal review complete; integrated browser checks green.
+- [x] Two implementation PRs merged with green CI.
+- [x] Staging migration/deployment verified and recorded; #141 updated with actual results.
 
-## Running assignments
+## Completed assignments
 
 - **Opus A:** `Captain saved views API`, background session `5b494281`, worktree
   `/tmp/captain-saved-views-api`, branch `feat/saved-views-api`.
@@ -129,21 +131,45 @@ hosted data, changes secrets or sends external messages. Native-device acceptanc
   `/tmp/captain-saved-views-web`, branch `feat/saved-views-web`.
 
 Both were observed working, and their actual assistant-message model was verified as
-`claude-opus-5-5`. Supervision uses `claude agents`, `claude logs <id>` and `claude attach <id>`.
+`claude-opus-5-5`. Initial supervision used `claude agents`, `claude logs <id>` and `claude attach <id>`.
 Initial plan-review checkpoints and final handoffs are in `/tmp/captain-saved-views/` as
 `api-status.md`, `web-status.md`, `api-handoff.md` and `web-handoff.md` when written.
 These local session details are execution evidence, not shipped functionality.
 
-Both Claude sessions are attached in Herdr's **Monitor** tab as `saved-views-api` and
+Both Claude sessions were attached in Herdr's **Monitor** tab as `saved-views-api` and
 `saved-views-web`. A local development watcher in `/tmp/captain-saved-views/monitor.py`
-records settled/blocked states and notifies the same coordinator session; it never answers
-approval dialogs. This is delegation supervision, not a Captain application process.
+recorded settled/blocked states and notified the same coordinator session without answering
+approval dialogs. It was stopped after the completed batch to prevent stale wake-ups. This was
+local delegation supervision, not a Captain application process.
 
 Backend proof: 60 database tests and 151 API tests passed against disposable Postgres with no
 skips. Final strict-query/collision corrections passed API typecheck and all 14 saved-view API
 tests; CI then passed before #153 merged. Both Opus agents reviewed the backend, including
-the coordinator's corrections. Migration 0040 has not yet run on staging.
+the coordinator's corrections. Migration 0040 subsequently ran on staging with exit 0, as recorded in the release runbook.
 
 Both agents completed their initial plan reviews with no blocking findings. The review corrected
 the contract's outdated export-role description and clarified unsupported-version references and
 private deletion-count handling before implementation review.
+
+## Integrated web proof
+
+Both Opus agents independently reviewed the other implementation. Follow-up reviews covered
+organisation scope, retained create identity, stale filter inputs, recovery disclosures and the
+coordinator's final browser harness fixes. Web typecheck, all 66 pure tests and production build
+passed. CI passed at the final reviewed head `162f41e`; #154 merged as `0e54baf`.
+
+All 16 saved-view browser groups passed against real local API/Postgres: 14 in the final run,
+then the remaining rename/delete/privacy/layout groups in a targeted continuation after correcting
+the test to reopen management following a successful rename. This is not claimed as one
+uninterrupted full-script pass. The long suite explicitly uses an opt-in controlled rate-limit
+clock in the disposable loopback fixture; production/default limits are unchanged, with separate
+rate-limit policy tests. All 10 existing Work browser groups then passed in a fresh default fixture
+with normal limits, no browser exceptions and exit 0.
+
+Populated layouts were checked at 360, 390, 430 and 1440 pixels. Selected captures:
+[saved list](../proposals/assets/saved-work-views-2026-09-26/saved-views-390.png),
+[draft](../proposals/assets/saved-work-views-2026-09-26/saved-draft-390.png),
+[conflict comparison](../proposals/assets/saved-work-views-2026-09-26/saved-view-conflict-390.png),
+[desktop saved view](../proposals/assets/saved-work-views-2026-09-26/saved-saved-1440.png).
+These are fictional local-fixture records, not customer or hosted-session evidence. Native-device
+and authenticated hosted acceptance remain separate.

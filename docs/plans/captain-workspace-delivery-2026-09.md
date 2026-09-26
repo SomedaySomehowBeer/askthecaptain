@@ -13,13 +13,13 @@ The [next batch and assignments](captain-next-batch-2026-09-25.md) records deliv
 recovery, then prioritises the scope cleanup, genuine standalone work, Work details, saved views
 and linked chat, with Expo foundation work alongside subsequent contracts. It adds acceptance detail without declaring any remaining slice complete.
 
-## Where this stands (25 September 2026)
+## Where this stands (26 September 2026)
 
 | Slice | State |
 |---|---|
 | 0. Architecture proof | Built as a fictional harness; web checks and bundle exports pass locally and in the new `client-proof` CI check ([#120](https://github.com/SomedaySomehowBeer/askthecaptain/pull/120)). Native-device acceptance has not been run. |
 | 1. Reviewed amendments | Original amendment merged in #116; its assistant-retention assumptions are corrected by the 25 September audit. Scope cleanup is now required. |
-| 2. Client and work foundation | In progress: task/tag API merged in #117. Web now has the three-tab shell, grouped view lists, real filtered Work and task creation. Tag creation/renaming and individual task tag editing are now available. Saved views and `apps/mobile` remain; this does not complete slice 2. |
+| 2. Client and work foundation | In progress: task/tag API merged in #117. Web now has the three-tab shell, grouped view lists, real filtered Work and task creation. Tag creation/renaming and individual task tag editing are now available. Private saved Work views are delivered in #153/#154. `apps/mobile` and native acceptance remain; this does not complete slice 2. |
 | 3. Equipment scheduling | First API increment: equipment, maintenance/reservations, database overlap enforcement, revisions, cancellation and bounded occupancy reads. The [contract](equipment-reservations-2026-09.md) defines the integrity boundary. Web timeline and catalogue/create/edit/cancel controls are implemented, with browser checks against real Postgres. Native clients and real-device gestures remain pending; this does not complete slice 3. |
 | 4–7 | Not started. Chat, files, mobile builds and Pip integration are designs, not code. |
 | Pip | Separate product, tracked in [#119](https://github.com/SomedaySomehowBeer/askthecaptain/issues/119); no Captain slice waits for it. |
@@ -28,8 +28,8 @@ Slice numbers are this plan's own; the old assistant phases 0–5 are linked fro
 reference index, not an active second sequence.
 Production stays paused through every slice. Staging may be resumed when needed under the one-machine-per-app limit; the local web checks do not require it.
 
-The equipment API increment proceeds against the delivered task/project foundation while saved
-views and native clients remain open. Its scheduling integrity does not depend on those clients;
+The equipment API increment proceeds against the delivered task/project foundation with private
+saved views now delivered; native clients remain open. Its scheduling integrity does not depend on those clients;
 the first-customer release still requires the full slices 2–4 acceptance evidence.
 
 ## First web foundation increment

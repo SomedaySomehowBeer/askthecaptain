@@ -1,8 +1,9 @@
 # Staging resumed; production paused (2026-09-24)
 
 Captain's staging workspace is available at **https://app.askthecaptain.app/work**. API and web
-retain the reviewed workspace: web now includes the continuous equipment schedule and project
-status filters (#149/#150, image source `709f89e`); API remains on #147 (`ac28154`).
+retain the reviewed workspace, now including private saved Work views (#153/#154):
+API image source `6be8321d`, web image source `7e60a1e`. Continuous equipment scheduling and
+project task-history filters remain included.
 The earlier Work record and task/list corrections remain included.
 Tasks, projects and recurring work have their own Work pages; the Commitments overview is retired.
 The old-version database content was reset earlier on 25 September under explicit owner
@@ -22,6 +23,60 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Private saved Work views release (26 September 2026, UTC)
+
+Workspace outcome: **manage shared work**. Backend [#153](https://github.com/SomedaySomehowBeer/askthecaptain/pull/153)
+and web [#154](https://github.com/SomedaySomehowBeer/askthecaptain/pull/154) received reciprocal
+Claude Opus/coordinator review and green CI before squash merge. Backend merge is
+`6be8321d1d07002c152d9058060f1e731054c39d`; web merge is
+`0e54baf55ab3dae0d36c6d5b2e0e27edfad65106`. Final web
+[CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36212100605) passed in 2m52s.
+
+Only the existing staging machines were updated:
+
+| App | Machine | Image source | Image digest |
+|---|---|---|---|
+| API | `80e39ea6416e18` | `git-6be8321d1d07002c152d9058060f1e731054c39d` | `sha256:8b2a1b15c692bfb739ab47c183e6475c21fe7fbf54784b81b360246a1f67308b` |
+| Web | `9185776e7cd3d8` | `git-7e60a1e` | `sha256:2a88aa7468032c224b387e1ea0a5ac0768270c7a54426b270bbf03afde9a8ac1` |
+
+Images are in their respective `registry.fly.io/askthecaptain-<app>-staging` repositories,
+built and pushed from clean worktrees. Every web Docker input was compared with the final merge
+and was identical: `7e60a1e` preceded the final reviewed head `162f41e` by only the
+browser-harness correction outside the image.
+API runtime inputs are unchanged by the web PR. No fixture data or credentials entered either image.
+
+Both staging machines were stopped with autostart off. The existing API was updated with the
+new image and a one-shot migration/queue-install command, restart policy `no`, and both autostart
+and autostop disabled for that command. Only `0040_saved_views.sql` applied at **02:38:55Z**.
+Queue installation completed and `SAVED_VIEWS_MIGRATION_READY` appeared at **02:38:56Z**;
+the process exited naturally with **0**, no OOM and `requested_stop=false`. No extra release
+machine was created. Normal API/web commands, restart-on-failure, autostart, idle stop and minimum
+zero were restored. Before/after configuration comparison showed only the intended image changes.
+
+API `/readyz` returned `200 {"ok":true}`. Live Chrome at 390 and 1440 pixels confirmed Work
+redirects signed-out visitors to the rendered Google sign-in entry, without overflow or browser
+exceptions. There was no authenticated hosted browser session, so saved-view acceptance used the
+real local API/Postgres fixture; authenticated hosted and native-device acceptance are not claimed.
+No reset or customer-record mutation was run; the additive migration does not touch demo tasks or
+projects. The demo was not independently re-read through an authenticated hosted session.
+
+Validation and populated captures are in the [delivery record](../plans/saved-work-views-delivery-2026-09-26.md):
+60 database tests, 151 API tests, 66 web tests, production build, 16 saved-view browser groups across
+the final run/targeted continuation and all 10 existing Work regression groups. Both Opus agents
+reviewed each other's implementation and the coordinator's corrections; the web agent also reviewed
+the sole-machine release configuration.
+
+Exactly one API and one web staging machine remained after release. Production's pre-existing two
+API and two web machines, and the sole embedding machine, remained stopped with their configurations
+unchanged. No DNS, secret or infrastructure apply occurred. Deploy and backup workflows remain
+disabled. No new backup/restore proof was established by this release.
+
+Rollback: restore the preceding API `git-ac28154` (digest
+`sha256:00823060f5fb7b0e63d3de14c4fedd06be7ba64afbb2305ca07865db82dc39db`) and web `git-709f89e`
+(digest `sha256:4adc477af6914c0339b1d6cdb257e3522d1b2df343abe4c29357afcacccc5300`) on these same
+machines, preserving normal settings. Keep additive migration 0040 and saved records; do not reset
+or drop the new table to roll back code.
 
 ## Equipment scrolling and project task-history release (26 September 2026, UTC)
 

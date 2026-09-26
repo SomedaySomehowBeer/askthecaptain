@@ -31,20 +31,20 @@ records the bounded task-detail contract and implementation, corrected to remove
 compatibility. [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) tracks scope
 cleanup: runtime retirement (#135), optional projects/reset (#136), and Work record replacement
 (#138) are implemented and deployed. Empty retired storage, the retrieval package, connector capabilities and deployment
-assets still need removal. Saved-view and linked-chat contracts are the next feature increments.
+assets still need removal. Private saved views are delivered (#153/#154); linked chat is the next feature increment.
 
 The populated-demo reliability/design follow-up is now delivered through #143/#145/#147 and
 #149/#150: checkable work, parent navigation, project Overview/Tasks/Schedule, continuous
 month-back/six-month-forward equipment scrolling and separated project task history. These are
 bounded corrections, not complete mockup or native-device acceptance. Search/filter presentation
-and contextual Files/Chat remain in #142; private saved views remain the next ordered feature
-increment below, under the [reviewed contract](saved-work-views-2026-09.md) adopted in #140;
-implementation is tracked in #141.
+and contextual Files/Chat remain in #142. Private saved views follow the
+[reviewed contract](saved-work-views-2026-09.md) adopted in #140 and tracked in #141.
 
 The [26 September saved-view delivery assignment](saved-work-views-delivery-2026-09-26.md)
-now splits #141 between two Claude Opus agents: database/API and Work web, in separate worktrees.
-Codex owns integration, serial verification and release. Implementation is in progress; no saved-view
-migration, API or web implementation is yet merged or deployed.
+split #141 between two Claude Opus agents: database/API and Work web, with reciprocal review.
+Both implementations are merged (#153/#154) with green CI. The linked delivery document records
+the real-Postgres/browser proof and staging release; this is implemented private Work filtering,
+not shared views or Chat/Files delivery.
 
 ## Ordered increments
 
@@ -68,8 +68,8 @@ migration, API or web implementation is yet merged or deployed.
 3. **Saved Work views.** Implement the [reviewed contract](saved-work-views-2026-09.md): named,
    versioned private Work filters, with strict supported fields and bounded counts. Saving a view never grants record access. The contract defines deleted tags/projects, revoked
    membership, stale updates, default-view behaviour and migration/export/deletion handling.
-   Deliver API/RLS and web controls as separate small PRs; this contract does not claim either shipped. Shared views follow an explicit
-   sharing contract; browser-session tab restoration is not persistent saved views.
+   Delivered in #153 (API/RLS) and #154 (web), released to staging on 26 September. Shared
+   views still require an explicit sharing contract; browser-session tab restoration is separate.
 4. **Linked-chat contract, then API.** Settle the cases below before adding tables. First API
    increment establishes conversations, membership, messages and task/project links. Follow
    with shared pins, personal stars and read position using the same identities. Each migration
@@ -145,5 +145,5 @@ and #138 (below).
 The [optional-project/reset increment](optional-work-projects-2026-09.md) implements task/series
 null projects, checklist and equipment links, and a separately invoked staging legacy-data reset
 authorised by the owner. The [Work record increment](work-record-pages-2026-09.md) shipped in
-#138; release evidence is in the [operational record](../runbooks/paused.md). Saved views and
-linked-chat contracts follow it.
+#138; release evidence is in the [operational record](../runbooks/paused.md). Private saved views
+followed in #153/#154; linked chat remains the next feature increment.
