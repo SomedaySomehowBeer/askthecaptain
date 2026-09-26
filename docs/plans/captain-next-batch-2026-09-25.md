@@ -46,6 +46,11 @@ Both implementations are merged (#153/#154) with green CI. The linked delivery d
 the real-Postgres/browser proof and staging release; this is implemented private Work filtering,
 not shared views or Chat/Files delivery.
 
+The [next assignments](business-views-and-chat-delivery-2026-09-26.md) add a bounded default
+business-view contract before linked-chat implementation, while the two contract drafts run in
+parallel. The owner asked about the missing Production/Marketing/etc. defaults after the private
+saved-view release. Both are planning assignments, not shipped features.
+
 ## Ordered increments
 
 1. **Recover without signing people out.** Missing credentials or a confirmed invalid session
