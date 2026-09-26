@@ -36,7 +36,9 @@ Admin/reporting remain ordinary tags, created explicitly through Tags if missing
 Only web machine `9185776e7cd3d8` changed image, to
 `registry.fly.io/askthecaptain-web-staging:git-2e0aa1b@sha256:a6b581dbe2ecc0abb00c202bd0f8d4d8d2d1da4a9056c11d4118495ae6b7401c`.
 It was built/pushed from a clean detached checkout at `2e0aa1b29965384b9a7343256f3d09f48eb0ead8`,
-whose committed tree exactly matches the merge. The machine configuration was copied and only its
+whose committed tree exactly matches the merge. Comparing `7e60a1e` with `bcc3155` also confirmed
+all Docker inputs outside `apps/web` were unchanged (including API, packages, manifests, lockfile
+and patches). The machine configuration was copied and only its
 image replaced, then the existing machine was updated and started. No migration, queue installation,
 API restart, reset or customer-record mutation was needed or performed.
 
