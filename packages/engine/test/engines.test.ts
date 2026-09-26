@@ -4,7 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { withTenant } from '@captain/db';
 import { InferenceError } from '@captain/model';
 import type { Harness } from '@captain/db/test';
-import { installQueues } from '../src/queue.ts';
+import { installQueues, runtimeRoles } from '../src/queue.ts';
 import { fixture, database } from './fixture.ts';
 let db: Harness; const it = process.env.DATABASE_URL ? test : test.skip;
 before(async () => { if (process.env.DATABASE_URL) db = await database(); }); after(async () => { await db?.close(); });
@@ -156,4 +156,25 @@ it('release installation is repeatable without replacing pending work or schedul
   assert.equal(job!.state, 'created'); assert.deepEqual(job!.data, { runId: run!.id });
   await f.engine.open(); // Runtime app-role startup still works after repeated release installs.
  } finally { await f.engine.close(); }
+});
+
+it('release installation grants each runtime role queue DML and nothing administrative', async () => {
+ await installQueues(db.databaseUrl, []);
+ for (const role of runtimeRoles) {
+  const [schemaUse] = await db.owner`select has_schema_privilege(${role}, 'workflow_queue', 'USAGE') as usage, has_schema_privilege(${role}, 'workflow_queue', 'CREATE') as create`;
+  assert.deepEqual({ ...schemaUse }, { usage: true, create: false }, role);
+  const tables = await db.owner`select c.oid::regclass::text as name,
+    has_table_privilege(${role}, c.oid, 'SELECT') and has_table_privilege(${role}, c.oid, 'INSERT')
+     and has_table_privilege(${role}, c.oid, 'UPDATE') and has_table_privilege(${role}, c.oid, 'DELETE') as dml,
+    has_table_privilege(${role}, c.oid, 'TRUNCATE') or has_table_privilege(${role}, c.oid, 'REFERENCES') or has_table_privilege(${role}, c.oid, 'TRIGGER')
+     -- MAINTAIN exists from PostgreSQL 17; naming it on an older server is an error. CASE (unlike AND) fixes the order.
+     or case when current_setting('server_version_num')::int >= 170000 then has_table_privilege(${role}, c.oid, 'MAINTAIN') else false end as extra,
+    pg_has_role(${role}, c.relowner, 'USAGE') as owns
+   from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'workflow_queue' and c.relkind in ('r', 'p')`;
+  assert.ok(tables.length > 0);
+  for (const t of tables) assert.deepEqual({ dml: t.dml, extra: t.extra, owns: t.owns }, { dml: true, extra: false, owns: false }, `${role} ${t.name}`);
+  const sequences = await db.owner`select c.oid::regclass::text as name from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'workflow_queue' and case when c.relkind = 'S' then not has_sequence_privilege(${role}, c.oid, 'USAGE') else false end`;
+  assert.deepEqual(sequences.map(s => s.name), [], role); // A query Result is not a plain array under strict equality.
+ }
 });

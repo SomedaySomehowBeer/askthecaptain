@@ -1,3 +1,4 @@
+import { runtimeRoleIsSafe } from './runtime-role.ts';
 import { legacyRetired, retiredRoutes } from './retirement/routes.ts';
 import { TagsService } from './tags/service.ts';
 import { tagsRoutes } from './tags/routes.ts';
@@ -66,7 +67,10 @@ export function createApp(deps: Deps) {
 
 	app.get('/healthz', (c) => c.json({ ok: true }));
 	app.get('/readyz', async (c) => {
-		try { await deps.db`select 1`; return c.json({ ok: true }); } catch { return c.json({ ok: false, reason: 'database unreachable' }, 503); }
+		try {
+			if (!await runtimeRoleIsSafe(deps.db)) return c.json({ ok: false, reason: 'database role is unsafe' }, 503);
+			return c.json({ ok: true });
+		} catch { return c.json({ ok: false, reason: 'database unreachable' }, 503); }
 	});
 
 	// Sign-in. The web sends people here; Google returns here; the web gets a one-time code.

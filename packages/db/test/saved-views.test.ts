@@ -6,7 +6,7 @@ import { withTenant } from '../src/context.ts';
 import { databaseUrl, freshDatabase, type Harness } from './harness.ts';
 
 // Migration 0040 (D26): private saved Work views. The table's own rules, proven as the migration owner and as the
-// non-bypassing runtime role `app`, independently of the API.
+// non-bypassing runtime role (captain_runtime since 0041; `app` keeps the same grants), independently of the API.
 const it = databaseUrl ? test : test.skip;
 let db: Harness;
 let orgA: string, orgB: string, ownerA: string, memberA: string, ownerB: string;
@@ -79,11 +79,13 @@ it('every update moves the revision, identity is fixed and a tombstone is final,
 });
 
 it('app reads and writes only the owner’s rows in the current tenant, while active, and can never delete', async () => {
-	const [grant] = await db.owner<{ del: boolean; sel: boolean; ins: boolean; upd: boolean; truncate: boolean }[]>`select
-		has_table_privilege('app', 'saved_views', 'DELETE') as del, has_table_privilege('app', 'saved_views', 'SELECT') as sel,
-		has_table_privilege('app', 'saved_views', 'INSERT') as ins, has_table_privilege('app', 'saved_views', 'UPDATE') as upd,
-		has_table_privilege('app', 'saved_views', 'TRUNCATE') as truncate`;
-	assert.deepEqual(grant, { del: false, sel: true, ins: true, upd: true, truncate: false });
+	for (const role of ['app', db.runtimeRole]) {
+		const [grant] = await db.owner<{ del: boolean; sel: boolean; ins: boolean; upd: boolean; truncate: boolean }[]>`select
+			has_table_privilege(${role}, 'saved_views', 'DELETE') as del, has_table_privilege(${role}, 'saved_views', 'SELECT') as sel,
+			has_table_privilege(${role}, 'saved_views', 'INSERT') as ins, has_table_privilege(${role}, 'saved_views', 'UPDATE') as upd,
+			has_table_privilege(${role}, 'saved_views', 'TRUNCATE') as truncate`;
+		assert.deepEqual(grant, { del: false, sel: true, ins: true, upd: true, truncate: false }, role);
+	}
 	const [policies] = await db.owner<{ commands: string[]; forced: boolean }[]>`select array_agg(p.polcmd::text order by p.polcmd) as commands, c.relforcerowsecurity as forced
 		from pg_policy p join pg_class c on c.oid = p.polrelid where c.relname = 'saved_views' group by c.relforcerowsecurity`;
 	assert.deepEqual(policies, { commands: ['a', 'r', 'w'], forced: true }, 'insert, select and update policies only; no delete or all policy');
@@ -152,5 +154,6 @@ it('membership and organisation deletion as app cascade live views and tombstone
 	assert.equal((await db.owner`select id from saved_views where organisation_id = ${orgB}`).length, 0);
 	assert.equal((await db.owner`select id from saved_views where id in ${db.owner([bView, bDead])}`).length, 0);
 	assert.ok((await db.owner`select id from saved_views where organisation_id = ${orgA}`).length > 0, 'another tenant is untouched');
-	assert.equal((await db.owner<{ del: boolean }[]>`select has_table_privilege('app', 'saved_views', 'DELETE') as del`)[0]!.del, false);
+	for (const role of ['app', db.runtimeRole])
+		assert.equal((await db.owner<{ del: boolean }[]>`select has_table_privilege(${role}, 'saved_views', 'DELETE') as del`)[0]!.del, false, role);
 });

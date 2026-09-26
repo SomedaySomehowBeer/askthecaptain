@@ -1,3 +1,4 @@
+import { requireSafeRuntimeRole } from './runtime-role.ts';
 import { ChaseService } from './chase/service.ts';
 import { StocktakeService } from './stock/workflow.ts';
 import { StockService } from './stock/service.ts';
@@ -33,6 +34,8 @@ import { WorkflowService } from './workflows/service.ts';
 
 const env = readEnv();
 const db = connect(env.DATABASE_URL, { max: 16 });
+// Refuse to start listeners, schedulers or workflow workers with an administrative connection.
+try { await requireSafeRuntimeRole(db); } catch (error) { await db.end(); throw error; }
 const google = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 	? new GoogleIdentityProvider(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/auth/google/callback', env.API_URL).toString())
 	: null;

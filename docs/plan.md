@@ -67,6 +67,9 @@ handles correspondence. Captain does not need an Inbox/Outbox to be useful.
 - **No autonomous correspondence:** workflows never send external mail. Existing legacy outbox
   safety remains until that path is removed; it does not require a new Captain mail product.
 - **Tenant isolation:** forced RLS on every tenant table; the runtime role cannot bypass it.
+  The [runtime-role repair](plans/runtime-database-role-2026-09.md) introduces SQL-created
+  `captain_runtime`, explicit grants and live startup/readiness checks; hosted activation is a
+  separately recorded credential operation.
 - **Traceable effects:** audit writes and journal workflow steps, with explicit retry/idempotency
   boundaries. No credentials in model input, diagnostics or queue payloads.
 - **Honest states:** distinguish empty, loading, failed, unavailable, stale and unconfirmed data.
@@ -455,7 +458,7 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 | D3 | Workflows are compositions of typed steps in five kinds (read, infer, write, await, notify) with deterministic, bounded control flow (`when`, `each`, `branch`). Housekeeping is a system routine, not a workflow. |
 | D4 | A workflow acts in the name of the person who enabled it and can do nothing they could not. |
 | D5 | No workflow sends external correspondence. The legacy outbox remains person-sent until retirement; no Captain Inbox/Outbox replacement is required. Pip/provider drafts remain person-reviewed. |
-| D6 | Tenant isolation is forced RLS with a non-bypassing runtime role. |
+| D6 | Tenant isolation is forced RLS with a non-bypassing, non-administrative runtime role. Use SQL-created `captain_runtime` with explicit grants and no role memberships; new policies/grants name it alongside legacy `app`. Verify the actual runtime connection at startup/readiness and release, not only a local test role. |
 | D7 | Captain owns shared projects, tasks, recurring series and evidence. Projects do not nest; one-level checklists remain. Tasks/series may have no project. Remove the Obligations system-project requirement through a reviewed schema/service change, not a hidden or renamed default. Flat tags/filters never duplicate work or grant access. |
 | D8 | First-party connectors with our OAuth/encryption. Captain connects business sources; Pip holds personal provider access and uses normal Captain APIs. Google sign-in is separate from mail/calendar consent. No copied credentials or inbound forwarding mailbox. |
 | D9 | Inference uses each organisation's own Claude or Codex subscription through an unmodified CLI, behind a Sprite provider adapter; monthly token allowances and per-step usage, not dollar reservations. |

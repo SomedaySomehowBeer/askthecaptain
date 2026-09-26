@@ -28,7 +28,9 @@ records deliberately; never claim a live data audit from a code inventory.
 - **No autonomous correspondence (D5).** Workflows never send external mail. The legacy outbox
   remains person-sent until retirement; it is not a requirement for a Captain mail product.
 - **RLS on every tenant table (D6).** Every tenant table has `organisation_id`, forced RLS, and a
-  policy. The runtime role cannot bypass it. A migration that adds a tenant table adds its policy
+  policy. The SQL-created runtime role `captain_runtime` cannot bypass it or hold administrative
+  memberships; policies and direct grants include it alongside legacy `app`. Verify live connection
+  privileges at startup/readiness and release. A migration that adds a tenant table adds its policy
   in the same file and a cross-tenant test in the same pull request.
 - **Workflows compose typed steps (D3).** Five kinds: `read`, `infer`, `write`, `await`, `notify`,
   with `when`, `each` and `branch` for control flow over data. No unbounded loops. Housekeeping

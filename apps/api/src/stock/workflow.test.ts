@@ -80,7 +80,7 @@ it('count events remain queued while workers are stopped and a restarted runner 
  const f = await stocktakeFixture(db); let restarted: BossEngine | undefined; try {
   const a = await item(f); const { runId } = await f.startStocktake(); await state(f, runId, 'waiting'); await f.engine.close();
   await f.stock.count(f.member, f.org, a.id, { count: '7' });
-  const url = new URL(db.databaseUrl); url.username = 'app'; url.password = 'app'; restarted = new BossEngine(db.app, url.toString(), f.registry, definitions); await restarted.open();
+  restarted = new BossEngine(db.app, db.runtimeUrl, f.registry, definitions); await restarted.open();
   await state(f, runId, 'succeeded'); assert.equal((await f.tx(tx => tx`select * from stock_counts`)).length, 1);
  } finally { await restarted?.close(); await f.engine.close(); }
 });

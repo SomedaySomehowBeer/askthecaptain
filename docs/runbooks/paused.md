@@ -1,6 +1,12 @@
-# Staging resumed; production paused (2026-09-24)
+# Staging API contained; production paused (2026-09-26)
 
-Captain's staging workspace is available at **https://app.askthecaptain.app/work**. API and web
+**Staging API is temporarily stopped with autostart disabled** while the runtime database role
+is repaired. Web remains at https://app.askthecaptain.app/work, but authenticated workspace
+operations are unavailable. See the [repair record](../plans/runtime-database-role-2026-09.md).
+Do not restart the API with its current image and administrative runtime credential. The earlier
+staging restart procedure below is superseded until the repair preflight and guarded activation
+pass. A one-shot maintenance command with no HTTP listener is separate from starting the API.
+The previous release state follows as history. API and web
 retain the reviewed workspace, including private saved Work views (#153/#154) and By tag navigation (#159):
 API image source `6be8321d`, web image source `2e0aa1b`. Continuous equipment scheduling and
 project task-history filters remain included.

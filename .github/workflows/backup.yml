@@ -72,14 +72,30 @@ jobs:
           set -euo pipefail
           export PGPASSWORD="$PGPASSWORD_REHEARSAL"
           "$PG_BIN/pg_restore" --list "/tmp/captain-$STAMP.dump" | grep -c 'TABLE DATA' | xargs -I{} echo "{} tables with data in the archive"
-          # RLS policies in the dump reference the runtime role, even with ACLs omitted.
-          "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -c "do \$\$ begin if not exists (select 1 from pg_roles where rolname = 'app') then create role app nologin; end if; end \$\$"
+          # RLS policies in the dump reference both runtime roles, even with ACLs omitted. In this
+          # throwaway copy they only need to exist: no login, no attributes, no memberships.
+          "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -v ON_ERROR_STOP=1 -c "do \$\$ declare r text; begin foreach r in array array['app', 'captain_runtime'] loop if not exists (select 1 from pg_roles where rolname = r) then execute format('create role %I nologin nosuperuser nobypassrls nocreaterole nocreatedb noreplication noinherit', r); end if; end loop; end \$\$"
           "$PG_BIN/pg_restore" --host=localhost --username=postgres --dbname=rehearsal --no-owner --no-privileges --exit-on-error "/tmp/captain-$STAMP.dump"
           "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -c "select count(*) from organisations" > /tmp/orgs-restored.txt
           echo "organisations: source $(cat /tmp/orgs-source.txt), restored $(cat /tmp/orgs-restored.txt)"
           test "$(cat /tmp/orgs-source.txt)" = "$(cat /tmp/orgs-restored.txt)"
           "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -c "select count(*) from schema_migrations" | xargs -I{} echo "{} migrations recorded in the restored copy"
           "$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -c "select count(*) from pg_policies" | xargs -I{} echo "{} row security policies restored"
+          # Policy parity. Policies are schema, so the dump keeps their role lists; grants are ACLs and
+          # --no-privileges strips them. Parity therefore shows only that every restored policy that
+          # admits app also admits captain_runtime (and the reverse). It does not show the runtime can
+          # read or write anything: no grants are restored here, these roles cannot log in, and the
+          # hosted roles' attributes are not in a dump. Grant replay remains a separate prerequisite
+          # (docs/runbooks/backup-and-restore.md). Dumps taken before 0041 carry no captain_runtime
+          # policies, so the check applies once that migration is recorded in the restored copy.
+          recorded="$("$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -v ON_ERROR_STOP=1 -c "select count(*) from schema_migrations where name = '0041_runtime_role.sql'")"
+          if [ "$recorded" = 1 ]; then
+            mismatched="$("$PG_BIN/psql" -h localhost -U postgres -d rehearsal -At -v ON_ERROR_STOP=1 -c "select count(*) from pg_policies where ('app' = any(roles)) <> ('captain_runtime' = any(roles))")"
+            echo "$mismatched restored policies name only one of app and captain_runtime"
+            test "$mismatched" = 0
+          else
+            echo "dump predates 0041_runtime_role.sql; runtime policy parity not applicable"
+          fi
       - name: Keep the dump, prune old ones
         run: |
           set -euo pipefail

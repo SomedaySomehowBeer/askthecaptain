@@ -4,6 +4,9 @@ import type { WorkflowDefinition } from '@captain/steps';
 export const queueName = (key: string) => `workflow_${key}`;
 export const schema = 'workflow_queue';
 export const failedQueue = 'workflow_failed';
+/** Both runtime roles until the staging secret moves to captain_runtime (plan D6); each is created by the migrations. */
+export const runtimeRoles = ['app', 'captain_runtime'] as const;
+const grants = runtimeRoles.map(role => `grant usage on schema ${schema} to ${role}; grant select, insert, update, delete on all tables in schema ${schema} to ${role}; grant usage on all sequences in schema ${schema} to ${role}`).join('; ');
 export const adapter = (tx: TransactionSql): Db => ({ executeSql: async (text, values) => ({ rows: await tx.unsafe(text, values as never[]) }) });
 /** schedule()/unschedule() use the instance's DB (unlike send's per-call adapter). No start/DDL. */
 export const transactionalBoss = (tx: TransactionSql) => new PgBoss({ db: adapter(tx), schema });
@@ -14,6 +17,6 @@ export async function installQueues(url: string, definitions: WorkflowDefinition
  try {
   await boss.start(); await boss.createQueue(failedQueue, { retryLimit: 10, retryDelay: 30 });
   for (const d of definitions) await boss.createQueue(queueName(d.key), { retryLimit: 3, retryDelay: 10, retryBackoff: true, expireInSeconds: 900, deadLetter: failedQueue });
-  await boss.getDb().executeSql(`grant usage on schema ${schema} to app; grant select, insert, update, delete on all tables in schema ${schema} to app; grant usage on all sequences in schema ${schema} to app`);
+  await boss.getDb().executeSql(grants);
  } finally { await boss.stop(); }
 }
