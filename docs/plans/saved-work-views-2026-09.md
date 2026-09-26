@@ -27,6 +27,8 @@ This is exactly today's Work filter:
 
 - **Strict:** these four keys, all **required**, with no extras. The server stores the **normalised** form:
   - `tagIds` holds at most 20 unique lower-cased UUIDs, sorted.
+    Incoming arrays are bounded at 100 entries before normalisation; duplicate entries within
+    that bound do not consume the 20-unique-tag limit.
   - `projectId` is a lower-cased UUID or `null`.
 - The encoded filter is at most 4 KB, checked in the database. No offset is stored.
 - **`"me"` is the viewer.** In this increment the viewer is always the owner.
