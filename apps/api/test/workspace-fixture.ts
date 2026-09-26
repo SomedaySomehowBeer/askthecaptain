@@ -94,15 +94,15 @@ try {
     await db.owner`insert into workflow_run_steps (organisation_id, run_id, path, kind, key, state)
         values (${org.id}, ${oldRun!.id}, 'steps.2', 'infer', 'draftChaser', 'succeeded')`;
     await writeFile(`${directory}/data.json`, JSON.stringify({ fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id, retiredRun: oldRun!.id }), { mode: 0o600, flag: 'wx' });
-    let mutationRequests = 0;
-    const reservationReads: { equipmentId: string; from: string | null; to: string | null }[] = [];
+    let mutationRequests = 0, reservationReadCount = 0;
+    const reservationReads: { sequence: number; equipmentId: string; from: string | null; to: string | null }[] = [];
     const server = serve({ hostname: '127.0.0.1', port: 8084, fetch: async (req, bindings) => {
         const mode = await readFile(`${directory}/mode`, 'utf8').catch(() => '');
         const url = new URL(req.url);
-        if (url.pathname === '/__fixture/stats') return Response.json({ mutationRequests, reservationReads });
+        if (url.pathname === '/__fixture/stats') return Response.json({ mutationRequests, reservationReadCount, reservationReads });
         const equipmentRead = /\/equipment\/([^/]+)\/reservations$/.exec(url.pathname);
         if (equipmentRead && req.method === 'GET') {
-            reservationReads.push({ equipmentId: equipmentRead[1]!, from: url.searchParams.get('from'), to: url.searchParams.get('to') });
+            reservationReads.push({ sequence: ++reservationReadCount, equipmentId: equipmentRead[1]!, from: url.searchParams.get('from'), to: url.searchParams.get('to') });
             if (reservationReads.length > 256) reservationReads.shift();
             if (mode === 'reservations-delayed') await new Promise(resolve => setTimeout(resolve, 1200));
         }
