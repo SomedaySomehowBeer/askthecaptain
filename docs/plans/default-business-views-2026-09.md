@@ -1,8 +1,7 @@
-# Default business Work views: "By tag" navigation
+# Default business Work views
 
-Status: **proposed for adoption in #158** (26 September 2026). Choices below are root's
-adopted-for-review decisions. Not implemented. Code starts only after #158 adopts this contract.
-Drafted by the saved-views API agent (Claude Opus); root owns integration; peer review requested.
+Status: **reviewed for adoption in #158**, 26 September 2026. Root and both Claude Opus agents
+reviewed this bounded design. Implementation follows adoption; nothing is shipped by this contract.
 
 Outcome: **manage shared work**, in Work only. Authority: D7 (flat tags select work, never grant
 access), D11 (Work view list; Work defaults to My work), D14 (reviewed designs — this document is the
@@ -81,6 +80,10 @@ title stays **"All tasks"** and the selected-tag chip keeps its existing wording
 "Selected tag"). The title is never derived from a name match, a URL value or a guess. The filter and
 task list use the ID in every case.
 
+The title rule also applies on later task-result pages: a nonzero task offset does not change it.
+The existing Tags management link deliberately shows all non-cancelled statuses; these business
+navigation rows explicitly say Open. Its broader management behaviour remains unchanged.
+
 **Draft/save behaviour.** It is the plain Work URL, so changing a control produces another plain filter
 URL, exactly as today. **Save this view** creates a private D26 saved view of the current filter; the tag
 rows are unaffected and nobody else sees the copy.
@@ -125,6 +128,7 @@ After #158 adopts this contract, **one web-only PR**, no migration, no API chang
 ## 5. Acceptance
 
 **Pure (web):**
+- A nonzero task-result offset preserves the same eligible tag heading.
 - Row link is exactly `/work?owner=all&tagId=<id>`.
 - `tagOffset` parsing mirrors the saved-view page bounds; malformed values give the error state.
 - Every generated views-page link preserves the other group's cursor (Next/Previous/first page/Try
@@ -149,6 +153,7 @@ After #158 adopts this contract, **one web-only PR**, no migration, no API chang
   another member.
 - Empty (fresh organisation, example names as text, no writes), failed tag read (fixture fault mode for
   `GET /tags`), out-of-range `tagOffset` and loading states are explicit; other groups still render.
+- A 60-character tag name fits the 360-pixel layout without horizontal overflow.
 - Existing Work and saved-view browser suites still pass.
 
 **API/DB:** no change; existing tags/work tests remain the authority. The PR states that none were added

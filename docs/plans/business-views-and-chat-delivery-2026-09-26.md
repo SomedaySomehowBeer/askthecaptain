@@ -9,7 +9,7 @@ and [linked chat #157](https://github.com/SomedaySomehowBeer/askthecaptain/issue
 ## Intended result
 
 A person can reach Production, Marketing, Sales and Admin/reporting work from the Work view
-list without first configuring personal saved views. These remain views over tags and existing
+list once those tags exist, without first configuring personal saved views. These remain views over tags and existing
 work, not departments, separate task stores or access boundaries. My work remains the initial
 page. Personal saved views remain private. The first contract must distinguish built-in tag
 navigation from editable organisation-shared saved views. The selected
@@ -80,7 +80,7 @@ work before assigning the next stage. Stop the watcher when this batch is comple
 
 - [x] Both Opus agents assigned and observed working in Herdr Monitor.
 - [x] Background supervisor running for these exact agents and coordinator session.
-- [ ] Proposed contracts complete and independently reviewed.
-- [ ] Authoritative plan/contract PRs adopted; implementation assignments dispatched.
+- [x] By tag contract complete and independently reviewed; chat remains proposed with review findings.
+- [ ] By tag contract adopted in #158 and web implementation dispatched; chat adoption remains separate.
 - [ ] Default business views implemented, reviewed, verified and released to staging.
 - [ ] First linked-chat implementation slice reviewed, verified and released to staging.

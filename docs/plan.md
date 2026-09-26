@@ -368,7 +368,7 @@ linked by the current shell are tracked cleanup work:
 - **Work** — defaults to My work, filtered to Assigned to you. Projects, tasks, recurring
   work and tag/project/person/status/date views all select the same records. The reviewed
   [By tag navigation](plans/default-business-views-2026-09.md) lists every organisation tag as an
-  Everyone · Open Work link, with independent bounded paging. It adds no special departments,
+  Everyone · Open Work link by tag ID, with independent bounded paging. It adds no special departments,
   seeded tags or shared saved-view data; implementation is tracked in #156.
 - **Chat** — participant conversations, unread and personally starred conversations, linked
   bidirectionally to projects/tasks/file versions. Participation follows the conversation by
