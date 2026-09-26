@@ -64,7 +64,7 @@ test('the longest real description (20 sixty-character tags and an archived proj
 	const project = '0199a1b2-0000-7000-8000-0000000000aa';
 	const longName = (i: number) => `${String(i).padStart(2, '0')} ${'Ünïcödé production line '.repeat(3)}`.slice(0, 60);
 	const filter = normaliseFilter({ owner: 'all', status: 'all', tagIds, projectId: project });
-	const words = describeFilter(filter, { tag: (id) => longName(tagIds.indexOf(id)), project: () => `${'P'.repeat(60)} (archived)` });
+	const words = describeFilter(filter, { tag: (id) => longName(tagIds.indexOf(id)), project: () => `${'P'.repeat(120)} (archived)` });
 	assert.ok(words.length > 1_200 && words.length < 1_600, String(words.length));
 	assert.ok(words.length <= maxWords);
 	const storage = tab();

@@ -37,6 +37,8 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
  };
  const context = await signedIn(fixture.token);
  const page = await context.newPage(), errors = []; page.setDefaultTimeout(15000); page.on('pageerror', e => errors.push(e.message));
+ // A second test tab can leave this page backgrounded in shared headed Chrome. Bring it forward for captures.
+ const screenshot = async options => { await page.bringToFront(); return page.screenshot({ ...options, timeout: 30000 }); };
  // Pat (a plain member) has no saved views; the owner has the seeded newer/unreadable rows.
  const patContext = await signedIn(fixture.memberToken);
  const patPage = await patContext.newPage(); patPage.setDefaultTimeout(15000); patPage.on('pageerror', e => errors.push(e.message));
@@ -202,7 +204,7 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   stored = await api(`/views/${twoTabs.id}`);
   assert.equal(stored.revision, 2); assert.deepEqual(stored.filter, { ...productionOpen, status: 'done' });
   assert.equal(params().get('base'), '1');
-  for (const width of [360, 390, 430, 1440]) { await page.setViewportSize({ width, height: 874 }); await noOverflow(); await page.screenshot({ path: path.join(directory, `saved-view-conflict-${width}.png`), fullPage: true }); }
+  for (const width of [360, 390, 430, 1440]) { await page.setViewportSize({ width, height: 874 }); await noOverflow(); await screenshot({ path: path.join(directory, `saved-view-conflict-${width}.png`), fullPage: true }); }
   await page.setViewportSize({ width: 390, height: 844 });
   // A Replace that fails without landing is checked against the revision it was sent with (2), not the base (1).
   const replace = draftBar.getByRole('button', { name: 'Replace the saved filter with my draft', exact: true });
@@ -423,7 +425,7 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   for (const [name, route] of [['views', '/work/views'], ['saved', `/work?view=${launch.id}`], ['draft', `/work?view=${launch.id}&base=2&draft=1&owner=me&status=open&tagId=${production}&projectId=none`]]) {
    for (const width of [360, 390, 430, 1440]) {
     await page.setViewportSize({ width, height: 874 }); await goto(route); await noOverflow();
-    await page.screenshot({ path: path.join(directory, `saved-${name}-${width}.png`), fullPage: true });
+    await screenshot({ path: path.join(directory, `saved-${name}-${width}.png`), fullPage: true });
    }
   }
   await page.setViewportSize({ width: 390, height: 844 });
@@ -435,6 +437,6 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   console.log('PASS other members\' views are private; revoked membership loses access; 360/390/430/1440 layouts');
 
   assert.deepEqual(errors, []);
- } catch (error) { await page.screenshot({ path: path.join(directory, 'failure.png'), fullPage: true }).catch(() => {}); console.error('PAGE', page.url(), await page.locator('main').innerText().catch(() => '')); throw error; }
+ } catch (error) { await screenshot({ path: path.join(directory, 'failure.png'), fullPage: true }).catch(() => {}); console.error('PAGE', page.url(), await page.locator('main').innerText().catch(() => '')); throw error; }
  finally { await mode('').catch(() => {}); await patContext.close().catch(() => {}); await context.close(); await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

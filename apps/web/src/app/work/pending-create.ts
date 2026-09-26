@@ -12,7 +12,7 @@ export type Restored = { state: 'none' } | { state: 'found'; record: PendingCrea
 
 const recordVersion = 1;
 /** The filter in words is display text written by `describeFilter`. Its longest honest form is 20 tag names of up to
- *  60 characters (API limit) joined by ", ", one project name of up to 60 plus a state such as " (archived)", and the
+ *  60 characters (API limit) joined by ", ", one project name of up to 120 plus a state such as " (archived)", and the
  *  fixed owner/status words: well under 1,600 characters. 4,000 leaves room for multi-code-unit names and future
  *  label wording while still bounding what a restored record may put on screen. */
 export const maxWords = 4_000;
