@@ -407,6 +407,8 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   await expect(page.getByRole('heading', { level: 1, name: 'Production line', exact: true })).toBeVisible();
   await expect(page.getByText('Reload it to see the latest version', { exact: false })).toHaveCount(0);
   assert.equal((await api(`/views/${productionView}`)).name, 'Production line');
+  // A successful rename loads a new revision and a fresh (closed) management disclosure.
+  await page.locator('summary').filter({ hasText: /^Rename or delete this view$/ }).click();
   await page.getByRole('button', { name: 'Delete view…', exact: true }).click();
   await mode('view-delete-uncertain'); await page.getByRole('button', { name: 'Delete “Production line”', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Check whether it was deleted', exact: true })).toBeVisible();
