@@ -1,14 +1,27 @@
 import assert from 'node:assert/strict';
-import { after, before, test } from 'node:test';
+import { after, before, beforeEach, test } from 'node:test';
 import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
 import { createApp } from './app.ts';
 import type { IdentityProvider } from './auth/google.ts';
-import { AuthService } from './auth/service.ts';
+import { AuthService, hashSecret } from './auth/service.ts';
 import { CommitmentsService } from './commitments/service.ts';
 import { OrganisationService } from './organisations/service.ts';
+import { RateLimiter } from './ratelimit.ts';
 
 const it = databaseUrl ? test : test.skip;
 let db: Harness; let app: ReturnType<typeof createApp>; let auth: AuthService;
+/** The production limits apply unchanged (30 sign-in attempts a minute from one address, and every in-process
+ *  request here comes from the same `unknown` address). Each test starts in a fresh window of the limiter's own
+ *  clock, so one test's sign-ins never spend another's allowance; within a test the real limit still holds. */
+let clock = Date.parse('2030-01-01T00:00:00Z');
+const limiter = new RateLimiter(() => clock);
+beforeEach(() => { clock += 61_000; });
+/** The redirect target of a response, failing with its status and body (for example a 429) when it is not one. */
+async function redirectTo(response: Response): Promise<URL> {
+	const location = response.headers.get('location');
+	assert.ok(response.status >= 300 && response.status < 400 && location, `expected a redirect, got ${response.status} ${await response.clone().text()}`);
+	return new URL(location);
+}
 const google: IdentityProvider & { next: { subject: string; email: string; name: string } } = {
 	next: { subject: 'g-1', email: 'owner@example.com', name: 'Olive Owner' },
 	authorizationUrl: ({ state }) => `https://google.test/auth?state=${state}`,
@@ -18,11 +31,10 @@ const json = (method: string, path: string, token?: string, body?: unknown) => a
 
 async function signIn(identity: { subject: string; email: string; name: string }) {
 	google.next = identity;
-	const start = await app.request('/auth/google/start?return_to=/settings');
-	const state = new URL(start.headers.get('location')!).searchParams.get('state')!;
-	const callback = await app.request(`/auth/google/callback?code=abc&state=${state}`);
-	const code = new URL(callback.headers.get('location')!).searchParams.get('code')!;
+	const state = (await redirectTo(await app.request('/auth/google/start?return_to=/settings'))).searchParams.get('state')!;
+	const code = (await redirectTo(await app.request(`/auth/google/callback?code=abc&state=${state}`))).searchParams.get('code')!;
 	const exchange = await json('POST', '/auth/session/exchange', undefined, { code });
+	assert.equal(exchange.status, 200, await exchange.clone().text());
 	return (await exchange.json()) as { token: string; user: { id: string }; returnTo: string };
 }
 
@@ -30,7 +42,7 @@ before(async () => {
 	if (!databaseUrl) return;
 	db = await freshDatabase();
 	auth = new AuthService(db.app, google, { appUrl: 'https://app.example.test', sessionTtlDays: 30 });
-	app = createApp({ db: db.app, auth, organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app) });
+	app = createApp({ db: db.app, auth, organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), rateLimiter: limiter });
 });
 after(async () => { await db?.close(); });
 
@@ -61,8 +73,44 @@ it('Google sign-in hands the web a one-time code that becomes a session', async 
 });
 
 it('return_to must be a path on the app', async () => {
-	assert.equal((await app.request('/auth/google/start?return_to=https://evil.test')).status, 400);
-	assert.equal((await app.request('/auth/google/start?return_to=//evil.test')).status, 400);
+	for (const bad of ['https://evil.test', '//evil.test', '/\\evil.test', '/\\/evil.test', '/\t/evil.test', '/\n/evil.test', '/..//evil.test', '/.//evil.test', 'javascript:alert(1)']) {
+		const response = await app.request(`/auth/google/start?return_to=${encodeURIComponent(bad)}`);
+		assert.equal(response.status, 400, JSON.stringify(bad));
+		assert.equal((await response.json() as { code: string }).code, 'return_to_invalid');
+	}
+	// A valid path keeps its query and fragment through the whole Google flow.
+	google.next = { subject: 'g-return', email: 'return@example.com', name: 'Rita Return' };
+	const wanted = '/chat?filter=unread&linked=false#latest';
+	const state = (await redirectTo(await app.request(`/auth/google/start?return_to=${encodeURIComponent(wanted)}`))).searchParams.get('state')!;
+	const code = (await redirectTo(await app.request(`/auth/google/callback?code=abc&state=${state}`))).searchParams.get('code')!;
+	const response = await json('POST', '/auth/session/exchange', undefined, { code });
+	assert.equal(response.status, 200, await response.clone().text());
+	assert.equal((await response.json() as { returnTo: string }).returnTo, wanted);
+});
+
+it('a destination read back from a stored sign-in request is checked again and falls back home', async () => {
+	// Rows as an older release (or a changed database) could have left them: the flow still never sends anyone away.
+	google.next = { subject: 'g-stored', email: 'stored@example.com', name: 'Sid Stored' };
+	for (const bad of ['/\\evil.test', '//evil.test', 'https://evil.test', '/\t/evil.test', '/..//evil.test']) {
+		const state = `st_${crypto.randomUUID()}`;
+		await db.owner`insert into auth_requests (kind, token_hash, payload, expires_at)
+			values ('oauth', ${hashSecret(state)}, ${db.owner.json({ nonce: 'n_test', verifier: 'v_test', returnTo: bad })}, ${new Date(Date.now() + 60_000)})`;
+		const target = await redirectTo(await app.request(`/auth/google/callback?code=abc&state=${state}`));
+		assert.equal(target.origin, 'https://app.example.test');
+		const code = target.searchParams.get('code');
+		assert.ok(code, `the callback issued no code: ${target.href}`);
+		const response = await json('POST', '/auth/session/exchange', undefined, { code });
+		assert.equal(response.status, 200, await response.clone().text());
+		assert.equal((await response.json() as { returnTo: string }).returnTo, '/', JSON.stringify(bad));
+	}
+	// A stored one-time exchange with a bad destination is corrected too.
+	const [user] = await db.owner<{ id: string }[]>`select id from users where email = 'stored@example.com'`;
+	const exchangeCode = `x_${crypto.randomUUID()}`;
+	await db.owner`insert into auth_requests (kind, token_hash, user_id, payload, expires_at)
+		values ('session_exchange', ${hashSecret(exchangeCode)}, ${user!.id}, ${db.owner.json({ returnTo: '/\\evil.test' })}, ${new Date(Date.now() + 60_000)})`;
+	const response = await json('POST', '/auth/session/exchange', undefined, { code: exchangeCode });
+	assert.equal(response.status, 200, await response.clone().text());
+	assert.equal((await response.json() as { returnTo: string }).returnTo, '/');
 });
 
 it('a person creates an organisation and becomes its owner; others cannot see it', async () => {

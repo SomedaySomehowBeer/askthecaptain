@@ -1,15 +1,27 @@
 import assert from 'node:assert/strict';
-import { after, before, test } from 'node:test';
+import { after, before, beforeEach, test } from 'node:test';
 import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
 import { createApp } from '../app.ts';
 import { CommitmentsService } from '../commitments/service.ts';
 import { OrganisationService } from '../organisations/service.ts';
 import type { IdentityProvider } from './google.ts';
 import { PasskeyService, type WebAuthn } from './passkeys.ts';
-import { AuthService } from './service.ts';
+import { AuthService, hashSecret } from './service.ts';
+import { RateLimiter } from '../ratelimit.ts';
 
 const it = databaseUrl ? test : test.skip;
 let db: Harness; let app: ReturnType<typeof createApp>;
+/** Production limits unchanged; each test starts in a fresh window of the limiter's own clock, so the sign-ins of
+ *  one test never spend another's allowance (all in-process requests share the `unknown` address). */
+let clock = Date.parse('2030-01-01T00:00:00Z');
+const limiter = new RateLimiter(() => clock);
+beforeEach(() => { clock += 61_000; });
+/** The redirect target of a response, failing with its status and body (for example a 429) when it is not one. */
+async function redirectTo(response: Response): Promise<URL> {
+	const location = response.headers.get('location');
+	assert.ok(response.status >= 300 && response.status < 400 && location, `expected a redirect, got ${response.status} ${await response.clone().text()}`);
+	return new URL(location);
+}
 const google: IdentityProvider & { next: { subject: string; email: string; name: string } } = {
 	next: { subject: 'g-1', email: 'owner@example.com', name: 'Olive Owner' },
 	authorizationUrl: ({ state }) => `https://google.test/auth?state=${state}`,
@@ -26,10 +38,8 @@ const json = (method: string, path: string, token?: string, body?: unknown) => a
 const body = async <T>(response: Response, status: number): Promise<T> => { assert.equal(response.status, status, await response.clone().text()); return (await response.json()) as T; };
 async function exchange(identity: { subject: string; email: string; name: string }) {
 	google.next = identity;
-	const start = await app.request('/auth/google/start?return_to=/settings');
-	const state = new URL(start.headers.get('location')!).searchParams.get('state')!;
-	const callback = await app.request(`/auth/google/callback?code=abc&state=${state}`);
-	const code = new URL(callback.headers.get('location')!).searchParams.get('code')!;
+	const state = (await redirectTo(await app.request('/auth/google/start?return_to=/settings'))).searchParams.get('state')!;
+	const code = (await redirectTo(await app.request(`/auth/google/callback?code=abc&state=${state}`))).searchParams.get('code')!;
 	return body<{ token: string; stepUp?: true; returnTo: string; user?: { id: string } }>(await json('POST', '/auth/session/exchange', undefined, { code }), 200);
 }
 const olive = { subject: 'g-1', email: 'owner@example.com', name: 'Olive Owner' };
@@ -38,7 +48,7 @@ before(async () => {
 	if (!databaseUrl) return;
 	db = await freshDatabase();
 	const passkeys = new PasskeyService(db.app, webauthn);
-	app = createApp({ db: db.app, passkeys, auth: new AuthService(db.app, google, { appUrl: 'https://app.example.test', sessionTtlDays: 30, passkeys }), organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app) });
+	app = createApp({ db: db.app, passkeys, auth: new AuthService(db.app, google, { appUrl: 'https://app.example.test', sessionTtlDays: 30, passkeys }), organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), rateLimiter: limiter });
 });
 after(async () => { await db?.close(); });
 
@@ -90,4 +100,17 @@ it('a step-up token cannot be used for another person\'s credential', async () =
 	const options = await body<{ options: { challenge: string } }>(await json('POST', '/auth/passkey/options', undefined, { token: stepped.token }), 200);
 	assert.equal((await json('POST', '/auth/passkey/verify', undefined, { token: stepped.token, response: { id: 'someone-elses', challenge: options.options.challenge } })).status, 401);
 	assert.equal((await json('POST', '/auth/passkey/options', undefined, { token: 'pks_made_up' })).status, 401);
+});
+
+it('a step-up whose stored destination is not a path on the app finishes at home, never elsewhere', async () => {
+	// cred-2 from the previous case is still registered, so this sign-in steps up.
+	const stepped = await exchange(olive);
+	assert.equal(stepped.stepUp, true);
+	// The stored step-up request is changed as an older release or an altered database could leave it.
+	await db.owner`update auth_requests set payload = payload || ${db.owner.json({ returnTo: '/\\evil.test' })}
+		where kind = 'passkey_challenge' and token_hash = ${hashSecret(stepped.token)}`;
+	const options = await body<{ options: { challenge: string } }>(await json('POST', '/auth/passkey/options', undefined, { token: stepped.token }), 200);
+	const session = await body<{ token: string; returnTo: string }>(await json('POST', '/auth/passkey/verify', undefined, { token: stepped.token, response: { id: 'cred-2', challenge: options.options.challenge } }), 200);
+	assert.match(session.token, /^sess_/);
+	assert.equal(session.returnTo, '/');
 });
