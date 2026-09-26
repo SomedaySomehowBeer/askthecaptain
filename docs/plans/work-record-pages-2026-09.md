@@ -163,3 +163,16 @@ cancelled/other-project exclusions, deterministic paging and strict query valida
 The overview merges the first six open and first six in-progress tasks by due date then ID and
 shows at most six. A failed source fails the preview; completed/cancelled/suggested history remains
 in Tasks. Tags are shared organisation labels (migration 0035), not personal categories.
+
+## Project task history follow-up (26 September 2026)
+
+The project Tasks view defaults to Open, matching Work's default, with visible In progress,
+Suggested, Completed and Cancelled filters. All except cancelled remains an explicit history view and preserves
+suggested work. Each is an existing API status query, so completed rows cannot consume a page of
+open results. A filter change resets pagination; completion/reopening keeps the chosen filter and
+moves focus to the existing persistent confirmation if the row leaves it. Old cancelled URLs stay
+valid; `status=all` explicitly selects the earlier mixed history. No saved-view vocabulary changes.
+The schedule form uses the existing secondary button style so Show bookings reads as an action.
+
+The overview’s Tasks links open All except cancelled, preserving access to both open and
+in-progress work shown in its preview. Switching status clears previous action feedback.

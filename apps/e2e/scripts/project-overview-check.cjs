@@ -57,11 +57,11 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
    await page.screenshot({path:path.join(directory,`project-${view}-${width}.png`),fullPage:true});
   }
   console.log('PASS populated overview, cross-tag work, project-only bookings and all three views at four widths');
-  await goto(projectPath+'?view=tasks');
+  await goto(projectPath+'?view=tasks&status=all');
   const checkbox=page.getByRole('checkbox',{name:'Complete Confirm packaging slot',exact:true});
   await checkbox.focus();await checkbox.press('Space');await expect(checkbox).toBeChecked();
   await expect(page.getByRole('status',{name:'Work updates'})).toBeFocused();
-  await expect(page).toHaveURL(origin+projectPath+'?view=tasks');
+  await expect(page).toHaveURL(origin+projectPath+'?view=tasks&status=all');
   assert.equal((await api(`/tasks/${tasks[0].id}`)).task.status,'done');
   await checkbox.click();await expect(checkbox).not.toBeChecked();
   await page.getByRole('link',{name:/^Confirm packaging slot/}).click();await expect(page).toHaveURL(origin+`/work/tasks/${tasks[0].id}`);
@@ -72,6 +72,9 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   await page.getByRole('link',{name:/View shared equipment schedule/}).click();await expect(page).toHaveURL(/\/resources\/equipment\?date=/);
   console.log('PASS project tasks complete/reopen, keyboard confirmation and task/reservation/shared-schedule links');
   // More than a preview, then more than a schedule page. Use one equipment lane with nonoverlapping slots.
+  // Fixture seeding and the first two groups nearly fill the real write-rate window.
+  // Wait before the bulk booking setup, so neither it nor later fault checks hit that limit.
+  await new Promise(resolve=>setTimeout(resolve,60000));
   for(let n=0;n<51;n++)await api(`/equipment/${fixture.equipment[2].id}/reservations`,'POST',{id:crypto.randomUUID(),title:`Schedule page booking ${n+1}`,startsAt:new Date(baseTime+n*7200000).toISOString(),endsAt:new Date(baseTime+n*7200000+3600000).toISOString(),projectId:project.id});
   for(let n=0;n<3;n++)await api('/tasks','POST',{title:`More launch work ${n+1}`,projectId:project.id});
   await goto(projectPath);await expect(page.getByText(/Showing the first six open or in-progress tasks/)).toBeVisible();await expect(page.getByText(/Showing the first three bookings/)).toBeVisible();
@@ -84,9 +87,6 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   await goto(projectPath+'?view=schedule&date=invalid');await expect(page.getByText('Schedule could not be read',{exact:true})).toBeVisible();
   await page.getByRole('link',{name:'Open today’s project schedule',exact:true}).click();await expect(page.locator('.project-bookings > li')).toHaveCount(50);
   console.log('PASS bounded previews, booking pagination, date-window changes, empty and invalid schedule states');
-  // Bulk pagination setup makes many real requests. Give the unchanged per-IP limiter a full
-  // window before independent failure checks; a 429 must not mask the injected read failure.
-  await new Promise(resolve=>setTimeout(resolve,60000));
   await writeFile(path.join(directory,'mode'),'project-bookings-failed');await goto(projectPath);
   await expect(page.getByText('Bookings could not be read',{exact:true})).toBeVisible();await expect(page.getByText('No confirmed bookings overlap this window.',{exact:true})).toHaveCount(0);await expect(page.locator('.project-stream > li')).toHaveCount(6);
   await writeFile(path.join(directory,'mode'),'failed');await goto(projectPath);
@@ -98,5 +98,5 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   await expect(page.locator('.project-context')).toContainText('archived');await expect(page.getByRole('link',{name:'New task in this project',exact:true})).toHaveCount(0);await expect(page.locator('.project-bookings > li')).toHaveCount(3);
   await expect(page.getByRole('link',{name:'Back to Projects',exact:true})).toHaveAttribute('href','/work/projects?state=archived');
   assert.deepEqual(errors,[]);console.log('PASS independent read failures, empty project and archived history without fake availability');
- } catch(error){await page.screenshot({path:path.join(directory,'project-failure.png'),fullPage:true}).catch(()=>{});console.error('PAGE',page.url(),await page.locator('main').innerText().catch(()=>''));throw error;} finally {await writeFile(path.join(directory,'mode'),'');await context.close();await browser.close();}
+ } catch(error){await page.screenshot({path:path.join(directory,'project-failure.png'),fullPage:true}).catch(()=>{});console.error('PAGE',page.url(),await page.locator('main').innerText().catch(()=>''));throw error;} finally {await writeFile(path.join(directory,'mode'),'');await context.unrouteAll({behavior: 'wait'});await context.close();await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1});
