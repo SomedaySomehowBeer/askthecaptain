@@ -82,7 +82,10 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
  const chatMark = async () => (await stats()).chatRequestCount;
  const createsSince = async mark => (await stats()).chatRequests.filter(r => r.sequence > mark && r.method === 'POST' && r.path === `${fixture.base}/conversations`);
  const noOverflow = async (on = page) => assert.ok(await on.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `overflow at ${on.url()}`);
- const main = (on = page) => on.locator('main');
+ // The accessible main landmark only: while a page streams under chat/loading.tsx, Next keeps the incoming page's
+ // <main> hidden next to the visible loading one, so a plain CSS `main` can match two and fail strict mode at once.
+ // The role locator ignores the hidden one and retries until the real content is swapped in.
+ const main = (on = page) => on.getByRole('main');
  const group = (title, on = page) => on.getByRole('region', { name: title, exact: true });
  const rowIds = async (title, on = page) => on.getByRole('list', { name: title, exact: true }).locator('a.chat-row')
   .evaluateAll(links => links.map(a => a.getAttribute('href').split('/').pop()));

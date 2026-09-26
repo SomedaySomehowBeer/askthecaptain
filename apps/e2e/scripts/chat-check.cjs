@@ -342,7 +342,7 @@ const POLL = 15000, TICK = { timeout: POLL * 2 + 5000 }, TOTAL = 120;
   await expect(byId(doomed.id).getByRole('group', { name: 'Delete this message' }).getByRole('button', { name: 'Cancel' })).toBeDisabled();
   await mode('');
   await byId(doomed.id).getByRole('button', { name: 'Check again' }).click();
-  await expect(byId(doomed.id)).toContainText('Message deleted');
+  await expect(byId(doomed.id).locator('.chat-message__deleted')).toBeVisible();
   await expect(pins.locator('.chat-pin')).toHaveCount(1);
   await expect(pins).not.toContainText('Pinned then deleted');
   // The star, the same way.
@@ -384,7 +384,7 @@ const POLL = 15000, TICK = { timeout: POLL * 2 + 5000 }, TOTAL = 120;
   const patLast = seeded[TOTAL - 1];
   await choose(patLast.id, 'Delete');
   await byId(patLast.id).getByRole('group', { name: 'Delete this message' }).getByRole('button', { name: 'Delete' }).click();
-  await expect(byId(patLast.id)).toContainText('Message deleted');
+  await expect(byId(patLast.id).locator('.chat-message__deleted')).toBeVisible();
   assert.ok((await api(`/conversations/${main.id}/messages?after=${patLast.seq - 1}&limit=1`)).messages[0].deletedAt);
   await pins.getByRole('button', { name: /Go to message/ }).click();
   await expect(byId(seeded[1].id)).toBeInViewport();

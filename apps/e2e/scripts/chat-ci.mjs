@@ -86,12 +86,14 @@ async function terminate(child, graceMs) {
 	try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already gone */ }
 	return child.exited;
 }
-let stopping = false;
-async function stopAll() { stopping = true; await Promise.all([...children].map(child => stop(child, 30_000))); }
+/** Set only by SIGINT/SIGTERM. Normal cleanup also stops every child, but that is not a cancellation. */
+let cancelled = false;
+async function stopAll() { await Promise.all([...children].map(child => stop(child, 30_000))); }
 // Cancellation: stop the children (the fixture still drops its database on SIGTERM), let the running suite's cleanup
-// write its logs and screenshots, then exit. A hard limit keeps cancellation bounded if anything hangs.
+// write its logs and screenshots, then exit 130. A hard limit keeps cancellation bounded if anything hangs.
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => {
-	if (stopping) return;
+	if (cancelled) return;
+	cancelled = true;
 	log(`received ${signal}; stopping children, then writing logs`);
 	setTimeout(() => { log('cleanup did not finish in 120 s; exiting'); process.exit(130); }, 120_000).unref();
 	void stopAll();
@@ -157,7 +159,7 @@ try {
 		{ ...process.env, API_URL: `http://${API.host}:${API.port}`, APP_URL: `http://${WEB.host}:${WEB.port}` }, path.join(root, 'apps/web'));
 	await until('web server', () => portOpen(WEB), 120_000, web);
 	for (const suite of suites) {
-		if (stopping) break;
+		if (cancelled) break;
 		if (!(await runSuite(suite))) failed++;
 	}
 } catch (error) {
@@ -168,6 +170,6 @@ try {
 	if (web) await writeFile(path.join(out, 'web.log'), redact(web.output.join(''))).catch(() => undefined);
 	await stopAll();
 }
-if (stopping) { log(`cancelled; logs and screenshots so far are in ${path.relative(root, out)}`); process.exit(130); }
+if (cancelled) { log(`cancelled; logs and screenshots so far are in ${path.relative(root, out)}`); process.exit(130); }
 log(failed ? `${failed} problem(s); see ${path.relative(root, out)}` : 'all chat suites passed');
 process.exit(failed ? 1 : 0);
