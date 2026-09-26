@@ -22,7 +22,8 @@ type Participant = { userId: string; name: string };
 type Link = { id: string; kind: 'task' | 'project'; targetId: string; title: string; state: string };
 type Detail = { id: string; title: string; revision: number; lastSeq: number; lastChange: number; createdBy: string | null; participants: Participant[]; links: Link[];
  starred: boolean; lastReadSeq: number; unread: number };
-type Message = { id: string; conversationId: string; seq: number; changeSeq: number; authorId: string | null; body: string | null; deletedAt: string | null; editedAt: string | null; revision: number };
+type Message = { id: string; conversationId: string; seq: number; changeSeq: number; authorId: string | null; authorName: string | null; body: string | null;
+ deletedAt: string | null; editedAt: string | null; revision: number };
 type Pin = { id: string; conversationId: string; messageId: string; changeSeq: number; pinnedBy: string | null; unpinnedBy: string | null; unpinnedAt: string | null };
 type Page = { conversation: { id: string; revision: number; lastSeq: number; lastChange: number }; messages: Message[]; hasMore: boolean };
 type Change = { changeSeq: number; kind: 'message'; message: Message } | { changeSeq: number; kind: 'pin'; pin: Pin };
@@ -805,4 +806,179 @@ it('unread counts stop at 51, in the list, detail and work-to-chat', async () =>
  assert.equal((await json<{ conversations: Detail[] }>(request('GET', `${base()}/tasks/${task}/conversations`, member))).conversations[0]!.unread, 51);
  assert.deepEqual(await json(read(member, chat.id, 1)), { lastReadSeq: 1, unread: 51 });
  assert.deepEqual(await json(read(member, chat.id, 50)), { lastReadSeq: 50, unread: 3 });
+});
+
+// Web read API (docs/plans/linked-chat-web-2026-09.md §3, A1–A4). -----------------------------------------------
+
+type Listed = Detail & {
+ latest: { seq: number; authorName: string | null; excerpt: string | null; deleted: boolean } | null;
+ linkSummary: { first: { kind: 'task' | 'project'; targetId: string; title: string } | null; count: number };
+};
+type ListPage = { conversations: Listed[]; nextCursor: string | null };
+const listIn = (person: Person, query: string) => request('GET', `${chats()}?${query}`, person);
+/** Every conversation in one view, one per page, checking that no page repeats or skips one. */
+async function everyPage(person: Person, view: string): Promise<Listed[]> {
+ const seen: Listed[] = []; let cursor: string | null = null;
+ for (let rounds = 0; rounds < 50; rounds++) {
+  const listed: ListPage = await json<ListPage>(listIn(person, `${view}${view ? '&' : ''}limit=1${cursor === null ? '' : `&cursor=${encodeURIComponent(cursor)}`}`));
+  seen.push(...listed.conversations);
+  cursor = listed.nextCursor;
+  if (cursor === null) break;
+ }
+ assert.equal(cursor, null, `${view}: paging ends`);
+ assert.equal(new Set(seen.map(c => c.id)).size, seen.length, `${view}: no conversation twice`);
+ return seen;
+}
+/** One conversation's row in a view. It must have the newest activity's page (the first 50): the people used here are
+ *  in many conversations by now, and a conversation just written to is always on the first page. */
+async function rowIn(person: Person, view: string, id: string): Promise<Listed> {
+ const found = (await json<ListPage>(listIn(person, `${view}${view ? '&' : ''}limit=50`))).conversations.find(c => c.id === id);
+ assert.ok(found, `${id} in ${view || 'the default view'}`);
+ return found;
+}
+
+it('views compose filter and linked before pagination, each paging on its own, never showing another’s conversations', async () => {
+ const viewer = await signIn('chat-viewer', 'Vic Viewer'); await join(viewer);
+ const task = await makeTask('View link');
+ // Five of the viewer's conversations, oldest first, and one they are not in.
+ const workUnread = await newChat(viewer, 'Work, starred, unread', [owner], [{ kind: 'task', targetId: task }]);
+ const workRead = await newChat(viewer, 'Work, read', [owner], [{ kind: 'task', targetId: task }]);
+ const teamUnread = await newChat(viewer, 'Team, unread', [owner]);
+ const teamStarred = await newChat(viewer, 'Team, starred', [owner]);
+ const teamQuiet = await newChat(viewer, 'Team, quiet', [owner]);
+ const hidden = await newChat(owner, 'Not the viewer’s', [member], [{ kind: 'task', targetId: task }]);
+ await json(send(owner, hidden.id, 'Private to others'), 201);
+ await json(send(owner, workUnread.id, 'For the viewer'), 201);
+ await json(send(owner, workRead.id, 'Already seen'), 201); await json(read(viewer, workRead.id, 1));
+ await json(send(owner, teamUnread.id, 'Also for the viewer'), 201);
+ await json(send(viewer, teamStarred.id, 'My own words are never unread'), 201);
+ await json(star(viewer, workUnread.id, true)); await json(star(viewer, teamStarred.id, true));
+ const ids = (rows: Listed[]) => rows.map(c => c.id).sort();
+ const expected: Record<string, string[]> = {
+  '': [workUnread.id, workRead.id, teamUnread.id, teamStarred.id, teamQuiet.id],
+  'filter=all': [workUnread.id, workRead.id, teamUnread.id, teamStarred.id, teamQuiet.id],
+  'filter=unread': [workUnread.id, teamUnread.id],
+  'filter=starred': [workUnread.id, teamStarred.id],
+  'linked=true': [workUnread.id, workRead.id],
+  'linked=false': [teamUnread.id, teamStarred.id, teamQuiet.id],
+  'filter=unread&linked=true': [workUnread.id],
+  'filter=unread&linked=false': [teamUnread.id],
+  'filter=starred&linked=true': [workUnread.id],
+  'filter=starred&linked=false': [teamStarred.id],
+ };
+ for (const [view, want] of Object.entries(expected)) {
+  const rows = await everyPage(viewer, view);
+  assert.deepEqual(ids(rows), [...want].sort(), view || 'default');
+  assert.ok(!rows.some(c => c.id === hidden.id), `${view}: never someone else’s conversation`);
+  if (view.includes('unread')) assert.ok(rows.every(c => c.unread > 0), `${view}: EXISTS agrees with the capped count`);
+  if (view.includes('starred')) assert.ok(rows.every(c => c.starred), view);
+ }
+ // Newest activity first within a view.
+ assert.deepEqual((await everyPage(viewer, 'linked=false')).map(c => c.id), [teamStarred.id, teamUnread.id, teamQuiet.id]);
+ // The unread view agrees with every row the default view marks unread.
+ assert.deepEqual(ids((await everyPage(viewer, '')).filter(c => c.unread > 0)), ids(await everyPage(viewer, 'filter=unread')));
+});
+
+it('a cursor belongs to its view; the legacy pair is accepted only for the default view; malformed queries are 400', async () => {
+ const pager = await signIn('chat-cursor', 'Cora Cursor'); await join(pager);
+ for (let i = 0; i < 3; i++) { const chat = await newChat(pager, `Cursor ${i}`, [owner]); await json(send(owner, chat.id, 'unread'), 201); }
+ const first = await json<ListPage>(listIn(pager, 'filter=unread&limit=1'));
+ assert.ok(first.nextCursor);
+ const cursor = encodeURIComponent(first.nextCursor!);
+ assert.equal((await json<ListPage>(listIn(pager, `filter=unread&limit=1&cursor=${cursor}`))).conversations.length, 1, 'its own view pages on');
+ for (const other of ['filter=starred', 'filter=unread&linked=true', 'filter=unread&linked=false', '', 'filter=all'])
+  assert.equal((await json<Failure>(listIn(pager, `${other}${other ? '&' : ''}cursor=${cursor}`), 400)).code, 'invalid_request', `unread cursor used for "${other}"`);
+ // The legacy pair (activity key, id): only the default view, and only when it is otherwise valid.
+ const legacy = encodeURIComponent(encodeCursor('2999-01-01T00:00:00.000000Z', randomUUID()));
+ assert.equal((await listIn(pager, `cursor=${legacy}`)).status, 200);
+ assert.equal((await listIn(pager, `filter=all&cursor=${legacy}`)).status, 200, 'filter=all with linked omitted is the default view');
+ for (const view of ['filter=unread', 'filter=starred', 'linked=true', 'linked=false', 'filter=all&linked=true'])
+  assert.equal((await json<Failure>(listIn(pager, `${view}&cursor=${legacy}`), 400)).code, 'invalid_request', view);
+ // Crafted cursors and malformed queries.
+ const crafted = (value: unknown) => encodeURIComponent(Buffer.from(JSON.stringify(value)).toString('base64url'));
+ const key = '2999-01-01T00:00:00.000000Z', id = randomUUID();
+ for (const bad of [crafted([key, id, 'unread', 'any', 'extra']), crafted([key, id, 'unread']), crafted([key, id, 'everything', 'any']), crafted([key, id, 'unread', 'maybe']),
+  crafted([key, 'not-a-uuid', 'unread', 'any']), crafted(['garbage', id, 'unread', 'any']), 'x'])
+  assert.equal((await json<Failure>(listIn(pager, `filter=unread&cursor=${bad}`), 400)).code, 'invalid_request', bad);
+ for (const query of ['filter=bogus', 'linked=maybe', 'linked=', 'filter=unread&filter=starred', 'linked=true&linked=false', 'view=all', 'limit=0', 'limit=51'])
+  assert.equal((await listIn(pager, query)).status, 400, query);
+});
+
+it('list and work-to-chat rows carry the latest message excerpt and the first link with a count; detail does not', async () => {
+ const task = await makeTask('Excerpt task'), project = await makeProject('Excerpt project');
+ const chat = await newChat(owner, 'Excerpts', [member], [{ kind: 'task', targetId: task }]);
+ const row = () => rowIn(owner, 'linked=true', chat.id);
+ let listed = await row();
+ assert.equal(listed.latest, null, 'no messages yet');
+ assert.deepEqual(listed.linkSummary, { first: { kind: 'task', targetId: task, title: 'Excerpt task' }, count: 1 });
+ // A link added later is counted but is not first: first is by created_at, id.
+ await json(request('POST', `${chats()}/${chat.id}/links`, owner, { expectedRevision: 1, kind: 'project', targetId: project }), 201);
+ listed = await row();
+ assert.deepEqual(listed.linkSummary, { first: { kind: 'task', targetId: task, title: 'Excerpt task' }, count: 2 });
+ // The excerpt is cut in SQL at 160 code points, astral characters included.
+ const long = await json<Message>(send(member, chat.id, '🍺'.repeat(4000)), 201);
+ listed = await row();
+ assert.deepEqual(listed.latest, { seq: long.seq, authorName: 'Mia Member', excerpt: '🍺'.repeat(160), deleted: false });
+ assert.equal([...listed.latest!.excerpt!].length, 160);
+ // A tombstone has no excerpt.
+ await json(tombstone(member, chat.id, long.id, 1));
+ listed = await row();
+ assert.deepEqual(listed.latest, { seq: long.seq, authorName: 'Mia Member', excerpt: null, deleted: true });
+ // Work to chat carries the same row; detail keeps its full links array and gains neither field.
+ const fromWork = (await json<{ conversations: Listed[] }>(request('GET', `${base()}/tasks/${task}/conversations`, owner))).conversations.find(c => c.id === chat.id)!;
+ assert.deepEqual([fromWork.latest, fromWork.linkSummary], [listed.latest, listed.linkSummary]);
+ const full = await json<Detail>(detail(owner, chat.id));
+ assert.equal(full.links.length, 2);
+ assert.ok(!('latest' in full) && !('linkSummary' in full));
+ // An empty conversation with no links.
+ const quiet = await newChat(owner, 'No links');
+ const quietRow = await rowIn(owner, 'linked=false', quiet.id);
+ assert.deepEqual([quietRow.latest, quietRow.linkSummary], [null, { first: null, count: 0 }]);
+});
+
+it('author names: kept after leaving or removal from the organisation, null only when the attribution was deleted', async () => {
+ const people = [await signIn('chat-name-left', 'Lena Left'), await signIn('chat-name-removed', 'Remy Removed'),
+  await signIn('chat-name-account', 'Ada Account'), await signIn('chat-name-row', 'Rowan Row')];
+ for (const person of people) await join(person);
+ const [left, removed, account, row] = people as [Person, Person, Person, Person];
+ const chat = await newChat(owner, 'Names', people);
+ const sent: Message[] = [];
+ for (const person of people) sent.push(await json<Message>(send(person, chat.id, `From ${person.user.id}`), 201));
+ assert.deepEqual(sent.map(m => m.authorName), ['Lena Left', 'Remy Removed', 'Ada Account', 'Rowan Row'], 'writes return the name too');
+ await json(pinIt(owner, chat.id, sent[2]!.id), 201);
+ await json(removePerson(left, chat.id, left, (await counters(chat.id)).revision)); // leaves the conversation
+ await json(request('DELETE', `${base()}/members/${removed.user.id}`, owner)); // membership status becomes removed
+ await db.owner`delete from users where id = ${account.user.id}`; // account deletion
+ await db.owner`delete from memberships where organisation_id = ${org} and user_id = ${row.user.id}`; // membership row deletion
+ const names = (messages: { id: string; authorName: string | null }[]) => sent.map(m => messages.find(x => x.id === m.id)?.authorName);
+ const want = ['Lena Left', 'Remy Removed', null, null];
+ assert.deepEqual(names((await json<Page>(page(owner, chat.id, 'latest=10'))).messages as (Message & { authorName: string | null })[]), want);
+ const feed = (await json<Changes>(changes(owner, chat.id, 'after=0'))).changes.filter(c => c.kind === 'message').map(messageOf);
+ assert.deepEqual(names(feed as (Message & { authorName: string | null })[]), want, 'the change feed carries the same names');
+ const pinned = (await json<{ pins: (Pin & { message: Message & { authorName: string | null } })[] }>(pinsOf(owner, chat.id))).pins;
+ assert.equal(pinned[0]!.message.authorName, null, 'a pinned message whose author account was deleted');
+ assert.equal((await rowIn(owner, '', chat.id)).latest!.authorName, null, 'the list excerpt too');
+});
+
+it('GET pins returns each pin’s original message from the same snapshot, even outside the latest messages', async () => {
+ const chat = await newChat(owner, 'Old pin', [member]);
+ const first = await json<Message>(send(member, chat.id, 'The original decision'), 201);
+ for (let i = 0; i < 8; i++) await json(send(owner, chat.id, `Later ${i}`), 201);
+ await json(edit(member, chat.id, first.id, 1, 'The original decision, clarified'));
+ const pin = await json<Pin>(pinIt(owner, chat.id, first.id), 201);
+ const latest = await json<Page>(page(owner, chat.id, 'latest=6'));
+ assert.ok(!latest.messages.some(m => m.id === first.id), 'the pinned message is outside the latest six');
+ const board = await json<{ conversation: { lastChange: number }; pins: (Pin & { message: Message & { authorName: string | null } })[] }>(pinsOf(member, chat.id));
+ assert.equal(board.pins.length, 1);
+ const hydrated = board.pins[0]!;
+ assert.equal(hydrated.id, pin.id);
+ assert.equal(hydrated.message.id, first.id); assert.equal(hydrated.message.seq, 1);
+ assert.equal(hydrated.message.body, 'The original decision, clarified'); assert.equal(hydrated.message.revision, 2);
+ assert.equal(hydrated.message.authorName, 'Mia Member'); assert.equal(hydrated.message.deletedAt, null);
+ assert.equal(board.conversation.lastChange, (await counters(chat.id)).lastChange, 'one snapshot: pins and messages as of this counter');
+ // Pin, unpin and change-feed pin objects keep their plain shape.
+ assert.ok(!('message' in pin));
+ const pinChange = (await json<Changes>(changes(owner, chat.id, 'after=0'))).changes.find(c => c.kind === 'pin')!;
+ assert.ok(pinChange.kind === 'pin' && !('message' in pinChange.pin));
+ assert.equal((await pinsOf(third, chat.id)).status, 404, 'still private');
 });
