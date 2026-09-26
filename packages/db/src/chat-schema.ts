@@ -18,7 +18,9 @@ import { memberships, organisations } from './connections-schema.ts';
 //   conversations_pkey, conversations_organisation_id_id_key            -> conversation id unavailable
 //   messages_pkey, messages_organisation_id_id_key                      -> message id unavailable
 //   conversation_links_target                                           -> link exists
-// Named for diagnosis, never mapped to a 409: messages_conversation_seq, messages_conversation_change.
+//   message_pins_live_message (0043)                                    -> message already pinned
+// Named for diagnosis, never mapped to a 409: messages_conversation_seq, messages_conversation_change,
+// message_pins_conversation_change.
 //
 // At commit, a deferred constraint trigger (chat_conversations_seq_check, not callable) checks that every last_seq
 // advance has its message; a failing commit raises check_violation (23514). Timestamps are the server's: created_at,
@@ -53,13 +55,16 @@ export const conversationParticipants = pgTable('conversation_participants', {
 	organisationId: tenant(), conversationId: uuid('conversation_id').notNull(), userId: uuid('user_id').notNull(),
 	state: text('state').notNull().default('active'), addedBy: uuid('added_by'), addedAt: at('added_at'),
 	endedAt: timestamp('ended_at', { withTimezone: true }),
+	// 0043: the participation baseline for read positions, set by the database on create, add and re-add.
+	readStartSeq: integer('read_start_seq').notNull().default(0),
 }, (t) => [primaryKey({ columns: [t.conversationId, t.userId] }),
 	foreignKey({ columns: [t.organisationId, t.conversationId], foreignColumns: [conversations.organisationId, conversations.id] }).onDelete('cascade'),
 	foreignKey({ columns: [t.organisationId, t.userId], foreignColumns: [memberships.organisationId, memberships.userId] }).onDelete('cascade'),
 	member(t.organisationId, t.addedBy), // on delete set null (added_by)
 	index('conversation_participants_active_by_user').on(t.organisationId, t.userId, t.conversationId).where(sql`${t.state} = 'active'`),
 	check('conversation_participants_state_check', sql`${t.state} in ('active', 'left', 'removed')`),
-	check('conversation_participants_ended_check', sql`(${t.state} = 'active') = (${t.endedAt} is null)`)]);
+	check('conversation_participants_ended_check', sql`(${t.state} = 'active') = (${t.endedAt} is null)`),
+	check('conversation_participants_read_start_check', sql`${t.readStartSeq} >= 0`)]);
 
 export const conversationLinks = pgTable('conversation_links', {
 	id: uuid('id').primaryKey().default(sql`uuidv7()`), organisationId: tenant(), conversationId: uuid('conversation_id').notNull(),
@@ -93,6 +98,39 @@ export const messages = pgTable('messages', {
 	check('messages_hash_check', sql`${t.sentBodySha256} is null or octet_length(${t.sentBodySha256}) = 32`),
 	check('messages_tombstone_check', sql`(${t.deletedAt} is null and ${t.body} is not null and ${t.sentBodySha256} is not null and ${t.deletedBy} is null)
 		or (${t.deletedAt} is not null and ${t.body} is null and ${t.sentBodySha256} is null)`)]);
+
+// PR C (0043). Pins are shared; stars and read positions are personal and visible only to their own person while
+// they participate. A person's effective read position is max(read_start_seq, their conversation_reads.last_read_seq, 0).
+export const messagePins = pgTable('message_pins', {
+	id: uuid('id').primaryKey().default(sql`uuidv7()`), organisationId: tenant(), conversationId: uuid('conversation_id').notNull(),
+	messageId: uuid('message_id').notNull(), changeSeq: integer('change_seq').notNull(),
+	pinnedBy: uuid('pinned_by'), pinnedAt: at('pinned_at'),
+	unpinnedBy: uuid('unpinned_by'), unpinnedAt: timestamp('unpinned_at', { withTimezone: true }),
+}, (t) => [
+	foreignKey({ columns: [t.organisationId, t.conversationId], foreignColumns: [conversations.organisationId, conversations.id] }).onDelete('cascade'),
+	foreignKey({ columns: [t.organisationId, t.messageId], foreignColumns: [messages.organisationId, messages.id] }).onDelete('cascade'),
+	member(t.organisationId, t.pinnedBy), // on delete set null (pinned_by)
+	member(t.organisationId, t.unpinnedBy), // on delete set null (unpinned_by)
+	uniqueIndex('message_pins_live_message').on(t.messageId).where(sql`${t.unpinnedAt} is null`),
+	uniqueIndex('message_pins_conversation_change').on(t.conversationId, t.changeSeq),
+	index('message_pins_live_by_conversation').on(t.organisationId, t.conversationId).where(sql`${t.unpinnedAt} is null`),
+	check('message_pins_change_check', sql`${t.changeSeq} > 0`),
+	check('message_pins_unpinned_check', sql`${t.unpinnedBy} is null or ${t.unpinnedAt} is not null`)]);
+
+export const conversationStars = pgTable('conversation_stars', {
+	organisationId: tenant(), conversationId: uuid('conversation_id').notNull(), userId: uuid('user_id').notNull(), createdAt: at('created_at'),
+}, (t) => [primaryKey({ columns: [t.conversationId, t.userId] }),
+	foreignKey({ columns: [t.organisationId, t.conversationId], foreignColumns: [conversations.organisationId, conversations.id] }).onDelete('cascade'),
+	foreignKey({ columns: [t.organisationId, t.userId], foreignColumns: [memberships.organisationId, memberships.userId] }).onDelete('cascade'),
+	index('conversation_stars_by_user').on(t.organisationId, t.userId)]);
+
+export const conversationReads = pgTable('conversation_reads', {
+	organisationId: tenant(), conversationId: uuid('conversation_id').notNull(), userId: uuid('user_id').notNull(),
+	lastReadSeq: integer('last_read_seq').notNull(), updatedAt: at('updated_at'),
+}, (t) => [primaryKey({ columns: [t.conversationId, t.userId] }),
+	foreignKey({ columns: [t.organisationId, t.conversationId], foreignColumns: [conversations.organisationId, conversations.id] }).onDelete('cascade'),
+	foreignKey({ columns: [t.organisationId, t.userId], foreignColumns: [memberships.organisationId, memberships.userId] }).onDelete('cascade'),
+	check('conversation_reads_seq_check', sql`${t.lastReadSeq} >= 0`)]);
 
 export const chatAuditEvents = pgTable('chat_audit_events', {
 	id: uuid('id').primaryKey().default(sql`uuidv7()`), organisationId: tenant(), conversationId: uuid('conversation_id').notNull(),

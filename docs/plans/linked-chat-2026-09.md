@@ -3,7 +3,8 @@
 Status: **adopted in #160** (revision 5), 26 September 2026. That PR applied
 the §11 amendments to `AGENTS.md` and `docs/plan.md`.
 PR B (#169) shipped to staging after the runtime-role repair (#162–#168), with migration 0042
-and hosted rollback-only isolation/write checks. PR C and the web remain subsequent increments.
+and hosted rollback-only isolation/write checks. PR C is implemented and under review with real-
+Postgres checks; it is not released. The web remains the subsequent increment.
 PR C execution clarifications below are adopted with this reviewed amendment.
 
 Peer reviews r3 and r4 and root's concurrence are incorporated:
@@ -590,7 +591,9 @@ A poll costs two requests: the session read and the chat read.
     Unknown, foreign and inaccessible IDs return an identical 404.
 - **PR C, migration `0043_chat_personal_pins.sql`.**
   - Tables: pins, stars and reads with their policies and triggers, plus the read backfill.
-  - Endpoints: pins, star, read, and message edit.
+  - Endpoints: `GET/POST …/pins`, `DELETE …/pins/:pinId`, `POST/DELETE …/star`,
+    `POST …/read` and `PATCH …/messages/:mid`. Stars use POST so the unchanged chat-write
+    rate policy covers every write. No new polling or automatic write retries.
   - `lifecycle.ts` gains the three new tables in `uncounted`.
 - **PR D (web).** The Chat views, the full conversation and item panels (every live pin above the
   latest six), pending, scope and 429 states, and Playwright checks.
@@ -670,7 +673,7 @@ All run against real Postgres as `captain_runtime` (DB and API), plus the browse
 PR C additionally proves current cross-table change-number collision refusal, a fixed read baseline
 while new messages arrive without a personal read row, re-add reset, no audit for no-op stars/reads/
 edits, `409 message_deleted` for pinning a tombstone, one audit for atomic delete/unpin, and the race
-for the 50th live pin. Each pin table also enforces `(conversation_id, change_seq)` uniqueness.
+for the 50th live pin. The pin table also enforces `(conversation_id, change_seq)` uniqueness, as messages already do.
 
 ## 17. Remaining items
 

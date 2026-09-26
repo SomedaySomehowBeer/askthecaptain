@@ -46,6 +46,17 @@ export function chatRoutes(service: ChatService) {
  });
  routes.delete(`${one}/messages/:messageId`, async c => c.json(await service.deleteMessage(actor(c), uuid.parse(c.req.param('id')),
   uuid.parse(c.req.param('conversationId')), uuid.parse(c.req.param('messageId')), singleQuery(c.req.queries()))));
+ // PR C (contract §13): author edits, shared pins, personal stars and read positions. Every write here is a POST, PATCH
+ // or DELETE under the conversations path, so the existing chat-writes limit applies; nothing relaxes it.
+ routes.patch(`${one}/messages/:messageId`, async c => c.json(await service.editMessage(actor(c), uuid.parse(c.req.param('id')),
+  uuid.parse(c.req.param('conversationId')), uuid.parse(c.req.param('messageId')), await readJson(c.req))));
+ routes.get(`${one}/pins`, async c => c.json(await service.pins(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('conversationId')))));
+ routes.post(`${one}/pins`, async c => c.json(await service.pin(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('conversationId')), await readJson(c.req)), 201));
+ routes.delete(`${one}/pins/:pinId`, async c => c.json(await service.unpin(actor(c), uuid.parse(c.req.param('id')),
+  uuid.parse(c.req.param('conversationId')), uuid.parse(c.req.param('pinId')))));
+ routes.post(`${one}/star`, async c => c.json(await service.setStar(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('conversationId')), true)));
+ routes.delete(`${one}/star`, async c => c.json(await service.setStar(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('conversationId')), false)));
+ routes.post(`${one}/read`, async c => c.json(await service.markRead(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('conversationId')), await readJson(c.req))));
  routes.get(`${one}/changes`, async c => c.json(await service.changes(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('conversationId')), singleQuery(c.req.queries()))));
  // Work to chat: only the caller's own conversations; work payloads themselves gain no chat fields.
  routes.get('/v1/organisations/:id/tasks/:taskId/conversations', async c =>
