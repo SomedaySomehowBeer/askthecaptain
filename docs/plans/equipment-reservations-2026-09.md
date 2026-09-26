@@ -110,5 +110,36 @@ in that window at the moment of the read. Truncation or any nonzero offset yield
 page alone cannot declare the whole window free. Outside the requested window remains unloaded.
 Offset paging is not a stable snapshot under concurrent edits. A client seeking a complete availability
 picture should narrow a dense window and reload an untruncated first page; only an accepted write
-confirms a booking. The web timeline preserves these distinctions when zooming or scrolling. It reads at most
-200 reservations per column; partial columns stay unknown and ask for a narrower date window.
+confirms a booking. The web timeline preserves these distinctions when zooming or scrolling.
+
+## Web schedule range and lazy reads
+
+The web schedule scrolls continuously through a finite range around its anchor date (the `date`
+parameter, default today in the organisation timezone): from one calendar month before it to six
+calendar months after it, clamped a day inside the API's 1900–2200 limits. It opens with the anchor
+date at the top of the viewport. The range is divided into reads of at most 28 civil days aligned to
+the anchor (a skipped civil date moves a boundary to the next existing day), far inside the 93-day
+limit. The page reads the anchor's chunk for its eight equipment columns on the server. Further
+chunks load as they come near the view, one server-action read at a time, nearest first; the action
+validates one page of at most eight distinct equipment IDs and a window of at most 93 days, then
+reads the API as the signed-in person. The browser never holds the token.
+
+Each chunk and equipment cell is unread, loading, failed, partial or complete. Time is striped as
+unknown unless a complete read covers it; only a complete first page (no next page) can show free
+time. A partial cell shows what it read and stays striped: more than 200 occupied intervals in a
+chunk are not paged further, and the list says gaps are not confirmed free. A failed cell keeps its
+reason and a Retry control and is never re-read automatically, so a failing boundary cannot loop. A
+response is applied only to the cells still waiting on that exact request; responses after the
+schedule re-anchors or changes equipment page are ignored. A reservation returned by two chunk reads
+is shown once, at its highest revision. A read reporting another organisation timezone asks for a
+refresh.
+
+Only the visible time plus about one and a half viewports either side is rendered: axis labels,
+one shared set of gridlines and reservation links. Hourly ticks across seven months are never built.
+Previous/next arrows move one day (Hours), one week (Days) or four weeks (Weeks); Today and Go to a
+date scroll within the range or re-anchor on a date outside it. At either end of the range the
+arrow and an end-of-range note link to a re-anchored schedule, so navigation continues without an
+unbounded read. The route keeps its original anchor while scrolling: changing it during a server-action read
+would let Next re-anchor the range on its response. Refresh availability and equipment-page links
+use the date in view; a browser reload or copied address reopens the original anchor. The list
+below the timeline covers the whole days in view. The legacy `span` parameter is ignored.

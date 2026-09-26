@@ -19,10 +19,18 @@
 .equipment-body { display:flex; position:relative; min-height:24px; }
 .equipment-axis { width:100px; flex:none; position:sticky; left:0; z-index:3; background:var(--bg); }
 .equipment-axis>span { position:absolute; left:0; width:100%; font-size:10px; padding:2px 6px; color:var(--muted); line-height:1.2; border-top:1px solid var(--line); }
-.equipment-lane { width:168px; flex:none; position:relative; border-left:1px solid var(--line); }
-.equipment-gridline { position:absolute; left:0; right:0; border-top:1px solid var(--line); pointer-events:none; }
-.equipment-lane--unknown { background:repeating-linear-gradient(135deg,transparent,transparent 8px,var(--line) 8px,var(--line) 9px); }
-.equipment-unknown { position:sticky; top:56px; display:block; z-index:2; margin:4px; padding:6px; border-radius:6px; background:var(--bg); color:var(--ink); font-size:12px; }
+/* Time is unknown (striped) unless a complete read covers it: a lane is striped by default and
+   only a complete segment paints it plain. Nothing unread can look free, even mid-scroll. */
+.equipment-lane { width:168px; flex:none; position:relative; border-left:1px solid var(--line); background:repeating-linear-gradient(135deg,transparent,transparent 8px,var(--line) 8px,var(--line) 9px); }
+.equipment-segment { position:absolute; left:0; right:0; }
+.equipment-segment[data-coverage=complete] { background:var(--panel); }
+.equipment-segment:not([data-coverage=complete]) { border-top:2px dashed var(--line); }
+.equipment-grid { position:absolute; top:0; bottom:0; left:100px; right:0; pointer-events:none; }
+.equipment-grid>span { position:absolute; left:0; right:0; border-top:1px solid var(--line); }
+.equipment-unknown { position:sticky; top:56px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; z-index:2; margin:4px; padding:6px; border-radius:6px; background:var(--bg); color:var(--ink); font-size:12px; }
+.equipment-unknown button { min-height:32px; padding:0 10px; border:1px solid var(--accent); border-radius:6px; background:var(--bg); color:var(--accent-text); font:inherit; font-weight:600; cursor:pointer; }
+.equipment-edge { position:sticky; left:0; max-width:min(100%,calc(100vw - 48px)); padding:12px; font-size:13px; color:var(--muted); border-top:1px solid var(--line); }
+.equipment-edge a { color:var(--accent-text); }
 .equipment-booking { position:absolute; left:7px; right:7px; min-height:1px; border-radius:6px; background:var(--accent-soft); color:var(--ink); overflow:hidden; text-decoration:none; z-index:1; outline:1px solid var(--accent-text); }
 .equipment-booking__actual { position:absolute; left:0; right:0; background:var(--accent); pointer-events:none; }
 .equipment-booking strong,.equipment-booking small { position:relative; z-index:1; display:block; padding:4px 6px; font-size:12px; line-height:1.25; overflow-wrap:anywhere; }
@@ -48,5 +56,7 @@
 .equipment-dates summary::before { content:'›'; margin-right:8px; }
 .equipment-dates[open] summary::before { content:'⌄'; }
 .equipment-date-nav { flex-wrap:nowrap; gap:4px; }
-.equipment-date-nav a { justify-content:center; min-width:44px; font-size:24px; }
+.equipment-date-nav a,.equipment-date-step { justify-content:center; min-width:44px; font-size:24px; }
+.equipment-date-step { min-height:44px; display:inline-flex; align-items:center; border:0; background:none; color:var(--accent-text); font-family:inherit; cursor:pointer; }
+.equipment-reservations .form__error .button { margin:8px 8px 0 0; }
 .equipment-date-nav strong { font-size:13px; text-align:center; }
