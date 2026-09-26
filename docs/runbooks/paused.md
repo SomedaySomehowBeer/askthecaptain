@@ -1,8 +1,8 @@
 # Staging resumed; production paused (2026-09-24)
 
 Captain's staging workspace is available at **https://app.askthecaptain.app/work**. API and web
-retain the reviewed workspace, now including private saved Work views (#153/#154):
-API image source `6be8321d`, web image source `7e60a1e`. Continuous equipment scheduling and
+retain the reviewed workspace, including private saved Work views (#153/#154) and By tag navigation (#159):
+API image source `6be8321d`, web image source `2e0aa1b`. Continuous equipment scheduling and
 project task-history filters remain included.
 The earlier Work record and task/list corrections remain included.
 Tasks, projects and recurring work have their own Work pages; the Commitments overview is retired.
@@ -23,6 +23,43 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## By tag Work views release (26 September 2026, UTC)
+
+Outcome: **manage shared work**. [#159](https://github.com/SomedaySomehowBeer/askthecaptain/pull/159)
+was independently reviewed by Claude Opus and the coordinator, passed
+[CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36214459102), and squash-merged
+as `bcc3155bd5ebafbde1b16ee345c70783677ad6dc`. Every existing organisation tag now appears under
+Work → views → By tag, linking by stable ID to Everyone · Open. Production, Marketing, Sales and
+Admin/reporting remain ordinary tags, created explicitly through Tags if missing. No seeding occurred.
+
+Only web machine `9185776e7cd3d8` changed image, to
+`registry.fly.io/askthecaptain-web-staging:git-2e0aa1b@sha256:a6b581dbe2ecc0abb00c202bd0f8d4d8d2d1da4a9056c11d4118495ae6b7401c`.
+It was built/pushed from a clean detached checkout at `2e0aa1b29965384b9a7343256f3d09f48eb0ead8`,
+whose committed tree exactly matches the merge. The machine configuration was copied and only its
+image replaced, then the existing machine was updated and started. No migration, queue installation,
+API restart, reset or customer-record mutation was needed or performed.
+
+Before/after comparisons confirmed one API and one web staging machine and unchanged configuration
+apart from the web image. API remains at the #153 image below. Production's existing two API and
+two web machines, and the single embedding machine, stayed stopped with unchanged configuration.
+Deploy and backup workflows remain disabled. No DNS, secret or infrastructure change occurred.
+
+API `/readyz` returned `200 {"ok":true}`. Shared Chrome at 390 and 1440 pixels rendered the hosted
+Google sign-in entry, without overflow or browser exceptions. There was no authenticated hosted
+session; authenticated functionality was checked against the isolated real API/Postgres fixture,
+not the customer's hosted data. The demo was not independently re-read on staging.
+
+Validation: web typecheck, 74 web tests and production build passed; all seven focused browser
+groups, all 16 saved-view regression groups in one run, and all 10 existing Work groups passed.
+The focused and saved-view suites used the existing opt-in disposable-fixture rate-limit clock;
+Work regression used ordinary limits. The first focused run found an ambiguous test selector;
+its corrected full rerun passed. No loading-timing or native-device acceptance is claimed.
+[Evidence and populated captures](../validation/tag-views-2026-09-26/README.md) are retained.
+
+Rollback is an image-only update on the same web machine to the previous `git-7e60a1e` digest
+`sha256:2a88aa7468032c224b387e1ea0a5ac0768270c7a54426b270bbf03afde9a8ac1`, preserving its current
+configuration. The API and database do not change.
 
 ## Private saved Work views release (26 September 2026, UTC)
 

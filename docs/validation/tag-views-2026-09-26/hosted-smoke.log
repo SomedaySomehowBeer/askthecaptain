@@ -1,0 +1,3 @@
+{"width":390,"signedOut":true,"route":"/sign-in"}
+{"width":1440,"signedOut":true,"route":"/sign-in"}
+PASS hosted browser smoke; no writes

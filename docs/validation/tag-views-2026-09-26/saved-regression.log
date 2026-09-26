@@ -1,0 +1,16 @@
+PASS empty and failed Saved views states, fixed groups unaffected
+PASS keyboard create, exact stored filter, opened by id
+PASS listed view opens; /work is still My work
+PASS in-view task completion keeps the view and focus feedback
+PASS inconsistent, unknown, invalid, newer-version and read-failure states are explicit
+PASS unavailable and missing references stay distinct and never broaden the list
+PASS explicit tag/project clears survive paging and history and save as cleared
+PASS form edits produce complete drafts; Discard changes nothing
+PASS two-tab stale draft keeps base, shows both filters, overwrites nothing until explicitly replaced
+PASS uncertain creates lock, retry/reconcile the same id, and only an explicit new save gets a new id
+PASS unavailable or full tab storage refuses a new create with zero requests
+PASS an unreadable pending record locks until an explicit start-new choice
+PASS saved-view actions refuse a different active organisation; pending creates stay scoped
+PASS draft and filter-form state are keyed to the draft; base is kept
+PASS rename; uncertain delete reconciled; deleted id is not available
+PASS other members' views are private; revoked membership loses access; 360/390/430/1440 layouts

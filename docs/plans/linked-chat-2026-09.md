@@ -1,7 +1,7 @@
 # Linked chat: contract and PR sequence
 
-Status: **adopted, pending merge of its plan PR** (revision 5), 26 September 2026. That PR applies
-the §11 amendments to `AGENTS.md` and `docs/plan.md`, and adoption takes effect when it merges.
+Status: **adopted in #160** (revision 5), 26 September 2026. That PR applied
+the §11 amendments to `AGENTS.md` and `docs/plan.md`.
 There is still no code, and no tables or migrations exist.
 
 Peer reviews r3 and r4 and root's concurrence are incorporated:
