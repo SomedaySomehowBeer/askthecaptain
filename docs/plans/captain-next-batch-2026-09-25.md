@@ -33,6 +33,13 @@ cleanup: runtime retirement (#135), optional projects/reset (#136), and Work rec
 (#138) are implemented and deployed. Empty retired storage, the retrieval package, connector capabilities and deployment
 assets still need removal. Saved-view and linked-chat contracts are the next feature increments.
 
+The populated-demo reliability/design follow-up is now delivered through #143/#145/#147 and
+#149/#150: checkable work, parent navigation, project Overview/Tasks/Schedule, continuous
+month-back/six-month-forward equipment scrolling and separated project task history. These are
+bounded corrections, not complete mockup or native-device acceptance. Search/filter presentation
+and contextual Files/Chat remain in #142; private saved views remain the next ordered feature
+increment below, under the existing reviewed contract in #141.
+
 ## Ordered increments
 
 1. **Recover without signing people out.** Missing credentials or a confirmed invalid session
