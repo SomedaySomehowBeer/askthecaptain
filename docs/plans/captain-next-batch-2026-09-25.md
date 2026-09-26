@@ -37,14 +37,14 @@ The populated-demo reliability/design follow-up is now delivered through #143/#1
 #149/#150: checkable work, parent navigation, project Overview/Tasks/Schedule, continuous
 month-back/six-month-forward equipment scrolling and separated project task history. These are
 bounded corrections, not complete mockup or native-device acceptance. Search/filter presentation
-and contextual Files/Chat remain in #142; private saved views remain the next ordered feature
-increment below, under the [reviewed contract](saved-work-views-2026-09.md) adopted in #140;
-implementation is tracked in #141.
+and contextual Files/Chat remain in #142. Private saved views follow the
+[reviewed contract](saved-work-views-2026-09.md) adopted in #140 and tracked in #141.
 
 The [26 September saved-view delivery assignment](saved-work-views-delivery-2026-09-26.md)
-now splits #141 between two Claude Opus agents: database/API and Work web, in separate worktrees.
-Codex owns integration, serial verification and release. Implementation is in progress; no saved-view
-migration, API or web implementation is yet merged or deployed.
+split #141 between two Claude Opus agents: database/API and Work web, with reciprocal review.
+Both implementations are merged (#153/#154) with green CI. The linked delivery document records
+the real-Postgres/browser proof and staging release; this is implemented private Work filtering,
+not shared views or Chat/Files delivery.
 
 ## Ordered increments
 
