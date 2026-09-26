@@ -2,6 +2,8 @@
  *  contract §7/§11): create/open/rename/delete, explicit clears, two-tab stale drafts, uncertain creates,
  *  reference failures without broadening, unusable links, revocation, keyboard feedback and layouts.
  *
+ *  Start the local fixture with WORKSPACE_PROBE_FAST_LIMITS=1: its controlled limiter clock avoids
+ *  unrelated 429s from rapid test actions/revalidation. Auth, roles, RLS and writes still use the real services.
  *  Needs from the fixture (root-owned): data.json `memberToken`, `memberUserId`, `newerViewId` (an owner
  *  row with filter_version 2 inserted as the owner role), `unreadableViewId` (an owner row with filter_version 1
  *  and a filter that is not valid v1, e.g. {"owner":"me"}), and these `mode` values:
@@ -18,6 +20,7 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
 (async () => {
  const fixture = JSON.parse(await readFile(path.join(directory, 'data.json'), 'utf8'));
  assert.equal(fixture.fixture, 'captain-workspace-local');
+ assert.equal(fixture.fastRateWindows, true, 'saved-view fixture requires WORKSPACE_PROBE_FAST_LIMITS=1');
  for (const key of ['memberToken', 'memberUserId', 'newerViewId', 'unreadableViewId']) assert.ok(fixture[key], `fixture ${key} required for saved views`);
  const browser = process.env.CHROME_CDP_URL ? await chromium.connectOverCDP(process.env.CHROME_CDP_URL) : await chromium.launch();
  /** Every context signs in with a cookie and, when the shared Chrome runs in Docker (CHROME_CDP_URL), forwards

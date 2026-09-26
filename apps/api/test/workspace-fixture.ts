@@ -9,6 +9,7 @@ import type { TaskStatus } from '../src/commitments/service.ts';
 import { AuthService } from '../src/auth/service.ts';
 import { OrganisationService } from '../src/organisations/service.ts';
 import { CommitmentsService } from '../src/commitments/service.ts';
+import { RateLimiter } from '../src/ratelimit.ts';
 import { serve } from '@hono/node-server';
 // Manual browser fixture only: never imported by the application or started against hosted data.
 const directory = process.env.WORKSPACE_PROBE_DIR;
@@ -20,6 +21,11 @@ const databaseHost = new URL(process.env.DATABASE_URL).hostname;
 if (!['127.0.0.1', 'localhost', '[::1]'].includes(databaseHost))
     throw new Error('The browser fixture requires a loopback Postgres server.');
 const db = await freshDatabase();
+// The long saved-view browser suite makes hundreds of API reads through Next's revalidation.
+// Opt in only for this loopback/disposable fixture; production and default fixture limits stay real.
+// Rate-limit policy itself is covered by ratelimit.test.ts and explicit session-429 browser modes.
+const fastRateWindows = process.env.WORKSPACE_PROBE_FAST_LIMITS === '1';
+let rateClock = 0;
 try {
     type Identity = { subject: string; email: string; name: string };
     type SignedIn = { token: string; user: { id: string } };
@@ -27,7 +33,7 @@ try {
     const google: IdentityProvider & {
         next: Identity;
     } = { next: { subject: 'workspace-owner', email: 'olive@example.test', name: 'Olive Owner' }, authorizationUrl: ({ state }) => `https://google.test/?state=${state}`, async exchange() { return this.next; } };
-    const app = createApp({ connections: new ConnectionService(db.app, null, null), workflows: new WorkflowService(db.app), db: db.app, auth: new AuthService(db.app, google, { appUrl: 'http://127.0.0.1:3034', sessionTtlDays: 1 }), organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app) });
+    const app = createApp({ connections: new ConnectionService(db.app, null, null), workflows: new WorkflowService(db.app), db: db.app, auth: new AuthService(db.app, google, { appUrl: 'http://127.0.0.1:3034', sessionTtlDays: 1 }), organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), ...(fastRateWindows ? { rateLimiter: new RateLimiter(() => (rateClock += 61_000)) } : {}) });
     async function request<T>(method: string, path: string, token: string | null, body?: unknown): Promise<T> {
         const response = await app.request(path, {
             method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
@@ -98,7 +104,7 @@ try {
         values (${newerViewId}, ${org.id}, ${owner.user.id}, 'Future view', 2, '{"mode":"board"}')`;
     await db.owner`insert into saved_views (id, organisation_id, owner_id, name, filter_version, filter)
         values (${unreadableViewId}, ${org.id}, ${owner.user.id}, 'Unreadable view', 1, '{"owner":"me"}')`;
-    await writeFile(`${directory}/data.json`, JSON.stringify({ unreadableViewId, memberToken: pat.token, memberUserId: pat.user.id, newerViewId, fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id, retiredRun: oldRun!.id }), { mode: 0o600, flag: 'wx' });
+    await writeFile(`${directory}/data.json`, JSON.stringify({ fastRateWindows, unreadableViewId, memberToken: pat.token, memberUserId: pat.user.id, newerViewId, fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id, retiredRun: oldRun!.id }), { mode: 0o600, flag: 'wx' });
     let mutationRequests = 0, reservationReadCount = 0;
     const reservationReads: { sequence: number; equipmentId: string; from: string | null; to: string | null }[] = [];
     const server = serve({ hostname: '127.0.0.1', port: 8084, fetch: async (req, bindings) => {
