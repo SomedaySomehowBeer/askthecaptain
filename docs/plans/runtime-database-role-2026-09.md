@@ -2,7 +2,7 @@
 
 Status: repair merged in [#162](https://github.com/SomedaySomehowBeer/askthecaptain/pull/162),
 26 September 2026; restricted staging login activated; old administrative password reset and proven rejected;
-infrastructure state reconciliation pending. Outcomes: protect shared work and private views (D6,
+role state refreshed; final legacy connection-output reconciliation pending. Outcomes: protect shared work and private views (D6,
 D26), and unblock linked chat (D25). Chat is held separately on `feat/linked-chat-core`.
 
 ## Observed problem and containment
@@ -101,8 +101,15 @@ this repair. No customer content is reset, deleted, or converted.
    tracked Terraform configuration. Cleanup removes only the file created by that run. The stored
    role dependency may be absent until the next normal configuration apply. The `app` role remains administrative and unused; rotating its
    password does not disable the role. Neon retains the new, unused administrative password, and
-   a successful refresh records it in state and the legacy URL output; neither is a runtime login.
-   Retirement invalidates the distributed credential, not the role’s ability to sign in. Do not rerun a completed retirement just to repeat a check.
+   the scoped refresh records it in the role state. The separate output repair below updates the
+   legacy URL too. Both are sensitive values in the Tigris state bucket, and neither is a runtime login.
+   Retirement invalidates the distributed credential, not the role’s ability to sign in.
+   The role-only refresh can leave the dependent URL output stale. The separate manual
+   `.github/workflows/reconcile-retired-output.yml` (#167) repairs that output from existing state:
+   refresh off, all three referenced resources must be no-ops, and only that sensitive output may
+   change to the independently derived value. Before/after comparisons protect resource values,
+   credentials, lineage and other outputs, allowing only the expected role dependency restoration.
+   It cannot reset a password. Disable each one-off workflow after its successful run. Do not rerun a completed retirement just to repeat a check.
 7. Resume the separately reviewed chat migration/API increment only after this gate passes.
 
 The repository's existing Terraform `neon_role.app` resource is retained, to avoid a destructive
@@ -111,3 +118,12 @@ use the SQL-created role. No `tofu apply`, credential rotation or provider suppo
 performed by implementation PR #162. The separately authorised activation and #164 retirement
 workflow (with #165 rejection-classifier and #166 scoped-refresh fixes) do change credentials; the latter applies only a checked refresh-only state plan. If activation fails, keep the API stopped; reverting to the
 administrative runtime connection is not an acceptable availability rollback.
+
+## Remaining credential separation
+
+`MIGRATION_DATABASE_URL` remains an owner secret on the staging API app and is available to its
+process. The runtime pool and guard use restricted `DATABASE_URL`; this repair does not prevent
+process code from accessing the separately supplied owner URL. Follow-up work should deliver that
+owner credential only to release/migration commands, preserving the one-machine staging limit and
+validating migration/queue recovery before changing deployment. It is not a reason to revert the
+restricted runtime login or re-enable the former administrative credential.

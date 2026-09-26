@@ -41,7 +41,10 @@ At **10:06:21Z**, preflight using the same endpoint as the API passed: current/s
 tasks/tags/memberships/private views, and denied DELETE on saved views. A private 0600 credential
 file was transferred over SFTP and imported via stdin into only staging API `DATABASE_URL` with
 `--stage`; local and remote temporary copies were deleted. Before/after secret digests confirm
-no other secret changed, including `MIGRATION_DATABASE_URL`.
+no other secret changed, including `MIGRATION_DATABASE_URL`. That owner URL remains in the API
+app's environment for release operations. The guard protects the runtime pool's `DATABASE_URL`;
+it does not isolate the owner secret from the process. Follow-up: restrict owner credential delivery
+to release commands, with staging validation before changing the release mechanism.
 
 Only existing API machine `80e39ea6416e18` was used. Its ordinary command and normal autostart/idle
 stop were restored on the same guarded image:
@@ -67,12 +70,24 @@ the restricted role and `/readyz`, then refused drift outside the role. No state
 exclusively created temporary override of the already-validated project/branch IDs. All strict
 password-only and no-managed-change gates remain. The temporary override can remove the role's
 stored project dependency until the next normal configuration apply; tracked configuration stays
-unchanged. State reconciliation is pending; the current state/output still hold the retired password.
+unchanged.
 
-The `app` role remains administrative, with a new unused password held by Neon. Retirement
+[Scoped resume 36236405227](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36236405227)
+completed at **10:39:19Z**: another reset was skipped, the old password was rejected, zero `app`
+sessions remained, the restricted role/readiness checks passed, and only the role password was
+refreshed in state. No infrastructure was provisioned. The temporary override was removed and
+the retirement workflow was disabled. A follow-up consistency check found the legacy URL output
+still held the retired password: the role-only target omitted that output's other dependencies.
+[#167](https://github.com/SomedaySomehowBeer/askthecaptain/pull/167) adds a separate output-only
+repair, with refresh disabled, exactly three resource no-ops, and checks that only the sensitive
+legacy URL changes to the value independently derived from state. The repair has no reset path.
+Its execution is pending; the role's stored password is current but the legacy output is stale.
+
+The `app` role remains administrative, with a new unused password held by Neon and in the
+sensitive Terraform state in Tigris. Retirement
 invalidates the former distributed credential; it does not disable that role. Neither staging
-app uses the new administrative password. Production remains paused with its old credential,
-which must be replaced before any future resume. See the
+app uses the new administrative password. Production remains paused with its old `app` credential, which no longer authenticates and
+must be replaced before any future resume. See the
 [validation record](../validation/runtime-activation-2026-09-26/README.md).
 
 ## Runtime-role repair preparation — historical (26 September 2026, UTC)

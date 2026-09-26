@@ -23,6 +23,13 @@ configuration change was made.
   All 47 offline fixtures pass. A local builtin-only OpenTofu probe confirms that project+role
   refresh becomes role-only, including when an output references both resources. Shell probes
   confirm a preexisting override survives refusal and the run’s own file is removed on failure.
+- [Successful scoped retirement](retirement-scoped.txt): the old password remained rejected, reset
+  skipped, staging safe/ready, and only the role password refreshed in state. Workflow disabled.
+  The follow-up connection-output consistency check failed because the legacy output remained
+  stale. [#167](https://github.com/SomedaySomehowBeer/askthecaptain/pull/167) contains the reviewed
+  output-only repair, with 54 passing fixtures plus all 47 retirement fixtures. A disposable
+  builtin-only OpenTofu test repaired a deliberately stale output with resource no-ops; its
+  before/after state passed the same whole-state comparison. Hosted output repair is pending.
 
 [#164](https://github.com/SomedaySomehowBeer/askthecaptain/pull/164) documents the provider-specific
 activation method and contains the reviewed manual retirement/state-reconciliation workflow.
