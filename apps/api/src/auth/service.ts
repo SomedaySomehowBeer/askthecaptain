@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { badRequest, unauthorised } from '../errors.ts';
 import type { IdentityProvider } from './google.ts';
 import type { PasskeyService } from './passkeys.ts';
+import { safeReturnPath } from './return-path.ts';
 
 export const hashSecret = (secret: string) => createHash('sha256').update(secret).digest('hex');
 const secret = (prefix: string) => `${prefix}${randomBytes(32).toString('base64url')}`;
@@ -13,6 +14,9 @@ export type Session = { id: string; userId: string; expiresAt: Date; user: Sessi
 export type Exchanged = { token: string; session: Session; returnTo: string } | { stepUp: true; token: string; returnTo: string };
 
 const minutes = (n: number) => n * 60_000;
+/** A destination read back from a stored auth request is checked again before it is used: a row written by an
+ *  older release, or altered in the database, never sends anyone off this app. It falls back to the home page. */
+const storedReturn = (value: string) => safeReturnPath(value) ?? '/';
 
 /** Sign-in and sessions. Sessions are opaque tokens whose hash is stored; the token itself lives
  *  only in the web app's cookie and in the Authorization header on its way here. The Google flow
@@ -49,7 +53,7 @@ export class AuthService {
 			const user = await this.#findOrCreateUser('google', identity);
 			const exchange = secret('x_');
 			await this.#db`insert into auth_requests (kind, token_hash, user_id, payload, expires_at)
-				values ('session_exchange', ${hashSecret(exchange)}, ${user.id}, ${this.#db.json({ returnTo: payload.returnTo })}, ${new Date(Date.now() + minutes(2))})`;
+				values ('session_exchange', ${hashSecret(exchange)}, ${user.id}, ${this.#db.json({ returnTo: storedReturn(payload.returnTo) })}, ${new Date(Date.now() + minutes(2))})`;
 			await this.#event('auth.google.finish', true, requestId, user.id);
 			target.searchParams.set('code', exchange);
 		} catch (error) {
@@ -64,7 +68,7 @@ export class AuthService {
 	async exchange(code: string, requestId: string): Promise<Exchanged> {
 		const request = await this.#consume('session_exchange', code);
 		if (!request?.userId) { await this.#event('auth.session.exchange', false, requestId); throw unauthorised('sign-in link is invalid or expired'); }
-		const returnTo = z.object({ returnTo: z.string() }).parse(request.payload).returnTo;
+		const returnTo = storedReturn(z.object({ returnTo: z.string() }).parse(request.payload).returnTo);
 		if (this.#passkeys && (await this.#passkeys.required(request.userId))) {
 			const token = await this.#passkeys.beginStepUp(request.userId, returnTo);
 			await this.#event('auth.session.step_up_required', true, requestId, request.userId);
@@ -82,7 +86,7 @@ export class AuthService {
 		const done = await this.#passkeys.completeStepUp(token, response, requestId);
 		const issued = await this.#issueSession(done.userId, true);
 		await this.#event('auth.session.exchange', true, requestId, done.userId, { passkey: true });
-		return { ...issued, returnTo: done.returnTo };
+		return { ...issued, returnTo: storedReturn(done.returnTo) };
 	}
 
 	async requireSession(token: string | undefined): Promise<Session> {
@@ -128,10 +132,12 @@ export class AuthService {
 		return row ?? null;
 	}
 
+	/** The requested destination, checked where it enters: anything but a same-origin path is refused. */
 	#returnPath(value: string | undefined): string {
 		if (!value) return '/';
-		if (!value.startsWith('/') || value.startsWith('//')) throw badRequest('return_to_invalid', 'return_to must be a path on this app');
-		return value;
+		const path = safeReturnPath(value);
+		if (path === null) throw badRequest('return_to_invalid', 'return_to must be a path on this app');
+		return path;
 	}
 
 	async #event(event: string, success: boolean, requestId: string, userId?: string, detail: Record<string, unknown> = {}) {

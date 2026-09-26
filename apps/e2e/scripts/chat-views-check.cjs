@@ -147,6 +147,24 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   await anonymous.close();
   console.log('PASS signed-out Chat and linked task/project links return to their canonical destination after sign-in');
 
+  // A crafted return path must never navigate a signed-in person to another site. Block the synthetic
+  // destination so a regression cannot issue an external request, then assert no navigation was attempted.
+  let escaped = 0;
+  await context.route('**://return-escape.invalid/**', async route => { escaped++; await route.abort(); });
+  for (const bad of ['/\\return-escape.invalid', '//return-escape.invalid', '/\t/return-escape.invalid', '/..//return-escape.invalid']) {
+   await goto(`/sign-in?${new URLSearchParams({ return_to: bad })}`);
+   await expect(page).toHaveURL(origin + '/work');
+   await expect(page.getByRole('heading', { name: 'My work', exact: true })).toBeVisible();
+  }
+  await goto('/sign-in?return_to=%2Fchat&return_to=%2Fwork');
+  await expect(page).toHaveURL(origin + '/work');
+  await goto(`/sign-in?${new URLSearchParams({ return_to: '/work?q=é' })}`);
+  await expect(page).toHaveURL(origin + '/work?q=%C3%A9');
+  await expect(page.getByRole('heading', { name: 'My work', exact: true })).toBeVisible();
+  assert.equal(escaped, 0, 'no off-site navigation from a sign-in return path');
+  await context.unroute('**://return-escape.invalid/**');
+  console.log('PASS crafted and repeated sign-in return paths stay on this app');
+
   // Empty states: one designed notice per view, no counts, the plus on the list.
   await goto('/chat');
   await expect(main().getByRole('heading', { name: 'No conversations yet' })).toBeVisible();

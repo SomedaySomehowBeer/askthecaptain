@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { api, ApiError } from '../../../lib/api.ts';
 import { cookieOptions, sessionCookie } from '../../../lib/session.ts';
+import { safeReturn } from '../../../lib/session-state.ts';
 
 export type Result = { error?: string };
 
@@ -18,5 +19,5 @@ export async function stepUpVerify(token: string, response: unknown): Promise<Re
 	try { result = await api('/auth/passkey/verify', { method: 'POST', body: { token, response } }); }
 	catch (error) { return { error: error instanceof ApiError ? error.message : 'The passkey could not be checked.' }; }
 	(await cookies()).set(sessionCookie, result.token, cookieOptions(Math.max(60, Math.floor((Date.parse(result.expiresAt) - Date.now()) / 1000))));
-	redirect(result.returnTo.startsWith('/') && !result.returnTo.startsWith('//') ? result.returnTo : '/');
+	redirect(safeReturn(result.returnTo, '/'));
 }

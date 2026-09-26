@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { api, ApiError } from '../../../lib/api.ts';
 import { appUrl } from '../../../lib/env.ts';
 import { cookieOptions, sessionCookie } from '../../../lib/session.ts';
+import { appReturnUrl } from '../../../lib/session-state.ts';
 
 type Exchanged = { token: string; expiresAt: string; returnTo: string } | { stepUp: true; token: string; returnTo: string };
 
@@ -16,7 +17,8 @@ export async function GET(request: NextRequest) {
 	try {
 		const result = await api<Exchanged>('/auth/session/exchange', { method: 'POST', body: { code } });
 		if ('stepUp' in result) { const stepUp = new URL('/auth/passkey', appUrl); stepUp.searchParams.set('token', result.token); return NextResponse.redirect(stepUp, 303); }
-		const response = NextResponse.redirect(new URL(result.returnTo.startsWith('/') ? result.returnTo : '/', appUrl), 303);
+		// The API checks the destination too; this is the sink, so it never trusts that alone.
+		const response = NextResponse.redirect(appReturnUrl(result.returnTo, appUrl), 303);
 		response.cookies.set(sessionCookie, result.token, cookieOptions(Math.max(60, Math.floor((Date.parse(result.expiresAt) - Date.now()) / 1000))));
 		return response;
 	} catch (caught) {
