@@ -174,7 +174,7 @@ it('release installation grants each runtime role queue DML and nothing administ
   assert.ok(tables.length > 0);
   for (const t of tables) assert.deepEqual({ dml: t.dml, extra: t.extra, owns: t.owns }, { dml: true, extra: false, owns: false }, `${role} ${t.name}`);
   const sequences = await db.owner`select c.oid::regclass::text as name from pg_class c join pg_namespace n on n.oid = c.relnamespace
-   where n.nspname = 'workflow_queue' and c.relkind = 'S' and not has_sequence_privilege(${role}, c.oid, 'USAGE')`;
+   where n.nspname = 'workflow_queue' and case when c.relkind = 'S' then not has_sequence_privilege(${role}, c.oid, 'USAGE') else false end`;
   assert.deepEqual(sequences.map(s => s.name), [], role); // A query Result is not a plain array under strict equality.
  }
 });
