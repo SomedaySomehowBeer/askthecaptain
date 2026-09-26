@@ -1,6 +1,7 @@
 # Saved Work views: implementation assignments
 
-Status: assigned on 26 September 2026; implementation and validation pending.
+Status: backend merged in [#153](https://github.com/SomedaySomehowBeer/askthecaptain/pull/153)
+on 26 September 2026; web integration/browser validation in progress. Not deployed.
 Workspace outcome: **manage shared work**. Tracking: #141, under D26 and the
 [contract adopted in #140](saved-work-views-2026-09.md). This is the next feature
 increment after the #149/#150 calendar and task-history corrections.
@@ -115,7 +116,7 @@ hosted data, changes secrets or sends external messages. Native-device acceptanc
 ## Completion ledger
 
 - [x] Both Opus agents started and model selection verified (`claude-opus-5-5`).
-- [ ] Backend implementation and reciprocal review complete; real-Postgres checks green.
+- [x] Backend implementation and reciprocal review complete; real-Postgres checks green (#153).
 - [ ] Web implementation and reciprocal review complete; integrated browser checks green.
 - [ ] Two implementation PRs merged with green CI.
 - [ ] Staging migration/deployment verified and recorded; #141 updated with actual results.
@@ -132,6 +133,16 @@ Both were observed working, and their actual assistant-message model was verifie
 Initial plan-review checkpoints and final handoffs are in `/tmp/captain-saved-views/` as
 `api-status.md`, `web-status.md`, `api-handoff.md` and `web-handoff.md` when written.
 These local session details are execution evidence, not shipped functionality.
+
+Both Claude sessions are attached in Herdr's **Monitor** tab as `saved-views-api` and
+`saved-views-web`. A local development watcher in `/tmp/captain-saved-views/monitor.py`
+records settled/blocked states and notifies the same coordinator session; it never answers
+approval dialogs. This is delegation supervision, not a Captain application process.
+
+Backend proof: 60 database tests and 151 API tests passed against disposable Postgres with no
+skips. Final strict-query/collision corrections passed API typecheck and all 14 saved-view API
+tests; CI then passed before #153 merged. Both Opus agents reviewed the backend, including
+the coordinator's corrections. Migration 0040 has not yet run on staging.
 
 Both agents completed their initial plan reviews with no blocking findings. The review corrected
 the contract's outdated export-role description and clarified unsupported-version references and
