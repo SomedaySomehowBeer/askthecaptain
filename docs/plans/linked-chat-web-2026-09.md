@@ -56,7 +56,9 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
 - **Scope.** Server actions carry `{ userId, organisationId }` and refuse a mismatch before any call (as
   `view-actions.ts` `scopedSession`). A mismatch stops polling and offers a reload; nothing is sent.
 - **Polling.** Full thread only: `changes?after=` every 15 s while visible and focused, one scheduler per tab, one
-  catch-up on return, stops after 10 min idle; read failures back off to 60 s. Panels never poll.
+  catch-up on return, stops after 10 min idle; read failures back off to 60 s. Each scheduled tick
+  fetches at most one bounded changes page; incomplete catch-up remains visibly in progress until
+  later ticks complete it. Hidden/blurred states stop further fetches. Panels never poll.
 - **429.** Every action result carries a structured `retryAfter: number | null` (seconds, from the header, capped at
   300 by the web). `lib/api.ts` `ApiError` gains `retryAfter`. A write that got 429 was not processed: the draft or
   intent keeps its id, stays editable, and nothing retries automatically; the UI shows when to try again.
@@ -82,7 +84,8 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
   messages yet" / "Nothing starred"), error (read failed, with retry and request id), rate-limited (time to wait), and
   **access lost** (404 anywhere: "This conversation is not available to you", polling stops, pending records for it
   are cleared as below).
-- **Pending lifecycle.** Records contain IDs, the person's draft and necessary create selections only,
+- **Pending lifecycle.** One pending send per conversation, shared by panel and thread; no extra
+  send queue. Records contain IDs, the person's draft and necessary create selections only,
   scoped to user/organisation/conversation in tab sessionStorage. A 429 keeps the same ID and an editable
   draft; a 5xx, timeout or network failure keeps it locked until reconciled. Stale-revision forms
   retain editable text and show current state. Clear on confirmed completion, explicit discard,
@@ -96,7 +99,7 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
 
 ## 3. Bounded API amendments (before web code; apps/api chat only)
 
-No change to limits, lock order or write paths.
+No change to limits, lock order or write behaviour; write responses gain the same author-name projection as reads.
 
 - **A1 Composable views, filtered before pagination.** `GET /conversations?filter=all|unread|starred&linked=true|false`
   (`linked` omitted = either). Both filters sit in the WHERE of the keyset query; unread uses `EXISTS` (a live message
@@ -104,16 +107,17 @@ No change to limits, lock order or write paths.
   cursor binds `filter` and `linked`, and a cursor used with a different pair is `400 invalid_request`. A legacy
   two-element cursor (activity key, id) is accepted only for the default view (`filter=all`, `linked` omitted).
 - **A2 Pins hydrate their message** in the same snapshot, at most 50: `pins[].message` is the ordinary `Message`
-  payload plus `authorName` (body null and `deletedAt` set for a tombstone).
+  payload plus `authorName`, including edits. Live pins refer to live messages; deleting a message unpins it atomically.
 - **A3 Author names.** Messages (pages, changes, pins) carry `authorName`. It is null **only** when the attribution was
   deleted (account or membership-row deletion nulls `author_id`); a person who left or whose
   membership status became removed keeps their name.
 - **A4 List and work-to-chat rows** (only those) gain `latest = { seq, authorName, excerpt, deleted }` for the
-  highest-`seq` message, the excerpt cut to ≤160 **code points in SQL**, and `links = { first: { kind, targetId, title } |
-  null, count }` with `first` ordered by `created_at, id`.
+  highest-`seq` message, the excerpt cut to ≤160 **code points in SQL**, and `linkSummary = { first: { kind, targetId, title } |
+  null, count }` with `first` ordered by `created_at, id`. The distinct field name preserves
+  detail's existing `links` array unchanged.
 - **Tests:** each view and `linked` value across several pages; switching view with a cursor → 400; the legacy cursor
   accepted only for the default view; crafted/garbage cursors → 400; unread `EXISTS` agrees with the capped count;
-  pins hydration including a tombstoned message; names kept after leave/status removal, null after account deletion and direct membership-row
+  pins hydration including an edited message outside the latest page, and deletion removing its live pin; names kept after leave/status removal, null after account deletion and direct membership-row
   deletion; excerpt
   of a tombstone and of a 4,000-code-point astral body cut at 160 code points.
 

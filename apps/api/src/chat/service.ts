@@ -37,7 +37,13 @@ export const addParticipants = z.object({ expectedRevision: revision, userIds: z
 export const addLink = z.object({ expectedRevision: revision, kind: z.enum(['task', 'project']), targetId: uuid }).strict();
 export const revisionQuery = z.object({ expectedRevision: queryRevision }).strict();
 export const sendMessage = z.object({ id: uuid, body: z.string() }).strict();
-export const listQuery = z.object({ cursor: z.string().min(1).max(300).optional(), limit: upTo(50).default(50) }).strict();
+/** A list view (web plan §3 A1): `filter` and `linked` compose, and both apply before pagination. */
+export const listQuery = z.object({
+ cursor: z.string().min(1).max(300).optional(), limit: upTo(50).default(50),
+ filter: z.enum(['all', 'unread', 'starred']).default('all'), linked: z.enum(['true', 'false']).optional(),
+}).strict();
+export type ListView = { filter: 'all' | 'unread' | 'starred'; linked: 'true' | 'false' | 'any' };
+export const defaultView: ListView = { filter: 'all', linked: 'any' };
 export const messagesQuery = z.object({ latest: upTo(100).optional(), after: counter.optional(), before: counter.optional(), limit: upTo(100).optional() }).strict()
  .refine(q => [q.latest, q.after, q.before].filter(v => v !== undefined).length === 1, 'Supply exactly one of latest, after or before.')
  .refine(q => q.latest === undefined || q.limit === undefined, 'latest is its own limit.');
@@ -58,9 +64,20 @@ export type Change = { changeSeq: number; kind: 'message'; message: Message } | 
 export type Participant = { userId: string; name: string; addedAt: Date };
 export type Link = { id: string; kind: LinkKind; targetId: string; title: string; state: string; createdAt: Date };
 export type ConversationDetail = ConversationSummary & { createdBy: string | null; participants: Participant[]; links: Link[] };
-/** A message as the API returns it. A tombstone keeps its identity and order with `body: null`. */
-export type Message = { id: string; conversationId: string; seq: number; changeSeq: number; authorId: string | null; body: string | null;
+/** A message as the API returns it. A tombstone keeps its identity and order with `body: null`. `authorName` is null
+ *  only when the author attribution was deleted (account or membership-row deletion; "Former member"): someone who
+ *  left, or whose membership was removed, keeps their name (web plan §3 A3). */
+export type Message = { id: string; conversationId: string; seq: number; changeSeq: number; authorId: string | null; authorName: string | null; body: string | null;
  createdAt: Date; editedAt: Date | null; deletedAt: Date | null; deletedBy: string | null; revision: number };
+/** List and work-to-chat rows only (web plan §3 A4): the latest message, excerpted, and the first link with a count.
+ *  Named `linkSummary` so it never collides with detail's `links` array. */
+export type ListedConversation = ConversationSummary & {
+ latest: { seq: number; authorName: string | null; excerpt: string | null; deleted: boolean } | null;
+ linkSummary: { first: { kind: LinkKind; targetId: string; title: string } | null; count: number };
+};
+/** A live pin as `GET …/pins` returns it: with its original message from the same snapshot (web plan §3 A2). */
+export type HydratedPin = Pin & { message: Message };
+export const excerptLength = 160;
 type MessageRow = Message & { sentBodySha256?: Buffer | null };
 type Locked = { id: string; title: string; revision: number; lastSeq: number; lastChange: number };
 
@@ -106,7 +123,11 @@ function redacted(error: unknown): unknown {
 class MessageIdTaken extends Error {}
 
 const summaryColumns = 'c.id, c.title, c.revision, c.last_seq, c.last_change, c.last_message_at, c.created_at';
-const messageColumns = 'id, conversation_id, seq, change_seq, author_id, body, created_at, edited_at, deleted_at, deleted_by, revision';
+/** Message reads join the author's name. `users` is a platform table outside row security, so a person who left or
+ *  whose membership was removed keeps their name; only a deleted attribution (null `author_id`) has none. Writes
+ *  re-read through this join rather than `returning`, so every response carries the same fields. */
+const messageColumns = 'm.id, m.conversation_id, m.seq, m.change_seq, m.author_id, u.name as author_name, m.body, m.created_at, m.edited_at, m.deleted_at, m.deleted_by, m.revision';
+const messageSource = 'messages m left join users u on u.id = m.author_id';
 const pinColumns = 'id, conversation_id, message_id, change_seq, pinned_by, pinned_at, unpinned_by, unpinned_at';
 
 /** Trimmed at the ends, 1–4,000 code points and at most 16 KB of UTF-8 (contract §5). */
@@ -123,7 +144,7 @@ export function createFingerprint(input: { title: string; participantIds: string
  return sha256(JSON.stringify({ title: input.title, participantIds: [...input.participantIds].sort(), links: input.links.map(linkKey).sort() }));
 }
 function publicMessage(row: MessageRow): Message {
- return { id: row.id, conversationId: row.conversationId, seq: row.seq, changeSeq: row.changeSeq, authorId: row.authorId, body: row.body,
+ return { id: row.id, conversationId: row.conversationId, seq: row.seq, changeSeq: row.changeSeq, authorId: row.authorId, authorName: row.authorName, body: row.body,
   createdAt: row.createdAt, editedAt: row.editedAt, deletedAt: row.deletedAt, deletedBy: row.deletedBy, revision: row.revision };
 }
 /** The list cursor's activity key, exactly as the list query writes it: UTC, microseconds, one fixed shape
@@ -138,15 +159,26 @@ export function validActivityKey(value: string): boolean {
  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
   && date.getUTCHours() === hour && date.getUTCMinutes() === minute && date.getUTCSeconds() === second;
 }
-export function encodeCursor(activity: string, id: string) { return Buffer.from(JSON.stringify([activity, id])).toString('base64url'); }
-export function decodeCursor(cursor: string): [string, string] {
- try {
-  const value: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
-  if (Array.isArray(value) && value.length === 2 && typeof value[0] === 'string' && validActivityKey(value[0])) {
-   const id = uuid.safeParse(value[1]);
-   if (id.success) return [value[0], id.data];
+/** A list cursor binds its view: `[activityKey, id, filter, linked]`, `linked` being 'true', 'false' or 'any'. Without a
+ *  view this writes the legacy pair `[activityKey, id]` (kept for unit tests and old links). */
+export function encodeCursor(activity: string, id: string, view?: ListView) {
+ return Buffer.from(JSON.stringify(view ? [activity, id, view.filter, view.linked] : [activity, id])).toString('base64url');
+}
+/** Reads a cursor for `view`. A cursor made for another view is refused, so each view pages on its own; the legacy
+ *  pair is accepted only for the default view (all conversations, linked or not). Anything malformed is a 400. */
+export function decodeCursor(cursor: string, view: ListView = defaultView): [string, string] {
+ let value: unknown;
+ try { value = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')); } catch { value = null; }
+ if (Array.isArray(value) && (value.length === 2 || value.length === 4) && typeof value[0] === 'string' && validActivityKey(value[0])) {
+  const id = uuid.safeParse(value[1]);
+  if (id.success) {
+   const sameView = value.length === 2
+    ? view.filter === defaultView.filter && view.linked === defaultView.linked
+    : value[2] === view.filter && value[3] === view.linked;
+   if (sameView) return [value[0], id.data];
+   throw badRequest('invalid_request', 'That page cursor belongs to a different view. Start the view again from its first page.');
   }
- } catch { /* fall through */ }
+ }
  throw badRequest('invalid_request', 'That page cursor cannot be read.');
 }
 
@@ -262,21 +294,56 @@ export class ChatService {
   return { ...conversation, participants, links };
  }
 
- /** The caller's active conversations, most recent activity first, with a keyset cursor. */
- list(actor: Actor, organisationId: string, raw: unknown): Promise<{ conversations: ConversationSummary[]; nextCursor: string | null }> {
+ /** List and work-to-chat columns only (web plan §3 A4), over `conversations c`: the highest-`seq` message with its
+  *  author's name and a SQL excerpt of at most `excerptLength` code points (none for a tombstone), and the first link by
+  *  `created_at, id` with the link count. Detail keeps its own `links` array; these never replace it. */
+ private listedColumns(tx: TransactionSql) {
+  return tx`(select json_build_object('seq', lm.seq, 'authorName', lu.name, 'excerpt', left(lm.body, ${excerptLength}), 'deleted', lm.deleted_at is not null)
+     from messages lm left join users lu on lu.id = lm.author_id where lm.conversation_id = c.id order by lm.seq desc limit 1) as latest,
+    json_build_object(
+     'first', (select json_build_object('kind', fl.target_kind, 'targetId', coalesce(fl.task_id, fl.project_id), 'title', coalesce(ft.title, fp.name))
+      from conversation_links fl
+      left join tasks ft on ft.organisation_id = fl.organisation_id and ft.id = fl.task_id
+      left join projects fp on fp.organisation_id = fl.organisation_id and fp.id = fl.project_id
+      where fl.conversation_id = c.id order by fl.created_at, fl.id limit 1),
+     'count', (select count(*) from conversation_links cl where cl.conversation_id = c.id)) as link_summary`;
+ }
+
+ /** The view's conditions (web plan §3 A1), inside the WHERE so they apply before the page limit. Unread uses EXISTS: a
+  *  live message by someone else above the caller's effective read position (the same position as `personal`). */
+ private viewConditions(tx: TransactionSql, me: string, view: ListView) {
+  const filter = view.filter === 'unread'
+   ? tx`and exists (select 1 from messages um where um.conversation_id = c.id and um.seq > greatest(p.read_start_seq, coalesce(r.last_read_seq, 0))
+     and um.deleted_at is null and um.author_id is distinct from ${me}::uuid)`
+   : view.filter === 'starred'
+    ? tx`and exists (select 1 from conversation_stars vs where vs.conversation_id = c.id and vs.user_id = ${me}::uuid)`
+    : tx``;
+  const linked = view.linked === 'true'
+   ? tx`and exists (select 1 from conversation_links vl where vl.conversation_id = c.id)`
+   : view.linked === 'false'
+    ? tx`and not exists (select 1 from conversation_links vl where vl.conversation_id = c.id)`
+    : tx``;
+  return tx`${filter} ${linked}`;
+ }
+
+ /** The caller's active conversations in one view, most recent activity first, with a keyset cursor bound to the view.
+  *  Each view pages on its own (web plan §3 A1). */
+ list(actor: Actor, organisationId: string, raw: unknown): Promise<{ conversations: ListedConversation[]; nextCursor: string | null }> {
   const query = listQuery.parse(raw);
-  const after = query.cursor ? decodeCursor(query.cursor) : null;
+  const view: ListView = { filter: query.filter, linked: query.linked ?? 'any' };
+  const after = query.cursor ? decodeCursor(query.cursor, view) : null;
   return this.snapshot(actor, organisationId, async tx => {
    const own = this.personal(tx, actor.userId);
-   const rows = await tx<(ConversationSummary & { activityKey: string })[]>`select ${tx.unsafe(summaryColumns)}, ${own.columns},
+   const rows = await tx<(ListedConversation & { activityKey: string })[]>`select ${tx.unsafe(summaryColumns)}, ${own.columns}, ${this.listedColumns(tx)},
      to_char(coalesce(c.last_message_at, c.created_at) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as activity_key
     from ${own.from}
     where c.organisation_id = ${organisationId}
+     ${this.viewConditions(tx, actor.userId, view)}
      ${after ? tx`and (coalesce(c.last_message_at, c.created_at), c.id) < (${after[0]}::timestamptz, ${after[1]}::uuid)` : tx``}
     order by coalesce(c.last_message_at, c.created_at) desc, c.id desc limit ${query.limit + 1}`;
    const page = rows.slice(0, query.limit);
    const last = page.at(-1);
-   return { conversations: page.map(({ activityKey: _, ...summary }) => summary), nextCursor: rows.length > query.limit && last ? encodeCursor(last.activityKey, last.id) : null };
+   return { conversations: page.map(({ activityKey: _, ...summary }) => summary), nextCursor: rows.length > query.limit && last ? encodeCursor(last.activityKey, last.id, view) : null };
   });
  }
 
@@ -423,6 +490,17 @@ export class ChatService {
   });
  }
 
+ /** One message with its author's name (and send hash, for reconciling retries), by id in this organisation. With
+  *  `conversationId` the conversation is part of the WHERE, so a lock never touches a message of another conversation;
+  *  `lock` takes only the message row `for update` (`of m`, never the joined user). */
+ private async readMessage(tx: TransactionSql, organisationId: string, id: string, options: { conversationId?: string; lock?: boolean } = {}): Promise<MessageRow | undefined> {
+  const [row] = await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)}, m.sent_body_sha256 from ${tx.unsafe(messageSource)}
+   where m.organisation_id = ${organisationId} and m.id = ${id}
+    ${options.conversationId === undefined ? tx`` : tx`and m.conversation_id = ${options.conversationId}`}
+    ${options.lock ? tx`for update of m` : tx``}`;
+  return row;
+ }
+
  /** Send with the client's id (contract §4, §9.4). An identical retry returns the stored message, even after an edit;
   *  anything else holding the id is the one generic 409. Counters and the insert share a savepoint, so an id collision
   *  rolls the counters back and leaves the transaction usable for the reconciling read. */
@@ -436,7 +514,7 @@ export class ChatService {
    if (row.conversationId === conversationId && row.authorId === me && !row.deletedAt && row.sentBodySha256 && hash.equals(row.sentBodySha256)) return { message: publicMessage(row), created: false };
    throw messageIdUnavailable();
   };
-  const own = (tx: TransactionSql) => tx<MessageRow[]>`select ${tx.unsafe(messageColumns)}, sent_body_sha256 from messages where organisation_id = ${organisationId} and id = ${input.id}`.then(rows => rows[0]);
+  const own = (tx: TransactionSql) => this.readMessage(tx, organisationId, input.id);
   return this.write(actor, organisationId, async tx => {
    await this.lockPeople(tx, organisationId, actor);
    await this.lockConversation(tx, organisationId, conversationId);
@@ -450,11 +528,11 @@ export class ChatService {
      const [next] = await sp<{ lastSeq: number; lastChange: number }[]>`update conversations
       set last_seq = last_seq + 1, last_change = last_change + 1, last_message_at = greatest(last_message_at, now()) where id = ${conversationId} returning last_seq, last_change`;
      if (!next) throw notFound();
-     const [row] = await sp<MessageRow[]>`insert into messages (id, organisation_id, conversation_id, seq, change_seq, author_id, body, sent_body_sha256)
+     const [row] = await sp<{ id: string }[]>`insert into messages (id, organisation_id, conversation_id, seq, change_seq, author_id, body, sent_body_sha256)
       values (${input.id}, ${organisationId}, ${conversationId}, ${next.lastSeq}, ${next.lastChange}, ${actor.userId}, ${body}, ${hash})
-      on conflict (id) do nothing returning ${sp.unsafe(messageColumns)}`;
+      on conflict (id) do nothing returning id`;
      if (!row) throw new MessageIdTaken();
-     return row;
+     return (await this.readMessage(sp, organisationId, row.id))!;
     });
    } catch (error) {
     const name = uniqueConstraint(error);
@@ -479,15 +557,15 @@ export class ChatService {
   return this.write(actor, organisationId, async tx => {
    const { me: membership } = await this.lockPeople(tx, organisationId, actor);
    await this.lockConversation(tx, organisationId, conversationId);
-   const [message] = await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)} from messages
-    where organisation_id = ${organisationId} and id = ${messageId} and conversation_id = ${conversationId} for update`;
+   const message = await this.readMessage(tx, organisationId, messageId, { conversationId, lock: true });
    if (!message || message.deletedAt) throw notFound();
    if (message.revision !== expectedRevision) throw staleMessage();
    if (message.authorId !== me && !canManage(membership.role)) throw forbidden('only the author, or an owner or admin in this conversation, can delete a message');
    const tombstoned = await this.nextChange(tx, conversationId);
-   const [tombstone] = await tx<MessageRow[]>`update messages set body = null, sent_body_sha256 = null, deleted_at = now(), deleted_by = ${actor.userId},
+   await tx`update messages set body = null, sent_body_sha256 = null, deleted_at = now(), deleted_by = ${actor.userId},
      revision = revision + 1, change_seq = ${tombstoned}
-    where id = ${messageId} returning ${tx.unsafe(messageColumns)}`;
+    where id = ${messageId}`;
+   const tombstone = await this.readMessage(tx, organisationId, messageId);
    const [pin] = await tx<{ id: string }[]>`select id from message_pins
     where organisation_id = ${organisationId} and conversation_id = ${conversationId} and message_id = ${messageId} and unpinned_at is null for update`;
    if (pin) {
@@ -510,30 +588,34 @@ export class ChatService {
   return this.write(actor, organisationId, async tx => {
    await this.lockPeople(tx, organisationId, actor);
    await this.lockConversation(tx, organisationId, conversationId);
-   const [message] = await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)} from messages
-    where organisation_id = ${organisationId} and id = ${messageId} and conversation_id = ${conversationId} for update`;
+   const message = await this.readMessage(tx, organisationId, messageId, { conversationId, lock: true });
    if (!message || message.deletedAt) throw notFound();
    if (message.authorId !== me) throw forbidden('only the author can edit a message');
    if (message.revision !== input.expectedRevision) throw staleMessage();
    if (message.body === body) return publicMessage(message);
    const changed = await this.nextChange(tx, conversationId);
-   const [edited] = await tx<MessageRow[]>`update messages set body = ${body}, edited_at = now(), revision = revision + 1, change_seq = ${changed}
-    where id = ${messageId} returning ${tx.unsafe(messageColumns)}`;
+   await tx`update messages set body = ${body}, edited_at = now(), revision = revision + 1, change_seq = ${changed} where id = ${messageId}`;
+   const edited = await this.readMessage(tx, organisationId, messageId);
    await this.audit(tx, organisationId, actor, conversationId, 'chat.message_edited', { kind: 'message', id: messageId },
     { conversationId, messageId, seq: edited!.seq, revision: edited!.revision });
    return publicMessage(edited!);
   });
  }
 
- /** Every live pin, in pin order, from one snapshot (§13). */
- pins(actor: Actor, organisationId: string, conversationId: string): Promise<{ conversation: { id: string; revision: number; lastChange: number }; pins: Pin[] }> {
+ /** Every live pin (at most `pinLimit`), in pin order, each with its original message, all from one snapshot (§13;
+  *  web plan §3 A2), so a panel can show a pin whose message is outside the messages it loaded. */
+ pins(actor: Actor, organisationId: string, conversationId: string): Promise<{ conversation: { id: string; revision: number; lastChange: number }; pins: HydratedPin[] }> {
   return this.snapshot(actor, organisationId, async tx => {
    const [conversation] = await tx<{ id: string; revision: number; lastChange: number }[]>`select id, revision, last_change
     from conversations where organisation_id = ${organisationId} and id = ${conversationId}`;
    if (!conversation) throw notFound();
    const pins = await tx<Pin[]>`select ${tx.unsafe(pinColumns)} from message_pins
-    where organisation_id = ${organisationId} and conversation_id = ${conversationId} and unpinned_at is null order by change_seq`;
-   return { conversation, pins };
+    where organisation_id = ${organisationId} and conversation_id = ${conversationId} and unpinned_at is null order by change_seq limit ${pinLimit}`;
+   const messages = pins.length ? await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)} from ${tx.unsafe(messageSource)}
+    where m.organisation_id = ${organisationId} and m.conversation_id = ${conversationId} and m.id in ${tx(pins.map(pin => pin.messageId))}` : [];
+   const byId = new Map(messages.map(row => [row.id, publicMessage(row)]));
+   // Every pin's message is in the same conversation (0043 guard and foreign key) and visible in this snapshot.
+   return { conversation, pins: pins.map(pin => ({ ...pin, message: byId.get(pin.messageId)! })) };
   });
  }
 
@@ -627,18 +709,18 @@ export class ChatService {
    const [conversation] = await tx<{ id: string; revision: number; lastSeq: number; lastChange: number }[]>`select id, revision, last_seq, last_change
     from conversations where organisation_id = ${organisationId} and id = ${conversationId}`;
    if (!conversation) throw notFound();
-   const columns = tx.unsafe(messageColumns);
+   const columns = tx.unsafe(messageColumns), source = tx.unsafe(messageSource);
    let rows: MessageRow[], hasMore: boolean;
    if (query.latest !== undefined) {
-    const found = await tx<MessageRow[]>`select ${columns} from messages where conversation_id = ${conversationId} order by seq desc limit ${query.latest + 1}`;
+    const found = await tx<MessageRow[]>`select ${columns} from ${source} where m.conversation_id = ${conversationId} order by m.seq desc limit ${query.latest + 1}`;
     hasMore = found.length > query.latest; rows = found.slice(0, query.latest).reverse();
    } else if (query.after !== undefined) {
     const limit = query.limit ?? 50;
-    const found = await tx<MessageRow[]>`select ${columns} from messages where conversation_id = ${conversationId} and seq > ${query.after} order by seq limit ${limit + 1}`;
+    const found = await tx<MessageRow[]>`select ${columns} from ${source} where m.conversation_id = ${conversationId} and m.seq > ${query.after} order by m.seq limit ${limit + 1}`;
     hasMore = found.length > limit; rows = found.slice(0, limit);
    } else {
     const limit = query.limit ?? 50;
-    const found = await tx<MessageRow[]>`select ${columns} from messages where conversation_id = ${conversationId} and seq < ${query.before!} order by seq desc limit ${limit + 1}`;
+    const found = await tx<MessageRow[]>`select ${columns} from ${source} where m.conversation_id = ${conversationId} and m.seq < ${query.before!} order by m.seq desc limit ${limit + 1}`;
     hasMore = found.length > limit; rows = found.slice(0, limit).reverse();
    }
    return { conversation, messages: rows.map(publicMessage), hasMore };
@@ -656,8 +738,8 @@ export class ChatService {
    const [conversation] = await tx<{ id: string; revision: number; lastSeq: number; lastChange: number }[]>`select id, revision, last_seq, last_change
     from conversations where organisation_id = ${organisationId} and id = ${conversationId}`;
    if (!conversation) throw notFound();
-   const messages = await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)} from messages where conversation_id = ${conversationId}
-    and change_seq > ${query.after} and change_seq <= ${conversation.lastChange} order by change_seq limit ${query.limit + 1}`;
+   const messages = await tx<MessageRow[]>`select ${tx.unsafe(messageColumns)} from ${tx.unsafe(messageSource)} where m.conversation_id = ${conversationId}
+    and m.change_seq > ${query.after} and m.change_seq <= ${conversation.lastChange} order by m.change_seq limit ${query.limit + 1}`;
    const pins = await tx<Pin[]>`select ${tx.unsafe(pinColumns)} from message_pins where conversation_id = ${conversationId}
     and change_seq > ${query.after} and change_seq <= ${conversation.lastChange} order by change_seq limit ${query.limit + 1}`;
    const found: Change[] = [
@@ -677,12 +759,12 @@ export class ChatService {
 
  /** Work to chat (contract §7): only the caller's active conversations linked to this task or project, at most 20,
   *  with no count or hint about anyone else's. An unknown task or project is a 404 like any other. */
- forTarget(actor: Actor, organisationId: string, kind: LinkKind, targetId: string): Promise<{ conversations: ConversationSummary[] }> {
+ forTarget(actor: Actor, organisationId: string, kind: LinkKind, targetId: string): Promise<{ conversations: ListedConversation[] }> {
   return this.snapshot(actor, organisationId, async tx => {
    await this.requireTarget(tx, organisationId, { kind, targetId }).catch(error => { if (error instanceof HttpError) throw notFound(); throw error; });
    const column = kind === 'task' ? tx`l.task_id` : tx`l.project_id`;
    const own = this.personal(tx, actor.userId);
-   const conversations = await tx<ConversationSummary[]>`select ${tx.unsafe(summaryColumns)}, ${own.columns} from ${own.from}
+   const conversations = await tx<ListedConversation[]>`select ${tx.unsafe(summaryColumns)}, ${own.columns}, ${this.listedColumns(tx)} from ${own.from}
     where c.organisation_id = ${organisationId}
      and exists (select 1 from conversation_links l where l.conversation_id = c.id and ${column} = ${targetId})
     order by coalesce(c.last_message_at, c.created_at) desc, c.id desc limit 20`;
