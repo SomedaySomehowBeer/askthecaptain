@@ -1,7 +1,7 @@
 # Staging resumed; production paused (2026-09-27)
 
-**Staging runs on the restricted `captain_runtime` database login**, with the #173 chat API
-image (retaining the #162 guard) and #174 web image. The workspace is at https://app.askthecaptain.app/work. One existing
+**Staging runs on the restricted `captain_runtime` database login**, with the #176 API and web
+images (retaining the #162 role guard, #173 chat API and #174 Chat screens). The workspace is at https://app.askthecaptain.app/work. One existing
 machine per staging app is retained, with normal autostart and idle stop. Production and the
 embedding service remain paused; automatic deploy and backup workflows remain disabled.
 Any API rollback must retain `captain_runtime` and the #162 role guard. Before any future production
@@ -27,6 +27,52 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Sign-in return fixes (27 September Perth / 26 September 2026, UTC)
+
+Reviewed [#175](https://github.com/SomedaySomehowBeer/askthecaptain/pull/175) preserves task/project
+sign-in destinations through each Work page's existing guard. Its
+[CI 36274052931](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36274052931) passed.
+Reviewed [#176](https://github.com/SomedaySomehowBeer/askthecaptain/pull/176) prevents crafted return
+paths escaping the app, including old stored OAuth/exchange/passkey requests. It merged as
+`23c672b066b0c623b05ada3ecdb293aa3eeacc65`; clean source
+`41e7939d2fe13e69367e9d6d275f1b9fc2b4f946` has the same tree,
+`eaf35b9917b147951d42d87cf0f52e141e9dcea4`, and includes #175.
+[CI 36274608736](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36274608736) passed
+both jobs, including 478 Postgres tests, 13 infra tests, the web build, React retry regression and
+both complete Chat browser suites. Local final typecheck and 478 uncached tests also passed.
+
+Both Linux/amd64 images were built from that clean source, then pushed and checked against their
+local image descriptors and build digests before release. Fly selected these platform manifests:
+
+| Existing staging machine | Installed image |
+|---|---|
+| Web `9185776e7cd3d8` | `registry.fly.io/askthecaptain-web-staging:git-41e7939@sha256:77f0a5f0c4c0106bb35c88aaffe7b8f02995cebd9ed374a6ff5fe7b0cafd2bf8` |
+| API `80e39ea6416e18` | `registry.fly.io/askthecaptain-api-staging:git-41e7939@sha256:b75367a9cf893bb266a938e2adbef1596842298e327da011f50a7d1a1e6eb4bd` |
+
+The pushed image indexes were web
+`sha256:2f6b4af4e6f9543faa73fc7d71b437c9a1a812e139917fa3455ef9fdd5152a3b` and API
+`sha256:62d9db748688ecad33f9bb222dce1f602a9490fb387101101e6fb5f78e40d976`.
+Web was updated first, then API. Only each machine's image changed; environment, command, size,
+restart, normal autostart/idle stop and machine IDs were preserved. No migration or queue installer
+ran, and schema 0043 remains. The API initially idled before the probe; a normal readiness request
+woke it, and verification then passed without altering its autostop configuration.
+
+Hosted Chrome at 390/1440 pixels passed exact Chat and task/project sign-in return paths, with no
+overflow or page errors. Anonymous unsafe destinations produce a Google link returning home.
+A read-only probe of the deployed API passed the runtime guard, confirmed current/session role
+`captain_runtime`, exercised compiled path validation, rejected two unsafe starts with 400
+`return_to_invalid`, and confirmed readiness 200. It read no business content and wrote no business
+data; no real OAuth flow was started. Full signed-in/two-person interaction remains local/CI
+evidence; no hosted signed-in session or staging multi-user capacity is claimed.
+
+The final five-app comparison confirmed exactly one machine in each staging app, image-only
+changes there, and unchanged production/embedding identities/configurations with all still
+stopped. Deployment, backup and credential-operation workflows remain disabled. No credential changes,
+DNS changes, infrastructure applies or demo-data resets occurred. See [validation](../validation/sign-in-return-2026-09-27/README.md).
+For a rollback, retain the return-path fix, restricted runtime and chat-aware API/schema; prefer a
+compatible forward fix or stop the affected service while repairing rather than restore the known
+unsafe redirect behaviour.
 
 ## Chat web release (27 September Perth / 26 September 2026, UTC)
 

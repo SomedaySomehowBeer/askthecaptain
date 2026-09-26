@@ -79,3 +79,8 @@ six Chat destinations at 390/1440 pixels, preserving sign-in return paths withou
 errors; API readiness was 200. No hosted signed-in session or business-data writes were used.
 The first hosted run found an older Work-layout task/project return-path bug; the follow-up adds
 local signed-out and signed-in regression cases and leaves reads guarded by each Work page.
+
+
+The Work destination fix and separate sign-in return safety fix were subsequently released in
+#175/#176. [Follow-up verification](../sign-in-return-2026-09-27/README.md) confirms hosted task/project
+return paths now pass, alongside the retained Chat destinations.
