@@ -33,7 +33,7 @@ it('every tenant table has organisation_id, forced RLS and a policy for app', as
 it('the runtime roles cannot bypass RLS', async () => {
 	const roles = await db.owner<{ name: string; bypass: boolean; superuser: boolean }[]>`
 		select rolname as name, rolbypassrls as bypass, rolsuper as superuser from pg_roles where rolname in ('app', ${runtime}) order by rolname`;
-	assert.deepEqual(roles, [{ name: 'app', bypass: false, superuser: false }, { name: runtime, bypass: false, superuser: false }]);
+	assert.deepEqual([...roles], [{ name: 'app', bypass: false, superuser: false }, { name: runtime, bypass: false, superuser: false }]);
 });
 
 it('migrations are idempotent', async () => {
@@ -144,6 +144,59 @@ it('a database left before 0041 is still reached as app', async () => {
 		assert.equal(new URL(old.runtimeUrl).username, 'app');
 		assert.equal((await old.app<{ current: string }[]>`select current_user as current`)[0]!.current, 'app');
 	} finally { await old.close(); }
+});
+
+it('0041 installing into two databases at once creates a missing role once, and both installations succeed', async () => {
+	// Cold creation, forced to overlap: the first installation creates a brand-new role and holds its transaction open
+	// while the second finds the role missing and tries to create it too. A fresh name keeps the shared role out of it.
+	const migration = await readFile(new URL(`../migrations/${runtimeRoleMigration}`, import.meta.url), 'utf8');
+	const probe = `runtime_race_${randomBytes(6).toString('hex')}`;
+	const text = migration.replace(`runtime constant name := '${runtime}'`, `runtime constant name := '${probe}'`);
+	assert.notEqual(text, migration);
+	const [one, two] = [await freshDatabase({ through: '0040_saved_views.sql' }), await freshDatabase({ through: '0040_saved_views.sql' })];
+	let release!: () => void;
+	const released = new Promise<void>((resolve) => { release = resolve; });
+	let first: Promise<unknown> | undefined, second: Promise<unknown> | undefined;
+	try {
+		// The first installation creates the role, reports its backend, and holds its transaction open until released.
+		let created!: (pid: number) => void;
+		const createdPid = new Promise<number>((resolve) => { created = resolve; });
+		first = one.owner.begin(async (tx) => {
+			const [{ pid }] = await tx<[{ pid: number }]>`select pg_backend_pid() as pid`;
+			await tx.unsafe(text);
+			created(pid);
+			await released;
+		});
+		// A failure before the signal ends the wait instead of hanging it.
+		const endedEarly = first.then(() => { throw new Error('the first installation ended before creating the role'); });
+		endedEarly.catch(() => undefined); // after a normal commit this loser rejects too; it must not go unhandled
+		const firstPid = await Promise.race([createdPid, endedEarly]);
+		assert.equal((await db.owner`select 1 from pg_roles where rolname = ${probe}`).length, 0, 'the first creation is not yet committed');
+		second = two.owner.begin((tx) => tx.unsafe(text));
+		let secondDone = false;
+		second.then(() => { secondDone = true; }, () => { secondDone = true; });
+		// Release the first only once the second is actually blocked behind it (on the new role's name), not after a guess.
+		for (const deadline = Date.now() + 15_000; ;) {
+			const [waiting] = await db.owner<{ n: number }[]>`select count(*)::int as n from pg_stat_activity where ${firstPid}::int = any(pg_blocking_pids(pid))`;
+			if (waiting!.n > 0) break;
+			if (secondDone) { await second; assert.fail('the second installation finished without waiting for the first'); }
+			if (Date.now() > deadline) assert.fail('the second installation never waited for the first');
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		release();
+		await Promise.all([first, second]);
+		assert.equal((await db.owner`select 1 from pg_roles where rolname = ${probe}`).length, 1);
+		for (const installed of [one, two]) {
+			const [row] = await installed.owner`select (select count(*) from pg_policy where ${probe}::regrole = any(polroles))::int as policies,
+				has_table_privilege(${probe}, 'saved_views', 'SELECT') as reads, has_table_privilege(${probe}, 'saved_views', 'DELETE') as deletes`;
+			assert.ok(row!.policies > 20); assert.equal(row!.reads, true); assert.equal(row!.deletes, false);
+		}
+	} finally {
+		release(); // never leave the first transaction open, whatever failed
+		await Promise.allSettled([first, second].filter((p) => p !== undefined));
+		await one.close(); await two.close(); // dropping both databases removes every dependency on the probe role
+		await db.owner.unsafe(`drop role if exists ${probe}`);
+	}
 });
 
 it('0041 creates a clean runtime role, accepts a clean existing one, and refuses an unsafe one without changing it', async () => {

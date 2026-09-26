@@ -166,13 +166,15 @@ it('release installation grants each runtime role queue DML and nothing administ
   const tables = await db.owner`select c.oid::regclass::text as name,
     has_table_privilege(${role}, c.oid, 'SELECT') and has_table_privilege(${role}, c.oid, 'INSERT')
      and has_table_privilege(${role}, c.oid, 'UPDATE') and has_table_privilege(${role}, c.oid, 'DELETE') as dml,
-    has_table_privilege(${role}, c.oid, 'TRUNCATE') or has_table_privilege(${role}, c.oid, 'REFERENCES') or has_table_privilege(${role}, c.oid, 'TRIGGER') as extra,
+    has_table_privilege(${role}, c.oid, 'TRUNCATE') or has_table_privilege(${role}, c.oid, 'REFERENCES') or has_table_privilege(${role}, c.oid, 'TRIGGER')
+     -- MAINTAIN exists from PostgreSQL 17; naming it on an older server is an error. CASE (unlike AND) fixes the order.
+     or case when current_setting('server_version_num')::int >= 170000 then has_table_privilege(${role}, c.oid, 'MAINTAIN') else false end as extra,
     pg_has_role(${role}, c.relowner, 'USAGE') as owns
    from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'workflow_queue' and c.relkind in ('r', 'p')`;
   assert.ok(tables.length > 0);
   for (const t of tables) assert.deepEqual({ dml: t.dml, extra: t.extra, owns: t.owns }, { dml: true, extra: false, owns: false }, `${role} ${t.name}`);
   const sequences = await db.owner`select c.oid::regclass::text as name from pg_class c join pg_namespace n on n.oid = c.relnamespace
    where n.nspname = 'workflow_queue' and c.relkind = 'S' and not has_sequence_privilege(${role}, c.oid, 'USAGE')`;
-  assert.deepEqual(sequences, [], role);
+  assert.deepEqual(sequences.map(s => s.name), [], role); // A query Result is not a plain array under strict equality.
  }
 });

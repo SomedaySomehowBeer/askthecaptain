@@ -20,13 +20,15 @@ on demand (*Actions → backup → Run workflow*):
    assignments and ACLs; policy definitions still reference roles such as `app` and `captain_runtime`;
 3. **rehearses the restore** into a fresh Postgres 18 inside the job, checks the archive lists its
    tables, restores with `--exit-on-error`, and compares the organisation count with the source;
-   a difference fails the run;
+   a difference fails the run. For dumps recording migration 0041, it also verifies each restored
+   policy names both runtime roles or neither. Matching policy role lists do not prove application
+   access because the archive omits grants;
 4. keeps the dump in the Tigris bucket `askthecaptain-tofu-state` under `backups/` and prunes
    dumps older than 30 days;
 5. deletes the local copy whether or not the run succeeded.
 
-A red run is the alarm. Nobody is paged by it yet; check the Actions tab when the morning brief
-mentions nothing, or add a Better Stack monitor on the workflow's badge URL.
+A red run is the alarm. Nobody is paged by it yet; the operator must check the Actions tab
+after a scheduled backup or configure monitoring before relying on unattended backups.
 
 What the dump holds: every table, including encrypted provider tokens (still encrypted with each
 organisation's data key, which is itself wrapped by `MASTER_KEY`). A dump without `MASTER_KEY` cannot
@@ -70,10 +72,14 @@ When Neon's history does not reach far enough, or the project itself is gone:
 6. Point the API at it: set `DATABASE_URL` and `MIGRATION_DATABASE_URL` on the Fly app to the new
    connection strings: runtime uses SQL-created `captain_runtime`, migrations use the owner.
    Do not use the administrative `neon_app_database_url` output. Verify runtime flags, membership,
-   object ownership and RLS before activation. The release step re-runs
-   migrations and the queue installation; both are idempotent.
-7. Tell people: anything written after the dump's timestamp is gone; mail and calendar re-sync from
-   the providers on the next run (their cursors are in the dump and re-sync from that point).
+   object ownership and RLS before activation. Enable LOGIN and set the credential through the
+   [repair plan’s owner step](../plans/runtime-database-role-2026-09.md), never with plaintext
+   passwords in command or SQL logs. The release step applies only unrecorded migrations and
+   repeats queue installation. Queue installation restores queue grants only; it does not replay
+   application grants from migrations already recorded in the dump.
+7. Tell people that writes after the dump's timestamp are missing. Reconcile affected shared work
+   and enabled business integrations before resuming workflows. Captain does not ingest mail or
+   personal calendars, and provider synchronisation cannot reconstruct every lost workspace write.
 
 ## The drill
 

@@ -72,11 +72,15 @@ begin
 	select oid into app_oid from pg_roles where rolname = 'app';
 	if app_oid is null then raise exception 'migration 0041 needs the role app'; end if;
 
-	-- Roles are cluster-wide and databases are not: installations into two databases of one cluster take turns here,
-	-- so the second finds the first's role (committed) and checks it like any existing one.
-	perform pg_advisory_xact_lock(hashtext('captain.runtime_role'));
+	-- Roles are cluster-wide; databases, and so advisory locks, are not. When installations into two databases of one
+	-- cluster both find the role missing, the second's insert waits for the first to commit and then fails on the
+	-- unique role name. That role is then committed and is checked below like any existing one.
 	if not exists (select 1 from pg_roles where rolname = runtime) then
-		execute format('create role %I nologin nosuperuser nobypassrls nocreaterole nocreatedb noreplication', runtime);
+		begin
+			execute format('create role %I nologin nosuperuser nobypassrls nocreaterole nocreatedb noreplication', runtime);
+		exception when unique_violation or duplicate_object then
+			null;
+		end;
 	end if;
 
 	-- Refusals, all before anything is granted or altered. -------------------------------------------------------

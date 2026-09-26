@@ -29,7 +29,10 @@ unavailable while the API is contained. No production or embedding machine was c
 Migration `0041_runtime_role.sql` creates SQL-owned `captain_runtime` as NOLOGIN, with no role
 memberships, no superuser/bypass/role-creation/database-creation/replication privileges. It verifies
 an already-existing role rather than silently weakening an unexpected role. It copies only direct
-`app` ACLs, never privileges inherited from `neon_superuser`, and adds `captain_runtime` to existing
+`app` ACLs for SELECT/INSERT/UPDATE/DELETE/USAGE/EXECUTE/CONNECT/TEMPORARY within the public and
+workflow_queue schemas (excluding extension objects), those schemas and the current database.
+It refuses unsafe grant kinds before copying and verifies parity both ways; later schema tests
+enforce that parity. It never copies inherited privileges or grant options, and adds `captain_runtime` to existing
 policies that name `app`. The old policy role remains for compatibility; it is not a runtime-login
 recommendation. Future grants and policies name both roles. No password is in a migration.
 
@@ -52,6 +55,7 @@ this repair. No customer content is reset, deleted, or converted.
 ## Release and owner credential step
 
 1. Independently review this repair; pass typecheck, real-Postgres suites and applicable CI.
+   Confirm automatic deploy and backup workflows remain disabled immediately before merging.
 2. Build from the reviewed source. Use the same existing API machine for migration and queue
    installation, with no HTTP server, no restart loop and autostart disabled. Verify completion
    and leave it stopped. No second release machine and no infrastructure apply.
@@ -62,7 +66,7 @@ this repair. No customer content is reset, deleted, or converted.
    `\password captain_runtime` or a client-generated SCRAM verifier over a private connection so
    a plaintext password is not included in SQL statement logs. Never print passwords or verifiers,
    or manage this role through the Neon Console/API.
-4. Preflight the new connection: effective/session roles and ownership checks pass; no privileged
+4. Preflight the new connection through the same endpoint the API uses (pooled or direct): effective/session roles and ownership checks pass; no privileged
    memberships; forced RLS on tenant tables; a rolled-back random-tenant probe finds no tasks,
    tags, memberships or saved views. `DELETE FROM saved_views WHERE false` must be denied. No
    real customer row is needed for these probes.
@@ -72,6 +76,8 @@ this repair. No customer content is reset, deleted, or converted.
 6. Immediately after successful activation, retire the old elevated runtime credential through
    an owner/provider operation; this is required, not optional cleanup. The old role may
    remain referenced by historical policies and infrastructure state; do not destroy it blindly.
+   Resetting its password through the Neon control plane also requires reconciling the existing
+   Terraform-managed credential state as an owner operation.
 7. Resume the separately reviewed chat migration/API increment only after this gate passes.
 
 The repository's existing Terraform `neon_role.app` resource is retained, to avoid a destructive

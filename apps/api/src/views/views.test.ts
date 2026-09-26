@@ -355,23 +355,23 @@ it('references resolve in bounded batches: available, missing and unavailable ne
  assert.equal(missing.filter.projectId, leaving);
 
  // Fault injection: the name reads fail, the record read does not.
- await db.owner`revoke select on tags from app`;
+ await db.owner`revoke select on tags from ${db.owner(db.runtimeRole)}`;
  try {
   const failed = await json<Detail>(request('GET', `${views()}/${view.id}`, person));
   assert.deepEqual(failed.references!.tags, sorted.map(id => ({ id, state: 'unavailable' })));
   assert.deepEqual(failed.references!.project, { id: leaving, state: 'missing' });
   assert.deepEqual(failed.filter, missing.filter); assert.equal(failed.revision, 1);
   assert.equal((await json<{ views: View[] }>(request('GET', views(), person))).views[0]!.id, view.id);
- } finally { await db.owner`grant select on tags to app`; }
+ } finally { await db.owner`grant select on tags to ${db.owner(db.runtimeRole)}`; }
  const project2 = await makeProject('Present project');
  const withProject = await newView(person, 'Project unavailable', filter({ projectId: project2, tagIds: [kept] }));
- await db.owner`revoke select on projects from app`;
+ await db.owner`revoke select on projects from ${db.owner(db.runtimeRole)}`;
  try {
   const failed = await json<Detail>(request('GET', `${views()}/${withProject.id}`, person));
   assert.deepEqual(failed.references!.project, { id: project2, state: 'unavailable' });
   assert.deepEqual(failed.references!.tags, [{ id: kept, state: 'available', name: 'aaa Kept' }]);
   assert.equal(failed.filter.projectId, project2);
- } finally { await db.owner`grant select on projects to app`; }
+ } finally { await db.owner`grant select on projects to ${db.owner(db.runtimeRole)}`; }
 
  // The Work list is queried with exactly the stored IDs: a missing tag narrows to nothing, it never widens to everything.
  const task = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Tagged work' }), 201)).id;
