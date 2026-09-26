@@ -94,5 +94,17 @@ check 'plan: a create' 'plan proposes a managed change' \
 check 'plan: another output changes' 'an output other than neon_app_database_url changes' \
 	"$(plan '{"resource_drift": [], "resource_changes": [], "output_changes": {"neon_owner_database_url": {"actions": ["update"]}}}')"
 
+# plan_diagnostics: addresses, actions and changed key names; never a value ---------------------------------
+diag() { printf '%s' "$1" > "$dir/plan.json"; plan_diagnostics "$dir/plan.json" | tr '\n' '|'; }
+refused='{"resource_changes": [{"address": "neon_role.app", "change": {"actions": ["no-op"]}}, {"address": "cloudflare_dns_record.app", "change": {"actions": ["update"], "before": {"content": "SECRET-A"}, "after": {"content": "SECRET-B"}}}],
+ "resource_drift": [{"address": "neon_project.captain", "change": {"actions": ["update"], "before": {"id": "p", "quota": {"x": 1}, "database_password": "SECRET-C"}, "after": {"id": "p", "quota": {"x": 2}, "database_password": "SECRET-C", "maintenance_window": "SECRET-D"}}},
+  {"address": "neon_role.app", "change": {"actions": ["update"], "before": {"name": "app", "password": "SECRET-E"}, "after": {"name": "app", "password": "SECRET-F"}}}],
+ "output_changes": {"neon_app_database_url": {"actions": ["update"], "before": "SECRET-G", "after": "SECRET-H"}, "neon_project_id": {"actions": ["no-op"]}}}'
+summary="$(diag "$refused")"
+check 'diagnostics: addresses, actions and changed keys' \
+	'change cloudflare_dns_record.app update|drift neon_project.captain update keys=maintenance_window,quota|drift neon_role.app update keys=password|output neon_app_database_url update|' "$summary"
+check 'diagnostics: no value is ever printed' no "$(case "$summary" in *SECRET*) echo yes ;; *) echo no ;; esac)"
+check 'diagnostics: unreadable plan' 'plan JSON could not be read|' "$(diag 'not json')"
+
 echo "retire-elevated-runtime lib: $passed passed, $failed failed"
 [ "$failed" -eq 0 ]
