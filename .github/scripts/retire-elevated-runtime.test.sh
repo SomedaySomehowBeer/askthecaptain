@@ -44,6 +44,8 @@ auth() { printf '%s\n' "$2" > "$dir/err"; classify_auth "$1" "$dir/err"; }
 check 'auth: connected' accepted "$(auth 0 '')"
 check 'auth: postgres rejection' rejected "$(auth 2 'psql: error: connection to server at "ep-x" (1.2.3.4), port 5432 failed: FATAL:  password authentication failed for user "app"')"
 check 'auth: proxy rejection' rejected "$(auth 2 "psql: error: connection to server at \"ep-x\", port 5432 failed: FATAL:  password authentication failed for user 'app'")"
+check 'auth: Neon ERROR rejection' rejected "$(auth 2 "psql: error: connection failed: ERROR:  password authentication failed for user 'app'")"
+check 'auth: other ERROR is not password rejection' unknown "$(auth 2 "psql: error: connection failed: ERROR:  endpoint is starting")"
 check 'auth: another role rejected is not this one' unknown "$(auth 2 'psql: error: connection failed: FATAL:  password authentication failed for user "app_other"')"
 check 'auth: timeout' unknown "$(auth 2 'psql: error: connection to server at "ep-x" (1.2.3.4), port 5432 failed: timeout expired')"
 check 'auth: dns' unknown "$(auth 2 'psql: error: could not translate host name "ep-x" to address: Name or service not known')"
