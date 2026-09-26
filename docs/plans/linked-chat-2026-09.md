@@ -2,7 +2,8 @@
 
 Status: **adopted in #160** (revision 5), 26 September 2026. That PR applied
 the §11 amendments to `AGENTS.md` and `docs/plan.md`.
-There is still no code, and no tables or migrations exist.
+PR B implementation is being integrated after the runtime-role repair (#162–#168);
+its migration and API have not been released. PR C and the web remain subsequent increments.
 
 Peer reviews r3 and r4 and root's concurrence are incorporated:
 - **Counters.** Per-column rules. A send moves only `last_seq` and `last_change`; `revision` moves
@@ -11,8 +12,8 @@ Peer reviews r3 and r4 and root's concurrence are incorporated:
 - **ID collisions.** Every exact ID-collision constraint, including the composite organisation-plus-ID
   keys, maps to the generic "unavailable" `409`. Unknown constraints never do.
 
-This contract is adopted by a **separate plan PR** (not #159), which applies the §11 AGENTS and
-plan amendments. Chat code starts only after that PR merges. The remaining items in §17 are PR B
+This contract was adopted by the **separate plan PR #160** (not #159), which applied the §11
+AGENTS and plan amendments. This PR B updates the execution details below for the repaired runtime role. The remaining items in §17 are PR B
 execution gates, proven by tests on real Postgres; none is a precondition for adoption. Outcome: **discuss work** (plan §2). Authority: D6, D7, D11,
 D13, D14, D23 and D25; plan §5 ("Chat" row) and §10; the
 [next-batch checklist](captain-next-batch-2026-09-25.md); and the reviewed
@@ -92,6 +93,9 @@ snippets are labelled as latest-message excerpts. A message, pin or star never c
   client re-reads: if the intended state holds, the write is done; otherwise the person chooses
   again. Nothing retries automatically.
 - **Message writes.** Edit and delete require the message's `expectedRevision`.
+- **Create input bound.** At most 100 participant ID entries are accepted in a request.
+  Duplicates and the creator are normalised before the 50-person conversation cap is checked.
+  This permits a repeated selection without consuming another participant slot.
 - **Create retry.** The fingerprint is `sha256` of the normalised original
   `{ title, participantIds sorted, links sorted }`.
   - The same ID, from the same creator while still an active participant, with an equal fingerprint
@@ -205,8 +209,13 @@ Nothing locks a membership after a conversation.
   owner would itself be filtered.
 - **Function hardening.** Every function below is created with
   `set search_path = pg_catalog, public, pg_temp`, then `revoke all … from public`. Only the three
-  callable functions are `grant execute … to app`.
-- **`app` stays non-bypassing** (`rolbypassrls = false`, already tested by `schema-policy.test.ts`).
+  callable functions are `grant execute … to captain_runtime, app`. The additional commit-time
+  trigger in §9.5 is non-callable and read-only; it grants no new public API.
+- **The runtime is SQL-created `captain_runtime`.** It must have no administrative attributes,
+  role memberships or owned objects. Migration 0042 checks this role, not the legacy Neon-created
+  administrative `app` role. Policies and direct grants include both for compatibility (D6);
+  only `captain_runtime` is an application runtime login. The API startup/readiness guard and
+  real-Postgres harness verify the actual connection identity and privileges.
 - **No broader bypass** and no hosted-infrastructure change.
 
 ### 9.2 Callable definer functions (the only elevated paths)
@@ -243,7 +252,7 @@ Nothing locks a membership after a conversation.
      chat-audit row each, with `actor_id` = the caller.
    - **Result.** It returns nothing, so no count reaches a non-participant caller.
 
-### 9.3 RLS policies (all `to app`)
+### 9.3 RLS policies (all `to captain_runtime, app`)
 
 `P(x)` means `chat_participant(x)`. `org` means `organisation_id = current_organisation_id()`. `me`
 means `current_user_id()`.
@@ -275,7 +284,7 @@ means `current_user_id()`.
 ### 9.4 Row-transition triggers (enforced in the database for every role)
 
 Each table gets one `before insert or update` trigger function. These functions are `security
-invoker` and not callable by `app`: they are revoked from public and not granted. They compare `old`
+invoker` and not callable by either runtime-grant role: they are revoked from public and not granted. They compare `old`
 and `new` and **raise `check_violation`** for anything not listed. They read only rows the current
 role can already see: `memberships` of the current organisation, and the locked conversation row.
 The shared predicates are:
@@ -355,7 +364,7 @@ any row, including tombstones, unpinned pins and chat-audit rows.
 
 **`conversation_links`:** there is no update path except Rule A.
 
-**`chat_audit_events`:** there is no update except Rule A, and no delete path for `app`.
+**`chat_audit_events`:** there is no update except Rule A, and no delete path for `captain_runtime` or legacy `app`.
 
 **`message_pins`** (C):
 - **Insert.** `pinned_by = me`, the message is live, and `change_seq` equals the conversation's
@@ -390,7 +399,29 @@ delete only.
 
 Every other unique violation, including `messages_conversation_seq`,
 `messages_conversation_change` and any constraint not named here, is a `500`, because it means a
-bug. Unknown constraint names are never mapped to a `409`.
+bug. Unknown constraint names are never mapped to a `409`. Unexpected database errors inside
+chat reads/writes retain only a validated SQLSTATE for diagnostics; the request ID is logged by
+the API handler. Driver messages, details, queries, parameters and causes can contain private
+text and must not be passed to that logger. The forced-constraint test inspects the captured log
+as well as the response.
+
+### 9.5 Commit-time ordering and server timestamps (PR B execution amendment)
+
+The row guards prevent invalid transitions, but a transaction could advance `last_seq` without
+inserting a message. A deferred constraint trigger checks every advanced sequence at commit and
+refuses the transaction unless its corresponding message exists. Checks for rolled-back savepoints
+roll back too; a conversation deleted later in the transaction needs no remaining message.
+
+The trigger's function is `security definer`, with the same fixed search path and public EXECUTE
+revocation. Neither runtime-grant role can call it. It only reads and raises; it performs no writes
+and returns no chat data. It must see through RLS because a participant could advance a counter
+and then leave before commit. The three §9.2 functions remain the only callable elevated paths.
+Tests cover a bare advance, several advances, rollback, and advance-then-leave without a message.
+
+Chat creation, send, participant/link and audit timestamps come from the database transaction
+clock, not caller-supplied dates. Guards set these values and derive `last_message_at` from server
+time without lowering an existing value. Attribution-only cascades retain the original timestamp.
+Message display order remains `seq`; timestamps are not an ordering or idempotency key.
 
 ## 10. Audit (participant-scoped) and export
 
@@ -459,7 +490,7 @@ D4 needs no change: it governs workflows, and this contract adds no workflow cha
   - its own cascade then deletes it.
 
   No trigger blocks a delete. The transition triggers are `before insert or update` only, and
-  `app` holds no `delete` on protected tables.
+  `captain_runtime` and legacy `app` hold no direct `delete` grant on protected tables.
 - **Display.** A null author shows as "Former member".
 
 ## 13. Pins, stars and read positions (PR C)
@@ -508,9 +539,9 @@ A poll costs two requests: the session read and the chat read.
 
 - **PR A (docs).** A separate plan PR by root: this contract plus the §11 amendments. It is not part
   of #159, and chat code starts only after it merges.
-- **PR B, migration `0041_chat_core.sql`** (the number is checked at implementation), with files:
+- **PR B, migration `0042_chat_core.sql`** (the number is checked at implementation), with files:
   - Migration and schema:
-    - `packages/db/migrations/0041_chat_core.sql`: tables, the owner check, the §9.2 functions, the
+    - `packages/db/migrations/0042_chat_core.sql`: tables, the owner check, the §9.2 functions, the
       §9.3 policies, the §9.4 triggers and the grants;
     - `packages/db/src/chat-schema.ts`: the Drizzle description.
   - Services and routes:
@@ -531,7 +562,7 @@ A poll costs two requests: the session read and the chat read.
     - `GET /tasks/:taskId/conversations` and `GET /projects/:projectId/conversations`.
 
     Unknown, foreign and inaccessible IDs return an identical 404.
-- **PR C, migration `0042_chat_personal_pins.sql`.**
+- **PR C, migration `0043_chat_personal_pins.sql`.**
   - Tables: pins, stars and reads with their policies and triggers, plus the read backfill.
   - Endpoints: pins, star, read, and message edit.
   - `lifecycle.ts` gains the three new tables in `uncounted`.
@@ -542,7 +573,7 @@ A poll costs two requests: the session read and the chat read.
 
 ## 16. Tests
 
-All run against real Postgres as `app` (DB and API), plus the browser.
+All run against real Postgres as `captain_runtime` (DB and API), plus the browser.
 
 - **Deletion with tombstones (1).**
   - Delete the account of a person who authored messages, deleted others' messages, unpinned pins,
@@ -550,7 +581,7 @@ All run against real Postgres as `app` (DB and API), plus the browser.
     and `change_seq` are unchanged.
   - Delete an organisation that contains live messages, tombstones, unpinned pins and chat audit.
     Everything is removed and no trigger error occurs.
-- **DB-enforced transitions (2)**, by direct SQL as `app`, bypassing the service:
+- **DB-enforced transitions (2)**, by direct SQL as `captain_runtime`, bypassing the service:
   - A participant cannot:
     - change another person's message body (neither the author's live text nor a tombstone);
     - tombstone another person's message unless they are an owner or admin;
@@ -580,7 +611,7 @@ All run against real Postgres as `app` (DB and API), plus the browser.
   - A send leaves `revision` unchanged and moves `last_seq` and `last_change` by exactly 1.
   - An edit, tombstone, pin or unpin moves only `last_change`.
   - Title, add, leave, remove, end-membership and link changes move only `revision`.
-  - Direct SQL as `app` that moves a counter by 2, lowers one, or combines message counters with
+  - Direct SQL as `captain_runtime` that moves a counter by 2, lowers one, or combines message counters with
     `revision` is refused.
 - **Leave audit order (r4 item 2).**
   - A leave commits exactly one `chat.participant_left` audit row, written before the state change.
@@ -617,12 +648,12 @@ that PR merges. §9 has been peer-reviewed through r4.
 
 **PR B execution gates.** Each is proven by a test or a recorded check before PR B merges. None is
 an open design question.
-1. **Migration owner can bypass RLS.** The 0041 owner assertion must pass on CI and staging. The same
+1. **Migration owner can bypass RLS.** The 0042 owner assertion must pass on CI and staging. The same
    check already passed there when 0038 was applied, so no new permission is expected. If it failed,
    the migration would abort cleanly and nothing would change.
 2. **Neon's PostgreSQL version.** Confirm at PR B that it is 15 or later. CI and staging are
    already PostgreSQL 18, since migrations use native `uuidv7()`.
-3. **Trigger reads of `memberships`.** The §9.4 triggers run as the invoker, `app`. They read
+3. **Trigger reads of `memberships`.** The §9.4 triggers run as the invoker, `captain_runtime`. They read
    `memberships` under its tenant RLS, and the conversation row under chat RLS. PR B must test that
    every allowed transition sees the rows it needs: for example, a leave, where the RLS participation
    check on the new row would fail but the trigger reads only memberships and the conversation.
@@ -645,3 +676,17 @@ Closed in revisions 4 and 5:
 - DB-enforced authorship, moderation and participant transitions;
 - lifecycle files;
 - exact conflict constraints.
+
+## PR B release and rollback boundary
+
+Deploy only to the existing staging API machine. Preflight must confirm the actual safe runtime
+connection, a bypassing migration owner, supported PostgreSQL, and the expected migration position.
+Run migration/queue installation without an HTTP listener, then restore the normal command on the
+reviewed image and verify readiness and participant-scoped reads/writes. Web remains at its current
+release until PR D; a deployed API does not make the Chat tab usable yet.
+
+Retain migration 0042 on rollback; do not drop chat data. Once chat exists, a pre-chat API is not a
+safe general rollback because it lacks membership-removal cleanup and the chat-aware export/deletion
+rules. Prefer a forward fix retaining those hooks. If no verified compatible image exists, stop
+HTTP on the same machine rather than serving the old membership-write path. Production and the
+embedding service stay paused, and the restricted runtime credential is never replaced by `app`.

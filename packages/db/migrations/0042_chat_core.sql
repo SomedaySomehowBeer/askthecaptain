@@ -6,31 +6,41 @@
 -- `before insert or update` trigger per table decides which transitions are allowed (§9.4). The three callable
 -- `security definer` functions are the only elevated paths. Chat writes are audited in chat_audit_events, never in
 -- the tenant-wide audit_events (AGENTS "Writes are plain writes", plan D25).
+--
+-- Roles (D6, after 0041_runtime_role): the API connects as SQL-created `captain_runtime`. Every policy and grant here
+-- also names legacy `app`, as every policy and grant since 0041 does, so the two keep the same privileges
+-- (schema-policy.test.ts checks this parity). `app` is Neon's administrative role, retained but never used to
+-- connect; nothing here requires it to be safe. Being named keeps it at parity with captain_runtime; on staging it
+-- already bypasses row security, so the policies change nothing for it there.
 
 -- §9.1: the definer functions and the owner-run referential actions must see every row. Under forced row
 -- security a non-bypassing owner would be filtered, so refuse to run rather than install broken functions.
 do $$ begin
 	if not exists (select 1 from pg_roles where rolname = current_user and (rolsuper or rolbypassrls)) then
-		raise exception 'migration 0041 must run as a role that bypasses row security (the migration owner)';
+		raise exception 'migration 0042 must run as a role that bypasses row security (the migration owner)';
 	end if;
 end $$;
 
--- D6: chat access is enforced only by policies `to app`, so the runtime role must not bypass row security, directly
--- or by switching into a role that does, and must not administer roles. A deployment has run with it otherwise
--- (staging, 2026-09-26). Refuse rather than install chat behind policies that would not apply. This changes no role.
+-- D6: chat access is enforced only by row security, so the runtime role must not be able to bypass it or gain more:
+-- no superuser, bypassrls, createrole, createdb or replication attribute, no membership of any role (administrative
+-- or not, so no SET ROLE path) and no owned object. This checks captain_runtime, the role the API connects as; it
+-- changes no role. The API's startup guard checks the live connection the same way.
 -- runtime-role precondition: begin
-do $$ declare runtime constant name := 'app'; problems text[];
+do $$ declare runtime constant name := 'captain_runtime'; problems text[];
 begin
 	select array_remove(array[
 		case when r.rolsuper then 'superuser' end,
 		case when r.rolbypassrls then 'bypassrls' end,
 		case when r.rolcreaterole then 'createrole' end,
-		case when exists (select 1 from pg_roles o where o.oid <> r.oid and (o.rolsuper or o.rolbypassrls)
-			and pg_has_role(r.oid, o.oid, 'SET')) then 'can set role to a role that bypasses row security' end], null)
+		case when r.rolcreatedb then 'createdb' end,
+		case when r.rolreplication then 'replication' end,
+		case when exists (select 1 from pg_auth_members m where m.member = r.oid) then 'member of another role' end,
+		case when exists (select 1 from pg_shdepend d where d.refclassid = 'pg_authid'::regclass and d.refobjid = r.oid and d.deptype = 'o')
+			then 'owns objects' end], null)
 	into problems from pg_roles r where r.rolname = runtime;
-	if problems is null then raise exception 'migration 0041 requires the runtime role %', runtime; end if;
+	if problems is null then raise exception 'migration 0042 requires the runtime role % (created by 0041_runtime_role)', runtime; end if;
 	if cardinality(problems) > 0 then
-		raise exception 'runtime role % must not bypass row security: %', runtime, array_to_string(problems, ', ');
+		raise exception 'runtime role % is not safe for row security: %', runtime, array_to_string(problems, ', ');
 	end if;
 end $$;
 -- runtime-role precondition: end
@@ -267,7 +277,7 @@ begin
 end $$;
 
 -- §9.4 row-transition triggers -----------------------------------------------------------------------------------
--- Security invoker: under `app` they read memberships and the conversation through the tenant's own row security;
+-- Security invoker: under the runtime role they read memberships and the conversation through the tenant's own row security;
 -- during referential actions they run as the table owner. They raise check_violation for anything not listed.
 -- Each update check starts with Rule A: an update whose only changes null attribution columns of memberships that
 -- no longer exist (the `on delete set null (column)` action) is allowed on any row and moves no counter.
@@ -472,7 +482,7 @@ begin
 		new.deleted_at := now(); -- server time, never the caller's
 		return new;
 	end if;
-	-- Author edits arrive in PR C (0042), which extends this function.
+	-- Author edits arrive in PR C (0043), which extends this function.
 	raise exception 'that message change is not allowed' using errcode = 'check_violation';
 end $$;
 
@@ -500,10 +510,10 @@ end $$;
 -- savepoint that rolled back is discarded with the savepoint, and a conversation deleted later in the transaction
 -- (organisation deletion) has nothing left to check.
 --
--- This is the one trigger that runs as its definer. Under `app`, row security would hide the conversation and its
--- messages from someone who advanced the counter and then left in the same transaction, so an invoker check could be
--- evaded exactly when it matters. It only reads and raises; it is not callable (not granted to app, revoked from
--- public) and changes nothing. The three callable definer functions of §9.2 remain the only elevated paths.
+-- This is the one trigger that runs as its definer. Under the runtime role, row security would hide the conversation
+-- and its messages from someone who advanced the counter and then left in the same transaction, so an invoker check
+-- could be evaded exactly when it matters. It only reads and raises; it is not callable (granted to no role, revoked
+-- from public) and changes nothing. The three callable definer functions of §9.2 remain the only elevated paths.
 create function chat_conversations_seq_check() returns trigger
 	language plpgsql security definer set search_path = pg_catalog, public, pg_temp as $$
 begin
@@ -526,60 +536,61 @@ create trigger conversation_links_guard before insert or update on conversation_
 create trigger messages_guard before insert or update on messages for each row execute function chat_messages_guard();
 create trigger chat_audit_events_guard before insert or update on chat_audit_events for each row execute function chat_audit_guard();
 
--- §9.3 row security (all `to app`) -------------------------------------------------------------------------------
+-- §9.3 row security (all `to app, captain_runtime`) --------------------------------------------------------------
 
 alter table conversations enable row level security;
 alter table conversations force row level security;
-create policy conversations_select on conversations for select to app
+create policy conversations_select on conversations for select to app, captain_runtime
 	using (organisation_id = current_organisation_id() and chat_participant(id));
-create policy conversations_update on conversations for update to app
+create policy conversations_update on conversations for update to app, captain_runtime
 	using (organisation_id = current_organisation_id() and chat_participant(id))
 	with check (organisation_id = current_organisation_id());
 
 alter table conversation_participants enable row level security;
 alter table conversation_participants force row level security;
-create policy conversation_participants_select on conversation_participants for select to app
+create policy conversation_participants_select on conversation_participants for select to app, captain_runtime
 	using (organisation_id = current_organisation_id() and chat_participant(conversation_id));
-create policy conversation_participants_insert on conversation_participants for insert to app
+create policy conversation_participants_insert on conversation_participants for insert to app, captain_runtime
 	with check (organisation_id = current_organisation_id() and chat_participant(conversation_id) and added_by = current_user_id());
-create policy conversation_participants_update on conversation_participants for update to app
+create policy conversation_participants_update on conversation_participants for update to app, captain_runtime
 	using (organisation_id = current_organisation_id() and chat_participant(conversation_id))
 	with check (organisation_id = current_organisation_id());
 
 alter table conversation_links enable row level security;
 alter table conversation_links force row level security;
-create policy conversation_links_select on conversation_links for select to app
+create policy conversation_links_select on conversation_links for select to app, captain_runtime
 	using (organisation_id = current_organisation_id() and chat_participant(conversation_id));
-create policy conversation_links_insert on conversation_links for insert to app
+create policy conversation_links_insert on conversation_links for insert to app, captain_runtime
 	with check (organisation_id = current_organisation_id() and chat_participant(conversation_id) and linked_by = current_user_id());
-create policy conversation_links_delete on conversation_links for delete to app
+create policy conversation_links_delete on conversation_links for delete to app, captain_runtime
 	using (organisation_id = current_organisation_id() and chat_participant(conversation_id));
 
 alter table messages enable row level security;
 alter table messages force row level security;
-create policy messages_select on messages for select to app
+create policy messages_select on messages for select to app, captain_runtime
 	using (organisation_id = current_organisation_id() and chat_participant(conversation_id));
-create policy messages_insert on messages for insert to app
+create policy messages_insert on messages for insert to app, captain_runtime
 	with check (organisation_id = current_organisation_id() and chat_participant(conversation_id) and author_id = current_user_id());
-create policy messages_update on messages for update to app
+create policy messages_update on messages for update to app, captain_runtime
 	using (organisation_id = current_organisation_id() and chat_participant(conversation_id))
 	with check (organisation_id = current_organisation_id());
 
 alter table chat_audit_events enable row level security;
 alter table chat_audit_events force row level security;
-create policy chat_audit_events_select on chat_audit_events for select to app
+create policy chat_audit_events_select on chat_audit_events for select to app, captain_runtime
 	using (organisation_id = current_organisation_id() and chat_participant(conversation_id) and (not personal or actor_id = current_user_id()));
-create policy chat_audit_events_insert on chat_audit_events for insert to app
+create policy chat_audit_events_insert on chat_audit_events for insert to app, captain_runtime
 	with check (organisation_id = current_organisation_id() and chat_participant(conversation_id) and actor_id = current_user_id());
 
 -- Grants: no delete anywhere except unlinking; no insert on conversations (bootstrap only); audit is append-only.
-grant select, update on conversations to app;
-grant select, insert, update on conversation_participants to app;
-grant select, insert, delete on conversation_links to app;
-grant select, insert, update on messages to app;
-grant select, insert on chat_audit_events to app;
+grant select, update on conversations to app, captain_runtime;
+grant select, insert, update on conversation_participants to app, captain_runtime;
+grant select, insert, delete on conversation_links to app, captain_runtime;
+grant select, insert, update on messages to app, captain_runtime;
+grant select, insert on chat_audit_events to app, captain_runtime;
 
 revoke all on function chat_participant(uuid), chat_create_conversation(uuid, text, bytea), chat_end_membership(uuid),
 	chat_conversations_guard(), chat_participants_guard(), chat_links_guard(), chat_messages_guard(), chat_audit_guard(),
 	chat_conversations_seq_check() from public;
-grant execute on function chat_participant(uuid), chat_create_conversation(uuid, text, bytea), chat_end_membership(uuid) to app;
+grant execute on function chat_participant(uuid), chat_create_conversation(uuid, text, bytea), chat_end_membership(uuid)
+	to app, captain_runtime;

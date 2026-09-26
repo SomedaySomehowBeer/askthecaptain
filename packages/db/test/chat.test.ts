@@ -6,8 +6,9 @@ import type { TransactionSql } from 'postgres';
 import { withTenant } from '../src/context.ts';
 import { databaseUrl, freshDatabase, type Harness } from './harness.ts';
 
-// Migration 0041 (D25, linked-chat contract §9/§16): chat's database security, proven as the non-bypassing `app`
-// role by direct SQL, bypassing any service. Service-shaped helpers below follow the contract's §6 lock order.
+// Migration 0042 (D25, linked-chat contract §9/§16): chat's database security, proven by direct SQL, bypassing any
+// service, as the role the API connects as: the harness's `db.app` connection signs in as SQL-created
+// `captain_runtime` (asserted below). Service-shaped helpers below follow the contract's §6 lock order.
 const it = databaseUrl ? test : test.skip;
 let db: Harness;
 const RLS = /row-level security/;
@@ -27,7 +28,7 @@ async function person(org: string, role: 'owner' | 'admin' | 'member' = 'member'
 	await db.owner`insert into memberships (organisation_id, user_id, role) values (${org}, ${user!.id}, ${role})`;
 	return user!.id;
 }
-/** One transaction as `app` for this person in this organisation, failing instead of waiting on a lock cycle. */
+/** One transaction as the runtime role for this person in this organisation, failing instead of waiting on a lock cycle. */
 function as<T>(org: string, user: string, work: (tx: TransactionSql) => Promise<T>): Promise<T> {
 	return withTenant(db.app, { organisationId: org, userId: user }, async (tx) => { await tx`set local lock_timeout = '5s'`; return work(tx); });
 }
@@ -102,20 +103,39 @@ const counts = (org: string, user: string) => as(org, user, async (tx) => {
 const participantState = async (conversation: string, user: string) =>
 	(await db.owner<{ state: string }[]>`select state from conversation_participants where conversation_id = ${conversation} and user_id = ${user}`)[0]?.state;
 
+it('the suite really runs as captain_runtime, which bypasses nothing', async () => {
+	const [who] = await db.app<{ current: string; session: string; rowSecurity: string }[]>`
+		select current_user as current, session_user as session, current_setting('row_security') as row_security`;
+	assert.deepEqual({ ...who }, { current: 'captain_runtime', session: 'captain_runtime', rowSecurity: 'on' });
+	assert.equal(db.runtimeRole, 'captain_runtime');
+	const [role] = await db.owner`select rolsuper or rolbypassrls or rolcreaterole or rolcreatedb or rolreplication as elevated,
+		(select count(*) from pg_auth_members m where m.member = r.oid)::int as memberships from pg_roles r where rolname = 'captain_runtime'`;
+	assert.deepEqual({ ...role }, { elevated: false, memberships: 0 });
+});
+
 it('chat tables force row security, grant no deletes but unlinking, and expose only three definer functions', async () => {
 	for (const table of tables) {
 		const [flags] = await db.owner<{ rls: boolean; forced: boolean }[]>`select relrowsecurity as rls, relforcerowsecurity as forced from pg_class where relname = ${table}`;
 		assert.deepEqual(flags, { rls: true, forced: true }, table);
 	}
-	const privilege = async (table: string, kind: string) => (await db.owner<{ ok: boolean }[]>`select has_table_privilege('app', ${table}, ${kind}) as ok`)[0]!.ok;
-	for (const table of ['conversations', 'conversation_participants', 'messages', 'chat_audit_events']) assert.equal(await privilege(table, 'DELETE'), false, table);
-	assert.equal(await privilege('conversation_links', 'DELETE'), true);
-	assert.equal(await privilege('conversations', 'INSERT'), false, 'conversations are created only by the bootstrap');
-	for (const table of ['conversation_links', 'chat_audit_events']) assert.equal(await privilege(table, 'UPDATE'), false, table);
-	const functions = await db.owner<{ name: string; definer: boolean; callable: boolean; config: string[] | null }[]>`
-		select p.proname as name, p.prosecdef as definer, has_function_privilege('app', p.oid, 'EXECUTE') as callable, p.proconfig as config
+	// Both runtime roles hold the same privileges (D6): captain_runtime, which the API uses, and legacy `app`.
+	for (const role of ['captain_runtime', 'app']) {
+		const privilege = async (table: string, kind: string) => (await db.owner<{ ok: boolean }[]>`select has_table_privilege(${role}, ${table}, ${kind}) as ok`)[0]!.ok;
+		for (const table of ['conversations', 'conversation_participants', 'messages', 'chat_audit_events']) assert.equal(await privilege(table, 'DELETE'), false, `${role} ${table}`);
+		assert.equal(await privilege('conversation_links', 'DELETE'), true, role);
+		assert.equal(await privilege('conversations', 'INSERT'), false, `${role}: conversations are created only by the bootstrap`);
+		for (const table of ['conversation_links', 'chat_audit_events']) assert.equal(await privilege(table, 'UPDATE'), false, `${role} ${table}`);
+	}
+	const policies = await db.owner<{ name: string; roles: string[] }[]>`select policyname as name, roles::text[] as roles from pg_policies
+		where tablename in ${db.owner([...tables])} order by policyname`;
+	assert.equal(policies.length, 13);
+	for (const policy of policies) assert.deepEqual([...policy.roles].sort(), ['app', 'captain_runtime'], policy.name);
+	const functions = await db.owner<{ name: string; definer: boolean; callable: boolean; legacyCallable: boolean; config: string[] | null }[]>`
+		select p.proname as name, p.prosecdef as definer, has_function_privilege('captain_runtime', p.oid, 'EXECUTE') as callable,
+			has_function_privilege('app', p.oid, 'EXECUTE') as legacy_callable, p.proconfig as config
 		from pg_proc p where p.proname like 'chat\\_%' order by p.proname`;
 	assert.deepEqual(functions.filter((f) => f.callable).map((f) => f.name), ['chat_create_conversation', 'chat_end_membership', 'chat_participant']);
+	assert.deepEqual(functions.map((f) => f.legacyCallable), functions.map((f) => f.callable), 'app can call exactly what captain_runtime can');
 	assert.ok(functions.filter((f) => f.callable).every((f) => f.definer), 'the callable functions are the only elevated paths');
 	// Transition triggers run as the invoker; the single non-callable definer is the commit-time seq check, which reads
 	// past row security so a caller who then leaves cannot evade it.
@@ -127,38 +147,36 @@ it('chat tables force row security, grant no deletes but unlinking, and expose o
 		'messages_conversation_seq', 'messages_conversation_change', 'conversation_links_target']) assert.ok(names.includes(name), name);
 });
 
-it('0041 refuses a runtime role that could bypass row security or administer roles, and accepts a plain one', async () => {
-	// Roles are cluster-wide, so the shared `app` is never altered: the migration's own precondition block runs against
-	// throwaway roles instead, with only its role name substituted.
-	const text = await readFile(new URL('../migrations/0041_chat_core.sql', import.meta.url), 'utf8');
+it('0042 checks captain_runtime, never legacy app, and refuses any runtime role that could gain more', async () => {
+	// Roles are cluster-wide, so no shared role is ever altered: the migration's own precondition block runs against a
+	// throwaway role, with only its role name substituted, inside a transaction that always rolls back.
+	const text = await readFile(new URL('../migrations/0042_chat_core.sql', import.meta.url), 'utf8');
 	const block = /-- runtime-role precondition: begin\n([\s\S]*?)-- runtime-role precondition: end/.exec(text)?.[1];
-	const binding = "runtime constant name := 'app'";
-	assert.ok(block?.includes(binding), 'the precondition names app exactly once, in its binding');
-	await db.owner.unsafe(block!); // the harness app is a plain login role
-	const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
-	const probe = `chat_probe_${suffix}`, bypassing = `chat_bypass_${suffix}`;
-	const check = (role: string) => db.owner.unsafe(block!.replace(binding, `runtime constant name := '${role}'`));
-	try {
-		await assert.rejects(check(probe), /requires the runtime role/);
-		await db.owner.unsafe(`create role ${probe} nologin`);
-		await db.owner.unsafe(`create role ${bypassing} nologin bypassrls`);
-		await check(probe);
-		for (const [attribute, reason] of [['bypassrls', /bypassrls/], ['superuser', /superuser/], ['createrole', /createrole/]] as const) {
-			await db.owner.unsafe(`alter role ${probe} ${attribute}`);
-			await assert.rejects(check(probe), reason, attribute);
-			await db.owner.unsafe(`alter role ${probe} no${attribute}`);
-		}
-		await check(probe);
-		// Attributes are not inherited, but a membership that allows SET ROLE reaches the bypassing role's.
-		await db.owner.unsafe(`grant ${bypassing} to ${probe} with inherit true, set true`);
-		await assert.rejects(check(probe), /can set role to a role that bypasses row security/);
-		await db.owner.unsafe(`revoke ${bypassing} from ${probe}`);
-		await db.owner.unsafe(`grant ${bypassing} to ${probe} with inherit true, set false`);
-		await check(probe);
-	} finally {
-		await db.owner.unsafe(`drop role if exists ${probe}`);
-		await db.owner.unsafe(`drop role if exists ${bypassing}`);
-	}
+	const binding = "runtime constant name := 'captain_runtime'";
+	assert.equal(block?.split(binding).length, 2, 'the precondition names captain_runtime once, in its binding');
+	assert.ok(!/'app'|\bapp\b/.test(block!.replace(binding, '')), 'the precondition never inspects, or depends on, legacy app');
+	await db.owner.unsafe(block!); // the harness's captain_runtime, as 0041_runtime_role made it
+	const probe = `chat_probe_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
+	class RolledBack extends Error {}
+	const check = (setup: string) => db.owner.begin(async (tx) => {
+		if (setup) await tx.unsafe(setup);
+		await tx.unsafe(block!.replace(binding, `runtime constant name := '${probe}'`));
+		throw new RolledBack();
+	});
+	await assert.rejects(check(''), /requires the runtime role/);
+	await assert.rejects(check(`create role ${probe} login`), RolledBack, 'a plain login role passes');
+	for (const [setup, reason] of [
+		[`create role ${probe} superuser`, /superuser/],
+		[`create role ${probe} bypassrls`, /bypassrls/],
+		[`create role ${probe} createrole`, /createrole/],
+		[`create role ${probe} createdb`, /createdb/],
+		[`create role ${probe} replication`, /replication/],
+		// Attributes are not inherited, but any membership could reach a role's privileges or SET ROLE into it.
+		[`create role ${probe}; grant pg_read_all_data to ${probe}`, /member of another role/],
+		[`create role ${probe}; create role ${probe}_x; grant ${probe}_x to ${probe} with admin option, inherit false, set false`, /member of another role/],
+		[`create role ${probe}; create table ${probe}_owned (); alter table ${probe}_owned owner to ${probe}`, /owns objects/],
+	] as const) await assert.rejects(check(setup), reason, setup);
+	assert.equal((await db.owner`select 1 from pg_roles where rolname like ${`${probe}%`}`).length, 0, 'every attempt rolled back');
 });
 
 it('the bootstrap creates one caller row and matches only its own creator’s identical retry', async () => {

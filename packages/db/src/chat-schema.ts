@@ -2,13 +2,13 @@ import { sql } from 'drizzle-orm';
 import { boolean, check, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { memberships, organisations } from './connections-schema.ts';
 
-// Linked chat, PR B (D25; contract docs/plans/linked-chat-2026-09.md, adopted in #160). Migration 0041 owns these
+// Linked chat, PR B (D25; contract docs/plans/linked-chat-2026-09.md, adopted in #160). Migration 0042 owns these
 // tables and everything Drizzle cannot describe: forced RLS and its policies, the row-transition triggers (§9.4),
 // the three callable definer functions below, and the attribution foreign keys' `on delete set null (column)`
 // form, which only nulls the attribution column and keeps `organisation_id` (Drizzle's `onDelete('set null')`
 // would name every column, so it is not used here).
 //
-// Callable by `app` (nothing else is):
+// Callable by the runtime role `captain_runtime` (and, at parity, legacy `app`); by nothing else:
 //   chat_participant(conversation_id uuid) returns boolean              -- stable; used by the policies
 //   chat_create_conversation(p_id uuid, p_title text, p_fingerprint bytea) returns text
 //       -- 'created' | 'matched' | 'unavailable'; call positionally

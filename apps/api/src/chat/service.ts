@@ -24,7 +24,8 @@ const linkTarget = z.object({ kind: z.enum(['task', 'project']), targetId: uuid 
 
 export const createConversation = z.object({
  id: uuid, title,
- participantIds: z.array(uuid).max(participantLimit - 1).default([]),
+ // A bound on the request size only. The cap is on people, counted after removing duplicates and the caller (create).
+ participantIds: z.array(uuid).max(participantLimit * 2).default([]),
  links: z.array(linkTarget).max(linkLimit).default([]),
 }).strict();
 export const renameConversation = z.object({ expectedRevision: revision, title }).strict();
@@ -64,6 +65,25 @@ const messageIdConstraints = new Set(['messages_pkey', 'messages_organisation_id
 const conversationIdConstraints = new Set(['conversations_pkey', 'conversations_organisation_id_id_key']);
 function uniqueConstraint(error: unknown): string | null {
  return error instanceof Error && 'code' in error && error.code === '23505' && 'constraint_name' in error && typeof error.constraint_name === 'string' ? error.constraint_name : null;
+}
+/** An unexpected database failure in chat, reduced to its SQLSTATE. A Postgres error can carry private chat content in
+ *  its detail, query, parameters or cause (a unique violation's detail quotes the conflicting value, a message body
+ *  included), and the app's error handler logs what it is given. So nothing of the original is kept: not its message,
+ *  detail, constraint, query, parameters or cause. It still answers 500; the request id is logged by the handler. */
+export class ChatDatabaseError extends Error {
+ readonly sqlState: string;
+ constructor(sqlState: string) {
+  super(`chat database operation failed (SQLSTATE ${sqlState})`);
+  this.name = 'ChatDatabaseError';
+  this.sqlState = sqlState;
+ }
+}
+const sqlState = /^[0-9A-Z]{5}$/;
+/** Service errors pass through; a database error (anything with a SQLSTATE) becomes a ChatDatabaseError. */
+function redacted(error: unknown): unknown {
+ if (error instanceof HttpError) return error;
+ if (error instanceof Error && 'code' in error && typeof error.code === 'string' && sqlState.test(error.code)) return new ChatDatabaseError(error.code);
+ return error;
 }
 /** Raised inside the send savepoint when `on conflict (id) do nothing` inserted nothing: the id is held by a row this
  *  person cannot see, or by one of their own that the pre-check did not match. */
@@ -126,7 +146,8 @@ export class ChatService {
    if (name === 'conversation_links_target') throw conflict('link_exists', 'That task or project is already linked to this conversation.');
    if (name && conversationIdConstraints.has(name)) throw conversationIdUnavailable();
    if (name && messageIdConstraints.has(name)) throw messageIdUnavailable();
-   throw error;
+   // Any other constraint, named or not, stays a 500 (contract §9.4), without its content reaching the logs.
+   throw redacted(error);
   }
  }
 
@@ -134,11 +155,13 @@ export class ChatService {
   *  moment. The tenant context is set exactly as `withTenant` does. */
  private async snapshot<T>(actor: Actor, organisationId: string, work: (tx: TransactionSql) => Promise<T>): Promise<T> {
   await roleOf(this.#db, actor.userId, organisationId);
-  return this.#db.begin('isolation level repeatable read read only', async tx => {
-   await tx`select set_config('app.organisation_id', ${organisationId}, true)`;
-   await tx`select set_config('app.user_id', ${actor.userId}, true)`;
-   return work(tx);
-  }) as Promise<T>;
+  try {
+   return await (this.#db.begin('isolation level repeatable read read only', async tx => {
+    await tx`select set_config('app.organisation_id', ${organisationId}, true)`;
+    await tx`select set_config('app.user_id', ${actor.userId}, true)`;
+    return work(tx);
+   }) as Promise<T>);
+  } catch (error) { throw redacted(error); }
  }
 
  /** Step 1 of the lock order: memberships, sorted, final modes. The caller must be an active member. */
@@ -171,8 +194,11 @@ export class ChatService {
   return row.revision;
  }
 
- private async requireTarget(tx: TransactionSql, link: { kind: LinkKind; targetId: string }) {
-  const [row] = link.kind === 'task' ? await tx`select id from tasks where id = ${link.targetId}` : await tx`select id from projects where id = ${link.targetId}`;
+ // Row security already confines these reads to the tenant; the organisation predicate is defence in depth.
+ private async requireTarget(tx: TransactionSql, organisationId: string, link: { kind: LinkKind; targetId: string }) {
+  const [row] = link.kind === 'task'
+   ? await tx`select id from tasks where organisation_id = ${organisationId} and id = ${link.targetId}`
+   : await tx`select id from projects where organisation_id = ${organisationId} and id = ${link.targetId}`;
   if (!row) throw linkTargetUnavailable();
  }
 
@@ -224,12 +250,15 @@ export class ChatService {
   const links = [...new Map(input.links.map(link => [linkKey(link), link])).values()].sort((a, b) => linkKey(a).localeCompare(linkKey(b)));
   const fingerprint = createFingerprint({ title: input.title, participantIds: others, links });
   return this.write(actor, organisationId, async tx => {
+   // The cap counts people, not list entries: naming yourself does not use a second place. Checked only once the caller
+   // is known to be a member, so a stranger still gets the same 404 as everywhere else.
+   if (others.length + 1 > participantLimit) throw conflict('participant_limit', `A conversation can have up to ${participantLimit} people.`);
    const { people } = await this.lockPeople(tx, organisationId, actor, new Map(others.map(id => [id, 'share' as const])));
    const [bootstrap] = await tx<{ result: string }[]>`select chat_create_conversation(${input.id}::uuid, ${input.title}::text, ${fingerprint}::bytea) as result`;
    if (bootstrap?.result === 'matched') return { conversation: await this.detailIn(tx, organisationId, input.id), created: false };
    if (bootstrap?.result !== 'created') throw conversationIdUnavailable();
    if (others.some(id => people.get(id)?.status !== 'active')) throw participantUnavailable();
-   for (const link of links) await this.requireTarget(tx, link);
+   for (const link of links) await this.requireTarget(tx, organisationId, link);
    const [{ revision: current } = { revision: 1 }] = await tx<{ revision: number }[]>`select revision from conversations where id = ${input.id}`;
    // Initial participants and links belong to the creation itself: no revision bump (the bootstrap revision stands).
    for (const userId of others) await tx`insert into conversation_participants (organisation_id, conversation_id, user_id, state, added_by)
@@ -321,7 +350,7 @@ export class ChatService {
    await this.lockPeople(tx, organisationId, actor);
    const conversation = await this.lockConversation(tx, organisationId, conversationId);
    if (conversation.revision !== input.expectedRevision) throw staleConversation();
-   await this.requireTarget(tx, input);
+   await this.requireTarget(tx, organisationId, input);
    const column = input.kind === 'task' ? tx`task_id` : tx`project_id`;
    const [existing] = await tx`select id from conversation_links where conversation_id = ${conversationId} and ${column} = ${input.targetId}`;
    if (existing) throw conflict('link_exists', 'That task or project is already linked to this conversation.');
@@ -363,7 +392,7 @@ export class ChatService {
    if (row.conversationId === conversationId && row.authorId === me && !row.deletedAt && row.sentBodySha256 && hash.equals(row.sentBodySha256)) return { message: publicMessage(row), created: false };
    throw messageIdUnavailable();
   };
-  const own = (tx: TransactionSql) => tx<MessageRow[]>`select ${tx.unsafe(messageColumns)}, sent_body_sha256 from messages where id = ${input.id}`.then(rows => rows[0]);
+  const own = (tx: TransactionSql) => tx<MessageRow[]>`select ${tx.unsafe(messageColumns)}, sent_body_sha256 from messages where organisation_id = ${organisationId} and id = ${input.id}`.then(rows => rows[0]);
   return this.write(actor, organisationId, async tx => {
    await this.lockPeople(tx, organisationId, actor);
    await this.lockConversation(tx, organisationId, conversationId);
@@ -373,7 +402,7 @@ export class ChatService {
    try {
     sent = await tx.savepoint(async sp => {
      // `now()` is this transaction's start; a send that waited for the conversation lock may start before the one just
-     // committed, and last_message_at never goes back (0041 trigger), so keep the later of the two.
+     // committed, and last_message_at never goes back (0042 trigger), so keep the later of the two.
      const [next] = await sp<{ lastSeq: number; lastChange: number }[]>`update conversations
       set last_seq = last_seq + 1, last_change = last_change + 1, last_message_at = greatest(last_message_at, now()) where id = ${conversationId} returning last_seq, last_change`;
      if (!next) throw notFound();
@@ -467,7 +496,7 @@ export class ChatService {
   *  with no count or hint about anyone else's. An unknown task or project is a 404 like any other. */
  forTarget(actor: Actor, organisationId: string, kind: LinkKind, targetId: string): Promise<{ conversations: ConversationSummary[] }> {
   return this.snapshot(actor, organisationId, async tx => {
-   await this.requireTarget(tx, { kind, targetId }).catch(error => { if (error instanceof HttpError) throw notFound(); throw error; });
+   await this.requireTarget(tx, organisationId, { kind, targetId }).catch(error => { if (error instanceof HttpError) throw notFound(); throw error; });
    const column = kind === 'task' ? tx`l.task_id` : tx`l.project_id`;
    const conversations = await tx<ConversationSummary[]>`select ${tx.unsafe(summaryColumns)} from conversations c
     where c.organisation_id = ${organisationId}

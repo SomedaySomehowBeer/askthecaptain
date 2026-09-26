@@ -52,8 +52,10 @@ presenting a partial count as complete. Personal stars/read positions, when adde
 increment, remain private to their person. A database backup contains every conversation and message,
 including those no exporting person can see, and requires the operator controls above. After a
 restore with `--no-owner`, verify that the owner of each `chat_*` security-definer function has
-`rolsuper` or `rolbypassrls`, and that `app` has neither. Migration 0041 checks this on installation;
-a restore does not rerun that assertion. Also verify that `app` can execute only the three callable
+`rolsuper` or `rolbypassrls`, and that SQL-created `captain_runtime` has no administrative flags,
+memberships or owned objects. Chat migration 0042 checks this on installation; a restore does not
+rerun that assertion. Legacy Neon-created `app` remains administrative and is not a runtime login.
+Also verify that `captain_runtime` can execute only the three callable
 helpers, never the deferred integrity-trigger function.
 
 Neon keeps point-in-time history for the branch. For a mistake in the last hours (a bad migration,

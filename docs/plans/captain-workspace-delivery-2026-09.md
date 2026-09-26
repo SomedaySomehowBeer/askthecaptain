@@ -13,7 +13,7 @@ The [next batch and assignments](captain-next-batch-2026-09-25.md) records deliv
 recovery, then prioritises the scope cleanup, genuine standalone work, Work details, saved views
 and linked chat, with Expo foundation work alongside subsequent contracts. It adds acceptance detail without declaring any remaining slice complete.
 
-## Where this stands (26 September 2026)
+## Where this stands (27 September 2026)
 
 | Slice | State |
 |---|---|
@@ -21,7 +21,8 @@ and linked chat, with Expo foundation work alongside subsequent contracts. It ad
 | 1. Reviewed amendments | Original amendment merged in #116; its assistant-retention assumptions are corrected by the 25 September audit. Scope cleanup is now required. |
 | 2. Client and work foundation | In progress: task/tag API merged in #117. Web now has the three-tab shell, grouped view lists, real filtered Work and task creation. Tag creation/renaming and individual task tag editing are now available. Private saved Work views are delivered in #153/#154. `apps/mobile` and native acceptance remain; this does not complete slice 2. |
 | 3. Equipment scheduling | First API increment: equipment, maintenance/reservations, database overlap enforcement, revisions, cancellation and bounded occupancy reads. The [contract](equipment-reservations-2026-09.md) defines the integrity boundary. Web timeline and catalogue/create/edit/cancel controls are implemented, with browser checks against real Postgres. Native clients and real-device gestures remain pending; this does not complete slice 3. |
-| 4–7 | Not started. Chat, files, mobile builds and Pip integration are designs, not code. |
+| 4. Linked chat | Contract adopted in #160. Core storage/API (PR B) is being reviewed against the repaired runtime role: private participants, retry-safe messages, task/project links and access revocation. Not released yet; pins/stars/read positions and the web remain separate increments. |
+| 5–7 | Not started. Files, assistance, broader mobile release and Pip integration remain planned. |
 | Pip | Separate product, tracked in [#119](https://github.com/SomedaySomehowBeer/askthecaptain/issues/119); no Captain slice waits for it. |
 
 Slice numbers are this plan's own; the old assistant phases 0–5 are linked from the historical
@@ -47,7 +48,7 @@ the first-customer release still requires the full slices 2–4 acceptance evide
   The Work record increment (#138) removed the remaining Commitments forms and overview API.
 - Chat and Files & assets are explicitly unavailable. No fictional records, free-equipment
   assertions or create actions for unimplemented capabilities are exposed.
-- Saved filters and native integration remain subsequent work.
+- Private saved filters shipped in #153/#154; native integration remains subsequent work.
 
 ## Web tag-controls increment
 
