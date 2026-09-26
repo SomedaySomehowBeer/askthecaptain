@@ -1,6 +1,8 @@
 # Saved Work views
 
-Status: reviewed contract, 25 September 2026. Implementation has not started.
+Status: reviewed contract, 25 September 2026. Implementation assigned to two Opus agents on
+26 September; [delivery plan](saved-work-views-delivery-2026-09-26.md). No implementation PR is
+yet merged or deployed.
 Outcome: **manage shared work**, in Work only. Authority: plan §5 (the "Saved views" row), D6, D7, D11 and D14; next batch item 3; the mobile mockups ("Saved views" group).
 
 **This increment covers personal saved Work views only.** Only the creator can see or change a view. Organisation-shared views, including the Marketing and Production views in the mockups, come in a later, separately reviewed increment (§10). This increment adds **no shared columns, policies or endpoints**.

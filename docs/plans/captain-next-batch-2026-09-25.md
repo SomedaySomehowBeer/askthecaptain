@@ -41,6 +41,11 @@ and contextual Files/Chat remain in #142; private saved views remain the next or
 increment below, under the [reviewed contract](saved-work-views-2026-09.md) adopted in #140;
 implementation is tracked in #141.
 
+The [26 September saved-view delivery assignment](saved-work-views-delivery-2026-09-26.md)
+now splits #141 between two Claude Opus agents: database/API and Work web, in separate worktrees.
+Codex owns integration, serial verification and release. Implementation is in progress; no saved-view
+migration, API or web implementation is yet merged or deployed.
+
 ## Ordered increments
 
 1. **Recover without signing people out.** Missing credentials or a confirmed invalid session
