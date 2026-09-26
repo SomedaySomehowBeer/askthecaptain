@@ -12,7 +12,10 @@ A person can reach Production, Marketing, Sales and Admin/reporting work from th
 list without first configuring personal saved views. These remain views over tags and existing
 work, not departments, separate task stores or access boundaries. My work remains the initial
 page. Personal saved views remain private. The first contract must distinguish built-in tag
-navigation from editable organisation-shared saved views and choose the smallest useful scope.
+navigation from editable organisation-shared saved views. The selected
+[contract](default-business-views-2026-09.md) is **By tag**: list all existing organisation tags,
+using their IDs and current names, linking to Everyone · Open. New organisations use the existing
+explicit Tags screen; no tags, bindings or special department slots are silently created.
 
 Two people can discuss a task or project in one linked conversation. Full Chat and item previews
 must share message identities and enforce the same audience. Chat works before summaries or
@@ -40,11 +43,14 @@ merge or deploy. Codex manages those operations when their implementation stage 
    cases. List any plan decision/table/dependency needing adoption before code.
 2. Codex reviews scope and complexity. Each agent independently reviews the other's proposal,
    especially tag/default identity and chat audience/retry guarantees. Resolve findings in the
-   contracts and authoritative plan; merge only after review and applicable checks.
-3. Implement default business views first once that contract is adopted. Split API/setup and web
-   work between the agents where both are needed, with explicit file ownership. Preserve private
-   saved-view and existing Work browser regressions. No automatic seeded customer changes before
-   the setup policy is reviewed.
+   contracts and authoritative plan; merge only after review and applicable checks. Adopt the
+   small By tag contract in #158; keep chat proposed in a separate PR until its privacy, retry,
+   lifecycle and reconnect findings are resolved. Chat review does not block the tag-view increment.
+3. Implement the By tag web increment first once its contract is adopted; it needs no API,
+   schema or migration. `business-views` owns the web implementation and pure tests; Codex owns
+   the browser fixture/proof. `linked-chat` reviews it while preparing the separate chat contract.
+   Preserve private saved-view semantics, independent group paging and existing Work regressions.
+   There are no seeded customer changes.
 4. Implement linked-chat storage/API under its adopted contract in small PRs, one migration each.
    Add web only after a stable reviewed API. Shared pins, personal stars and read positions may
    be separate increments; do not expose unfinished controls. Summaries stay explicitly unavailable
