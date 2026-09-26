@@ -147,6 +147,9 @@ Nothing locks a membership after a conversation.
   service reads and returns the current conversation and writes nothing. When it returns
   `unavailable`, the result is a `409`.
 - **Send.** The sender's membership (share), then the conversation, then insert.
+- **PR C writes.** Edit, pin, unpin, star and read use the same write helper: caller membership
+  `for share`, conversation `for update`, then the affected message, pin or personal row.
+  Deleting a pinned message locks the message before the pin.
 - **Add.** The actor's and targets' memberships (share, sorted), then the conversation. Every target
   must be active, otherwise `400 participant_unavailable` (atomic). The participant cap is checked
   under the conversation lock.
@@ -663,6 +666,11 @@ All run against real Postgres as `captain_runtime` (DB and API), plus the browse
   - audit privacy, including personal rows;
   - export shows only the exporter's conversations and notes the rest are excluded, and `rowCounts`
     omits chat.
+
+PR C additionally proves current cross-table change-number collision refusal, a fixed read baseline
+while new messages arrive without a personal read row, re-add reset, no audit for no-op stars/reads/
+edits, `409 message_deleted` for pinning a tombstone, one audit for atomic delete/unpin, and the race
+for the 50th live pin. Each pin table also enforces `(conversation_id, change_seq)` uniqueness.
 
 ## 17. Remaining items
 
