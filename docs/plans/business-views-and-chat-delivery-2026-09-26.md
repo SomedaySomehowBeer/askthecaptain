@@ -1,7 +1,7 @@
 # Default business views and linked chat: next assignments
 
 Status: By tag (default business views) shipped to staging in web-only #159. The linked-chat
-contract is adopted in #160; chat implementation is the next increment.
+contract is adopted in #160; core API shipped in #169, with PR C personal state/pins next.
 26 September 2026. Private saved Work views are already delivered
 in #153/#154; [release evidence](../runbooks/paused.md) records their actual scope. This batch
 addresses the missing default business views and prepares the next linked-chat increment.
@@ -62,8 +62,23 @@ commit or deploy. No PR C pins/stars/read tables, UI, inference or new runtime p
 The held core implementation was rebased onto the completed runtime-role activation (#168) on
 27 September. Both agents adapt their owned files to `captain_runtime`; Codex preserves the
 merged runtime guard and updates the deferred-counter/server-timestamp contract. Core code
-remains unreleased until all §17 execution gates pass, review findings are resolved and
-applicable CI is green. One migration belongs to this PR. The existing monitor remains active.
+shipped in #169 after all §17 execution gates, reciprocal reviews and CI passed; hosted checks are
+in the release record. One migration belonged to that PR.
+
+## PR C assignments
+
+After the reviewed execution clarifications in the linked-chat contract:
+
+- `business-views`: migration 0043, pin/star/read schemas and participant read baseline, direct-SQL
+  role/privacy/transition/backfill/deletion tests. Preserve all merged migrations.
+- `linked-chat`: author edits, shared pins, personal stars/read positions, unread/change-feed
+  responses and lifecycle coverage in API services/routes/tests.
+- Codex: contract integration, serial real-Postgres checks, reciprocal review, reviewed merge and
+  staging-only release. No new UI, inference or dependencies in this backend increment.
+
+The two existing Opus sessions keep their disjoint files and review each other's work. The
+background monitor captures status/approval states without answering them. Completion requires
+inspection and tests; an idle agent alone proves nothing.
 
 ## Review and implementation order
 

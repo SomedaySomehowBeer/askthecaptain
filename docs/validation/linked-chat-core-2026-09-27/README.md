@@ -35,9 +35,24 @@ A read-only check on the existing staging API machine passed before migration:
 CHAT_PREFLIGHT_PASS {"runtimeRole":"captain_runtime","version":180006,"owner_bypasses":true,"latest":"0041_runtime_role.sql","chat_absent":true}
 ```
 
-This confirms prerequisites, not deployment or chat operation. Only status/metadata was printed;
-no credential, customer message or other record content was read into this record. Actual release
-and post-migration checks will be recorded in the staging runbook after reviewed merge and green CI.
+Only status/metadata was printed; no credential or customer message content was included.
+
+## Hosted release and rollback-only checks
+
+After reviewed #169 merged and CI 36264794205 passed, the existing single staging API machine
+ran migration 0042 and the queue installer successfully (exit 0). The normal process/configuration
+was restored on the new image and `/readyz` returned 200. The deployed runtime probe returned:
+
+```
+CHAT_POSTDEPLOY_PASS {"role":"captain_runtime","latest":"0042_chat_core.sql","forced_tables":5,"policy_mismatches":0,"checks":["bootstrap retry","send","nonparticipant hidden","foreign tenant hidden","tombstone","leave hides access","deferred integrity","all probes rolled back"]}
+```
+
+The synthetic transaction used an existing active owner's IDs only, and was rolled back. Owner-side
+absence checks confirmed no probe conversation/message/audit remained. Temporary remote scripts
+were removed. All final machine configurations matched their baselines, except the staging API
+image; staging retained one machine per app and production/embedding remained stopped.
+The [release record](../../runbooks/paused.md) gives image, commit, timing and rollback limits.
+These are hosted database/API checks, not signed-in browser acceptance.
 
 ## Release boundary
 

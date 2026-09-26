@@ -487,8 +487,9 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   in API/web (#153/#154); organisation-shared views still need their own contract.
 - Linked chat: the [adopted contract](plans/linked-chat-2026-09.md) specifies bounded reads,
   revisions, participants/access, retry identity, cursors, read state, pins, participant-scoped
-  audit and export/deletion for the first three increments. Implementation has not started. Its
-  PR B execution gates (§17) are proven by real-Postgres tests. Summaries, files, notifications and
+  audit and export/deletion for the first three increments. Core storage/API shipped in #169 on
+  the restricted staging runtime; the Chat screen remains unavailable. PR C adds pins/stars/read positions/edits, followed by PR D web.
+  PR B execution gates (§17) passed real-Postgres and hosted rollback-only checks. Summaries, files, notifications and
   native delivery need their own contracts.
 - Files: provider/version identity, permissions, preview/extraction retention and explicitly shared
   correspondence contract. Provider originals and version-scoped chat are adopted; the entire

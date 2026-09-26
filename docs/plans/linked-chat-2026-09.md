@@ -2,8 +2,9 @@
 
 Status: **adopted in #160** (revision 5), 26 September 2026. That PR applied
 the §11 amendments to `AGENTS.md` and `docs/plan.md`.
-PR B implementation is being integrated after the runtime-role repair (#162–#168);
-its migration and API have not been released. PR C and the web remain subsequent increments.
+PR B (#169) shipped to staging after the runtime-role repair (#162–#168), with migration 0042
+and hosted rollback-only isolation/write checks. PR C and the web remain subsequent increments.
+PR C execution clarifications below are adopted with this reviewed amendment.
 
 Peer reviews r3 and r4 and root's concurrence are incorporated:
 - **Counters.** Per-column rules. A send moves only `last_seq` and `last_change`; `revision` moves
@@ -13,7 +14,7 @@ Peer reviews r3 and r4 and root's concurrence are incorporated:
   keys, maps to the generic "unavailable" `409`. Unknown constraints never do.
 
 This contract was adopted by the **separate plan PR #160** (not #159), which applied the §11
-AGENTS and plan amendments. This PR B updates the execution details below for the repaired runtime role. The remaining items in §17 are PR B
+AGENTS and plan amendments. PR B updated the execution details below for the repaired runtime role. The remaining items in §17 are PR B
 execution gates, proven by tests on real Postgres; none is a precondition for adoption. Outcome: **discuss work** (plan §2). Authority: D6, D7, D11,
 D13, D14, D23 and D25; plan §5 ("Chat" row) and §10; the
 [next-batch checklist](captain-next-batch-2026-09-25.md); and the reviewed
@@ -330,6 +331,9 @@ any row, including tombstones, unpinned pins and chat-audit rows.
     - the row's `user_id = me`;
     - the conversation's `created_by = me`;
     - no participant rows exist yet for that conversation.
+- **Read starting position (PR C).** `read_start_seq` is set by this invoker trigger to the
+  conversation's current `last_seq` on insert and re-add. Input cannot override it, and other
+  updates cannot change it. It is a participation baseline, not a read receipt.
 - **Active → left.** Only when `user_id = me`. It sets `ended_at`.
 - **Active → removed.** Allowed in either of two cases:
   - `user_id <> me` and `admin(me)`: an admin who is a participant, because RLS `using` requires
@@ -373,8 +377,15 @@ any row, including tombstones, unpinned pins and chat-audit rows.
   participant may unpin, as the product requires.
 - **After unpinning,** only Rule A applies.
 
-**`conversation_reads`** (C): `last_read_seq` only increases. **`conversation_stars`**: insert and
-delete only.
+**`conversation_reads`** (C): `last_read_seq` only increases, never above `last_seq`. A person
+writes only their own advances. **`conversation_stars`**: insert and delete only.
+
+**Shared change numbers (PR C).** Invoker message and pin guards also refuse a `change_seq`
+already held by the other table in that conversation. Mutations serialize on the conversation
+lock. Do not require every historical `last_change` number to survive: edits overwrite a row's
+previous number, and the convergence feed deliberately permits those gaps (§8). The PR B deferred
+message-sequence check stays unchanged. Deletion's atomic unpin remains a service responsibility;
+pin insertion rejects tombstones, and the UI never renders a pin on a known tombstone.
 
 **Conflicts (item 6).** They map by exact constraint name only:
 - **Conversation ID collisions:** `conversations_pkey` and the composite
@@ -499,17 +510,29 @@ D4 needs no change: it governs workflows, and this contract adds no workflow cha
   - Any participant may pin or unpin, up to **50 live pins**, one per message.
   - A pin references the message ID and never copies its text.
   - `GET …/pins` returns every live pin in one snapshot.
+  - Pinning a visible tombstone returns `409 message_deleted`. Hidden/missing records stay 404.
+    Pins use server IDs: a duplicate/retried live pin returns `409 message_already_pinned`, and the
+    client re-reads; no automatic retry. Deleting a pinned message writes one `chat.message_deleted`
+    audit row, including the unpinned pin ID, in the atomic delete/unpin transaction.
   - The web renders **every live pin** above the recent messages, with no collapsing. Pins are keyed
     by message ID, and each message appears once in the stream.
 - **Stars** are personal and idempotent, audited as personal, and hidden while the person is not
-  participating.
+  participating. Idempotent no-ops produce no new state or audit row.
 - **Read position.**
-  - `POST …/read { seq }` stores `max(stored, min(seq, last_seq))`.
+  - The effective position is `max(read_start_seq, stored last_read_seq or 0)`.
+    `POST …/read { seq }` stores the greater of that position and `min(seq, last_seq)` only
+    when it advances. No-op reads or same-body edits at the current revision write no audit row.
   - It is sent only by the full chat, for a message it has displayed while visible.
-  - It starts at the conversation's `last_seq` on create, add and re-add, set in the same
-    transaction. The PR C migration backfills every active participant.
-  - Unread is live messages by others above the read position, shown capped as "50+". There are no
-    read receipts.
+  - The invoker participant trigger sets `read_start_seq` to `last_seq` on create, add and re-add,
+    in the same transaction. This avoids writing someone else's private read row or adding an
+    elevated function. The migration backfills all existing participants' baselines to current
+    `last_seq`; only the participant transition trigger is temporarily disabled for that one
+    owner-run statement inside the migration transaction. Re-add resets the baseline, so an older
+    personal read row cannot produce a historical unread flood.
+  - Unread is live messages by others above the read position, returned as an integer capped
+    at 51 (the web displays "50+"). A null author counts as another person. A missing private
+    read row uses the fixed participation baseline, not the ever-moving conversation `last_seq`.
+    There are no read receipts.
 
 ## 14. Transport within current limits
 
