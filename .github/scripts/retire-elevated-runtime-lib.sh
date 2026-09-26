@@ -61,6 +61,18 @@ reset_operations() {
 		then .operations[].id else error("malformed") end' "$1" 2> /dev/null
 }
 
+# plan_diagnostics PLAN_JSON: what a plan would change, as addresses, actions and changed attribute NAMES only;
+# never a value. For explaining a refusal without exposing the sensitive values the plan JSON holds.
+plan_diagnostics() {
+	jq -r '
+		def changed($c): (($c.before // {}) + ($c.after // {}) | keys)
+			| map(select(. as $k | ($c.before // {})[$k] != ($c.after // {})[$k] or (($c.before // {}) | has($k)) != (($c.after // {}) | has($k))));
+		(.resource_changes // [] | .[] | select(.change.actions != ["no-op"]) | "change \(.address) \(.change.actions | join(","))"),
+		(.resource_drift // [] | .[] | "drift \(.address) \(.change.actions | join(",")) keys=\(changed(.change) | join(","))"),
+		((.output_changes // {}) | to_entries[] | select(.value.actions != ["no-op"]) | "output \(.key) \(.value.actions | join(","))")
+	' "$1" 2> /dev/null || echo 'plan JSON could not be read'
+}
+
 # plan_is_password_refresh PLAN_JSON: succeeds only for a refresh-only plan that proposes no managed change, whose
 # only drift is neon_role.app updated in place with nothing but `password` differing (keys on either side,
 # including ones added or removed by the refresh), and whose only changed output is neon_app_database_url.

@@ -16,8 +16,10 @@
 #      outcome is recorded as unconfirmed, never as success; step 5 then decides.
 #   5. The old password is rejected by the server, the owner sees no `app` sessions, `captain_runtime` is still
 #      safe, and /readyz is 200 again.
-#   6. A refresh-only plan targeted at neon_role.app, checked to change nothing but that role's password and the
-#      output built from it (plan_is_password_refresh), is applied. That writes state only; nothing is provisioned.
+#   6. A refresh-only plan targeted at neon_role.app alone (an ephemeral override pins its project and branch so
+#      the project is not refreshed with it), checked to change nothing but that role's password and the output
+#      built from it (plan_is_password_refresh) and to have found that change, is applied. That writes state only;
+#      nothing is provisioned. A refusal prints addresses, actions and changed attribute names, never values.
 #
 # Nothing secret is printed: URLs and passwords are masked and never echoed, the reset response and the plan
 # JSON are read inside a private directory and deleted, and only statuses and counts are logged.
@@ -37,7 +39,12 @@ PSQL="${PG_BIN:-/usr/lib/postgresql/18/bin}/psql"
 export PGCONNECT_TIMEOUT=15
 
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+# Step 6's ephemeral override (see there). Every exit removes it, but only if this run created it: a file that was
+# already there is refused and left alone.
+override="$PWD/zz_retire_scoped_role_override.tf"
+override_created=0
+remove_override() { if [ "$override_created" = 1 ]; then rm -f "$override"; override_created=0; fi; }
+trap 'rm -rf "$work"; remove_override' EXIT
 say() { echo "[retire] $*"; }
 fail() { echo "::error::[retire] $*"; exit 1; }
 mask() { if [ -n "$1" ]; then echo "::add-mask::$1"; fi; }
@@ -157,11 +164,40 @@ done
 say "no $ROLE sessions; $RUNTIME still safe; staging /readyz 200"
 
 # 6. Reconcile state with a checked refresh-only plan. ---------------------------------------------------------
+# neon_role.app takes project_id and branch_id from neon_project.captain, so targeting the role also refreshes the
+# project, whose server-managed fields drift on their own. An override file (OpenTofu merges `*_override.tf` into
+# the resource of the same address, each argument replacing the original's) pins both to the values validated in
+# step 1, which equal the role's state. The role then has no dependency and is refreshed alone. The file exists
+# only in this checkout, only for plan and apply, and is removed on exit; every gate below is unchanged.
+for existing in ./*override.tf ./*override.tf.json ./*override.tofu ./*override.tofu.json; do
+	if [ -e "$existing" ]; then fail 'an override file already exists in infra/tofu; not adding another'; fi
+done
+[ -z "$(git ls-files -- "$override")" ] || fail 'the override path is tracked by git'
+[[ "$branch" =~ ^br-[a-z0-9-]+$ ]] || fail 'branch id unexpectedly changed shape'
+# Exclusive creation: with noclobber, bash opens the path with O_EXCL, so this fails rather than truncating a file
+# that appeared since the check above. Ownership is recorded only once creation has succeeded.
+if ( set -o noclobber; : > "$override" ) 2> /dev/null; then override_created=1
+else fail 'could not create the override exclusively; not refreshing'; fi
+cat >> "$override" <<HCL
+# Ephemeral: written by .github/scripts/retire-elevated-runtime.sh for one refresh, removed on exit. Never commit.
+resource "neon_role" "app" {
+  project_id = "$PROJECT"
+  branch_id  = "$branch"
+}
+HCL
 tofu plan -refresh-only -target=neon_role.app -input=false -no-color -out="$work/refresh.tfplan" > /dev/null
 tofu show -json "$work/refresh.tfplan" > "$work/plan.json"
-reason="$(plan_is_password_refresh "$work/plan.json")" || fail "refresh-only plan not applied: $reason"
+if ! reason="$(plan_is_password_refresh "$work/plan.json")"; then
+	plan_diagnostics "$work/plan.json" | sed 's/^/[retire] plan: /'
+	fail "refresh-only plan not applied: $reason"
+fi
 drifted="$(jq '[.resource_drift // [] | .[]] | length' "$work/plan.json")"
+if [ "$drifted" = 0 ]; then
+	plan_diagnostics "$work/plan.json" | sed 's/^/[retire] plan: /'
+	fail 'no password drift observed by the refresh; state reconciliation not confirmed, so nothing is applied'
+fi
 rm -f "$work/plan.json"
 tofu apply -input=false -no-color "$work/refresh.tfplan" > /dev/null
-say "state reconciled from a refresh-only plan ($drifted drifted resource: neon_role.app password); nothing provisioned"
+remove_override
+say "state reconciled from a refresh-only plan (drift: neon_role.app password only); nothing provisioned"
 say "done (reset: $reset_status); do not rerun this workflow"
