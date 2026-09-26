@@ -38,7 +38,8 @@ The populated-demo reliability/design follow-up is now delivered through #143/#1
 month-back/six-month-forward equipment scrolling and separated project task history. These are
 bounded corrections, not complete mockup or native-device acceptance. Search/filter presentation
 and contextual Files/Chat remain in #142; private saved views remain the next ordered feature
-increment below, under the existing reviewed contract in #141.
+increment below, under the [reviewed contract](saved-work-views-2026-09.md) adopted in #140;
+implementation is tracked in #141.
 
 ## Ordered increments
 
