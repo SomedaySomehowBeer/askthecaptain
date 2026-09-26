@@ -72,7 +72,7 @@ const origin = 'http://127.0.0.1:3034';
   console.log('PASS continuous timeline, focal zoom, equipment scroll/paging and touch-handler zoom');
 
   await goto('/resources/equipment?date=2030-10-01');
-  await page.getByText('Change dates or window',{exact:true}).click();await expect(page.getByLabel('Starting date',{exact:true})).toBeVisible();await page.getByText('Change dates or window',{exact:true}).click();
+  await page.getByText('Go to a date',{exact:true}).click();await expect(page.getByLabel('Date',{exact:true})).toBeVisible();await page.getByText('Go to a date',{exact:true}).click();
   await proof('equipment-phone-overview');
   await goto('/resources/equipment/manage');await page.getByLabel('Add equipment',{exact:true}).fill('Browser equipment');await page.getByRole('button',{name:'Add equipment',exact:true}).click();
   await expect(page.getByText('Added “Browser equipment”.',{exact:true})).toBeVisible();
@@ -102,8 +102,8 @@ const origin = 'http://127.0.0.1:3034';
   await mode('reservation-save-failed');await newForm(equip[4].id,'Uncertain missing booking','2030-10-10T09:00','2030-10-10T10:00');await page.getByRole('button',{name:'Reserve',exact:true}).click();await expect(page.getByRole('button',{name:'Check whether it was saved',exact:true})).toBeVisible();await mode('');await page.getByRole('button',{name:'Check whether it was saved',exact:true}).click();await page.getByRole('button',{name:'Send the same request again',exact:true}).click();await expect(page.getByRole('heading',{name:'Uncertain missing booking',exact:true})).toBeVisible();
   console.log('PASS conflict input retention and uncertain-create reconciliation/retry');
 
-  await mode('reservations-partial');await goto('/resources/equipment?date=2030-10-01');await expect(page.locator('[data-coverage=partial]')).toHaveCount(8);await expect(page.getByText(/gaps are not confirmed free/).first()).toBeVisible();
-  await mode('reservations-failed');await goto('/resources/equipment?date=2030-10-01');await expect(page.locator('[data-coverage=failed]')).toHaveCount(8);await expect(page.getByText(/No confirmed reservations in this loaded window/)).toHaveCount(0);
+  await mode('reservations-partial');await goto('/resources/equipment?date=2030-10-01');await expect(page.locator('.equipment-reservations [data-coverage=partial]')).toHaveCount(8);await expect(page.getByText(/Gaps are not confirmed free/).first()).toBeVisible();
+  await mode('reservations-failed');await goto('/resources/equipment?date=2030-10-01');await expect(page.locator('.equipment-reservations [data-coverage=failed]')).toHaveCount(8);await expect(page.getByText(/No confirmed reservations on these dates/)).toHaveCount(0);
   await mode('equipment-failed');await goto('/resources/equipment');await expect(page.getByRole('heading',{name:'Equipment could not be loaded.',exact:true})).toBeVisible();
   await mode('equipment-lookups-failed');await goto(createdUrl.slice(origin.length));await expect(page.getByText('Cancelled',{exact:true})).toBeVisible();
   await mode('equipment-zone-sydney');await newForm(equip[5].id,'DST proof','2026-10-04T02:30','2026-10-04T04:00');await expect(page.getByText(/This time does not exist in Australia\/Sydney/)).toBeVisible();await page.getByRole('button',{name:'Reserve',exact:true}).click();await expect(page.getByText(/That local time does not exist/)).toBeVisible();
@@ -116,5 +116,5 @@ const origin = 'http://127.0.0.1:3034';
   await goto('/resources/equipment/manage');await proof('catalogue-desktop');
   assert.deepEqual(errors,[]);console.log('PASS phone/desktop layouts and no browser exceptions');
  } catch(error){await page.screenshot({path:path.join(directory,'failure.png'),fullPage:true}).catch(()=>{});throw error;}
- finally {await mode('');await context.close();await browser.close();}
+ finally {await mode('');await context.unrouteAll({behavior: 'wait'});await context.close();await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1});
