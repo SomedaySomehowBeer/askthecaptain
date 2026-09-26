@@ -33,6 +33,8 @@
 .work-new__half { flex: 1 1 180px; }
 
 .work-chip { gap: 4px; padding-right: 4px; }
+/* A 60-character tag name (By tag views) wraps inside its chip instead of widening a phone layout. */
+.work-filters__active .chip { max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
 .work-chip__remove { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; min-height: 28px; border-radius: 999px; color: inherit; text-decoration: none; font-size: 15px; line-height: 1; }
 .work-chip__remove:hover { background: var(--line); }
 .work-chip__remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

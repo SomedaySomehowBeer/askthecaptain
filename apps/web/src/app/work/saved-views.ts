@@ -291,5 +291,19 @@ export function parseViewOffset(value: string | string[] | undefined): number | 
 	const offset = Number(value);
 	return offset <= maxViewOffset && offset % viewPageSize === 0 ? offset : null;
 }
-export const viewPageHref = (offset: number | null): string | null =>
-	offset === null || offset < 0 || offset > maxViewOffset ? null : offset === 0 ? '/work/views' : `/work/views?offset=${offset}`;
+const viewCursorOk = (value: number) => Number.isInteger(value) && value >= 0 && value <= maxViewOffset && value % viewPageSize === 0;
+/** The Work views page with both of its independent group cursors: `offset` (private Saved views) and `tagOffset`
+ *  (By tag). Every link one group writes carries the other group's current cursor, so paging one never resets the
+ *  other. A cursor passed as null is left out (that group shows its first page); one outside the bounds a list can
+ *  have makes the whole link null, so no page writes a link to a page that cannot exist. */
+export function viewsHref(offset: number | null, tagOffset: number | null): string | null {
+	if ((offset !== null && !viewCursorOk(offset)) || (tagOffset !== null && !viewCursorOk(tagOffset))) return null;
+	const query = new URLSearchParams();
+	if (offset) query.set('offset', String(offset));
+	if (tagOffset) query.set('tagOffset', String(tagOffset));
+	const text = query.toString();
+	return text ? `/work/views?${text}` : '/work/views';
+}
+/** A Saved views page link; kept for existing callers. Pass the By tag cursor to preserve it. */
+export const viewPageHref = (offset: number | null, tagOffset: number | null = null): string | null =>
+	offset === null ? null : viewsHref(offset, tagOffset);

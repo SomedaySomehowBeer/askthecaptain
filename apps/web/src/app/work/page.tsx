@@ -15,14 +15,10 @@ import { WorkSwitch } from './WorkSwitch.tsx';
 import { SaveViewForm } from './SaveViewForm.tsx';
 import { DraftBar } from './DraftBar.tsx';
 import { ManageView } from './ManageView.tsx';
+import { workHeading } from './tag-views.ts';
 import './work.css';
 
 export const metadata: Metadata = { title: 'Work' };
-
-function titleFor(filters: WorkFilters) {
-	if (isDefault(filters)) return 'My work';
-	return filters.owner === 'me' ? 'Assigned to you' : 'All tasks';
-}
 
 function TaskRow({ task, today, meId, owners, projects, returnHref }: { returnHref: string; task: WorkTask; today: string | null; meId: string; owners: Map<string, string>; projects: Map<string, Project> }) {
 	const due = today ? describeDue(task.due, today) : { text: task.due ? `due ${task.due}` : 'no date', urgency: null };
@@ -188,11 +184,13 @@ export default async function WorkPage({ searchParams }: { searchParams: Promise
 	const groups = tasks.ok ? groupWork(tasks.value.tasks, today) : [];
 	const returnHref = hrefFor({ offset: filters.offset });
 	const newTaskHref = filters.projectId ? `/work/new?projectId=${filters.projectId}` : '/work/new';
-	const title = view ? view.name : titleFor(filters);
+	// A tag's name titles the page only for a plain Everyone · Open · one-tag filter whose exact ID is in the tags this
+	// page loaded; saved views and drafts keep their own titles. Otherwise "All tasks" and the tag chip remain.
+	const heading = mode.kind === 'plain' ? workHeading({ mode: 'plain', filters, loadedTags: tags.ok ? tags.value.tags : null }) : workHeading({ mode: mode.kind, viewName: mode.view.name });
 	const lede = view ? words : filters.owner === 'me' ? 'Your assigned work across the business.' : 'Shared work across the business.';
 
 	return (
-		<Page title={title} lede={lede} eyebrow={mode.kind === 'saved' ? 'Saved view' : mode.kind === 'draft' ? 'Saved view · unsaved changes' : undefined}>
+		<Page title={heading.title} lede={lede} eyebrow={heading.eyebrow}>
             <WorkSwitch selected="tasks"/>
 			{mode.kind === 'draft' ? (
 				// One DraftBar per person, organisation, view, base and draft filter. The saved revision is left out on
