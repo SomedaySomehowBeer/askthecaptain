@@ -3,7 +3,9 @@
 **Staging API is temporarily stopped with autostart disabled** while the runtime database role
 is repaired. Web remains at https://app.askthecaptain.app/work, but authenticated workspace
 operations are unavailable. See the [repair record](../plans/runtime-database-role-2026-09.md).
-Do not restart the API with its current image and administrative runtime credential. The earlier
+The guarded #162 image and non-login role migration are prepared, but the API must stay
+stopped until its administrative runtime credential is replaced and the new connection passes preflight.
+The earlier
 staging restart procedure below is superseded until the repair preflight and guarded activation
 pass. A one-shot maintenance command with no HTTP listener is separate from starting the API.
 The previous release state follows as history. API and web
@@ -29,6 +31,43 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Runtime-role repair prepared; credential activation pending (26 September 2026, UTC)
+
+Outcome: protect shared work and private views (D6/D26), unblock private chat (D25).
+[#162](https://github.com/SomedaySomehowBeer/askthecaptain/pull/162) merged as
+`7236abbfd2c37f245d583380d9bd96f1d348e575`, after reciprocal Claude Opus/coordinator review and
+[green CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36219270732).
+[Validation](../validation/runtime-role-2026-09-26/README.md) records all 358 tests, typechecks,
+API build and the limited disposable restore rehearsal.
+
+A clean detached checkout at `6977fac47dce97cdd0ec2829367fccd671bc7851`, verified to have the same
+tree as the merge, produced this API image:
+`registry.fly.io/askthecaptain-api-staging:git-6977fac@sha256:a6cfb8085b7723fc53b0edec35e78dc28bd9f8a2af9f22b9191f462508d559e7`.
+Only existing staging API machine `80e39ea6416e18` was updated. Before the update, read-only
+metadata preflight ran on the previous image without an HTTP listener. The reviewed one-shot
+then ran migrations and queue installation with
+restart policy `no`, autostart off and idle stop off. Only `0041_runtime_role.sql` applied, at
+**05:03:32Z**; `RUNTIME_ROLE_MIGRATION_READY` followed at **05:03:33Z** and the process exited
+normally with **0**. No extra release machine was created.
+
+A subsequent read-only owner connection at **05:04:33Z** verified `captain_runtime` has LOGIN off,
+all administrative flags off, zero memberships and zero owned objects. Latest migration is 0041;
+69 policies name the new role, with zero mismatches against the legacy role. This is preparation
+proof, not proof of a working runtime login or historical tenant isolation. No customer content
+was read, reset or deleted by this repair; no password, Fly secret, DNS or infrastructure apply
+changed. The old elevated runtime credential remains configured and is **not safe to serve**.
+
+The [final fleet check](../validation/runtime-role-2026-09-26/fleet-final.txt) confirms the machine
+is stopped on the guarded image with its ordinary command and autostart disabled. Staging still
+has one machine per app; all other machine configurations are unchanged.
+Before HTTP resumes, the owner must enable the new login with a fresh credential, update only the
+staging API's `DATABASE_URL`, and pass the [repair preflight](../plans/runtime-database-role-2026-09.md)
+through the actual endpoint. Migration-owner credentials remain unchanged. Retire the old elevated
+credential immediately after activation, with the provider/infrastructure-state reconciliation
+covered by that plan. Returning to the elevated connection is not an acceptable rollback.
+Production and embedding stay paused; deploy and backup remain disabled. Chat code stays separate
+until safe runtime activation passes. The web remains at #159, but authenticated use is unavailable.
 
 ## By tag Work views release (26 September 2026, UTC)
 

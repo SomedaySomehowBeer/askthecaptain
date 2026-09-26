@@ -1,0 +1,11 @@
+askthecaptain-api-staging: 1 machines; 80e39ea6416e18 stopped
+askthecaptain-web-staging: 1 machines; 9185776e7cd3d8 stopped
+askthecaptain-api: 2 machines; 28744717c04598 stopped, 68303d3f3562e8 stopped
+askthecaptain-web: 2 machines; 7817206bd65778 stopped, 82d17ddb771d38 stopped
+askthecaptain-embed: 1 machines; 82d1dd0b021908 stopped
+Staging API equals guarded-contained config; other configurations unchanged.
+API image: registry.fly.io/askthecaptain-api-staging:git-6977fac@sha256:a6cfb8085b7723fc53b0edec35e78dc28bd9f8a2af9f22b9191f462508d559e7
+API command: ["node", "dist/index.js"]
+Autostart: false
+Restart: {"policy": "on-failure", "max_retries": 10}
+Deploy and backup workflows: disabled_manually
