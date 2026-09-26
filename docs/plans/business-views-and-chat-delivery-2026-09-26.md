@@ -52,14 +52,17 @@ working against `/home/nanoclaw/atc-next` on one integration branch with disjoin
 
 | Agent | Owned implementation and tests |
 |---|---|
-| `business-views` | PR B database: migration 0041 (confirm number), chat schema and exports, direct-SQL RLS/transition/lifecycle/concurrency tests under `packages/db` |
+| `business-views` | PR B database: migration 0042 (0041 is the merged runtime-role repair), chat schema and exports, direct-SQL RLS/transition/lifecycle/concurrency tests under `packages/db` |
 | `linked-chat` | PR B API: chat services/routes/tests, route and rate-policy registration, membership locking/removal hooks and lifecycle export handling under `apps/api` |
 | Codex | Interface coordination, real-Postgres verification under the build lock, reciprocal review, PR and staging release |
 
 Each agent reports exported names and SQL function interfaces early, then independently reviews the
 other's implementation. They do not alter each other's files, run builds/tests/install commands,
 commit or deploy. No PR C pins/stars/read tables, UI, inference or new runtime process enters PR B.
-Core code remains unreleased until all §17 execution gates pass, review findings are resolved and
+The held core implementation was rebased onto the completed runtime-role activation (#168) on
+27 September. Both agents adapt their owned files to `captain_runtime`; Codex preserves the
+merged runtime guard and updates the deferred-counter/server-timestamp contract. Core code
+remains unreleased until all §17 execution gates pass, review findings are resolved and
 applicable CI is green. One migration belongs to this PR. The existing monitor remains active.
 
 ## Review and implementation order

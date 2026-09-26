@@ -12,8 +12,10 @@ const identifier = /^[a-z_][a-z0-9_]*$/;
 const exportOnly: Record<string, string> = { saved_views: 'deleted_at is null' };
 /** Tables left out of a deletion's row counts. Row security limits a count of saved views to the deleting owner's own
  *  rows, which is not the organisation's total, and no elevated query counts other members' private views. The
- *  foreign-key cascade still removes every member's views and tombstones with the organisation. */
-const uncounted = new Set(['saved_views']);
+ *  foreign-key cascade still removes every member's views and tombstones with the organisation. Chat is the same
+ *  (linked-chat contract §10): row security shows only the deleting person's own conversations, so a count would
+ *  mislead; the cascade removes every conversation, message, link, participant and chat-audit row regardless. */
+const uncounted = new Set(['saved_views', 'conversations', 'conversation_participants', 'conversation_links', 'messages', 'chat_audit_events']);
 
 export type TenantTable = { name: string; columns: string[] };
 export type Revoker = (actor: Actor, organisationId: string) => Promise<void>;
@@ -49,7 +51,8 @@ export class OrganisationLifecycle {
 			return org!;
 		});
 		yield JSON.stringify({ kind: 'captain-export', version: 1, exportedAt: new Date().toISOString(), keys: 'camelCase, as the API returns them', organisation, tables: tables.map((t) => t.name),
-			notes: ['saved_views holds only the exporting person’s own live saved views. Other members’ private views and deleted views are not exported, so this is not a complete backup of personal views.'] }) + '\n';
+			notes: ['saved_views holds only the exporting person’s own live saved views. Other members’ private views and deleted views are not exported, so this is not a complete backup of personal views.',
+				'Chat tables hold only conversations the exporting person participates in, and only that person’s stars and read positions; other members’ conversations are not exported, so this is not a complete chat backup.'] }) + '\n';
 		const counts: Record<string, number> = {};
 		for (const table of tables) {
 			const only = exportOnly[table.name];

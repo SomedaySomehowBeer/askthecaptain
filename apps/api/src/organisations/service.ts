@@ -1,8 +1,9 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { withTenant, withUser, type Sql } from '@captain/db';
+import { withTenant, withUser, type Sql, type TransactionSql } from '@captain/db';
 import { audit } from '../audit.ts';
-import { badRequest, forbidden, notFound } from '../errors.ts';
+import { HttpError, badRequest, forbidden, notFound } from '../errors.ts';
 import { roleOf } from '../tenant.ts';
+import { lockMemberships, type MembershipLock } from '../chat/locks.ts';
 
 export type Role = 'owner' | 'admin' | 'member';
 export type Organisation = { id: string; name: string; timezone: string; locale: string; createdAt: Date };
@@ -67,30 +68,70 @@ export class OrganisationService {
 			from memberships m join users u on u.id = m.user_id where m.organisation_id = ${organisationId} and m.status = 'active' order by m.created_at`);
 	}
 
+	/** Role changes and removals follow the global lock order (linked-chat contract §6): every affected membership row is
+	 *  locked first, sorted by user id, each in its final mode (the changing row `for no key update`, everyone else
+	 *  `for share`), and every rule is re-checked under those locks. A concurrent demotion or removal that committed
+	 *  first therefore gives 403/404, and two admins acting at once cannot deadlock or remove the last owner. */
 	async setRole(actor: Actor, organisationId: string, userId: string, role: Role): Promise<void> {
 		const actorRole = await this.#roleOf(actor.userId, organisationId);
 		if (!canManage(actorRole)) throw forbidden('only an owner or admin can change roles');
 		if (role === 'owner' && actorRole !== 'owner') throw forbidden('only an owner can make another owner');
 		await withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
-			const [target] = await tx<{ role: Role }[]>`select role from memberships where organisation_id = ${organisationId} and user_id = ${userId} and status = 'active'`;
-			if (!target) throw notFound('that person is not a member');
-			if (target.role === 'owner' && actorRole !== 'owner') throw forbidden('only an owner can change an owner');
-			if (target.role === 'owner' && role !== 'owner') await this.#requireAnotherOwner(tx, organisationId, userId);
+			const { actorRow, target, otherOwners, peekedOwner } = await this.#lockForChange(tx, organisationId, actor.userId, userId, (peeked) => peeked === 'owner' && role !== 'owner');
+			if (!canManage(actorRow.role)) throw forbidden('only an owner or admin can change roles');
+			if (role === 'owner' && actorRow.role !== 'owner') throw forbidden('only an owner can make another owner');
+			if (target.role === 'owner' && actorRow.role !== 'owner') throw forbidden('only an owner can change an owner');
+			if (target.role === 'owner' && role !== 'owner') {
+				if (!peekedOwner) throw membershipChanged();
+				if (otherOwners === 0) throw lastOwner();
+			}
 			await tx`update memberships set role = ${role} where organisation_id = ${organisationId} and user_id = ${userId}`;
 			await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, action: 'membership.role_changed', subjectType: 'membership', subjectId: userId, requestId: actor.requestId, detail: { from: target.role, to: role } });
 		});
 	}
 
+	/** Removal also ends the person's chat participation in the same transaction (`chat_end_membership`, which returns
+	 *  nothing to a caller who may not be a participant). The `membership.removed` audit row carries no chat data. */
 	async remove(actor: Actor, organisationId: string, userId: string): Promise<void> {
 		const actorRole = await this.#roleOf(actor.userId, organisationId);
-		if (!canManage(actorRole) && actor.userId !== userId) throw forbidden('only an owner or admin can remove members');
+		const self = actor.userId.toLowerCase() === userId.toLowerCase();
+		if (!canManage(actorRole) && !self) throw forbidden('only an owner or admin can remove members');
 		await withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
-			const [target] = await tx<{ role: Role }[]>`select role from memberships where organisation_id = ${organisationId} and user_id = ${userId} and status = 'active'`;
-			if (!target) throw notFound('that person is not a member');
-			if (target.role === 'owner') { if (actorRole !== 'owner') throw forbidden('only an owner can remove an owner'); await this.#requireAnotherOwner(tx, organisationId, userId); }
+			const { actorRow, target, otherOwners, peekedOwner } = await this.#lockForChange(tx, organisationId, actor.userId, userId, (peeked) => peeked === 'owner');
+			if (!canManage(actorRow.role) && !self) throw forbidden('only an owner or admin can remove members');
+			if (target.role === 'owner') {
+				if (actorRow.role !== 'owner') throw forbidden('only an owner can remove an owner');
+				if (!peekedOwner) throw membershipChanged();
+				if (otherOwners === 0) throw lastOwner();
+			}
 			await tx`update memberships set status = 'removed' where organisation_id = ${organisationId} and user_id = ${userId}`;
+			await tx`select chat_end_membership(${userId}::uuid)`;
 			await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, action: 'membership.removed', subjectType: 'membership', subjectId: userId, requestId: actor.requestId });
 		});
+	}
+
+	/** Step 1 of the lock order for a membership change. The target is read once unlocked only to decide whether the other
+	 *  active owners must be locked too (for the last-owner rule); then the actor (`for share`), the target
+	 *  (`for no key update`, or the single row when acting on oneself) and those owners (`for share`) are locked in
+	 *  `user_id` order and the caller re-validates. If the target became an owner after the peek, its owner rows were
+	 *  not locked, so the caller refuses with `membership_changed` rather than check an unlocked count. */
+	async #lockForChange(tx: TransactionSql, organisationId: string, actorId: string, targetId: string, needsOwners: (peeked: Role) => boolean) {
+		const [peek] = await tx<{ role: Role }[]>`select role from memberships where organisation_id = ${organisationId} and user_id = ${targetId} and status = 'active'`;
+		if (!peek) throw notFound('that person is not a member');
+		const peekedOwner = peek.role === 'owner';
+		const owners = needsOwners(peek.role)
+			? (await tx<{ userId: string }[]>`select user_id from memberships where organisation_id = ${organisationId} and role = 'owner' and status = 'active' and user_id <> ${targetId}`).map((row) => row.userId)
+			: [];
+		const locks = new Map<string, MembershipLock>(owners.map((id) => [id, 'share' as const]));
+		locks.set(actorId, 'share');
+		locks.set(targetId, 'no key update');
+		const rows = await lockMemberships(tx, organisationId, locks);
+		const actorRow = rows.get(actorId.toLowerCase());
+		const target = rows.get(targetId.toLowerCase());
+		if (!actorRow || actorRow.status !== 'active') throw notFound();
+		if (!target || target.status !== 'active') throw notFound('that person is not a member');
+		const otherOwners = owners.filter((id) => { const row = rows.get(id.toLowerCase()); return row?.status === 'active' && row.role === 'owner'; }).length;
+		return { actorRow, target, otherOwners, peekedOwner };
 	}
 
 	/** Returns the invitation and the one-time token that goes in the link. The token is shown to the
@@ -149,9 +190,7 @@ export class OrganisationService {
 	}
 
 	#roleOf(userId: string, organisationId: string): Promise<Role> { return roleOf(this.#db, userId, organisationId); }
-
-	async #requireAnotherOwner(tx: Parameters<Parameters<typeof withTenant>[2]>[0], organisationId: string, exceptUserId: string) {
-		const [row] = await tx<{ count: number }[]>`select count(*)::int as count from memberships where organisation_id = ${organisationId} and role = 'owner' and status = 'active' and user_id <> ${exceptUserId}`;
-		if (!row || row.count === 0) throw badRequest('last_owner', 'an organisation needs at least one owner');
-	}
 }
+
+const lastOwner = () => badRequest('last_owner', 'an organisation needs at least one owner');
+const membershipChanged = () => new HttpError(409, 'membership_changed', 'that membership changed while this was being saved; reload and try again');

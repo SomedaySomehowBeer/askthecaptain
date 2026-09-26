@@ -43,6 +43,21 @@ backup includes those rows and needs the operator access controls described abov
 deletion cascades through all saved views, but its recorded row counts omit this private table
 rather than presenting the deleting owner's visible count as a total.
 
+With linked chat, exports include only conversations the exporting owner/admin actively participates
+in, with their participant-visible messages, links and chat audit. They are not a complete chat
+backup and do not grant access to other conversations. Content-free message tombstones remain in
+exports. Organisation deletion cascades through all chat tables, including conversations the
+owner could not read; its row counts omit chat tables to avoid disclosing private conversations or
+presenting a partial count as complete. Personal stars/read positions, when added in the next
+increment, remain private to their person. A database backup contains every conversation and message,
+including those no exporting person can see, and requires the operator controls above. After a
+restore with `--no-owner`, verify that the owner of each `chat_*` security-definer function has
+`rolsuper` or `rolbypassrls`, and that SQL-created `captain_runtime` has no administrative flags,
+memberships or owned objects. Chat migration 0042 checks this on installation; a restore does not
+rerun that assertion. Legacy Neon-created `app` remains administrative and is not a runtime login.
+Also verify that `captain_runtime` can execute only the three callable
+helpers, never the deferred integrity-trigger function.
+
 Neon keeps point-in-time history for the branch. For a mistake in the last hours (a bad migration,
 a wrong delete) this is the first choice: in the Neon console, restore the branch to a timestamp,
 or create a branch from that timestamp and read from it. No dump is needed.

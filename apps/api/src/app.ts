@@ -5,6 +5,8 @@ import { tagsRoutes } from './tags/routes.ts';
 import { equipmentRoutes } from './equipment/routes.ts';
 import { savedViewsRoutes } from './views/routes.ts';
 import { SavedViewsService } from './views/service.ts';
+import { chatRoutes } from './chat/routes.ts';
+import { ChatService } from './chat/service.ts';
 import { EquipmentService } from './equipment/service.ts';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { shopifyRoutes } from './shopify/routes.ts';
@@ -119,7 +121,7 @@ export function createApp(deps: Deps) {
 		const token = bearer(c.req.header('authorization')); if (!token) throw unauthorised();
 		c.set('session', await deps.auth.requireSession(token)); await next();
 	});
-	signedIn.use('*', rateLimit(limiter, limits.user, limits.organisation, limits.trigger));
+	signedIn.use('*', rateLimit(limiter, limits.user, limits.organisation, limits.trigger, limits.chatWrites));
 	const actor = (c: { get(key: 'session'): Session; get(key: 'requestId'): string }) => ({ userId: c.get('session').userId, requestId: c.get('requestId') });
 
 	signedIn.post('/auth/sign-out', async (c) => { await deps.auth.signOut(bearer(c.req.header('authorization')), c.get('requestId')); return c.json({ ok: true }); });
@@ -193,6 +195,7 @@ export function createApp(deps: Deps) {
 	signedIn.route('/', tagsRoutes(new TagsService(deps.db)));
 	signedIn.route('/', equipmentRoutes(new EquipmentService(deps.db)));
 	signedIn.route('/', savedViewsRoutes(new SavedViewsService(deps.db)));
+	signedIn.route('/', chatRoutes(new ChatService(deps.db)));
 	if (deps.workflows) signedIn.route('/', workflowRoutes(deps.workflows));
 	if (deps.push) signedIn.route('/', pushRoutes(deps.push));
 	app.route('/', signedIn);
