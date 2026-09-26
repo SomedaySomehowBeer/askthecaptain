@@ -1,8 +1,8 @@
 # Chat web verification — 27 September 2026
 
 Outcome: **discuss work** (D25), following the adopted [web contract](../../plans/linked-chat-web-2026-09.md).
-This is browser and API verification against synthetic, disposable local workspaces; it is not a
-claim of a staging web release. The [operational record](../../runbooks/paused.md) records deployments.
+Local browser/API verification uses synthetic, disposable workspaces. Deployment facts live in
+the [operational record](../../runbooks/paused.md); this page distinguishes local/CI and hosted evidence.
 
 ## Implementation and review
 
@@ -31,7 +31,9 @@ and read positions are personal. Lists show labelled latest-message excerpts, no
 `apps/e2e/scripts/chat-ci.mjs` starts a built production web server on loopback and runs
 `chat-views-check.cjs` and `chat-check.cjs` sequentially, each with a fresh disposable database and
 private fixture directory. It waits for fixture cleanup between suites. CI has a separate
-`chat-browser` job; existing workspace checks remain unchanged. Only synthetic screenshots and
+`chat-browser` job; its existing workspace CI job is unchanged. The separate workspace browser
+smoke now checks sign-in navigation rather than a raw 307, because page-owned guards may stream
+the redirect. Only synthetic screenshots and
 redacted logs are retained, never fixture session files.
 
 The suites exercise two participants, independent list paging, creation and linking, shared pins,
