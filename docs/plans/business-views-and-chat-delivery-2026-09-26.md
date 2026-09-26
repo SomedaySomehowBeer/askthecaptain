@@ -1,7 +1,7 @@
 # Default business views and linked chat: next assignments
 
 Status: By tag (default business views) shipped to staging in web-only #159. The linked-chat
-contract is adopted in #160; core API shipped in #169, with PR C personal state/pins next.
+contract is adopted in #160; core API shipped in #169 and personal state/pins in #171. The web amendment is next.
 26 September 2026. Private saved Work views are already delivered
 in #153/#154; [release evidence](../runbooks/paused.md) records their actual scope. This batch
 addresses the missing default business views and prepares the next linked-chat increment.
@@ -65,7 +65,7 @@ merged runtime guard and updates the deferred-counter/server-timestamp contract.
 shipped in #169 after all §17 execution gates, reciprocal reviews and CI passed; hosted checks are
 in the release record. One migration belonged to that PR.
 
-## PR C assignments
+## PR C assignments (completed in #171)
 
 After the reviewed execution clarifications in the linked-chat contract:
 
@@ -79,6 +79,13 @@ After the reviewed execution clarifications in the linked-chat contract:
 The two existing Opus sessions keep their disjoint files and review each other's work. The
 background monitor captures status/approval states without answering them. Completion requires
 inspection and tests; an idle agent alone proves nothing.
+
+## Current web assignments
+
+Follow the [web delivery amendment](linked-chat-web-2026-09.md). First ship the bounded read API
+projections/filters, then the real web screens with independent list and thread/panel ownership.
+The same two Opus sessions remain in Herdr Monitor, with Codex coordinating reviews and serial
+checks. The release runbook records actual staging scope; backend delivery does not enable Chat UI.
 
 ## Review and implementation order
 
