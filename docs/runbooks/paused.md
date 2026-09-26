@@ -11,7 +11,7 @@ The owner authorised the credential switch and retirement of the former administ
 credential on 26 September. See the activation record below and the
 [repair plan](../plans/runtime-database-role-2026-09.md). Earlier containment/preparation records
 are history, not instructions to revert to the elevated login. No additional customer-data reset
-was performed. Chat core storage/API is deployed; the Chat web screen remains unavailable.
+was performed. Chat storage/API (core, pins and personal state) is deployed; the Chat web screen remains unavailable.
 
 ## Staging authorisation (24 September 2026)
 
@@ -61,7 +61,7 @@ infrastructure or workflow change occurred; automatic deployment and backup rema
 The Chat web screen remains unavailable until the [web increment](../plans/linked-chat-web-2026-09.md).
 
 **Rollback:** retain migration 0043 and the restricted runtime. A pre-C API cannot atomically unpin
-on message deletion and counts the new private tables in deletion totals. Use a verified compatible
+on message deletion and counts the new chat tables in deletion totals. Use a verified compatible
 forward fix or stop HTTP while repairing; never drop chat records or restore the old runtime login.
 
 ## Chat core release (27 September Perth / 26 September 2026, UTC)

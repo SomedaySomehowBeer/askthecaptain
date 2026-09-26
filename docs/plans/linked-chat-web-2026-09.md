@@ -14,7 +14,7 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
 ## 0. Product decisions
 
 - **No global badge or aggregate counts:** no tab badge, conversation totals on views/chips, or total
-  derived from `lastSeq`. Per-conversation unread (1–50 or "50+") and real link counts remain visible.
+  derived from `lastSeq`. Per-conversation unread (1–50 or "50+"), real link counts and the live pin count remain visible.
 - **Item panels have an inline composer.** It shares the full thread's pending-send key for that conversation, so a
   send started in either place is the same pending record. A panel **never** advances the read position.
 - **Several linked conversations:** the most recently active *accessible* one is expanded; the others are listed.
@@ -27,9 +27,12 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
   to work**: Linked, Not linked. Each view is a `(filter, linked)` pair (§3 A1); no aggregate counts.
 - **Conversation list** (`/chat?filter=…&linked=…`): newest activity first, keyset "More". Row: title, first link chip
   ("+n" when more), labelled latest-message excerpt ("Latest message · Ryan: …", or "Message deleted"), time, star,
-  and an unread marker (1–50, or "50+" at the API's cap of 51, never a sum). Mockup summaries are not
-  shown (contract §2: "Summary unavailable" where a summary area exists). The "+" (new conversation) appears on the
-  list only.
+  and an unread marker (1–50, or "50+" at the API's cap of 51, never a sum). All / Unread / Starred
+  chips change `filter` while preserving `linked`, with no aggregate counts. Preserve the mockup's
+  **About the work** and **Team conversations** groups: each has its own filtered query and cursor;
+  a linked-only view shows only its matching group. View links do not replace these list groups.
+  No generated-summary card appears: use labelled latest-message excerpts. The green "+" opens
+  New conversation from both the view list and conversation list, never an individual thread.
 - **New conversation** (`/chat/new`): title, people (picker from `GET /members`, readable by every member), optional
   task/project links (reuse `WorkPicker`). Create id + payload are written to tab sessionStorage **before** sending
   (as `work/pending-create.ts`), locked until reconciled; `conversation_id_unavailable` requires an explicit "start
@@ -46,7 +49,7 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
 - **Item panels** (task `work/tasks/[taskId]`, project `work/projects/[projectId]`): "Chat" section from
   `…/tasks|projects/:id/conversations` (≤20). The most recently active accessible conversation shows all live pins,
   the latest six messages, the inline composer and "Open chat"; the rest are listed. Load once, then a manual "Check
-  for new messages".
+  for new messages". The heading is "Latest messages", with no invented total; no summary card is shown.
 
 ## 2. States, transport and writes (contract §14)
 
@@ -64,8 +67,11 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
   control locks; the action re-reads the intended state (detail, message, pins or star) and reports "done" if it holds;
   otherwise it shows what is current and offers a manual retry. Never an automatic retry. A stale revision shows the
   current state and asks the person to choose again.
-- **Convergence.** Upsert by entity id keeping the higher `changeSeq`; a `revision` change refetches detail; gaps are
-  detected only by `seq`.
+- **Convergence.** Upsert by entity ID keeping the higher `changeSeq`; a `revision` change refetches
+  detail; gaps are detected only by `seq`. A pin change whose message is absent triggers a bounded
+  `GET /pins` refresh. Reconcile an uncertain edit/delete with `messages?after=<seq-1>&limit=1`,
+  stars with detail, and pins with `GET /pins`. Initial independently fetched message/pin snapshots
+  must not advance the change cursor past the older message snapshot; catch up before claiming current state.
 - **Read position.** `POST read` at most once per 15 s, only from the full thread, for the highest message displayed
   while visible (IntersectionObserver), only when it moves forward. Never from a panel, list or background poll.
   A failed or rate-limited advance does not lock the composer or retry automatically; a later
@@ -81,6 +87,11 @@ placeholders, `components/{ViewGroup,TabBar,Page}.tsx`, `lib/api.ts`, Work's sav
   access loss (404) for that conversation, sign-out or a different signed-in user. Another organisation's
   records for the same user stay hidden and are restored only when that scope returns; switching
   organisation never sends or silently deletes them. Malformed records are discarded.
+
+- **UI limits.** Explain and enforce 49 other people at create, 20 per add request, 50 participants
+  total, 10 links and 50 live pins. Map server error codes to actionable states. Shared pins keep
+  original message IDs; their block may show the actual live pin count. The message stream has one
+  row per message ID. Exact write methods remain those listed in the main contract §15.
 
 ## 3. Bounded API amendments (before web code; apps/api chat only)
 
@@ -116,7 +127,8 @@ No change to limits, lock order or write paths.
   - create with people and links; send/receive via polling; edit, delete, pin, unpin;
   - a task panel shows every pin plus the latest six; its inline composer's pending send is the same record the full
     thread shows; the panel never advances reads;
-  - views: All/Unread/Starred × Linked/Not linked paging; an invalid cursor in the URL shows the error state;
+  - views: All/Unread/Starred × Linked/Not linked paging, separate About the work/Team cursors;
+    an invalid cursor in the URL shows the error state;
   - pending send survives reload and reconciles; an uncertain non-send write locks, re-reads, and offers manual retry;
   - 429 keeps the draft/ID editable; network failure keeps it locked; organisation switching hides/restores
     a pending send and stops polling without sending under the wrong scope;
@@ -136,7 +148,6 @@ Root coordinates serial checks, peer review and staging release; agents do not r
 commit, merge or deploy. The existing Herdr monitor remains active and never answers approvals.
 
 For web implementation, the two existing agents own disjoint files:
-
 
 - **Agent 1: API amendments, data layer, list.** `apps/api/src/chat/{service,routes}.ts` and `chat.test.ts` (A1–A4);
   `apps/web/src/lib/api.ts` (`retryAfter`); new `apps/web/src/app/chat/{types,actions,pending,poll,feed}.ts` and
