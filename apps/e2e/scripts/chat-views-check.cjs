@@ -106,7 +106,7 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   await useOrganisation(fixture.orgId);
   assert.equal((await allConversations()).length, 0, 'a fresh fixture: the owner starts with no conversations');
 
-  // Signed out, a Chat deep link goes to sign-in with the canonical form of that exact view or suggestion to return
+  // Signed out, a Chat or linked Work deep link goes to sign-in with that exact view or suggestion to return
   // to; an unusable link returns to the plain page rather than carrying the bad values.
   // Then, signed in, that sign-in URL sends the person to exactly that destination (the sign-in page redirects a
   // signed-in visitor to a safe return_to), and the destination renders what it names.
@@ -128,7 +128,11 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
    [`/chat/${someConversation}`, `/chat/${someConversation}`,
     async () => { await expect(outPage.getByRole('heading', { name: 'This conversation is not available to you' })).toBeVisible(); }],
    [`/chat/${someConversation}/details`, `/chat/${someConversation}/details`,
-    async () => { await expect(outPage.getByRole('heading', { name: 'This conversation is not available to you' })).toBeVisible(); }]
+    async () => { await expect(outPage.getByRole('heading', { name: 'This conversation is not available to you' })).toBeVisible(); }],
+   [`/work/tasks/${taskId}`, `/work/tasks/${taskId}`,
+    async () => { await expect(outPage.getByRole('heading', { name: 'Confirm packaging slot', exact: true })).toBeVisible(); }],
+   [`/work/projects/${fixture.projectId}`, `/work/projects/${fixture.projectId}`,
+    async () => { await expect(outPage.getByRole('heading', { name: 'Autumn launch', exact: true })).toBeVisible(); }]
   ]) {
    await anonymous.clearCookies();
    await goto(route, outPage);
@@ -141,7 +145,7 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
    await arrived();
   }
   await anonymous.close();
-  console.log('PASS signed-out list, views, new, thread and details links return to their canonical destination after sign-in');
+  console.log('PASS signed-out Chat and linked task/project links return to their canonical destination after sign-in');
 
   // Empty states: one designed notice per view, no counts, the plus on the list.
   await goto('/chat');

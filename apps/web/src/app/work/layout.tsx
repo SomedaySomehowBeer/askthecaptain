@@ -1,8 +1,2 @@
-import { requireCurrent } from '../../components/Page.tsx';
-
-/** The session check lives in the layout so a signed-out request is answered with a real redirect
- *  before anything streams; the loading state only ever covers the list itself. */
-export default async function WorkLayout({ children }: { children: React.ReactNode }) {
-	await requireCurrent('/work');
-	return children;
-}
+/** Each Work page guards its own reads and keeps its destination when sign-in is needed. */
+export default function WorkLayout({ children }: { children: React.ReactNode }) { return children; }
