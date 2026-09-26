@@ -375,13 +375,15 @@ delete only.
     non-arbiter composite key.
   - The bootstrap therefore catches a `unique_violation` on **either** of these exact names and
     returns `unavailable`, which the service maps to `409 conversation_id_unavailable`.
+    Its PL/pgSQL exception block is a subtransaction, preserving the caller transaction.
 - **Message ID collisions:** `messages_pkey` and the composite `messages_organisation_id_id_key`.
   The composite key exists as the target of the pin foreign keys.
   - An empty result from `insert … on conflict (id) do nothing returning`, or a unique violation on
     either of these exact names, is handled the same way. The service first checks the caller's own
     row under the conversation lock (an identical retry returns `200`), and otherwise returns
     `409 message_id_unavailable`. Catch a unique violation inside a savepoint, or retry the lookup
-    in a fresh transaction; never query a transaction left aborted by the failed insert.
+    in a fresh transaction; never query a transaction left aborted by the failed insert. Prefer
+    a savepoint; a fresh transaction must reacquire the §6 membership and conversation locks.
 - Every generic `409` has the same body, whoever holds the ID.
 - `message_pins_live_message` (the partial unique index on live pins): `409 message_already_pinned`.
 - `conversation_links_target` (unique on conversation and target): `409 link_exists`.

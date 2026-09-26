@@ -371,7 +371,7 @@ linked by the current shell are tracked cleanup work:
   Everyone · Open Work link by tag ID, with independent bounded paging. It adds no special departments,
   seeded tags or shared saved-view data; implementation is tracked in #156.
 - **Chat** — participant conversations, unread and personally starred conversations, linked
-  bidirectionally to projects/tasks/file versions. Participation follows the conversation by
+  bidirectionally to projects/tasks; file-version links follow the Files contract. Participation follows the conversation by
   default; starring is a private bookmark. Important messages use shared pins.
 - **Resources** — grouped libraries, planning and business views: files/DAM links, equipment,
   counted stock, people/companies, Xero context and reporting as those slices become available.
