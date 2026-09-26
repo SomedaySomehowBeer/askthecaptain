@@ -64,10 +64,21 @@ this repair. No customer content is reset, deleted, or converted.
 3. **Owner credential step:** enable LOGIN on `captain_runtime` with a new random secret, verify
    it by connecting directly, and update only staging API `DATABASE_URL`. Keep migration-owner
    credentials unchanged. AGENTS.md reserves secret changes to the owner; this step needs that
-   action or explicit authorisation once the concrete repair is reviewed and verified. Use psql
-   `\password captain_runtime` or a client-generated SCRAM verifier over a private connection so
-   a plaintext password is not included in SQL statement logs. Never print passwords or verifiers,
-   or manage this role through the Neon Console/API.
+   action or explicit authorisation once the concrete repair is reviewed and verified. The owner
+   explicitly authorised activation and old-credential retirement on 26 September.
+   **Provider correction from execution:** this Neon deployment rejected a client-generated SCRAM
+   verifier (SQLSTATE XX000, “Neon only supports being given plaintext passwords”); LOGIN remained
+   off. Use a bound password parameter over verified TLS, through a temporary invoker function
+   that constructs ALTER ROLE internally and catches failures, returning only SQLSTATE. In the
+   same transaction, before sending the parameter, require statement/duration/transaction-sampled
+   logging disabled, error parameter logging disabled, no pgAudit logging, pg_stat_statements
+   limited to top-level queries, auto_explain disabled and SCRAM password storage. Drop the helper
+   before commit. Fail closed if these checks fail. A fresh random credential is transferred by
+   encrypted SFTP in a private 0600 file, imported through stdin with Fly's staging-only secret
+   operation, and both temporary copies are deleted. Never print the password or put it in command
+   arguments or machine configuration. Neon's internal provider logging cannot be established
+   from PostgreSQL settings; this method controls the application and SQL logging paths.
+   The role remains SQL-created; do not create or replace it through the Neon Console/API.
 4. Preflight the new connection through the same endpoint the API uses (pooled or direct): effective/session roles and ownership checks pass; no privileged
    memberships; forced RLS on tenant tables; a rolled-back random-tenant probe finds no tasks,
    tags, memberships or saved views. `DELETE FROM saved_views WHERE false` must be denied. No
@@ -79,7 +90,12 @@ this repair. No customer content is reset, deleted, or converted.
    an owner/provider operation; this is required, not optional cleanup. The old role may
    remain referenced by historical policies and infrastructure state; do not destroy it blindly.
    Resetting its password through the Neon control plane also requires reconciling the existing
-   Terraform-managed credential state as an owner operation.
+   Terraform-managed credential state as an owner operation. The manual-only
+   `.github/workflows/retire-elevated-runtime.yml` implements that authorised step for the fixed
+   project and role: check identity/readiness, reset once, wait for Neon operations, prove the old
+   password is rejected and refresh only the password in state. It rejects managed infrastructure
+   changes or unrelated state drift. The `app` role remains administrative and unused; rotating its
+   password does not disable the role. Do not rerun a completed retirement just to repeat a check.
 7. Resume the separately reviewed chat migration/API increment only after this gate passes.
 
 The repository's existing Terraform `neon_role.app` resource is retained, to avoid a destructive
