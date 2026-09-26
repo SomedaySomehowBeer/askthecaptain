@@ -278,10 +278,18 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   await expect(startButton()).toBeEnabled(); // a rate-limited record whose wait has passed is editable and sendable
   await startButton().click();
   await expect(main()).toContainText('could not use its reserved identity');
+  // Start again only gives the create a new id: it must not submit. Nothing is sent until the person presses Start
+  // conversation (a reused button once turned this click into a submit).
+  mark = await chatMark();
   await page.getByRole('button', { name: 'Start again', exact: true }).click();
   await expect(title()).toHaveValue('Taken identity');
+  await expect(startButton()).toBeEnabled();
+  await pause(1500);
+  await expect(page).toHaveURL(`${origin}/chat/new`);
+  assert.equal((await createsSince(mark)).length, 0, 'Start again sends nothing');
   await startButton().click();
   await page.waitForURL(/\/chat\/[0-9a-f-]{36}$/);
+  assert.equal((await createsSince(mark)).length, 1, 'one create, from the explicit Start conversation');
   assert.notEqual(newThreadId(), created.id);
   assert.equal((await titled('Taken identity')).length, 1);
   assert.equal((await api(`/conversations/${created.id}`)).title, 'Packaging handover', 'the existing conversation is untouched');

@@ -200,19 +200,22 @@ export function NewConversationForm({ scope, members, initialLink, tasks, projec
 
 			{note ? <p className="muted" role="status">{note}</p> : null}
 			{error ? <p className="form__error" role="alert">{error}</p> : null}
+			{/* Each control has its own key: React must never reuse one of these buttons as another. A click re-renders
+			    synchronously, before the browser's default action, so a reused "Start again" button that had become the
+			    submit button would submit the form in the same click. The non-submit handlers also cancel any default. */}
 			<div className="row">
 				{phase.kind === 'stopped' ? (phase.reason === 'signed-out'
-					? <a className="button button--primary" href={`/sign-in?return_to=${encodeURIComponent('/chat/new')}`}>Sign in again</a>
-					: <button className="button button--primary" type="button" onClick={() => window.location.reload()}>Reload</button>)
+					? <a key="sign-in" className="button button--primary" href={`/sign-in?return_to=${encodeURIComponent('/chat/new')}`}>Sign in again</a>
+					: <button key="reload" className="button button--primary" type="button" onClick={(e) => { e.preventDefault(); window.location.reload(); }}>Reload</button>)
 				: phase.kind === 'uncertain' ? <>
-					<button className="button button--primary" type="button" onClick={retry}>Try again</button>
-					<Link className="button button--ghost" href="/chat">Check your conversations</Link>
+					<button key="retry" className="button button--primary" type="button" onClick={(e) => { e.preventDefault(); retry(); }}>Try again</button>
+					<Link key="check" className="button button--ghost" href="/chat">Check your conversations</Link>
 				</> : needsNewId ? <>
-					<button className="button button--primary" type="button" onClick={startAgain}>Start again</button>
-					<Link className="button button--ghost" href="/chat">Cancel</Link>
+					<button key="start-again" className="button button--primary" type="button" onClick={(e) => { e.preventDefault(); startAgain(); }}>Start again</button>
+					<Link key="cancel-again" className="button button--ghost" href="/chat">Cancel</Link>
 				</> : <>
-					<button className="button button--primary" type="submit" disabled={busy || waiting || phase.kind === 'done'}>{busy ? 'Starting…' : 'Start conversation'}</button>
-					<Link className="button button--ghost" href="/chat">Cancel</Link>
+					<button key="start" className="button button--primary" type="submit" disabled={busy || waiting || phase.kind === 'done'}>{busy ? 'Starting…' : 'Start conversation'}</button>
+					<Link key="cancel" className="button button--ghost" href="/chat">Cancel</Link>
 				</>}
 			</div>
 		</form>
