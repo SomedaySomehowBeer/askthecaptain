@@ -1,6 +1,8 @@
 # Saved Work views
 
-Status: reviewed contract, 25 September 2026. Implementation has not started.
+Status: reviewed contract, 25 September 2026. Implementation assigned to two Opus agents on
+26 September; [delivery plan](saved-work-views-delivery-2026-09-26.md). No implementation PR is
+yet merged or deployed.
 Outcome: **manage shared work**, in Work only. Authority: plan §5 (the "Saved views" row), D6, D7, D11 and D14; next batch item 3; the mobile mockups ("Saved views" group).
 
 **This increment covers personal saved Work views only.** Only the creator can see or change a view. Organisation-shared views, including the Marketing and Production views in the mockups, come in a later, separately reviewed increment (§10). This increment adds **no shared columns, policies or endpoints**.
@@ -115,6 +117,8 @@ create index saved_views_list on saved_views (organisation_id, owner_id, lower(n
     "project": null | { "id": "…", "state": "available", "name": "…", "projectState": "archived" } | { "id": "…", "state": "missing" } }
   ```
   - `missing` means the id no longer resolves in the tenant. It is never inferred from a tag being absent from a paged tag list, and "not on this page" never counts as missing.
+- **For an inapplicable/newer-version filter, `references` is `null`.** An older server must not
+  interpret unknown filter keys as version-1 references. Clients check applicability before reading either.
 - **If a reference read fails, the API keeps the saved view and its filter available, returning an explicit `unavailable` state for that reference kind.** Resolve references separately from the saved-record read so a failed lookup does not discard the filter. The web shows "unavailable": "Tag names could not be read; the view still filters by them". That is distinct from "missing".
 - **In every case the Work query uses the exact stored filter,** with the stored IDs, through the normal `GET /tasks`. A missing, unavailable or unreadable reference never removes or relaxes a filter term.
 - A create or PATCH supplying a filter with a missing reference is refused with `400 filter_reference_unavailable`, and the person chooses what to do. References are validated only when the filter is supplied; a name-only change does not re-check them.
@@ -136,9 +140,11 @@ create index saved_views_list on saved_views (organisation_id, owner_id, lower(n
 
 ## 8. Export, deletion and privacy
 
-- **Tenant export** (owner-only today) includes **only the requesting owner's own live views**. It excludes every other member's personal views and all tombstones, and its audit rows carry only the ID-only details above.
+- **Tenant export** (available to an owner or admin) includes **only the requesting exporter's own live views**. It excludes every other member's personal views and all tombstones, and its audit rows carry only the ID-only details above.
 - An export is therefore **not** a complete backup of personal views. Database backups are a separate, operator-controlled matter (runbook), and the export documentation must say so.
-- **Organisation deletion** cascades.
+- **Organisation deletion** cascades. Its `rowCounts` omits `saved_views`: an RLS-limited count
+  would describe only the deleting owner's visible rows, not the organisation total. Do not bypass
+  RLS to count other members' private views. Export footer counts still describe the rows exported.
 - **Account deletion** cascades through memberships.
 - **The legacy reset script** doesn't touch this table.
 
@@ -180,7 +186,8 @@ It adds its own columns and policies in its own migration.
   - A tombstone that keeps any of name, filter or version is rejected by the CHECK, as is a live row missing any of them.
   - `app` has no `delete` privilege: a direct `delete from saved_views` as `app` fails with a permission error, and the API offers no physical delete.
 - **Export privacy:**
-  - An owner's export contains their own live views, and no other member's views, tombstones, names or filters.
+  - An owner or admin export contains only the exporting person's own live views, and no other
+    member's views, tombstones, names or filters.
   - Audit rows for personal views carry only `viewId`, `filterVersion` and `revision`.
 - **Validation:**
   - Strict keys; all four required.
@@ -203,7 +210,8 @@ It adds its own columns and policies in its own migration.
   - A tag on no page of the tag list still resolves as available.
   - A reference that can't be resolved leaves the Work query using the exact stored IDs.
 - **Lifecycle:**
-  - Organisation deletion and account/membership deletion remove views and tombstones by cascade, proven with the runtime role holding no `delete` grant on `saved_views`.
+  - Organisation deletion and account/membership deletion remove views and tombstones by cascade, proven with the runtime role holding no `delete` grant on `saved_views`. Organisation-deletion
+    `rowCounts` omits private saved views rather than present a partial count as a total.
   - A row with a filter version above 1 inserted by the owner role reads as `applicable: false`.
   - Paging ends with `nextOffset: null`.
 
