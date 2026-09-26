@@ -1,0 +1,10 @@
+PASS unauthenticated redirects before streaming
+PASS real owner/tag filters and tab route restoration
+PASS completed task reveal and honest cancelled row
+PASS missing lookup preservation, invalid, empty and failed reads
+PASS standalone task creation, detail handoff and tag filtering through API/RLS
+PASS bounded pagination and independent Inventory/Work tab state
+PASS shared tag create/duplicate/rename and persisted task add/remove
+PASS tag failed-save input retention, confirmed link state and read/error boundaries
+PASS tag catalogue pagination and mobile/desktop layouts
+PASS grouped routes, retired assistant routes, mobile/desktop layout and no browser exceptions

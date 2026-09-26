@@ -369,7 +369,8 @@ linked by the current shell are tracked cleanup work:
   work and tag/project/person/status/date views all select the same records. The reviewed
   [By tag navigation](plans/default-business-views-2026-09.md) lists every organisation tag as an
   Everyone · Open Work link by tag ID, with independent bounded paging. It adds no special departments,
-  seeded tags or shared saved-view data; implementation is tracked in #156.
+  seeded tags or shared saved-view data; delivered in #159 and released to staging
+  ([operational record](runbooks/paused.md)).
 - **Chat** — participant conversations, unread and personally starred conversations, linked
   bidirectionally to projects/tasks; file-version links follow the Files contract. Participation follows the conversation by
   default; starring is a private bookmark. Important messages use shared pins.

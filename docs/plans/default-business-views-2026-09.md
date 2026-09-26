@@ -1,7 +1,8 @@
 # Default business Work views
 
-Status: **reviewed for adoption in #158**, 26 September 2026. Root and both Claude Opus agents
-reviewed this bounded design. Implementation follows adoption; nothing is shipped by this contract.
+Status: **adopted in #158, implemented in #159 and released to staging**, 26 September 2026.
+Root and both Claude Opus agents reviewed the design and implementation. The
+[operational record](../runbooks/paused.md) records verification and hosted acceptance limits.
 
 Outcome: **manage shared work**, in Work only. Authority: D7 (flat tags select work, never grant
 access), D11 (Work view list; Work defaults to My work), D14 (reviewed designs — this document is the

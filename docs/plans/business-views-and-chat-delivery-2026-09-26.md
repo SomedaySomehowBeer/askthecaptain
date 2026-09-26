@@ -1,7 +1,7 @@
 # Default business views and linked chat: next assignments
 
-Status: By tag (default business views) is implemented in web-only #159. The linked-chat contract
-is reviewed and adopted by a separate plan PR, pending merge; chat implementation has not started.
+Status: By tag (default business views) shipped to staging in web-only #159. The linked-chat
+contract is adopted in #160; chat implementation is the next increment.
 26 September 2026. Private saved Work views are already delivered
 in #153/#154; [release evidence](../runbooks/paused.md) records their actual scope. This batch
 addresses the missing default business views and prepares the next linked-chat increment.
@@ -29,7 +29,7 @@ Two people can discuss a task or project in one linked conversation. Full Chat a
 must share message identities and enforce the same audience. Chat works before summaries or
 native notifications exist. Shared pins, personal stars and read positions remain distinct.
 
-## Current assignments
+## Contract assignments (completed)
 
 Two existing **Claude Opus** sessions are reused in Herdr's **Monitor** tab. They read the current
 primary checkout, not their previous saved-view worktrees. Each owns one proposed contract file;
@@ -44,6 +44,23 @@ Codex owns this delivery document, plan integration, issues, branches and PRs.
 No implementation is implied by assigning a contract. Agents do not change application code,
 merged migrations, infrastructure or each other's files. They do not run builds/tests, commit,
 merge or deploy. Codex manages those operations when their implementation stage begins.
+
+## Core chat implementation assignments
+
+The contract was adopted in #160. Both existing Opus sessions continue in the Monitor tab,
+working against `/home/nanoclaw/atc-next` on one integration branch with disjoint files:
+
+| Agent | Owned implementation and tests |
+|---|---|
+| `business-views` | PR B database: migration 0041 (confirm number), chat schema and exports, direct-SQL RLS/transition/lifecycle/concurrency tests under `packages/db` |
+| `linked-chat` | PR B API: chat services/routes/tests, route and rate-policy registration, membership locking/removal hooks and lifecycle export handling under `apps/api` |
+| Codex | Interface coordination, real-Postgres verification under the build lock, reciprocal review, PR and staging release |
+
+Each agent reports exported names and SQL function interfaces early, then independently reviews the
+other's implementation. They do not alter each other's files, run builds/tests/install commands,
+commit or deploy. No PR C pins/stars/read tables, UI, inference or new runtime process enters PR B.
+Core code remains unreleased until all §17 execution gates pass, review findings are resolved and
+applicable CI is green. One migration belongs to this PR. The existing monitor remains active.
 
 ## Review and implementation order
 
@@ -90,8 +107,8 @@ work before assigning the next stage. Stop the watcher when this batch is comple
 - [x] Background supervisor running for these exact agents and coordinator session.
 - [x] By tag contract complete and independently reviewed; chat remains proposed with review findings.
 - [x] By tag contract adopted in #158 and web implementation dispatched; chat adoption remains separate.
-- [ ] Default business views (#159) reviewed, verified, merged and released to staging.
+- [x] Default business views (#159) reviewed, verified, merged and released to staging.
 - [x] Linked-chat contract peer-reviewed through revision 5 (r3/r4 findings resolved).
-- [ ] Linked-chat adopting plan PR merged, with the `AGENTS.md` and `docs/plan.md` audit amendments.
+- [x] Linked-chat adopting plan PR #160 merged, with the `AGENTS.md` and `docs/plan.md` audit amendments.
 - [ ] Chat PR B execution gates proven (contract §17): owner check, Neon PostgreSQL version, trigger reads, race/lock/rollback tests.
 - [ ] First linked-chat implementation slice (PR B) reviewed, verified and released to staging.

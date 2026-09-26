@@ -1,0 +1,7 @@
+PASS existing tags link by ID to everyone/open; title survives task paging; My work unchanged
+PASS tag rename preserves navigation identity and tasks; new tags appear without view setup
+PASS saved personal copy stays private; saved/draft names and ordinary filter changes preserved
+PASS independent group pagination and exact filtering beyond the 100-tag heading lookup
+PASS malformed cursors and independent failed reads preserve available groups and selected IDs
+PASS populated phone/desktop layouts including a 60-character name
+PASS new organisation empty state performs no seeding; no browser exceptions
