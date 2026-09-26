@@ -1,0 +1,6 @@
+2026-09-26T10:06:21Z app[80e39ea6416e18] syd [info]RUNTIME_ACTIVATION_PREFLIGHT_PASS: same endpoint; safe role; forced RLS; random-tenant empty; private-view delete denied
+LIVE_RUNTIME_VERIFIED {"role":"captain_runtime","authorisedExistingRecords":{"tasks":"26","projects":"1","equipment":"5","tags":"5","personal_views":"0"}}
+After control-plane reset:
+LIVE_RUNTIME_VERIFIED {"role":"captain_runtime","authorisedExistingRecords":{"tasks":"26","projects":"1","equipment":"5","tags":"5","personal_views":"0"}}
+Independent old-login check: SQLSTATE 28P01; password authentication failed for app.
+Only staging API DATABASE_URL digest changed; all other secret digests unchanged.

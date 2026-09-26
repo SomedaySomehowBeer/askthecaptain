@@ -1,22 +1,17 @@
-# Staging API contained; production paused (2026-09-26)
+# Staging resumed; production paused (2026-09-26)
 
-**Staging API is temporarily stopped with autostart disabled** while the runtime database role
-is repaired. Web remains at https://app.askthecaptain.app/work, but authenticated workspace
-operations are unavailable. See the [repair record](../plans/runtime-database-role-2026-09.md).
-The guarded #162 image and non-login role migration are prepared, but the API must stay
-stopped until its administrative runtime credential is replaced and the new connection passes preflight.
-The earlier
-staging restart procedure below is superseded until the repair preflight and guarded activation
-pass. A one-shot maintenance command with no HTTP listener is separate from starting the API.
-The previous release state follows as history. API and web
-retain the reviewed workspace, including private saved Work views (#153/#154) and By tag navigation (#159):
-API image source `6be8321d`, web image source `2e0aa1b`. Continuous equipment scheduling and
-project task-history filters remain included.
-The earlier Work record and task/list corrections remain included.
-Tasks, projects and recurring work have their own Work pages; the Commitments overview is retired.
-The old-version database content was reset earlier on 25 September under explicit owner
-permission; **this release did not run another reset**. Embedding and production remain stopped.
-The original 23 September pause is recorded below as history.
+**Staging runs on the restricted `captain_runtime` database login**, with the guarded #162 API
+image and #159 web image. The workspace is at https://app.askthecaptain.app/work. One existing
+machine per staging app is retained, with normal autostart and idle stop. Production and the
+embedding service remain paused; automatic deploy and backup workflows remain disabled.
+Any API rollback must retain `captain_runtime` and the #162 role guard. Before any future production
+resume, replace its old database credential and use a guarded image; do not reuse its stored login.
+
+The owner authorised the credential switch and retirement of the former administrative runtime
+credential on 26 September. See the activation record below and the
+[repair plan](../plans/runtime-database-role-2026-09.md). Earlier containment/preparation records
+are history, not instructions to revert to the elevated login. No additional customer-data reset
+was performed. The separately held chat implementation is not deployed.
 
 ## Staging authorisation (24 September 2026)
 
@@ -32,7 +27,76 @@ and standby behaviour to the one-machine limit, and record what changed here. Do
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
 
-## Runtime-role repair prepared; credential activation pending (26 September 2026, UTC)
+## Restricted runtime activation (26 September 2026, UTC)
+
+The owner explicitly authorised the reviewed credential operation. The API stayed contained while
+its login was configured. Neon rejected the precomputed SCRAM verifier (XX000); role LOGIN stayed
+off. The reviewed provider-specific method documented in the plan amendment in [#164](https://github.com/SomedaySomehowBeer/askthecaptain/pull/164)
+uses a temporary invoker function, a bound password parameter over verified TLS, strict logging
+checks in the same transaction, and internally handled errors returning only SQLSTATE. No password
+was printed, committed, placed in machine configuration or passed in command arguments.
+
+At **10:06:21Z**, preflight using the same endpoint as the API passed: current/session role
+`captain_runtime`, live role guard, forced tenant RLS, a rolled-back random-tenant read showing zero
+tasks/tags/memberships/private views, and denied DELETE on saved views. A private 0600 credential
+file was transferred over SFTP and imported via stdin into only staging API `DATABASE_URL` with
+`--stage`; local and remote temporary copies were deleted. Before/after secret digests confirm
+no other secret changed, including `MIGRATION_DATABASE_URL`. That owner URL remains in the API
+app's environment for release operations. The guard protects the runtime pool's `DATABASE_URL`;
+it does not isolate the owner secret from the process. Follow-up: restrict owner credential delivery
+to release commands, with staging validation before changing the release mechanism.
+
+Only existing API machine `80e39ea6416e18` was used. Its ordinary command and normal autostart/idle
+stop were restored on the same guarded image:
+`git-6977fac@sha256:a6cfb8085b7723fc53b0edec35e78dc28bd9f8a2af9f22b9191f462508d559e7`.
+`/readyz` returned `200 {"ok":true}` and a fresh connection using the deployed `DATABASE_URL`
+reported `captain_runtime`. Read-only queries under an existing owner's tenant context matched
+the explicitly scoped owner reference: 26 tasks, 1 project, 5 equipment, 5 tags and 0 personal saved
+views. These were counts only; no record content was read or changed. This proves existing-record database access; no authenticated browser session was available.
+Shared Chrome at 390 and 1440 pixels rendered Google sign-in without overflow or page errors.
+
+## Old administrative credential retirement (26 September 2026, UTC)
+
+The old `app` password was reset once in
+[run 36235270751](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36235270751);
+both Neon operations finished at **10:16:38Z**. That run stopped before any state write because
+its classifier did not recognise Neon's ERROR-severity password rejection. [#165](https://github.com/SomedaySomehowBeer/askthecaptain/pull/165)
+corrected that classifier; a separate direct connection confirmed SQLSTATE 28P01.
+
+[Resume 36235804814](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36235804814)
+skipped another reset, proved rejection of the old password, found zero `app` sessions, verified
+the restricted role and `/readyz`, then refused drift outside the role. No state was written.
+[#166](https://github.com/SomedaySomehowBeer/askthecaptain/pull/166) narrows the refresh with an
+exclusively created temporary override of the already-validated project/branch IDs. All strict
+password-only and no-managed-change gates remain. The temporary override can remove the role's
+stored project dependency until the next normal configuration apply; tracked configuration stays
+unchanged.
+
+[Scoped resume 36236405227](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36236405227)
+completed at **10:39:19Z**: another reset was skipped, the old password was rejected, zero `app`
+sessions remained, the restricted role/readiness checks passed, and only the role password was
+refreshed in state. No infrastructure was provisioned. The temporary override was removed and
+the retirement workflow was disabled. A follow-up consistency check found the legacy URL output
+still held the retired password: the role-only target omitted that output's other dependencies.
+[#167](https://github.com/SomedaySomehowBeer/askthecaptain/pull/167) adds a separate output-only
+repair, with refresh disabled, exactly three resource no-ops, and checks that only the sensitive
+legacy URL changes to the value independently derived from state. The repair has no reset path.
+[Output repair 36237043270](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36237043270)
+finished at **10:51:37Z**. Every resource was a no-op; only the legacy URL output changed. The
+whole-state comparison passed, all resource values/credentials and other outputs were unchanged,
+and recorded dependencies were unchanged. An independent read confirmed both connection outputs
+match their respective role credentials, host, database and branch (state serial 22; the role has
+one recorded dependency). No password was reset again. The output-repair workflow was then disabled;
+both one-off workflows remain disabled. Staging `/readyz` returned `200 {"ok":true}` afterward.
+
+The `app` role remains administrative, with a new unused password held by Neon and in the
+sensitive Terraform state in Tigris. Retirement
+invalidates the former distributed credential; it does not disable that role. Neither staging
+app uses the new administrative password. Production remains paused with its old `app` credential, which no longer authenticates and
+must be replaced before any future resume. See the
+[validation record](../validation/runtime-activation-2026-09-26/README.md).
+
+## Runtime-role repair preparation — historical (26 September 2026, UTC)
 
 Outcome: protect shared work and private views (D6/D26), unblock private chat (D25).
 [#162](https://github.com/SomedaySomehowBeer/askthecaptain/pull/162) merged as
@@ -56,18 +120,18 @@ all administrative flags off, zero memberships and zero owned objects. Latest mi
 69 policies name the new role, with zero mismatches against the legacy role. This is preparation
 proof, not proof of a working runtime login or historical tenant isolation. No customer content
 was read, reset or deleted by this repair; no password, Fly secret, DNS or infrastructure apply
-changed. The old elevated runtime credential remains configured and is **not safe to serve**.
+changed. The old elevated runtime credential remained configured at that point and was **not safe to serve**.
 
-The [final fleet check](../validation/runtime-role-2026-09-26/fleet-final.txt) confirms the machine
-is stopped on the guarded image with its ordinary command and autostart disabled. Staging still
+The [preparation fleet check](../validation/runtime-role-2026-09-26/fleet-final.txt) confirmed the machine
+was stopped on the guarded image with its ordinary command and autostart disabled. Staging still
 has one machine per app; all other machine configurations are unchanged.
-Before HTTP resumes, the owner must enable the new login with a fresh credential, update only the
+At that point, resuming HTTP required the owner to enable the new login with a fresh credential, update only the
 staging API's `DATABASE_URL`, and pass the [repair preflight](../plans/runtime-database-role-2026-09.md)
 through the actual endpoint. Migration-owner credentials remain unchanged. Retire the old elevated
 credential immediately after activation, with the provider/infrastructure-state reconciliation
 covered by that plan. Returning to the elevated connection is not an acceptable rollback.
 Production and embedding stay paused; deploy and backup remain disabled. Chat code stays separate
-until safe runtime activation passes. The web remains at #159, but authenticated use is unavailable.
+until safe runtime activation passes. The web remained at #159; authenticated use was unavailable until the activation above.
 
 ## By tag Work views release (26 September 2026, UTC)
 

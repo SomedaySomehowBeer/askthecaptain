@@ -1,0 +1,7 @@
+2026-09-26T10:16:31.4350986Z [retire] role app on project royal-glitter-10514027, default branch br-muddy-pine-a7qlpnsu; both URLs are the state's own connections
+2026-09-26T10:16:36.1719003Z [retire] staging ready; captain_runtime sessions 3, safe; app sessions before reset 0
+2026-09-26T10:16:37.2830770Z [retire] old password before reset: accepted
+2026-09-26T10:16:38.2768337Z [retire] operation d6992db3-12e6-4c33-986c-2a48ecb6b19b finished
+2026-09-26T10:16:38.7034928Z [retire] operation c878b22b-44fe-4f81-a8e3-a6b7330ad601 finished
+2026-09-26T10:16:38.7035797Z [retire] reset: confirmed: 200 with operations
+2026-09-26T10:18:55.9001012Z ##[error][retire] old password still unknown after 2 minutes (reset: confirmed: 200 with operations); do not assume it is retired

@@ -1,7 +1,8 @@
 # Runtime database role repair
 
 Status: repair merged in [#162](https://github.com/SomedaySomehowBeer/askthecaptain/pull/162),
-26 September 2026; staging migration prepared, credential activation pending. Outcomes: protect shared work and private views (D6,
+26 September 2026; restricted staging login activated; old administrative password reset and proven rejected;
+role state and legacy connection output reconciled; both one-off workflows disabled. Outcomes: protect shared work and private views (D6,
 D26), and unblock linked chat (D25). Chat is held separately on `feat/linked-chat-core`.
 
 ## Observed problem and containment
@@ -23,8 +24,8 @@ other administrative memberships, so it is not an adequate repair.
 
 The existing staging API machine `80e39ea6416e18` was stopped with autostart disabled for
 containment. Its guarded image and non-login role migration were subsequently prepared as
-recorded in [the runbook](../runbooks/paused.md); credentials remain unchanged and HTTP remains stopped. Web remains on #159; authenticated workspace operations are
-unavailable while the API is contained. No production or embedding machine was changed.
+recorded in [the runbook](../runbooks/paused.md). After explicit owner authorisation, staging
+activated the restricted login and resumed HTTP. Web remains on #159. No production or embedding machine was changed.
 
 ## Bounded implementation
 
@@ -93,13 +94,38 @@ this repair. No customer content is reset, deleted, or converted.
    Terraform-managed credential state as an owner operation. The manual-only
    `.github/workflows/retire-elevated-runtime.yml` implements that authorised step for the fixed
    project and role: check identity/readiness, reset once, wait for Neon operations, prove the old
-   password is rejected and refresh only the password in state. It rejects managed infrastructure
-   changes or unrelated state drift. The `app` role remains administrative and unused; rotating its
-   password does not disable the role. Do not rerun a completed retirement just to repeat a check.
+   password is rejected and refresh only the password in state. A rejected-password baseline
+   skips the reset on resume. It rejects managed infrastructure
+   changes or unrelated state drift. The scoped refresh uses a temporary override of the validated
+   project/branch IDs to remove the project dependency during that operation; it never changes
+   tracked Terraform configuration. Cleanup removes only the file created by that run. The stored
+   role dependency may be absent until the next normal configuration apply; in this run it was
+   retained (one recorded dependency). The `app` role remains administrative and unused; rotating its
+   password does not disable the role. Neon retains the new, unused administrative password, and
+   the scoped refresh records it in the role state. The separate output repair below updates the
+   legacy URL too. Both are sensitive values in the Tigris state bucket, and neither is a runtime login.
+   Retirement invalidates the distributed credential, not the role’s ability to sign in.
+   The role-only refresh can leave the dependent URL output stale. The separate manual
+   `.github/workflows/reconcile-retired-output.yml` (#167) repairs that output from existing state:
+   refresh off, all three referenced resources must be no-ops, and only that sensitive output may
+   change to the independently derived value. Before/after comparisons protect resource values,
+   credentials, lineage and other outputs, allowing only the expected role dependency restoration.
+   It cannot reset a password. Disable each one-off workflow after its successful run. Do not rerun a completed retirement just to repeat a check.
 7. Resume the separately reviewed chat migration/API increment only after this gate passes.
 
 The repository's existing Terraform `neon_role.app` resource is retained, to avoid a destructive
 state change. Its generated URL is no longer a suitable runtime connection; future operators must
 use the SQL-created role. No `tofu apply`, credential rotation or provider support request is
-performed by this implementation PR. If activation fails, keep the API stopped; reverting to the
+performed by implementation PR #162. The separately authorised activation and #164 retirement
+workflow (with #165 rejection-classifier and #166 scoped-refresh fixes) do change credentials; the latter applies only a checked refresh-only state plan. #167 additionally applied one
+checked output-only plan with refresh off. If activation fails, keep the API stopped; reverting to the
 administrative runtime connection is not an acceptable availability rollback.
+
+## Remaining credential separation
+
+`MIGRATION_DATABASE_URL` remains an owner secret on the staging API app and is available to its
+process. The runtime pool and guard use restricted `DATABASE_URL`; this repair does not prevent
+process code from accessing the separately supplied owner URL. Follow-up work should deliver that
+owner credential only to release/migration commands, preserving the one-machine staging limit and
+validating migration/queue recovery before changing deployment. It is not a reason to revert the
+restricted runtime login or re-enable the former administrative credential.
