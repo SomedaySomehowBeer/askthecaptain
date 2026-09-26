@@ -1,6 +1,6 @@
 # Staging resumed; production paused (2026-09-27)
 
-**Staging runs on the restricted `captain_runtime` database login**, with the #169 chat-core API
+**Staging runs on the restricted `captain_runtime` database login**, with the #171 chat API
 image (retaining the #162 guard) and #159 web image. The workspace is at https://app.askthecaptain.app/work. One existing
 machine per staging app is retained, with normal autostart and idle stop. Production and the
 embedding service remain paused; automatic deploy and backup workflows remain disabled.
@@ -11,7 +11,7 @@ The owner authorised the credential switch and retirement of the former administ
 credential on 26 September. See the activation record below and the
 [repair plan](../plans/runtime-database-role-2026-09.md). Earlier containment/preparation records
 are history, not instructions to revert to the elevated login. No additional customer-data reset
-was performed. Chat core storage/API is deployed; the Chat web screen remains unavailable.
+was performed. Chat storage/API (core, pins and personal state) is deployed; the Chat web screen remains unavailable.
 
 ## Staging authorisation (24 September 2026)
 
@@ -26,6 +26,43 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Chat pins and personal state release (27 September Perth / 26 September 2026, UTC)
+
+Reviewed [#171](https://github.com/SomedaySomehowBeer/askthecaptain/pull/171) merged as
+`2bdf9bd86be499d32ce2fda3994accbf81ebbb47`; source `64f717dfa29500caf5bf8440d62b40b0cd8fabb4`
+has the same tree. [CI 36266589165](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36266589165)
+passed. Local regression checks passed **414 tests**, with no failed/skipped or cached test runs;
+workspace typecheck and final API typecheck/build passed. Both existing Claude Opus agents
+implemented disjoint files and reviewed each other; root strengthened the actual-endpoint rollback
+regression. See the [validation record](../validation/chat-personal-state-2026-09-27/README.md).
+
+The clean-source API image is
+`registry.fly.io/askthecaptain-api-staging:git-64f717d@sha256:074703ae5cf6f390c08062b148d591f1228795d76e602b6d80a179da3e24c9f9`.
+Only existing machine `80e39ea6416e18` was updated. Read-only preflight confirmed PostgreSQL 18,
+safe runtime `captain_runtime`, bypassing migration owner, schema 0042 and no pin tables.
+With HTTP stopped, autostart off and restart policy `no`, the one-shot migration/queue command
+applied `0043_chat_personal_pins.sql` at **19:39:41Z** and exited **0** at **19:39:42Z**.
+Normal command, restart policy and autostart/idle-stop settings were restored on the new image.
+Readiness returned `200 {"ok":true}`.
+
+A verified-TLS probe through the deployed runtime confirmed all eight chat tables force RLS,
+policy parity, create retry, sending, the participation baseline, author editing without changing
+the send hash, pinning, personal stars/reads, nonparticipant and foreign-tenant isolation,
+tombstoning with the next-numbered unpin, and access ending on all eight tables after leave.
+Deferred integrity checks passed. All probe writes rolled back; owner-side absence checks found
+no probe conversation/message/pin/star/read/audit rows. No existing message/work content was
+read or changed, and temporary remote scripts were removed.
+
+Fleet comparison confirmed one machine per staging app. The final API configuration differed
+only in image; the #159 web image/configuration, production and embedding configurations and
+machine identities were unchanged. Production/embedding stayed stopped. No credential, DNS,
+infrastructure or workflow change occurred; automatic deployment and backup remain disabled.
+The Chat web screen remains unavailable until the [web increment](../plans/linked-chat-web-2026-09.md).
+
+**Rollback:** retain migration 0043 and the restricted runtime. A pre-C API cannot atomically unpin
+on message deletion and counts the new chat tables in deletion totals. Use a verified compatible
+forward fix or stop HTTP while repairing; never drop chat records or restore the old runtime login.
 
 ## Chat core release (27 September Perth / 26 September 2026, UTC)
 

@@ -3,8 +3,8 @@
 Status: **adopted in #160** (revision 5), 26 September 2026. That PR applied
 the §11 amendments to `AGENTS.md` and `docs/plan.md`.
 PR B (#169) shipped to staging after the runtime-role repair (#162–#168), with migration 0042
-and hosted rollback-only isolation/write checks. PR C is implemented and under review with real-
-Postgres checks; it is not released. The web remains the subsequent increment.
+and hosted rollback-only isolation/write checks. PR C (#171) shipped with migration 0043 and hosted rollback-only
+verification. The [web delivery amendment](linked-chat-web-2026-09.md) specifies the next increment.
 PR C execution clarifications below are adopted with this reviewed amendment.
 
 Peer reviews r3 and r4 and root's concurrence are incorporated:
@@ -595,7 +595,8 @@ A poll costs two requests: the session read and the chat read.
     `POST …/read` and `PATCH …/messages/:mid`. Stars use POST so the unchanged chat-write
     rate policy covers every write. No new polling or automatic write retries.
   - `lifecycle.ts` gains the three new tables in `uncounted`.
-- **PR D (web).** The Chat views, the full conversation and item panels (every live pin above the
+- **PR D (web).** Follow the [web delivery amendment](linked-chat-web-2026-09.md), including bounded
+  read API additions before the client. The Chat views, the full conversation and item panels (every live pin above the
   latest six), pending, scope and 429 states, and Playwright checks.
 - **Later**, each contracted separately: files, notifications, native client, tasks from messages,
   summaries, threads, reactions, mentions and attachments.
