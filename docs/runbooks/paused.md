@@ -1,7 +1,7 @@
-# Staging resumed; production paused (2026-09-26)
+# Staging resumed; production paused (2026-09-27)
 
-**Staging runs on the restricted `captain_runtime` database login**, with the guarded #162 API
-image and #159 web image. The workspace is at https://app.askthecaptain.app/work. One existing
+**Staging runs on the restricted `captain_runtime` database login**, with the #169 chat-core API
+image (retaining the #162 guard) and #159 web image. The workspace is at https://app.askthecaptain.app/work. One existing
 machine per staging app is retained, with normal autostart and idle stop. Production and the
 embedding service remain paused; automatic deploy and backup workflows remain disabled.
 Any API rollback must retain `captain_runtime` and the #162 role guard. Before any future production
@@ -11,7 +11,7 @@ The owner authorised the credential switch and retirement of the former administ
 credential on 26 September. See the activation record below and the
 [repair plan](../plans/runtime-database-role-2026-09.md). Earlier containment/preparation records
 are history, not instructions to revert to the elevated login. No additional customer-data reset
-was performed. The separately held chat implementation is not deployed.
+was performed. Chat core storage/API is deployed; the Chat web screen remains unavailable.
 
 ## Staging authorisation (24 September 2026)
 
@@ -26,6 +26,42 @@ Before a staging resume, inspect live machine counts and deployment targets, con
 and standby behaviour to the one-machine limit, and record what changed here. Do not enable a
 workflow that could promote production. Backups remain disabled pending their separate restore
 checks and operational decision.
+
+## Chat core release (27 September Perth / 26 September 2026, UTC)
+
+Reviewed [#169](https://github.com/SomedaySomehowBeer/askthecaptain/pull/169) merged as
+`80425d241a988daf45c9864baa79da8adcef6424`. Its source `ba851ed8b724df2a2647445319e3d6bf598919b3`
+has the same tree. [CI 36264794205](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36264794205)
+passed in 2m58s. The API image, built from a clean archive of that source, is
+`registry.fly.io/askthecaptain-api-staging:git-ba851ed@sha256:a3913c13a573636ad5f98aa1c519c67c0d5d35d569574b72132ec9d904ecb600`.
+
+Only existing API machine `80e39ea6416e18` was updated. With HTTP stopped, autostart off and
+restart policy `no`, its one-shot command ran migrations and then the queue installer.
+`0042_chat_core.sql` applied at **19:09:42Z**, and the command exited **0** at **19:09:43Z**.
+The normal API command, restart policy, autostart and idle stop were restored. Final machine
+configuration matched its prior configuration except for the image. `/readyz` returned
+`200 {"ok":true}`.
+
+A verified-TLS probe through the deployed `DATABASE_URL` confirmed current/session role
+`captain_runtime`, the role guard, schema 0042, five forced-RLS chat tables and policy parity.
+A synthetic transaction exercised create retry, send, same-organisation nonparticipant isolation,
+foreign-tenant isolation, tombstoning, leaving and deferred integrity after loss of access.
+It was rolled back, and owner-side absence checks confirmed no probe conversation, message or
+audit remained. No existing work/message content was read or changed. See the
+[validation record](../validation/linked-chat-core-2026-09-27/README.md).
+
+The web machine `9185776e7cd3d8` and its #159 image/configuration were unchanged. Fleet comparison
+confirmed exactly one machine per staging app; both production apps and embedding retained their
+prior machine IDs/configurations and stayed stopped. No credentials, DNS or infrastructure were
+changed. Automatic deploy, backup and credential-operation workflows remain disabled.
+
+This releases private conversations, participants, messages and bidirectional task/project links
+at the API only. Pins, stars, read positions, edits and the Chat web UI are subsequent increments.
+No authenticated browser or two-person chat acceptance is claimed.
+
+**Rollback:** retain migration 0042 and the restricted login. Once conversations exist, a pre-chat
+API lacks membership cleanup and chat-aware export/deletion. Use a compatible forward fix or stop
+HTTP while repairing; do not drop chat records or restore the former administrative credential.
 
 ## Restricted runtime activation (26 September 2026, UTC)
 
