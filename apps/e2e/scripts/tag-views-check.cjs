@@ -64,7 +64,7 @@ if (!directory) throw Error('WORKSPACE_PROBE_DIR required');
   const viewId = new URL(page.url()).searchParams.get('view');
   assert.equal((await api(`/views/${viewId}`)).filter.tagIds[0], f.productionId);
   assert.ok(!(await api('/views?limit=50', 'GET', undefined, f.memberToken)).views.some(v => v.id === viewId));
-  await page.locator('.work-filters > details > summary').click(); await page.getByLabel('Status', { exact: true }).selectOption('done');
+  await page.locator('.work-filters > details > summary').filter({ hasText: /^Filter$/ }).click(); await page.getByLabel('Status', { exact: true }).selectOption('done');
   await page.getByRole('button', { name: 'Apply', exact: true }).click();
   await expect(page).toHaveURL(/draft=1/); await heading('Brew team');
   await goto(`/work?owner=all&status=done&tagId=${f.productionId}`); await heading('All tasks');
