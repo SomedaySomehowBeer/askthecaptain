@@ -7,12 +7,12 @@ import { createNativeSend, type UnderlyingFetch } from './native-send.ts';
 const origin = 'https://api.example.test';
 const token = `sess_${'t'.repeat(43)}`;
 
-/** An underlying fetch that records what it was given and answers 200 at the requested URL. */
+/** An underlying fetch that records what it was given and answers 200 at the requested URL, with no body. */
 function recording() {
 	const calls: { url: string; init: Parameters<UnderlyingFetch>[1] }[] = [];
 	const underlying: UnderlyingFetch = async (url, init) => {
 		calls.push({ url, init });
-		return { status: 200, redirected: false, url, headers: { get: () => null }, text: async () => '{}' };
+		return { status: 200, redirected: false, url, headers: { get: () => null }, body: null };
 	};
 	return { underlying, calls };
 }

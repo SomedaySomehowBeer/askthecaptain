@@ -514,7 +514,7 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   Sign-in composition and the account screens ([composition plan](plans/expo-mobile-auth-composition-2026-09.md))
   merged in #197. The read-only [My work read](plans/expo-mobile-my-work-read-2026-09.md) (M-read slice 1) is
   implemented and independently reviewed, with local tests, exports and browser checks passing. Other reads, writes, native
-  sign-in, a transport response byte budget and device evidence remain.
+  sign-in and device evidence remain. The response byte budget is implemented and locally validated in #202.
   [All tasks](plans/expo-mobile-all-tasks-read-2026-09.md) is also implemented and locally validated.
   [The transport response budget](plans/expo-mobile-response-byte-budget-2026-09.md) is a separate implementation;
   its contract and validation record track its evidence.

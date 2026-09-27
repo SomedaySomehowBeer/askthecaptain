@@ -112,7 +112,7 @@ installed-app evidence.
   [validation record](../validation/mobile-my-work-read-2026-09-27/README.md).
 - **Remaining:**
   - other reads, and all writes;
-  - a transport response byte budget before customer readiness;
+  - native transport buffering/cancellation evidence (the response byte budget is implemented in #202);
   - the device gates: `expo/fetch` reporting the query URL unchanged, and a real 403/404 on an isolated synthetic
     environment;
   - native sign-in stays off.
@@ -124,7 +124,8 @@ release. All heavy checks remain serial under `flock /tmp/atc-build.lock`.
 
 The [All tasks contract](expo-mobile-all-tasks-read-2026-09.md) and
 [transport response-budget contract](expo-mobile-response-byte-budget-2026-09.md) were adopted in #200 and define
-separate implementation PRs. The transport budget's status is recorded in its own contract and PR.
+separate implementation PRs. All tasks merged in #201. The transport implementation is independently
+reviewed with local validation passing; see its [validation record](../validation/mobile-response-byte-budget-2026-09-27/README.md) and #202.
 
 **All tasks status (27 September 2026): implemented and independently reviewed; local validation passed.**
 - **Written:**
