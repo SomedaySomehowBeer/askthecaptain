@@ -1,10 +1,10 @@
 # Mobile native section-stack navigation contract
 
-Status: adopted by this planning amendment, 27 September 2026. Outcome: **manage shared work** through predictable navigation.
-Source evidence is from the installed Expo Router 57.0.23 and Captain after #201/#202. This is a plan only;
-no implementation or native/device evidence is included. Native sign-in stays off.
+Status: source implementation and independent review complete, 27 September 2026; release checks in progress. Outcome: **manage shared work** through predictable navigation.
+Source evidence is from the installed Expo Router 57.0.23 and Captain after #201/#202. The source implementation now follows this contract. Validation is recorded in
+[the implementation evidence](../validation/mobile-native-navigation-2026-09-27/README.md). No native/device evidence is claimed; native sign-in stays off.
 
-**Outcome.** On iOS and Android, a section's view list is beneath the open view for the entries E1–E12 (§3.2,
+**Outcome by source; device verification pending.** On iOS and Android, a section's view list is beneath the open view for the entries E1–E12 (§3.2,
 §3.2a), and in the boot and remount cases of §3.0 other than L2. The first rendered state is already that shape, so no
 wrong screen renders and no extra read is sent. "Go to My work" goes to My work, without a second `(tabs)`. The web
 is unchanged.
@@ -23,9 +23,9 @@ Both are data-safe. Neither is claimed fixed.
 - every read rule;
 - the web export, the harness, and the browser expectations.
 
-## 1. Source facts
+## 1. Source facts before this change
 
-**App** (current `main`):
+**App** (the #203 base used to design §3):
 - **`SectionStack`** (`components/SectionStack.tsx:7-13`) declares only `index`, and passes only `screenOptions`.
 - **`sectionStackSettings`** (`:23`) is native `{ initialRouteName: 'views' }` and web `{}`. It is exported as
   `unstable_settings` by the three section layouts.
@@ -236,7 +236,7 @@ remounts).
 | E4 | Fail-closed reopen, `'arrive'` for `/work` | the guard closed for one commit removed `(tabs)` (R4 filter), so the same as E3 | `[views, index]` |
 | E5 | Verified destination `t`, `'arrive'` for `t` | applied on the first ready after sign-in, so `(tabs)` is absent (§3.0); same as E3 | `[views, t]`, or `[views]` if `t` is `views` (the tabs level `initial: false`, then at the section `getInitialState` = `[views]` and `navigate(views)` reusing the current route, R8) |
 | E6 | Requested cold-start route `t`, `'arrive'` for `t` | first ready of the process, so `(tabs)` is absent; same as E5 | `[views, t]` / `[views]` |
-| E7 | `Home` at `/`: `<Redirect href={routeFor(account)} withAnchor={anchored} />` | at boot, not ready, so it goes to `/welcome`. When ready (R-new with a `/` or absent launch URL), `(tabs)` is absent, so the same as E3. A ready `/` with `(tabs)` beneath is L2 (§3.0) | `[views, index]` |
+| E7 | `Home` at `/`: `<Redirect>` takes its anchor from `tabEntryAction` for its target | at boot, not ready, so it goes to `/welcome`. When ready (R-new with a `/` or absent launch URL), `(tabs)` is absent, so the same as E3. A ready `/` with `(tabs)` beneath is L2 (§3.0) | `[views, index]` |
 | E8 | Choosing a view in the list (from `[views]`) | unchanged `router.navigate`; R8 push | `[views, t]` |
 | E9 | Breadcrumb or back to the list | unchanged `dismissTo(viewsHref)` / pop | `[views]` |
 | E10 | Warm link | unchanged router path (R9); see §3.5 | see §3.5 |
@@ -257,9 +257,12 @@ remounts).
 
 | `intent` | Native (`anchored` true) | Web (`anchored` false), exactly today's |
 |---|---|---|
-| `'arrive'` (AccountStack E3–E6, `Home` E7) | `replace(href, { withAnchor: true })` | `replace(href)` |
+| `'arrive'` (AccountStack E3–E6, `Home` E7) | `replace(href, { withAnchor: true })` for tab destinations; `replace(href)` for account pages | `replace(href)` |
 | `'return-to-my-work'` (E11 and E12 below) | `dismissTo('/work', { withAnchor: true })` | `replace('/work')` |
 
+`tabEntryAction(anchored, entry)` takes an entry containing the intent and, for `arrive`, the target href.
+The small `account/tab-entry.ts` adapter applies its result. Only `/work`, `/chat` and `/resources`
+and their child paths are anchored; account pages retain their previous calls without stray navigation params.
 `Home`'s `<Redirect>` takes `withAnchor` from the same helper. Callers apply the result through `router`, so no call
 site chooses its own options.
 

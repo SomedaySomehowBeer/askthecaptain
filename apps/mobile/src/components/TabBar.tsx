@@ -1,8 +1,10 @@
-import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { firstVisitParams } from '../account/copy.ts';
 import { sections } from '../navigation/sections.ts';
 import { colors, tabBar, tabBarWidth } from '../theme/tokens.ts';
 import { SectionIcon } from './Icons.tsx';
+import { anchored } from './SectionStack.tsx';
 
 /** The subset of the tab navigator's bar props this bar uses. */
 type TabRoute = { key: string; name: string; state?: unknown };
@@ -22,8 +24,10 @@ export type TabBarProps = {
  *  they open from the header's avatar.
  *
  *  Each tab keeps its own stack. Choosing another tab returns to where that tab was left. The first visit opens the
- *  tab's default view with its view list one page to the left. Pressing the tab already shown does nothing, so it
- *  never discards the current view. */
+ *  tab's default view: on iOS and Android with its view list one page to the left (docs/plans/expo-mobile-native-
+ *  navigation-2026-09.md, E1; source-proven, device gates open); on the web alone, with the view list reached from the
+ *  header, because there every route needs its own browser-history entry. Pressing the tab already shown does
+ *  nothing, so it never discards the current view. */
 export function TabBar({ state, navigation }: TabBarProps) {
 	const insets = useSafeAreaInsets(); const { width } = useWindowDimensions();
 	const barWidth = tabBarWidth(width);
@@ -37,10 +41,10 @@ export function TabBar({ state, navigation }: TabBarProps) {
 					const onPress = () => {
 						const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
 						if (selected || event.defaultPrevented) return;
-						// A tab never visited opens its default view: on iOS and Android with the view list beneath it; on the web
-						// alone, because there every route needs its own history entry (see sectionStackSettings). A visited tab is
-						// restored as left.
-						if (route.state === undefined) navigation.navigate(route.name, Platform.OS === 'web' ? { screen: 'index' } : { screen: 'index', initial: false });
+						// A tab never visited opens its default view: on iOS and Android with the view list beneath it, built in the
+						// section navigator's first render; on the web alone, because there every route needs its own history entry
+						// (see sectionStackSettings, and copy.ts `firstVisitParams`). A visited tab is restored as left.
+						if (route.state === undefined) navigation.navigate(route.name, firstVisitParams(anchored));
 						else navigation.navigate(route.name);
 					};
 					return (

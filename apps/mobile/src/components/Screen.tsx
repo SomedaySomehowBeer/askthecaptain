@@ -12,8 +12,10 @@ import { Chevron, Magnifier } from './Icons.tsx';
  *  `role` and `aria-*` props, which iOS, Android and React Native Web all map. */
 export function Screen({ section, title, onViewList = false, children }: { section: SectionKey; title?: string; onViewList?: boolean; children: ReactNode }) {
 	const insets = useSafeAreaInsets(); const current = sectionOf(section); const navigation = useNavigation();
-	// Back to this section's view list when it is in this stack (always, on iOS and Android); otherwise open it, so it
-	// never leaves the section and, on the web, never pops to a route without its own history entry.
+	// Back to this section's view list when it is in this stack; otherwise open it, so it never leaves the section and,
+	// on the web, never pops to a route without its own history entry. On iOS and Android the view list is beneath every
+	// section stack built through the entries in docs/plans/expo-mobile-native-navigation-2026-09.md (source-proven; its
+	// device gates are still open); the push branch remains for the web and as a defensive path.
 	const toViews = () => {
 		const routes = (navigation.getState()?.routes ?? []) as { name: string }[];
 		if (routes.some((route) => route.name === 'views')) router.dismissTo(current.viewsHref);
