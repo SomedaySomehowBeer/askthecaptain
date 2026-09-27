@@ -2,7 +2,6 @@ import { requireSafeRuntimeRole } from './runtime-role.ts';
 import { ChaseService } from './chase/service.ts';
 import { StocktakeService } from './stock/workflow.ts';
 import { StockService } from './stock/service.ts';
-import { startAttachmentExpiry } from './triage/expiry.ts';
 import { ShopifyConnector } from '@captain/connectors/shopify';
 import { ShopifyConnections } from './shopify/connections.ts';
 import { ShopifySync, startShopifySchedule } from './shopify/sync.ts';
@@ -51,7 +50,6 @@ const push = new PushService(db, pushKeys ? webPushTransport(pushKeys) : null, p
 const registry = new StocktakeService(db, push).register(new ChaseService(db).register(new Registry(), push));
 const engine = new BossEngine(db, env.DATABASE_URL, registry, definitions, 86400000, retiredWorkflowVersions);
 const stock = new StockService(db, (tx, org, event, data, key) => engine.emit(tx, org, event, data, key));
-const stopAttachmentExpiry = startAttachmentExpiry(db);
 if (env.WORKFLOWS_DISABLED !== '1') await engine.open().catch(async () => { console.error('[api] workflow runner unavailable; follow docs/runbooks/workflow-runner.md'); await engine.close(); });
 const commitments = new CommitmentsService(db);
 const stopSeries = startSeriesSchedule(new SeriesRoutine(db, commitments), env.SERIES_DISABLED === '1');
@@ -76,5 +74,5 @@ const app = createApp({ stock, shopifyConnections, shopifySync, shopifyScheduleE
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
-const shutdown = () => { server.close(); void Promise.all([stopShopifySync(), stopAttachmentExpiry(), stopXeroSync(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
+const shutdown = () => { server.close(); void Promise.all([stopShopifySync(), stopXeroSync(), stopSeries(), engine.close()]).then(() => db.end({ timeout: 5 })).then(() => process.exit(0)); };
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);

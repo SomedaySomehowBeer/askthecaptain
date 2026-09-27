@@ -1,7 +1,6 @@
 # Removing the remaining assistant code
 
-Status: **adopted in #180**, 27 September 2026. Planning only:
-this document changes no code, schema, deployment, credential or data. Implementation increment for
+Status: **adopted in #180**, 27 September 2026. This contract guides the implementation sequence for
 [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) under D1, D2, D5, D6, D8,
 D13, D19, D21–D23 in the [plan](../plan.md). It follows the
 [runtime retirement](assistant-runtime-retirement-2026-09.md) and the
@@ -28,7 +27,17 @@ passkeys and Google sign-in keep working unchanged.
   closed issues are history. They are never edited (AGENTS.md: migrations are never edited after
   merge). Removing live code does not rewrite them.
 
-## 2. Current source state
+### Implementation update, 27 September
+
+R1 (#181), R2 (#182), R3 (#184) and R4a (#185) are merged. Fresh read-only staging
+counts at 05:22:22.969Z found zero Google connections and zero attachment cache rows;
+see [paused.md](../runbooks/paused.md) for the method and scope. R4b is in implementation.
+R5a removes the expiry reader after that zero-count gate; its code is reviewed and
+207 API tests against disposable Postgres (none skipped) plus API typecheck pass. PR integration
+and staging release remain pending. R5b still requires R5a deployed, then fresh counts
+of every affected table; neither this audit nor code removal drops storage.
+
+## 2. Source baseline audited for this contract
 
 ### Live and retained (do not remove in any slice here)
 
