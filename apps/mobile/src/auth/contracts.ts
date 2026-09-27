@@ -71,17 +71,18 @@ export type Attempts = {
 	 *  `start()` then resolves `cancelled` once the platform call settles, and the state returns to `idle`. */
 	cancel(): boolean;
 	/** Only in `cleanup-pending`, and only once the server's not-before time (its `retry-after`, reported by
-	 *  `pendingCleanupRetryAt()`) has passed: exactly one more revocation send, started by the person. Before the
+	 *  `pendingCleanupRetryAfterMs()`) has passed: exactly one more revocation send, started by the person. Before the
 	 *  not-before time, or while a cleanup is running, it answers 'still-pending' without sending; with nothing held it
 	 *  answers 'revoked' without sending. */
 	retryCleanup(): Promise<'revoked' | 'still-pending'>;
-	/** For wording only ("It will stop working on {date}"): never the token. Passing this time on the device clock is
-	 *  not revocation; only the server's confirmation ends a cleanup. */
+	/** The held session's expiry, never the token. Not shown to people (no expiry-date wording, composition plan §4.3).
+	 *  Passing this time on the device clock is not revocation; only the server's confirmation ends a cleanup. */
 	pendingCleanupExpiresAt(): string | null;
-	/** While a cleanup is held and the server asked to wait: the earliest time `retryCleanup()` will send, as an ISO
-	 *  instant (not a secret). Null when nothing is held or a retry may send now. Cleared when the cleanup completes.
-	 *  A long server back-off means a long `cleanup-pending`; the runner shows this time with the Try again action. */
-	pendingCleanupRetryAt(): string | null;
+	/** While a cleanup is held and the server asked to wait: the milliseconds, on the injected monotonic clock, before
+	 *  `retryCleanup()` will send (not a secret). Null when nothing is held or a retry may send now. Cleared when the
+	 *  cleanup completes. A long server back-off means a long `cleanup-pending`; the runner turns this duration into a
+	 *  monotonic deadline for pacing and an approximate wall time for wording, with the Try again action. */
+	pendingCleanupRetryAfterMs(): number | null;
 };
 
 /** The result of any client request other than the native exchange. */

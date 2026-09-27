@@ -1,7 +1,8 @@
 # Mobile sign-in composition, account provider and account screens
 
-Status: **reviewed implementation contract**, 27 September 2026. This amendment changes no code, dependency,
-configuration, flag, DNS or deployment change. Next M-auth increment under the adopted
+Status: **reviewed implementation contract**, 27 September 2026. The contract was adopted in #195.
+Its implementation adds app code, build configuration and the CI harness export; it changes no
+dependency, runtime flag, DNS or deployment. Next M-auth increment under the adopted
 [foundation contract](expo-mobile-foundation-2026-09.md) (§4 session, §5 links, §6 shell, §9 step 5),
 after the [platform adapters and account state](expo-mobile-platform-account-2026-09.md) (#193,
 merged as e91d258).
@@ -16,6 +17,49 @@ Root decisions already taken: gate with `Stack.Protected`; a bounded, coalesced 
 (30-second spacing; a longer server `Retry-After` wins); record links not yet supported stay deferred,
 while valid tab destinations are kept through sign-in; the test harness is selected only by
 `CAPTAIN_MOBILE_HARNESS` in build configuration (§7.1).
+
+## Implementation status (27 September 2026)
+
+**Implemented.** Ownership is as in §9, with reciprocal review. All 185 mobile tests, the four
+exports, boundary scans and browser checks at 360/390/430 px pass; see the
+[validation record](../validation/mobile-account-composition-2026-09-27/README.md). Sections 1–9 below remain the
+reviewed contract and its starting point. Where the implementation settled a detail differently, this section is
+current.
+
+- **Composed app.** `src/app/_layout.tsx` renders the account provider over the one per-process source
+  (`src/account/instance.ts`, composing through `src/platform/app-account.ts`) and `AccountStack`. The routes are
+  welcome, organisation and Account (`settings`), plus the index redirect.
+- **What it does not do.** The tabs show no business data: no business read or write exists. Native sign-in stays off on
+  shared staging and for real accounts. Nothing is installed or usable on a device, and no simulator or device evidence
+  exists (§8 gates remain open).
+- **Two web exports.**
+  - The production web export (default router root, harness variable unset) is web-only: no sign-in, no native
+    authentication, and no harness marker or `harness/app` path. Its bundles are scanned for that.
+  - The synthetic harness is a separate web-only export (`dist-harness`). It renders the production `AccountStack`,
+    screens and tabs over a scripted, token-free account source. It uses no API, credentials or account data, and is
+    never deployed.
+- **Organisation changes (§4.1, as implemented).** When the person or organisation changes while ready (a switch, or a
+  loss that auto-chooses the one remaining membership), the root stack is reset by its navigator key to one new tabs
+  route with no nested state. This replaces the planned `getId` keying: `getId` is not consulted on replace and is
+  deprecated. Losing ready (to the chooser, sign-out or a 401) is handled by the guard, which removes the tabs route and
+  its state. If the stack is ever not found, the tabs guard closes for one commit and a fixed console error is logged
+  (fail closed).
+- **Cold-launch destination (§4.7, as implemented).**
+  - A valid tab route the app was opened at is captured once, before any guard redirect, and kept for the life of the
+    process.
+  - It is the `returnTo` of every sign-in in that process, including one after a later sign-out.
+  - It is opened once, when a restored saved session first becomes ready with no sign-in destination.
+  - A later sign-in's own verified destination is applied as before. Record links are still not carried.
+- **Clock (§3, as implemented).** `Cleanup.retryAfterMs()` replaced `retryAt()` (and
+  `Attempts.pendingCleanupRetryAfterMs()` replaced `pendingCleanupRetryAt()`). One clamped monotonic clock, created in
+  `compose`, is shared by the runner, both cleanups, the attempt core and the source's `now`.
+- **Wording (§4.2, as implemented).**
+  - `unverified` claims no failed request: "Captain can't check your saved sign-in yet." under a server wait (nothing
+    was sent); otherwise "Captain couldn't check your saved sign-in with the server. It is still saved on this phone."
+  - The releasing heading is "Ending the session…" only while a revocation is under way; otherwise "Removing the saved
+    sign-in…" or "Signing out…".
+- **Tab notices.** Work, Chat and Resources now say that the app doesn't read that data yet, rather than asking the
+  person to sign in.
 
 ## 1. Starting point (#193 as merged, e91d258; installed SDK source in the platform checkout)
 

@@ -9,10 +9,14 @@
  *  schedule (by default three sends over about 30 seconds), then the cleanup is pending until the person retries.
  *
  *  `retry-after` is honoured, never shortened: no send happens before the time the server named. If that time is
- *  further away than the schedule allows (30 seconds), the cleanup goes pending instead of sending early, `retryAt()`
- *  names the time, and an explicit retry before it sends nothing. A long server back-off therefore means a long
- *  pending state; the runner must show it with that time and a Try again action, not as a failure or a success.
- *  (`retryAt()` converts the server's relative delay with the device clock, so it is wording and pacing only.)
+ *  further away than the schedule allows (30 seconds), the cleanup goes pending instead of sending early,
+ *  `retryAfterMs()` reports how long remains, and an explicit retry before then sends nothing. A long server back-off
+ *  therefore means a long pending state; the runner must show it with a Try again action, not as a failure or a success.
+ *
+ *  Clock (docs/plans/expo-mobile-auth-composition-2026-09.md §3): `now` is a monotonic reading in milliseconds that never
+ *  goes backwards. The app passes the one clamped monotonic clock it shares with the account runner, so a change to
+ *  the phone's date or time cannot bring a send forward. Nothing here is a wall time: `retryAfterMs()` is a duration,
+ *  and turning it into a displayed time is the runner's job. (The `Date.now` default exists for tests only.)
  *
  *  If the app is closed while pending, the token is lost with memory and that session stays valid until it expires;
  *  remote revocation (contract step 6) is the remedy. */
@@ -28,11 +32,13 @@ export type Cleanup = {
 	 *  time, or while already running, it answers 'still-pending' without sending. With nothing held it answers
 	 *  'revoked' without sending. */
 	retry(): Promise<'revoked' | 'still-pending'>;
-	/** The held session's expiry, for wording only; null when nothing is held. */
+	/** The held session's expiry, never shown to people (no expiry-date wording, composition plan §4.3) and never
+	 *  treated as revocation; null when nothing is held. */
 	expiresAt(): string | null;
-	/** While a session is held and the server's `retry-after` time is still ahead: that time, as an ISO instant (not a
-	 *  secret). Null when nothing is held or a send is allowed now. Cleared when the cleanup completes. */
-	retryAt(): string | null;
+	/** While a session is held and the server's `retry-after` time is still ahead: the milliseconds left on the injected
+	 *  clock, always above zero (not a secret). Null when nothing is held or a send is allowed now. Cleared when the
+	 *  cleanup completes. */
+	retryAfterMs(): number | null;
 };
 
 export const defaultCleanupDelaysMs: readonly number[] = [0, 10_000, 20_000];
@@ -47,7 +53,7 @@ export function createCleanup(options: {
 	const sleep = options.sleep ?? wait; const now = options.now ?? Date.now; const delays = options.delaysMs ?? defaultCleanupDelaysMs;
 	let held: { token: string; expiresAt: string } | null = null;
 	let phase: CleanupState = 'none';
-	/** No send before this time (ms since the epoch): the last answer's `retry-after`, or 0. */
+	/** No send before this reading of the injected clock: the last answer's `retry-after`, or 0. */
 	let notBefore = 0;
 
 	/** One sign-out: true when the session is confirmed unusable. Records any `retry-after`. */
@@ -87,6 +93,10 @@ export function createCleanup(options: {
 			return finish(await sendOnce(held.token));
 		},
 		expiresAt: () => held?.expiresAt ?? null,
-		retryAt: () => (held !== null && now() < notBefore ? new Date(notBefore).toISOString() : null)
+		retryAfterMs: () => {
+			if (held === null) return null;
+			const remaining = notBefore - now();
+			return remaining > 0 ? remaining : null;
+		}
 	};
 }

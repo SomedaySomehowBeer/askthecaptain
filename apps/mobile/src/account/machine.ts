@@ -1,5 +1,6 @@
 import type { AttemptKind, AttemptState, SessionUser } from '../auth/contracts.ts';
 import { linkTarget, refusedLink } from '../lib/links.ts';
+import { laterWait, type Wait } from './clock.ts';
 import type { Generation } from './contracts.ts';
 import type { Me, Membership } from './me.ts';
 
@@ -16,7 +17,11 @@ import type { Me, Membership } from './me.ts';
  *  - Only a freshly applied membership list removes an organisation. A refusal (403/404) only asks for a new list.
  *  - A credential being released keeps sign-in blocked until its local removal has a result and its session is known
  *    to be unusable. "A copy may remain" and "not yet ended" are reported, never hidden.
- *  - Slow operations change wording after ten seconds; they are never cancelled or replaced. */
+ *  - Slow operations change wording after ten seconds; they are never cancelled or replaced.
+ *  - Every `/v1/me` load (launch, Try again, a refusal, a foreground refresh) follows one pacing rule
+ *    (docs/plans/expo-mobile-auth-composition-2026-09.md §3): nothing is sent before the latest server wait, from any
+ *    trigger; a foreground refresh also waits 30 s after the last load started. Times come from the runner's clamped
+ *    monotonic clock. The pacing lives on the machine, so it survives sign-out and a later sign-in in this process. */
 
 declare const handleBrand: unique symbol;
 /** A credential in the runner's memory. Minted only by the runner; meaningless anywhere else. */
@@ -38,8 +43,16 @@ const retryable = (server: ServerState) => server === 'pending' || server === 'r
 export type ReleaseReason = 'sign-out' | 'save-failed' | 'save-stale' | 'session-ended';
 export type Release = {
 	readonly handle: CredentialHandle; readonly reason: ReleaseReason;
-	readonly local: LocalState; readonly server: ServerState; readonly retryAt: string | null;
+	/** `wait`: the revocation's server wait while `pending` (the cleanup sends nothing before it). */
+	readonly local: LocalState; readonly server: ServerState; readonly wait: Wait | null;
 };
+
+/** Why the organisation that was in use is gone. `lost` names it from the membership that was chosen; `lost-unnamed`
+ *  is a stored choice (only its ID is known) that the fresh list does not include. Token-free. */
+export type OrgNotice = { readonly kind: 'lost'; readonly name: string } | { readonly kind: 'lost-unnamed' };
+
+/** Minimum spacing between foreground refreshes (root decision). A longer server wait always wins. */
+export const refreshSpacingMs = 30_000;
 
 /** A sign-in that did not finish: the attempt outcomes, or `busy` when the gate could not be passed. */
 export type SignInFailure = Exclude<AttemptKind, 'signed-in'> | 'busy';
@@ -62,11 +75,11 @@ export type AccountState =
 	| { readonly kind: 'signing-in'; readonly phase: 'browser' | 'closing'; readonly slow: boolean }
 	| { readonly kind: 'saving'; readonly handle: CredentialHandle; readonly userId: string; readonly slow: boolean }
 	| { readonly kind: 'checking'; readonly handle: CredentialHandle; readonly userId: string }
-	| { readonly kind: 'unverified'; readonly handle: CredentialHandle; readonly userId: string; readonly retrying: boolean; readonly retryAt: number | null }
+	| { readonly kind: 'unverified'; readonly handle: CredentialHandle; readonly userId: string; readonly retrying: boolean }
 	| {
 		readonly kind: 'signed-in'; readonly handle: CredentialHandle; readonly user: SessionUser;
 		readonly memberships: readonly Membership[]; readonly org: OrgState; readonly refreshing: boolean;
-		readonly destination: string | null; readonly notice: Notice | null;
+		readonly destination: string | null; readonly notice: Notice | null; readonly orgNotice: OrgNotice | null;
 	}
 	| { readonly kind: 'releasing'; readonly release: Release; readonly slow: boolean };
 
@@ -87,6 +100,8 @@ export type Machine = {
 	readonly strays: readonly Release[];
 	/** A second credential was minted while one was live (plan §2.2). Both are kept and released; nothing is dropped. */
 	readonly fault: boolean;
+	/** `/v1/me` pacing, kept for the life of the process (a full restart resets it). */
+	readonly pacing: { readonly lastLoadStarted: number | null; readonly serverNotBefore: Wait | null };
 };
 
 export const slowAfterMs = 10_000;
@@ -97,6 +112,8 @@ export type Command =
 	| { readonly type: 'cancel' }
 	| { readonly type: 'sign-out' }
 	| { readonly type: 'retry'; readonly now: number }
+	/** The app came to the foreground: check memberships again, if pacing allows. */
+	| { readonly type: 'refresh'; readonly now: number }
 	| { readonly type: 'choose-organisation'; readonly organisationId: string }
 	| { readonly type: 'destination-used' };
 
@@ -104,7 +121,7 @@ export type Event =
 	| Command
 	| { readonly type: 'boot' }
 	| {
-		readonly type: 'launch-read';
+		readonly type: 'launch-read'; readonly now: number;
 		readonly result:
 			| { readonly kind: 'session'; readonly handle: CredentialHandle; readonly userId: string }
 			| { readonly kind: 'none' } | { readonly kind: 'unreadable' } | { readonly kind: 'unavailable' };
@@ -117,19 +134,19 @@ export type Event =
 			| { readonly kind: 'signed-in'; readonly handle: CredentialHandle; readonly userId: string; readonly returnTo: string }
 			| { readonly kind: SignInFailure };
 	}
-	| { readonly type: 'install-finished'; readonly handle: CredentialHandle; readonly result: 'written' | 'stale' | 'failed' }
+	| { readonly type: 'install-finished'; readonly handle: CredentialHandle; readonly result: 'written' | 'stale' | 'failed'; readonly now: number }
 	| {
 		readonly type: 'me-finished'; readonly handle: CredentialHandle; readonly membership: number;
-		readonly outcome: { readonly kind: 'ok'; readonly me: Me } | { readonly kind: 'unauthorised' } | { readonly kind: 'unavailable'; readonly retryAt: number | null };
+		readonly outcome: { readonly kind: 'ok'; readonly me: Me } | { readonly kind: 'unauthorised' } | { readonly kind: 'unavailable'; readonly wait: Wait | null };
 	}
 	/** The stored choice for this person: an ID, or null when none is usable (unreadable counts as none: it is a hint). */
 	| { readonly type: 'org-read'; readonly handle: CredentialHandle; readonly organisation: number; readonly organisationId: string | null }
 	| { readonly type: 'org-saved'; readonly handle: CredentialHandle; readonly organisation: number; readonly result: 'written' | 'stale' | 'failed' }
 	/** A business read scoped to the chosen organisation answered 403 or 404 (next increment's reads report this). */
-	| { readonly type: 'org-refused'; readonly handle: CredentialHandle; readonly organisation: number }
+	| { readonly type: 'org-refused'; readonly handle: CredentialHandle; readonly organisation: number; readonly now: number }
 	| { readonly type: 'unauthorised'; readonly handle: CredentialHandle }
 	| { readonly type: 'local-finished'; readonly handle: CredentialHandle; readonly result: LocalResult }
-	| { readonly type: 'server-finished'; readonly handle: CredentialHandle; readonly result: 'ended' | 'pending' | 'refused'; readonly retryAt: string | null }
+	| { readonly type: 'server-finished'; readonly handle: CredentialHandle; readonly result: 'ended' | 'pending' | 'refused'; readonly wait: Wait | null }
 	| { readonly type: 'slow'; readonly id: number }
 	| { readonly type: 'fault' }
 	/** The runner minted `handle` and, after the event carrying it, no state holds it (see `holds`). */
@@ -162,7 +179,8 @@ export type Step = { readonly machine: Machine; readonly effects: readonly Effec
 export function initial(): Machine {
 	return {
 		state: { kind: 'starting', slow: false }, generations: { account: 0, organisation: 0, membership: 0 },
-		requested: null, returnTo: null, watch: null, nextWatch: 1, strays: [], fault: false
+		requested: null, returnTo: null, watch: null, nextWatch: 1, strays: [], fault: false,
+		pacing: { lastLoadStarted: null, serverNotBefore: null }
 	};
 }
 
@@ -204,8 +222,27 @@ const currentHandle = (state: AccountState): CredentialHandle | null =>
 function beginRelease(machine: Machine, handle: CredentialHandle, reason: ReleaseReason, revoke: boolean, effects: Effect[]): Machine {
 	effects.push({ type: 'remove-if', handle });
 	if (revoke) effects.push({ type: 'revoke', handle });
-	const release: Release = { handle, reason, local: 'removing', server: revoke ? 'revoking' : 'not-needed', retryAt: null };
+	const release: Release = { handle, reason, local: 'removing', server: revoke ? 'revoking' : 'not-needed', wait: null };
 	return startWatch({ ...machine, state: { kind: 'releasing', release, slow: false }, returnTo: null }, 'removal', effects);
+}
+
+/** Whether the latest server wait still blocks a `/v1/me` load at `now` (exactly at `until`, it no longer does). */
+const blockedByServer = (machine: Machine, now: number): boolean =>
+	machine.pacing.serverNotBefore !== null && now < machine.pacing.serverNotBefore.until;
+
+/** Sends one `/v1/me` load for `handle` at the next membership generation and records when it started. The caller has
+ *  already checked the pacing rule for its trigger. */
+function loadMe(machine: Machine, handle: CredentialHandle, now: number, effects: Effect[]): Machine {
+	const next = advance(machine, 'membership');
+	effects.push({ type: 'load-me', handle, membership: next.generations.membership });
+	return { ...next, pacing: { ...next.pacing, lastLoadStarted: now } };
+}
+
+/** The first check of a session (at launch, or after a sign-in's save). A server wait inherited in this process that
+ *  still blocks it shows `unverified` with that wait and Try again, never a silent `checking`. */
+function firstCheck(machine: Machine, handle: CredentialHandle, userId: string, now: number, effects: Effect[]): Machine {
+	if (blockedByServer(machine, now)) return { ...machine, state: { kind: 'unverified', handle, userId, retrying: false } };
+	return { ...loadMe(machine, handle, now, effects), state: { kind: 'checking', handle, userId } };
 }
 
 /** When the local removal has a result and the session is known to be unusable, forget the token and sign out with a
@@ -230,21 +267,24 @@ function settleStray(machine: Machine, release: Release, effects: Effect[]): Mac
 }
 
 /** Try again for strays: the same deliberate retry as for the main release (§6.8 of the plan). */
-function retryStrays(machine: Machine, effects: Effect[]): Machine {
+function retryStrays(machine: Machine, now: number, effects: Effect[]): Machine {
 	let next = machine;
 	for (const stray of machine.strays) {
 		if (!retryable(stray.server) || stray.local === 'removing') continue;
+		if (stray.wait !== null && now < stray.wait.until) continue; // the server's wait is honoured, never shortened
 		const again = stray.local === 'copy-may-remain';
 		effects.push({ type: 'retry-release', handle: stray.handle, local: again, server: true });
-		next = { ...next, strays: next.strays.map((r): Release => r.handle === stray.handle ? { ...r, local: again ? 'removing' : r.local, server: 'revoking' } : r) };
+		next = { ...next, strays: next.strays.map((r): Release => r.handle === stray.handle ? { ...r, local: again ? 'removing' : r.local, server: 'revoking', wait: null } : r) };
 	}
 	return next;
 }
 
-/** An organisation has been chosen: record it and open the deferred destination, if any. */
-function choose(machine: Machine, membership: Membership, effects: Effect[], save: boolean): Machine {
-	const state = machine.state;
-	if (state.kind !== 'signed-in') return machine;
+/** An organisation has been chosen: record it and open the deferred destination, if any. A person's own choice clears
+ *  the loss notice; an automatic one (the only membership) keeps it, so the loss is still reported. */
+function choose(machine: Machine, membership: Membership, effects: Effect[], save: boolean, clearsNotice = false): Machine {
+	const current = machine.state;
+	if (current.kind !== 'signed-in') return machine;
+	const state = clearsNotice ? { ...current, orgNotice: null } : current;
 	let next = machine;
 	if (save) {
 		next = advance(next, 'organisation');
@@ -284,7 +324,7 @@ function applyMe(machine: Machine, me: Me, effects: Effect[]): Machine {
 	if (state.kind !== 'signed-in') {
 		const next: Machine = {
 			...machine,
-			state: { kind: 'signed-in', handle: state.handle, user: me.user, memberships: me.memberships, org: { kind: 'loading' }, refreshing: false, destination: null, notice: null }
+			state: { kind: 'signed-in', handle: state.handle, user: me.user, memberships: me.memberships, org: { kind: 'loading' }, refreshing: false, destination: null, notice: null, orgNotice: null }
 		};
 		if (me.memberships.length === 0) return defaultOrganisation(next, effects);
 		effects.push({ type: 'read-org', handle: state.handle, userId, organisation: next.generations.organisation });
@@ -296,11 +336,12 @@ function applyMe(machine: Machine, me: Me, effects: Effect[]): Machine {
 		const chosenId = state.org.membership.organisationId;
 		const still = me.memberships.find((m) => m.organisationId === chosenId);
 		if (still) return choose(refreshed, still, effects, false);
-		// Lost: the fresh list no longer has it.
+		// Lost: the fresh list no longer has it. Its name is the one from the membership that was chosen.
 		effects.push({ type: 'forget-org-if', userId, organisationId: chosenId });
 		const lost = advance(refreshed, 'organisation');
+		const orgNotice: OrgNotice = { kind: 'lost', name: state.org.membership.organisationName };
 		return defaultOrganisation({
-			...lost, state: { ...state, user: me.user, memberships: me.memberships, refreshing: false, org: { kind: 'choose' } }
+			...lost, state: { ...state, user: me.user, memberships: me.memberships, refreshing: false, org: { kind: 'choose' }, orgNotice }
 		}, effects);
 	}
 	return defaultOrganisation(refreshed, effects);
@@ -332,9 +373,7 @@ function step(machine: Machine, event: Event, effects: Effect[]): Machine {
 			if (result.kind === 'unavailable') return { ...next, state: { kind: 'storage-unavailable' } };
 			if (result.kind === 'unreadable') return { ...next, state: { kind: 'storage-unreadable', reading: false, slow: false } };
 			if (result.kind === 'none') return { ...next, state: { kind: 'signed-out', notice: null, gate: 'idle' } };
-			const checked = advance(next, 'membership');
-			effects.push({ type: 'load-me', handle: result.handle, membership: checked.generations.membership });
-			return { ...checked, state: { kind: 'checking', handle: result.handle, userId: result.userId } };
+			return firstCheck(next, result.handle, result.userId, event.now, effects);
 		}
 
 		case 'sign-in': {
@@ -368,7 +407,7 @@ function step(machine: Machine, event: Event, effects: Effect[]): Machine {
 				// released and tracked to the end, never dropped or left holding the gate closed.
 				if (outcome.kind !== 'signed-in') return machine;
 				effects.push({ type: 'remove-if', handle: outcome.handle }, { type: 'revoke', handle: outcome.handle });
-				const stray: Release = { handle: outcome.handle, reason: 'save-stale', local: 'removing', server: 'revoking', retryAt: null };
+				const stray: Release = { handle: outcome.handle, reason: 'save-stale', local: 'removing', server: 'revoking', wait: null };
 				return { ...machine, strays: [...machine.strays, stray], fault: true };
 			}
 			const next = stopWatch(machine, effects);
@@ -387,25 +426,25 @@ function step(machine: Machine, event: Event, effects: Effect[]): Machine {
 		case 'install-finished': {
 			if (state.kind !== 'saving' || state.handle !== event.handle) return machine;
 			const next = stopWatch(machine, effects);
-			if (event.result === 'written') {
-				const checked = advance(next, 'membership');
-				effects.push({ type: 'load-me', handle: state.handle, membership: checked.generations.membership });
-				return { ...checked, state: { kind: 'checking', handle: state.handle, userId: state.userId } };
-			}
+			if (event.result === 'written') return firstCheck(next, state.handle, state.userId, event.now, effects);
 			// Stale, or a failed save that may still have written: compare-delete it and revoke it; never keep it in
 			// memory only.
 			return beginRelease(next, state.handle, event.result === 'stale' ? 'save-stale' : 'save-failed', true, effects);
 		}
 
 		case 'me-finished': {
-			if (currentHandle(state) !== event.handle || machine.generations.membership !== event.membership) return machine;
-			if (state.kind !== 'checking' && state.kind !== 'unverified' && state.kind !== 'signed-in') return machine;
 			const outcome = event.outcome;
-			if (outcome.kind === 'ok') return applyMe(machine, outcome.me, effects);
+			// A server wait is kept from every answer, even one no longer current: it only ever makes waiting longer.
+			const paced: Machine = outcome.kind === 'unavailable' && outcome.wait !== null
+				? { ...machine, pacing: { ...machine.pacing, serverNotBefore: laterWait(machine.pacing.serverNotBefore, outcome.wait) } }
+				: machine;
+			if (currentHandle(state) !== event.handle || machine.generations.membership !== event.membership) return paced;
+			if (state.kind !== 'checking' && state.kind !== 'unverified' && state.kind !== 'signed-in') return paced;
+			if (outcome.kind === 'ok') return applyMe({ ...machine, pacing: { ...machine.pacing, serverNotBefore: null } }, outcome.me, effects);
 			if (outcome.kind === 'unauthorised') return beginRelease(advance(machine, 'account', 'organisation'), state.handle, 'session-ended', false, effects);
 			// Unavailable: never inferred to be a sign-out. A saved session that could not be checked is not signed in.
-			if (state.kind === 'signed-in') return { ...machine, state: { ...state, refreshing: false } };
-			return { ...machine, state: { kind: 'unverified', handle: state.handle, userId: state.userId, retrying: false, retryAt: outcome.retryAt } };
+			if (state.kind === 'signed-in') return { ...paced, state: { ...state, refreshing: false } };
+			return { ...paced, state: { kind: 'unverified', handle: state.handle, userId: state.userId, retrying: false } };
 		}
 
 		case 'org-read': {
@@ -414,8 +453,11 @@ function step(machine: Machine, event: Event, effects: Effect[]): Machine {
 			const stored = event.organisationId;
 			const member = stored === null ? undefined : state.memberships.find((m) => m.organisationId === stored);
 			if (member) return choose(machine, member, effects, false);
-			if (stored !== null) effects.push({ type: 'forget-org-if', userId: state.user.id, organisationId: stored });
-			return defaultOrganisation(stored !== null ? advance(machine, 'organisation') : machine, effects);
+			if (stored === null) return defaultOrganisation(machine, effects);
+			// A remembered choice that the fresh list does not include: only its ID is known, so the notice names nothing.
+			effects.push({ type: 'forget-org-if', userId: state.user.id, organisationId: stored });
+			const forgotten = advance(machine, 'organisation');
+			return defaultOrganisation({ ...forgotten, state: { ...state, orgNotice: { kind: 'lost-unnamed' } } }, effects);
 		}
 
 		case 'choose-organisation': {
@@ -423,7 +465,7 @@ function step(machine: Machine, event: Event, effects: Effect[]): Machine {
 			const member = state.memberships.find((m) => m.organisationId === event.organisationId);
 			if (!member) return machine;
 			if (state.org.kind === 'chosen' && state.org.membership.organisationId === member.organisationId) return machine;
-			return choose(machine, member, effects, true);
+			return choose(machine, member, effects, true, true);
 		}
 
 		case 'org-saved': {
@@ -435,11 +477,18 @@ function step(machine: Machine, event: Event, effects: Effect[]): Machine {
 
 		case 'org-refused': {
 			// Only a fresh membership list can remove an organisation: ask for one (refusals already in flight join it).
+			// Never before the server's wait; not subject to the foreground spacing.
 			if (state.kind !== 'signed-in' || state.handle !== event.handle || state.refreshing) return machine;
-			if (machine.generations.organisation !== event.organisation) return machine;
-			const next = advance(machine, 'membership');
-			effects.push({ type: 'load-me', handle: state.handle, membership: next.generations.membership });
-			return { ...next, state: { ...state, refreshing: true } };
+			if (machine.generations.organisation !== event.organisation || blockedByServer(machine, event.now)) return machine;
+			return { ...loadMe(machine, state.handle, event.now, effects), state: { ...state, refreshing: true } };
+		}
+
+		case 'refresh': {
+			// Foreground: coalesced with a load in flight, never before the server's wait, and at most every 30 s.
+			if (state.kind !== 'signed-in' || state.refreshing || blockedByServer(machine, event.now)) return machine;
+			const last = machine.pacing.lastLoadStarted;
+			if (last !== null && event.now < last + refreshSpacingMs) return machine;
+			return { ...loadMe(machine, state.handle, event.now, effects), state: { ...state, refreshing: true } };
 		}
 
 		case 'unauthorised': {
@@ -464,15 +513,15 @@ function step(machine: Machine, event: Event, effects: Effect[]): Machine {
 			const stray = machine.strays.find((r) => r.handle === event.handle);
 			if (stray) {
 				if (stray.server !== 'revoking') return machine;
-				return settleStray(machine, { ...stray, server: event.result, retryAt: event.result === 'pending' ? event.retryAt : null }, effects);
+				return settleStray(machine, { ...stray, server: event.result, wait: event.result === 'pending' ? event.wait : null }, effects);
 			}
 			if (state.kind !== 'releasing' || state.release.handle !== event.handle || state.release.server !== 'revoking') return machine;
-			const release: Release = { ...state.release, server: event.result, retryAt: event.result === 'pending' ? event.retryAt : null };
+			const release: Release = { ...state.release, server: event.result, wait: event.result === 'pending' ? event.wait : null };
 			return settleRelease({ ...machine, state: { ...state, release } }, effects);
 		}
 
 		case 'retry':
-			return retryStrays(retryMain(machine, event.now, effects), effects);
+			return retryStrays(retryMain(machine, event.now, effects), event.now, effects);
 
 		case 'destination-used': {
 			if (state.kind !== 'signed-in' || state.destination === null) return machine;
@@ -497,7 +546,7 @@ function step(machine: Machine, event: Event, effects: Effect[]): Machine {
 			// A credential the runner minted that no state took: release it like any other, never drop it.
 			if (holds(machine, event.handle)) return machine;
 			effects.push({ type: 'remove-if', handle: event.handle }, { type: 'revoke', handle: event.handle });
-			const stray: Release = { handle: event.handle, reason: 'save-stale', local: 'removing', server: 'revoking', retryAt: null };
+			const stray: Release = { handle: event.handle, reason: 'save-stale', local: 'removing', server: 'revoking', wait: null };
 			return { ...machine, strays: [...machine.strays, stray], fault: true };
 		}
 	}
@@ -512,18 +561,17 @@ export function holds(machine: Machine, handle: CredentialHandle): boolean {
 function retryMain(machine: Machine, now: number, effects: Effect[]): Machine {
 	const state = machine.state;
 	if (state.kind === 'unverified') {
-		// The server's Retry-After is honoured: no early Try again.
-		if (state.retrying || (state.retryAt !== null && now < state.retryAt)) return machine;
-		const next = advance(machine, 'membership');
-		effects.push({ type: 'load-me', handle: state.handle, membership: next.generations.membership });
-		return { ...next, state: { ...state, retrying: true } };
+		// The server's Retry-After is honoured: no early Try again (from any trigger, by the shared pacing).
+		if (state.retrying || blockedByServer(machine, now)) return machine;
+		return { ...loadMe(machine, state.handle, now, effects), state: { ...state, retrying: true } };
 	}
 	if (state.kind === 'releasing') {
-		const { local, server, handle } = state.release;
+		const { local, server, handle, wait } = state.release;
 		if (!retryable(server) || local === 'removing') return machine;
+		if (wait !== null && now < wait.until) return machine; // the revocation's server wait is honoured too
 		const again = local === 'copy-may-remain';
 		effects.push({ type: 'retry-release', handle, local: again, server: true });
-		const release: Release = { ...state.release, local: again ? 'removing' : local, server: 'revoking' };
+		const release: Release = { ...state.release, local: again ? 'removing' : local, server: 'revoking', wait: null };
 		const next: Machine = { ...machine, state: { ...state, release } };
 		return again ? startWatch({ ...next, state: { ...state, release, slow: false } }, 'removal', effects) : next;
 	}
@@ -542,22 +590,29 @@ function retryMain(machine: Machine, now: number, effects: Effect[]): Machine {
 // What screens may see: no handles, no tokens.
 
 export type AccountView =
+	/** Provider states outside any runner (account-source.ts): not a native build, no valid API address, or composition
+	 *  failed. The machine never produces these. */
+	| { readonly kind: 'web-only' }
+	| { readonly kind: 'misconfigured' }
+	| { readonly kind: 'startup-failed' }
 	| { readonly kind: 'starting'; readonly slow: boolean }
 	| { readonly kind: 'storage-unavailable' }
 	| { readonly kind: 'storage-unreadable'; readonly reading: boolean; readonly slow: boolean }
 	| { readonly kind: 'signed-out'; readonly notice: Notice | null; readonly gate: 'idle' | 'waiting' | 'busy' }
 	| { readonly kind: 'signing-in'; readonly phase: 'browser' | 'closing' | 'saving'; readonly slow: boolean }
 	| { readonly kind: 'checking' }
-	| { readonly kind: 'unverified'; readonly retrying: boolean; readonly retryAt: string | null }
+	/** `wait`: the server's wait still in force, if any (Try again stays disabled until `wait.until`). */
+	| { readonly kind: 'unverified'; readonly retrying: boolean; readonly wait: Wait | null }
 	| {
 		readonly kind: 'signed-in'; readonly user: SessionUser; readonly memberships: readonly Membership[];
 		readonly org: OrgState; readonly refreshing: boolean; readonly destination: string | null; readonly notice: Notice | null;
+		readonly orgNotice: OrgNotice | null;
 		/** True only with verified identity and a chosen organisation: the only time business reads may start. */
 		readonly ready: boolean;
 	}
 	| {
 		readonly kind: 'releasing'; readonly reason: ReleaseReason; readonly local: LocalState; readonly server: ServerState;
-		readonly retryAt: string | null; readonly slow: boolean;
+		readonly wait: Wait | null; readonly slow: boolean;
 		/** A copy may remain and the session is not yet ended: closing the app now may leave the person signed in the
 		 *  next time it opens (no sign-out marker exists). */
 		readonly closeAppWarning: boolean;
@@ -572,32 +627,37 @@ function signInOffered(machine: Machine): boolean {
 }
 
 /** A stray credential still being released (unreachable by construction; shown so it is never silent). */
-export type StrayView = { readonly local: LocalState; readonly server: ServerState; readonly retryAt: string | null; readonly closeAppWarning: boolean; readonly canRetry: boolean };
+export type StrayView = { readonly local: LocalState; readonly server: ServerState; readonly wait: Wait | null; readonly closeAppWarning: boolean; readonly canRetry: boolean };
 
-export function view(machine: Machine): {
+/** Everything a screen may see: token-free, and handle-free. */
+export type AccountSnapshot = {
 	readonly account: AccountView; readonly signInOffered: boolean; readonly fault: boolean; readonly strays: readonly StrayView[];
-} {
-	const strays = machine.strays.map(({ local, server, retryAt }): StrayView => ({
-		local, server, retryAt, closeAppWarning: local === 'copy-may-remain' && retryable(server), canRetry: retryable(server) && local !== 'removing'
+};
+
+export function view(machine: Machine): AccountSnapshot {
+	const strays = machine.strays.map(({ local, server, wait }): StrayView => ({
+		local, server, wait, closeAppWarning: local === 'copy-may-remain' && retryable(server), canRetry: retryable(server) && local !== 'removing'
 	}));
-	return { account: accountView(machine.state), signInOffered: signInOffered(machine), fault: machine.fault, strays };
+	return { account: accountView(machine), signInOffered: signInOffered(machine), fault: machine.fault, strays };
 }
 
-function accountView(state: AccountState): AccountView {
+function accountView(machine: Machine): AccountView {
+	const state = machine.state;
 	switch (state.kind) {
 		case 'starting': case 'storage-unavailable': case 'storage-unreadable': case 'signed-out': return state;
 		case 'signing-in': return { kind: 'signing-in', phase: state.phase, slow: state.slow };
 		case 'saving': return { kind: 'signing-in', phase: 'saving', slow: state.slow };
 		case 'checking': return { kind: 'checking' };
-		case 'unverified': return { kind: 'unverified', retrying: state.retrying, retryAt: state.retryAt === null ? null : new Date(state.retryAt).toISOString() };
+		case 'unverified': return { kind: 'unverified', retrying: state.retrying, wait: machine.pacing.serverNotBefore };
 		case 'signed-in': return {
 			kind: 'signed-in', user: state.user, memberships: state.memberships, org: state.org, refreshing: state.refreshing,
-			destination: state.org.kind === 'chosen' ? state.destination : null, notice: state.notice, ready: state.org.kind === 'chosen'
+			destination: state.org.kind === 'chosen' ? state.destination : null, notice: state.notice, orgNotice: state.orgNotice,
+			ready: state.org.kind === 'chosen'
 		};
 		case 'releasing': {
-			const { reason, local, server, retryAt } = state.release;
+			const { reason, local, server, wait } = state.release;
 			return {
-				kind: 'releasing', reason, local, server, retryAt, slow: state.slow,
+				kind: 'releasing', reason, local, server, wait, slow: state.slow,
 				closeAppWarning: local === 'copy-may-remain' && retryable(server),
 				canRetry: retryable(server) && local !== 'removing'
 			};

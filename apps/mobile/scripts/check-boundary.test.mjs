@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { checkBundles, checkManifest, checkMobile, loadAllowlist, secretNames, stripComments } from './check-boundary.mjs';
+import { checkBundles, checkManifest, checkMobile, harnessMarker, harnessRootPath, loadAllowlist, parseBundleArguments, secretNames, stripComments } from './check-boundary.mjs';
 
 const allowlist = await loadAllowlist();
 const clean = {
@@ -146,6 +146,118 @@ test('generated directories are skipped only at the mobile root; the same names 
 	has(findings, /src\/\.hidden\/leak\.ts: process\.env\.DATABASE_URL/);
 	for (const skipped of ['scripts/', 'dist/', '.expo/', 'ios/', 'node_modules/', 'src/node_modules/']) assert.ok(!findings.some((f) => f.startsWith(skipped)), `${skipped} is skipped: ${JSON.stringify(findings)}`);
 	assert.equal(findings.length, 4, JSON.stringify(findings));
+});
+
+test('harness allowance: only the root app.config.* may read CAPTAIN_MOBILE_HARNESS, EAS_BUILD and process.argv', async () => {
+	const reads = 'const h = process.env.CAPTAIN_MOBILE_HARNESS; const e = process.env.EAS_BUILD; const a = process.argv;\n';
+	const findings = await findingsFor({
+		'app.config.ts': `${reads}const api = process.env.EXPO_PUBLIC_API_URL;\nconst m = "CAPTAIN_MOBILE_HARNESS is for the web harness export only";\n`,
+		'src/config.ts': reads, 'harness/app/_layout.tsx': reads, 'src/deep/app.config.ts': reads, 'metro.config.js': reads,
+		'src/harness.test.ts': reads
+	});
+	assert.ok(!findings.some((f) => f.startsWith('app.config.ts')), JSON.stringify(findings));
+	for (const file of ['src/config.ts', 'harness/app/_layout.tsx', 'src/deep/app.config.ts', 'metro.config.js', 'src/harness.test.ts']) {
+		has(findings, new RegExp(`^${file.replace(/[./]/g, '\\$&')}: process\\.env\\.CAPTAIN_MOBILE_HARNESS is not allowed`));
+		has(findings, new RegExp(`^${file.replace(/[./]/g, '\\$&')}: process\\.env\\.EAS_BUILD is not allowed`));
+		has(findings, new RegExp(`^${file.replace(/[./]/g, '\\$&')}: a computed, aliased or destructured use of process`));
+	}
+	// Still no other secret, and no aliasing, in app.config.ts.
+	const config = await findingsFor({ 'app.config.ts': 'const k = process.env.MASTER_KEY; const { argv } = process; const p = process.env["CAPTAIN_MOBILE_HARNESS"];\n' });
+	has(config, /app\.config\.ts: process\.env\.MASTER_KEY is not allowed/);
+	assert.equal(config.filter((f) => /app\.config\.ts: a computed, aliased or destructured use of process/.test(f)).length, 2, JSON.stringify(config));
+});
+
+test('harness variable: never in eas.json; in scripts and workflows only unset, or =1 on one web-only expo export line', async () => {
+	const { harnessLineAllowed } = await import('./check-boundary.mjs');
+	for (const line of [
+		'CAPTAIN_MOBILE_HARNESS=1 pnpm --dir apps/mobile exec expo export --platform web --output-dir dist-harness',
+		'CAPTAIN_MOBILE_HARNESS=1 npx expo export --platform=web --output-dir dist-harness', 'CAPTAIN_MOBILE_HARNESS=1 expo export -p "web"',
+		'env -u CAPTAIN_MOBILE_HARNESS pnpm --dir apps/mobile exec expo export --platform "$platform" --output-dir "dist/$platform"',
+		'unset CAPTAIN_MOBILE_HARNESS'
+	]) assert.ok(harnessLineAllowed(line), line);
+	for (const line of [
+		'CAPTAIN_MOBILE_HARNESS=1 expo export', 'CAPTAIN_MOBILE_HARNESS=1 expo export --platform ios', 'CAPTAIN_MOBILE_HARNESS=1 expo export --platform all',
+		'CAPTAIN_MOBILE_HARNESS=1 expo export --platform web --platform android', 'CAPTAIN_MOBILE_HARNESS=1 expo export --platform web && expo export --platform ios',
+		'CAPTAIN_MOBILE_HARNESS=1 expo start --web', 'CAPTAIN_MOBILE_HARNESS=1 expo prebuild', 'CAPTAIN_MOBILE_HARNESS=true expo export --platform web',
+		"CAPTAIN_MOBILE_HARNESS: '1'", 'export CAPTAIN_MOBILE_HARNESS=1', 'echo "CAPTAIN_MOBILE_HARNESS=1" >> "$GITHUB_ENV"', 'CAPTAIN_MOBILE_HARNESS=1 \\',
+		'env -u CAPTAIN_MOBILE_HARNESS CAPTAIN_MOBILE_HARNESS=1 expo export --platform ios', 'XCAPTAIN_MOBILE_HARNESS=1 expo export --platform ios'
+	]) assert.ok(!harnessLineAllowed(line), line);
+
+	const outer = await mkdtemp(path.join(tmpdir(), 'captain-harness-'));
+	try {
+		const root = path.join(outer, 'apps', 'mobile'); const workflows = path.join(outer, '.github', 'workflows');
+		await mkdir(root, { recursive: true }); await mkdir(workflows, { recursive: true });
+		await writeFile(path.join(root, 'package.json'), JSON.stringify({ ...clean, scripts: {
+			'export:harness': 'CAPTAIN_MOBILE_HARNESS=1 expo export --platform web --output-dir dist-harness',
+			'export:bad': 'CAPTAIN_MOBILE_HARNESS=1 expo export --output-dir dist', check: 'tsc --noEmit'
+		} }));
+		await writeFile(path.join(root, 'eas.json'), JSON.stringify({ build: { preview: { env: { CAPTAIN_MOBILE_HARNESS: '1' } } } }));
+		await writeFile(path.join(workflows, 'mobile.yml'), [
+			'jobs:', '  shell:', '    env:', "      CAPTAIN_MOBILE_HARNESS: '1'", '    steps:',
+			'      # CAPTAIN_MOBILE_HARNESS stays unset for the production exports below.',
+			'      - run: env -u CAPTAIN_MOBILE_HARNESS pnpm --dir apps/mobile exec expo export --platform ios --output-dir dist/ios',
+			'      - run: CAPTAIN_MOBILE_HARNESS=1 pnpm --dir apps/mobile exec expo export --platform web --output-dir dist-harness',
+			'      - run: grep -rq CAPTAIN_MOBILE_HARNESS_7f3a apps/mobile/dist-harness',
+			'      - run: echo "CAPTAIN_MOBILE_HARNESS=1" >> "$GITHUB_ENV"'
+		].join('\n'));
+		await mkdir(path.join(root, 'dist-harness', '_expo'), { recursive: true });
+		await writeFile(path.join(root, 'dist-harness', '_expo', 'index.js'), 'var a=process.env.DATABASE_URL;');
+		const findings = await checkMobile(root, allowlist);
+		has(findings, /^eas\.json: CAPTAIN_MOBILE_HARNESS may never be set/);
+		has(findings, /^package\.json: script export:bad may mention/);
+		assert.ok(!findings.some((f) => f.includes('export:harness')), JSON.stringify(findings));
+		assert.deepEqual(findings.filter((f) => f.startsWith('.github/')).map((f) => f.split(':').slice(0, 2).join(':')),
+			['.github/workflows/mobile.yml:4', '.github/workflows/mobile.yml:10'], JSON.stringify(findings));
+		assert.ok(!findings.some((f) => f.startsWith('dist-harness')), 'the harness export directory is output, not source');
+		assert.equal(findings.length, 4, JSON.stringify(findings));
+	} finally { await rm(outer, { recursive: true, force: true }); }
+});
+
+test('harness exclusion: production exports may hold neither the marker nor a harness/app path; the harness export must hold the marker', async () => {
+	assert.equal(harnessMarker, 'CAPTAIN_MOBILE_HARNESS_7f3a'); assert.equal(harnessRootPath, 'harness/app');
+	const outer = await mkdtemp(path.join(tmpdir(), 'captain-harness-bundle-'));
+	try {
+		const names = await secretNames();
+		const write = async (dir, file, content) => { await mkdir(path.join(outer, dir, path.dirname(file)), { recursive: true }); await writeFile(path.join(outer, dir, file), content); };
+		// Minified web output: the marker survives as a testID string; a route context names its root.
+		await write('harness', '_expo/static/js/web/entry-abc.js', `var e=r(1);function L(){return e.jsx(V,{testID:"${harnessMarker}"})}var c=require.context("../../harness/app");`);
+		await write('harness', 'index.html', '<html></html>');
+		await write('web', '_expo/static/js/web/entry-def.js', 'var c=require.context("../../src/app");var a="EXPO_PUBLIC_API_URL";');
+		await write('ios', '_expo/static/js/ios/index.hbc', Buffer.concat([Buffer.from([0xc6, 0x1f, 0xbc, 0x03]), Buffer.from('src/app\0work\0', 'latin1')]));
+		await write('android', '_expo/static/js/android/index.hbc', Buffer.from('src/app\0chat\0', 'latin1'));
+		const production = ['web', 'ios', 'android'].map((d) => path.join(outer, d));
+		assert.deepEqual(await checkBundles(production, { names }), [], 'clean production exports pass (absence is the default)');
+		assert.deepEqual(await checkBundles([path.join(outer, 'harness')], { names, harness: 'present' }), [], 'the harness export passes with its marker');
+
+		// Any production export that picked up the harness fails, in minified JS or Hermes bytecode.
+		await write('leak-web', 'entry.js', `x.jsx(V,{testID:"${harnessMarker}"})`);
+		await write('leak-ios', 'index.hbc', Buffer.from(`\0${harnessMarker}\0`, 'latin1'));
+		await write('leak-android', 'index.hbc', Buffer.from('\0../../harness/app\0', 'latin1'));
+		const leaks = await checkBundles(['leak-web', 'leak-ios', 'leak-android'].map((d) => path.join(outer, d)), { names });
+		has(leaks, /leak-web\/entry\.js: contains the test harness marker/);
+		has(leaks, /leak-ios\/index\.hbc: contains the test harness marker/);
+		has(leaks, /leak-android\/index\.hbc: contains a harness\/app path/);
+		assert.equal(leaks.length, 3, JSON.stringify(leaks));
+
+		// A harness export without the marker proves nothing, so it fails; secrets and canaries still apply to it.
+		await write('unmarked', 'entry.js', 'var c=require.context("../../harness/app");');
+		has(await checkBundles([path.join(outer, 'unmarked')], { names, harness: 'present' }), /unmarked: the harness export does not contain the harness marker/);
+		await write('harness-secret', 'entry.js', `testID:"${harnessMarker}";var k="MASTER_KEY",v="canary-value-0002";`);
+		const secret = await checkBundles([path.join(outer, 'harness-secret')], { names, canaries: ['canary-value-0002'], harness: 'present' });
+		has(secret, /contains the server secret name MASTER_KEY/); has(secret, /contains canary value #1/);
+		assert.equal(secret.length, 2, JSON.stringify(secret));
+		has(await checkBundles([path.join(outer, 'missing')], { names, harness: 'present' }), /export directory not found/);
+	} finally { await rm(outer, { recursive: true, force: true }); }
+});
+
+test('bundle arguments: production directories, at most one --harness-export, and unknown options refused', () => {
+	assert.deepEqual(parseBundleArguments(['a/web', 'a/ios', 'a/android', '--harness-export', 'a/dist-harness']),
+		{ production: ['a/web', 'a/ios', 'a/android'], harness: ['a/dist-harness'], errors: [] });
+	assert.deepEqual(parseBundleArguments([]), { production: [], harness: [], errors: [] });
+	assert.deepEqual(parseBundleArguments(['--harness-export']).errors, ['--harness-export needs a directory']);
+	assert.deepEqual(parseBundleArguments(['--harness-export', '--x']).errors, ['--harness-export needs a directory', 'unknown option --x']);
+	assert.deepEqual(parseBundleArguments(['--harness-export', 'h1', '--harness-export', 'h2']).errors, ['--harness-export may be given once']);
+	assert.deepEqual(parseBundleArguments(['--harness', 'x']).errors, ['unknown option --harness']);
 });
 
 /** The two network files as the app has them: the binding and the forced options. */

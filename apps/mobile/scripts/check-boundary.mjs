@@ -2,7 +2,9 @@
  *  runs before and after install. It is tooling only: nothing in the app imports it.
  *
  *    node apps/mobile/scripts/check-boundary.mjs                 manifest + source/config scan
- *    node apps/mobile/scripts/check-boundary.mjs <export-dir>…   the same, then scan exported bundles
+ *    node apps/mobile/scripts/check-boundary.mjs <export-dir>…   the same, then scan production exported bundles
+ *    node apps/mobile/scripts/check-boundary.mjs <export-dir>… --harness-export <dir>
+ *                                                                 …and the test harness's web export
  *
  *  Manifest: every direct dependency is on the checked-in allowlist (client-boundary-allowlist.json), from the npm
  *  registry (no workspace:, file:, link:, git or URL specs), no @captain/* package ever, and no peer/optional/bundled
@@ -11,7 +13,17 @@
  *  node: or Node built-ins, never @captain/*, never a path escaping apps/mobile, never a non-literal import/require.
  *  Tests (*.test.*) and build config (app/metro/babel config) run in Node, so they may use node: built-ins and
  *  allowlisted dev packages, but the other rules hold. Everywhere, the only environment reads are
- *  process.env.EXPO_PUBLIC_API_URL and process.env.EXPO_PUBLIC_APP_URL.
+ *  process.env.EXPO_PUBLIC_API_URL and process.env.EXPO_PUBLIC_APP_URL, with one narrow allowance: the root
+ *  app.config.* may also read process.env.CAPTAIN_MOBILE_HARNESS, process.env.EAS_BUILD and process.argv, to select the
+ *  test-only account harness for the web export and refuse it for native builds (docs/plans/
+ *  expo-mobile-auth-composition-2026-09.md §7.1). Nowhere else, including src/ and harness/, may read them.
+ *  Harness variable (same plan): eas.json may never mention CAPTAIN_MOBILE_HARNESS. In the mobile package.json scripts
+ *  and the repository's .github/workflows, a line that mentions it must either unset it (`env -u CAPTAIN_MOBILE_HARNESS`
+ *  or `unset CAPTAIN_MOBILE_HARNESS`) or be a single command `CAPTAIN_MOBILE_HARNESS=1 … expo export --platform web …`
+ *  naming no other platform. Any other form (a YAML env entry, `export`, $GITHUB_ENV) is a finding, because a
+ *  lexical check cannot tell which steps it reaches. The setting and the export must be on one line (no `\`
+ *  continuation); YAML comment lines are ignored. The harness marker (CAPTAIN_MOBILE_HARNESS_ followed by more
+ *  characters) is a different name and is not matched.
  *  Network (app source only; docs/plans/expo-mobile-platform-account-2026-09.md): React Native's global fetch ignores
  *  `redirect: 'error'`, so app code reaches the network only through the API transport's injected `send`, which on
  *  device is `expo/fetch` bound in src/platform/fetch.ts. So: `expo/fetch` may be imported only by that file, and that
@@ -19,7 +31,8 @@
  *  tripwire; its node tests are the proof); and no app file may call a bare `fetch(`, name the global fetch
  *  (globalThis/global/window/self, dotted or bracketed), XMLHttpRequest, WebSocket, EventSource, sendBeacon or React
  *  Native's Networking, or use expo-crypto's synchronous getRandomBytes (it returns Math.random bytes in development).
- *  Bundles: no server secret variable name, no postgres:// URL, and no value named in BOUNDARY_CANARY_VALUES.
+ *  Bundles: no server secret variable name, no postgres:// URL, and no value named in BOUNDARY_CANARY_VALUES. Production
+ *  exports also contain neither the harness marker nor a harness/app path; the harness export must contain the marker.
  *  Findings name the file and the rule, never surrounding content. Exit 1 on any finding.
  *
  *  Limits: the source scan is lexical, not a JavaScript/TypeScript parser. It recognises comments, quoted strings and
@@ -47,7 +60,13 @@ const sourceExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', 
  *  as .expo). A directory of the same name deeper down, such as src/scripts, is ordinary source and is scanned.
  *  Installed packages (node_modules) are skipped at every depth. */
 const rootSkippedDirectories = new Set(['dist', 'ios', 'android', 'web-build', 'coverage', 'scripts']);
+/** Further export output directories at the mobile root, such as the harness export's dist-harness. */
+const rootSkippedPrefix = /^dist-/;
 const toolingConfig = /^(app|metro|babel)\.config\.(ts|js|mjs|cjs)$/;
+const appConfig = /^app\.config\.(ts|js|mjs|cjs)$/;
+/** Extra reads allowed in the root app.config.* only (see the header). */
+const appConfigEnv = new Set(['CAPTAIN_MOBILE_HARNESS', 'EAS_BUILD']);
+export const harnessVariable = 'CAPTAIN_MOBILE_HARNESS';
 const builtins = new Set(builtinModules.flatMap((name) => [name, name.split('/')[0]]));
 /** Server secrets that must never be in a bundle; the API's own environment schema adds any it defines later. */
 const knownSecretNames = ['DATABASE_URL', 'MIGRATION_DATABASE_URL', 'MASTER_KEY', 'GOOGLE_CLIENT_SECRET', 'SHOPIFY_CLIENT_SECRET',
@@ -169,10 +188,13 @@ export function checkSource({ file, text, kind, root, runtime, dev }) {
 	// Every use of `process` must be one of the two allowed reads. Quoted string contents are blanked first, so words in
 	// text are not uses while process['env'], process["env"], aliases (const p = process) and destructuring still are.
 	const identifiers = blankQuotedStrings(code);
+	const isAppConfig = kind === 'config' && path.dirname(file) === root && appConfig.test(path.basename(file));
 	for (const match of identifiers.matchAll(/\bprocess\b/g)) {
 		const rest = identifiers.slice(match.index);
 		const named = /^process\s*(?:\?\.|\.)\s*env\s*(?:\?\.|\.)\s*([A-Za-z_$][\w$]*)/.exec(rest);
 		if (named && allowedEnv.has(named[1]) && /^process\s*\.\s*env\s*\./.test(rest)) continue;
+		if (isAppConfig && named && appConfigEnv.has(named[1]) && /^process\s*\.\s*env\s*\./.test(rest)) continue;
+		if (isAppConfig && /^process\s*\.\s*argv\b/.test(rest)) continue;
 		findings.push(`${where}: ${named ? `process.env.${named[1]}` : 'a computed, aliased or destructured use of process'} is not allowed; only process.env.${[...allowedEnv].join(' and process.env.')} may be read`);
 	}
 	if (/\bimport\s*\.\s*meta\s*\.\s*env\b/.test(code)) findings.push(`${where}: import.meta.env is not allowed; only ${[...allowedEnv].join(' and ')} may be read through process.env`);
@@ -214,7 +236,7 @@ async function walk(directory, root, found = []) {
 		const full = path.join(directory, entry.name);
 		if (entry.isDirectory()) {
 			if (entry.name === 'node_modules') continue;
-			if (directory === root && (rootSkippedDirectories.has(entry.name) || entry.name.startsWith('.'))) continue;
+			if (directory === root && (rootSkippedDirectories.has(entry.name) || rootSkippedPrefix.test(entry.name) || entry.name.startsWith('.'))) continue;
 			await walk(full, root, found);
 		}
 		else if (entry.isFile() && sourceExtensions.has(path.extname(entry.name)) && !entry.name.endsWith('.d.ts')) found.push(full);
@@ -228,45 +250,115 @@ const kindOf = (root, file) => {
 	return 'app';
 };
 
-/** Manifest and every source file under the mobile root. */
-export async function checkMobile(root = defaultMobileRoot, allowlist) {
+const mentionsHarness = new RegExp(`${harnessVariable}(?![A-Za-z0-9_])`);
+/** One command line that mentions the harness variable: true only for the two permitted forms (see the header). */
+export function harnessLineAllowed(line) {
+	if (/(?:\benv\s+-u\s+|\bunset\s+)CAPTAIN_MOBILE_HARNESS(?![A-Za-z0-9_])/.test(line) && !/CAPTAIN_MOBILE_HARNESS\s*=/.test(line)) return true;
+	const sets = line.match(/CAPTAIN_MOBILE_HARNESS(?![A-Za-z0-9_])/g) ?? [];
+	if (sets.length !== 1 || !/(?:^|[\s;&|("'])CAPTAIN_MOBILE_HARNESS=1\s+(?:\S+\s+)*?\S*expo\s+export\b/.test(line)) return false;
+	const platforms = [...line.matchAll(/(?:--platform(?:=|\s+)|\s-p\s+)(\S+)/g)].map((m) => m[1].replace(/["']/g, ''));
+	return platforms.length > 0 && platforms.every((p) => p === 'web');
+}
+
+/** Where the harness variable may be set: never in eas.json; only the permitted lines in the mobile package.json
+ *  scripts and the repository workflows. A missing eas.json or workflows directory has nothing to check. */
+export async function checkHarnessSetters(root, workflowsDir = path.resolve(root, '..', '..', '.github', 'workflows')) {
+	const findings = [];
+	const easText = await readFile(path.join(root, 'eas.json'), 'utf8').catch(() => null);
+	if (easText !== null && mentionsHarness.test(easText)) findings.push(`eas.json: ${harnessVariable} may never be set for an EAS build; the harness is for the web export only`);
+	const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+	for (const [name, script] of Object.entries(manifest.scripts ?? {}))
+		if (typeof script === 'string' && mentionsHarness.test(script) && !harnessLineAllowed(script))
+			findings.push(`package.json: script ${name} may mention ${harnessVariable} only to unset it or as CAPTAIN_MOBILE_HARNESS=1 on an expo export --platform web command`);
+	const workflows = await readdir(workflowsDir).catch(() => []);
+	for (const name of workflows.filter((n) => /\.ya?ml$/.test(n)).sort()) {
+		const lines = (await readFile(path.join(workflowsDir, name), 'utf8')).split('\n');
+		lines.forEach((line, index) => {
+			if (!mentionsHarness.test(line) || /^\s*#/.test(line)) return; // a YAML comment sets nothing
+			const command = line.replace(/^\s*(?:-\s*)?(?:run:\s*)?/, '');
+			if (!harnessLineAllowed(command)) findings.push(`.github/workflows/${name}:${index + 1}: ${harnessVariable} may be set only as CAPTAIN_MOBILE_HARNESS=1 on one expo export --platform web command, or unset`);
+		});
+	}
+	return findings;
+}
+
+/** Manifest, harness-variable setters and every source file under the mobile root. */
+export async function checkMobile(root = defaultMobileRoot, allowlist, options = {}) {
 	allowlist ??= await loadAllowlist();
 	const manifest = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
 	const findings = checkManifest(manifest, allowlist);
+	findings.push(...await checkHarnessSetters(root, options.workflowsDir));
 	const declared = (field, allowed) => new Set(Object.keys(manifest[field] ?? {}).filter((name) => allowed.has(name)));
 	const runtime = declared('dependencies', allowlist.dependencies), dev = declared('devDependencies', allowlist.devDependencies);
 	for (const file of await walk(root, root)) findings.push(...checkSource({ file, text: await readFile(file, 'utf8'), kind: kindOf(root, file), root, runtime, dev }));
 	return findings;
 }
 
-/** Exported bundles: every file is read as bytes (Hermes bytecode keeps strings), and matched without context. */
-export async function checkBundles(directories, { names, canaries = [] }) {
+/** The fixed marker every harness layout renders (as a `testID`, so minification keeps it), and the harness router root
+ *  (docs/plans/expo-mobile-auth-composition-2026-09.md §7.1). */
+export const harnessMarker = 'CAPTAIN_MOBILE_HARNESS_7f3a';
+export const harnessRootPath = 'harness/app';
+
+/** Exported bundles: every file is read as bytes (Hermes bytecode keeps strings), and matched without context.
+ *  `harness: 'absent'` (production exports, the default): no file may contain the harness marker or a harness/app path.
+ *  `harness: 'present'` (the harness web export): each directory must contain the marker somewhere, proving the
+ *  absence check can see it in minified output. The secret, postgres and canary rules apply to both. */
+export async function checkBundles(directories, { names, canaries = [], harness = 'absent' }) {
 	const findings = [];
+	const withMarker = new Set();
 	const nameMatchers = names.map((name) => [name, new RegExp(`(?<![A-Z0-9_])${name}(?![A-Z0-9_])`)]);
 	const files = [];
 	const collect = async (directory, into) => { for (const entry of await readdir(directory, { withFileTypes: true })) { const full = path.join(directory, entry.name); if (entry.isDirectory()) await collect(full, into); else if (entry.isFile()) into.push(full); } };
 	// Each directory is judged on its own: one platform's missing or empty export is a finding even when another has files.
+	const scanned = [];
 	for (const directory of directories) {
 		if (!(await stat(directory).then((s) => s.isDirectory(), () => false))) { findings.push(`${directory}: export directory not found`); continue; }
 		const found = []; await collect(directory, found);
 		if (found.length === 0) findings.push(`${directory}: no exported files to scan`);
-		files.push(...found);
+		else scanned.push(directory);
+		files.push(...found.map((file) => [directory, file]));
 	}
-	for (const file of files) {
+	for (const [directory, file] of files) {
 		const text = (await readFile(file)).toString('latin1');
 		for (const [name, matcher] of nameMatchers) if (matcher.test(text)) findings.push(`${file}: contains the server secret name ${name}`);
 		if (/postgres(?:ql)?:\/\//i.test(text)) findings.push(`${file}: contains a postgres:// URL`);
 		for (const [index, canary] of canaries.entries()) if (canary && text.includes(canary)) findings.push(`${file}: contains canary value #${index + 1} from the export environment`);
+		const marked = text.includes(harnessMarker);
+		if (marked) withMarker.add(directory);
+		if (harness === 'absent') {
+			if (marked) findings.push(`${file}: contains the test harness marker; a production export must not include the harness`);
+			if (text.includes(harnessRootPath)) findings.push(`${file}: contains a ${harnessRootPath} path; a production export must not include the harness`);
+		}
 	}
+	if (harness === 'present') for (const directory of scanned) if (!withMarker.has(directory)) findings.push(`${directory}: the harness export does not contain the harness marker, so its absence elsewhere proves nothing`);
 	return findings;
 }
 
+/** Command-line arguments: production export directories, and at most one `--harness-export <dir>`. */
+export function parseBundleArguments(args) {
+	const production = []; const harness = []; const errors = [];
+	for (let i = 0; i < args.length; i++) {
+		if (args[i] === '--harness-export') {
+			const next = args[i + 1];
+			if (next === undefined || next.startsWith('--')) errors.push('--harness-export needs a directory'); else { harness.push(next); i++; }
+		}
+		else if (args[i].startsWith('--')) errors.push(`unknown option ${args[i]}`);
+		else production.push(args[i]);
+	}
+	if (harness.length > 1) errors.push('--harness-export may be given once');
+	return { production, harness, errors };
+}
+
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-	const exportDirectories = process.argv.slice(2).map((d) => path.resolve(d));
-	const findings = await checkMobile();
+	const { production, harness, errors } = parseBundleArguments(process.argv.slice(2));
+	const exportDirectories = [...production, ...harness];
+	const findings = [...errors];
+	findings.push(...await checkMobile());
 	if (exportDirectories.length) {
 		const canaries = (process.env.BOUNDARY_CANARY_VALUES ?? '').split(',').map((v) => v.trim()).filter((v) => v.length >= 8);
-		findings.push(...await checkBundles(exportDirectories, { names: await secretNames(), canaries }));
+		const names = await secretNames();
+		if (production.length) findings.push(...await checkBundles(production.map((d) => path.resolve(d)), { names, canaries, harness: 'absent' }));
+		if (harness.length) findings.push(...await checkBundles(harness.map((d) => path.resolve(d)), { names, canaries, harness: 'present' }));
 	}
 	for (const finding of findings) console.error(`boundary: ${finding}`);
 	console.log(findings.length ? `boundary: ${findings.length} finding(s)` : `boundary: apps/mobile manifest and sources${exportDirectories.length ? ' and exported bundles' : ''} are within the client boundary`);

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { appScheme, linkableRoutes, linkTarget, refusedLink, safeReturnPath } from './links.ts';
+import { redirectSystemPath } from '../app/+native-intent.tsx';
+import { callbackUrl } from '../auth/callback.ts';
+import { appScheme, linkableRoutes, linkTarget, refusedLink, safeReturnPath, systemLinkTarget } from './links.ts';
 
 /** The same vectors as the API's return-path.test.ts and the web's session-state.test.ts. */
 const kept = [
@@ -38,6 +40,33 @@ test('every sign-in callback is refused, in every form: this hook never accepts 
 	for (const incoming of [`${appScheme}:/auth/callback?${query}`, `${appScheme}:///auth/callback?${query}`, `/auth/callback?${query}`, '/auth/callback',
 		`${appScheme}://auth/callback?${query}`, `${appScheme}:/auth/callback/`, `${appScheme}:/AUTH/callback`, `${appScheme}:/auth/passkey?token=pks_x`])
 		assert.equal(linkTarget(incoming), refusedLink, incoming);
+});
+
+test('a system link that is exactly this build’s sign-in callback causes no navigation; lookalikes are still refused', () => {
+	const query = 'code=nh_' + 'a'.repeat(43) + '&attempt=' + 'b'.repeat(43);
+	// The attempt core's own prefix is one of the forms, so the two rules cannot drift apart.
+	assert.equal(callbackUrl, `${appScheme}:/auth/callback`);
+	for (const incoming of [`${callbackUrl}?${query}`, callbackUrl, `${callbackUrl}?`, `${appScheme}:///auth/callback?${query}`, `${appScheme}:///auth/callback`,
+		`${callbackUrl}?code=junk`]) {
+		assert.equal(systemLinkTarget(incoming), null, incoming);
+		for (const initial of [true, false]) assert.equal(redirectSystemPath({ path: incoming, initial }), null, incoming);
+	}
+	for (const incoming of [
+		`/auth/callback?${query}`, '/auth/callback', `${appScheme}://auth/callback?${query}`, `${appScheme}:////auth/callback`,
+		`${appScheme}:/auth/callback/`, `${appScheme}:/auth/callback/?${query}`, `${appScheme}:/AUTH/callback`, `${appScheme.toUpperCase()}:/auth/callback`,
+		`${appScheme}:/auth/callback#${query}`, `${appScheme}:/auth/callback?${query}#x`, `${appScheme}:/auth/callbacks`, `${appScheme}:/auth/callback.`,
+		`${appScheme}:/auth/passkey?token=pks_x`, `${appScheme}:/auth/google/callback`, `${appScheme}:/auth`, `${appScheme}:/auth/`,
+		`${appScheme}://evil.test/auth/callback`, `${appScheme}:/%61uth/callback`, `${appScheme}:/auth%2Fcallback`, `${appScheme}:/./auth/callback`,
+		`${appScheme}:/work/../auth/callback`, `https://app.askthecaptain.app/auth/callback?${query}`, `app-askthecaptain-dev:/auth/callback`,
+		`appXaskthecaptain.dev:/auth/callback`, ` ${callbackUrl}`, `${callbackUrl} `, `${callbackUrl}\n`, `${callbackUrl}?${'x'.repeat(2048)}`
+	]) {
+		assert.equal(systemLinkTarget(incoming), refusedLink, incoming);
+		assert.equal(redirectSystemPath({ path: incoming, initial: false }), refusedLink, incoming);
+	}
+	for (const incoming of [undefined, null, 7, ['/work']]) assert.equal(systemLinkTarget(incoming), refusedLink);
+	// Every app route is unchanged by the callback rule.
+	for (const route of linkableRoutes) assert.equal(systemLinkTarget(route), route, route);
+	assert.equal(systemLinkTarget(`${appScheme}:/work?x=1`), '/work');
 });
 
 test('other schemes, hosts, unknown or not-yet-built routes and malformed links are refused', () => {

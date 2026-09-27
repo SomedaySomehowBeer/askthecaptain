@@ -1,12 +1,15 @@
 import { apiPaths, type OrganisationPath } from '../api/paths.ts';
 import type { Cleanup } from '../auth/cleanup.ts';
 import type { ApiClient, ApiOutcome, Attempts, AttemptOutcome, Parse } from '../auth/contracts.ts';
+import { createClampedClock, waitFor, type Clock } from './clock.ts';
 import type { CredentialStore, Generation } from './contracts.ts';
 import {
 	holds, initial, reduce, slowAfterMs, storeGeneration, view as viewOf,
-	type Command, type CredentialHandle, type Effect, type Event, type LocalResult, type Machine
+	type AccountSnapshot, type Command, type CredentialHandle, type Effect, type Event, type LocalResult, type Machine
 } from './machine.ts';
 import { parseMe } from './me.ts';
+
+export type { AccountSnapshot } from './machine.ts';
 
 /** The account effect runner: the only place a session token lives in memory (docs/plans/
  *  expo-mobile-platform-account-2026-09.md "Account contract"). It performs the reducer's effects against the injected
@@ -30,12 +33,14 @@ export type AccountRunnerDeps = {
 	/** This runner's own revocation cleanup (createCleanup), never the attempt core's. */
 	readonly cleanup: Cleanup;
 	readonly timers?: Timers;
-	readonly now?: () => number;
+	/** The shared clamped monotonic clock (clock.ts): the same instance the cleanups use. Decides every send. */
+	readonly clock?: Clock;
+	/** Wall-clock milliseconds, for wording "about {time}" only; never to decide a send. */
+	readonly wallNow?: () => number;
 };
 
-/** Commands from screens. Try again carries no time; the runner adds its clock. */
-export type UiCommand = Exclude<Command, { type: 'retry' }> | { readonly type: 'retry' };
-export type AccountSnapshot = ReturnType<typeof viewOf>;
+/** Commands from screens. Try again and a foreground refresh carry no time; the runner adds its clock. */
+export type UiCommand = Exclude<Command, { type: 'retry' } | { type: 'refresh' }> | { readonly type: 'retry' } | { readonly type: 'refresh' };
 
 /** An organisation-scoped read's result. `not-ready`: no verified identity with a chosen organisation, so nothing was
  *  sent. `superseded`: the account or organisation changed while it was in flight, so its answer must not be shown. */
@@ -65,8 +70,14 @@ const defaultTimers: Timers = {
 
 export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 	const { attempts, client, cleanup } = deps;
-	const timers = deps.timers ?? defaultTimers; const now = deps.now ?? Date.now;
+	const timers = deps.timers ?? defaultTimers;
+	const clock = deps.clock ?? createClampedClock(() => performance.now());
+	const now = clock.now; const wallNow = deps.wallNow ?? Date.now;
 	let machine: Machine = initial();
+	// The snapshot screens read: recomputed only when the machine object changes, so repeated reads return the same
+	// object (useSyncExternalStore) and unchanged steps notify nobody.
+	let viewed: Machine = machine;
+	let current: AccountSnapshot = viewOf(machine);
 	const store = deps.createStore ? deps.createStore(() => storeGeneration(machine.generations)) : null;
 	const credentials = new Map<CredentialHandle, Credential>();
 	const running = new Map<number, unknown>();
@@ -85,7 +96,9 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 				for (const effect of step.effects) perform(effect);
 			}
 		} finally { dispatching = false; }
-		const snapshot = viewOf(machine);
+		if (machine === viewed) return;
+		viewed = machine; current = viewOf(machine);
+		const snapshot = current;
 		for (const listener of [...listeners]) { try { listener(snapshot); } catch { /* a screen's error is its own */ } }
 	}
 
@@ -116,15 +129,15 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 	let holder: CredentialHandle | null = null;
 
 	const fault = () => dispatch({ type: 'fault' });
-	const refuse = (handle: CredentialHandle) => { fault(); dispatch({ type: 'server-finished', handle, result: 'refused', retryAt: null }); };
+	const refuse = (handle: CredentialHandle) => { fault(); dispatch({ type: 'server-finished', handle, result: 'refused', wait: null }); };
 
 	function serverAnswer(handle: CredentialHandle, answer: Promise<'revoked' | 'still-pending'>): void {
 		void answer.then(
 			(result) => {
 				if (result === 'revoked') {
 					if (holder === handle) holder = null;
-					dispatch({ type: 'server-finished', handle, result: 'ended', retryAt: null });
-				} else dispatch({ type: 'server-finished', handle, result: 'pending', retryAt: cleanup.retryAt() });
+					dispatch({ type: 'server-finished', handle, result: 'ended', wait: null });
+				} else dispatch({ type: 'server-finished', handle, result: 'pending', wait: waitFor(cleanup.retryAfterMs(), clock, wallNow) });
 			},
 			() => {
 				// begin() refuses only when the cleanup already holds a token: it did not take this one.
@@ -147,6 +160,8 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 		const handle = mint({ token, expiresAt, userId: user.id });
 		deliver({ type: 'attempt-finished', outcome: { kind: 'signed-in', handle, userId: user.id, returnTo } }, handle);
 	}
+	const installed = (handle: CredentialHandle, result: 'written' | 'stale' | 'failed') =>
+		dispatch({ type: 'install-finished', handle, result, now: now() });
 
 	/** Dispatches the event carrying a freshly minted handle; if no state then holds it, it is released as a stray
 	 *  rather than left in memory holding the gate closed. (Completions run from promise callbacks, never inside a
@@ -159,14 +174,14 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 	function perform(effect: Effect): void {
 		switch (effect.type) {
 			case 'read-stored': {
-				if (!store) { dispatch({ type: 'launch-read', result: { kind: 'unavailable' } }); return; }
+				if (!store) { dispatch({ type: 'launch-read', now: now(), result: { kind: 'unavailable' } }); return; }
 				void store.read().then(
 					(session) => {
-						if (session === null) { dispatch({ type: 'launch-read', result: { kind: 'none' } }); return; }
+						if (session === null) { dispatch({ type: 'launch-read', now: now(), result: { kind: 'none' } }); return; }
 						const handle = mint({ token: session.token, expiresAt: session.expiresAt, userId: session.userId });
-						deliver({ type: 'launch-read', result: { kind: 'session', handle, userId: session.userId } }, handle);
+						deliver({ type: 'launch-read', now: now(), result: { kind: 'session', handle, userId: session.userId } }, handle);
 					},
-					() => dispatch({ type: 'launch-read', result: { kind: 'unreadable' } }));
+					() => dispatch({ type: 'launch-read', now: now(), result: { kind: 'unreadable' } }));
 				return;
 			}
 			case 'wait-settled': {
@@ -191,26 +206,26 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 			}
 			case 'install': {
 				const credential = credentials.get(effect.handle);
-				if (!store || !credential) { fault(); dispatch({ type: 'install-finished', handle: effect.handle, result: 'failed' }); return; }
+				if (!store || !credential) { fault(); installed(effect.handle, 'failed'); return; }
 				void store.install({ token: credential.token, expiresAt: credential.expiresAt, userId: credential.userId }, effect.generation).then(
-					(result) => dispatch({ type: 'install-finished', handle: effect.handle, result }),
-					() => dispatch({ type: 'install-finished', handle: effect.handle, result: 'failed' }));
+					(result) => installed(effect.handle, result),
+					() => installed(effect.handle, 'failed'));
 				return;
 			}
 			case 'load-me': {
 				const credential = credentials.get(effect.handle);
 				const { handle, membership } = effect;
 				// A missing credential is a fault; the bounded answer is "could not check", never signed in.
-				if (!credential) { fault(); dispatch({ type: 'me-finished', handle, membership, outcome: { kind: 'unavailable', retryAt: null } }); return; }
+				if (!credential) { fault(); dispatch({ type: 'me-finished', handle, membership, outcome: { kind: 'unavailable', wait: null } }); return; }
 				void client.get(apiPaths.me, credential.token, parseMe).then(
 					(answer) => {
 						if (answer.ok) { dispatch({ type: 'me-finished', handle, membership, outcome: { kind: 'ok', me: answer.value } }); return; }
 						if (answer.kind === 'unauthorised') { dispatch({ type: 'me-finished', handle, membership, outcome: { kind: 'unauthorised' } }); return; }
-						// Unavailable or refused: never a sign-out. A server's Retry-After paces Try again.
-						const retryAt = answer.kind === 'unavailable' && answer.retryAfter !== undefined ? now() + answer.retryAfter * 1000 : null;
-						dispatch({ type: 'me-finished', handle, membership, outcome: { kind: 'unavailable', retryAt } });
+						// Unavailable or refused: never a sign-out. A server's Retry-After paces every later load.
+						const wait = answer.kind === 'unavailable' && answer.retryAfter !== undefined ? waitFor(answer.retryAfter * 1000, clock, wallNow) : null;
+						dispatch({ type: 'me-finished', handle, membership, outcome: { kind: 'unavailable', wait } });
 					},
-					() => dispatch({ type: 'me-finished', handle, membership, outcome: { kind: 'unavailable', retryAt: null } }));
+					() => dispatch({ type: 'me-finished', handle, membership, outcome: { kind: 'unavailable', wait: null } }));
 				return;
 			}
 			case 'read-org': {
@@ -275,7 +290,7 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 		let answer: ApiOutcome<T>;
 		try { answer = await client.get(target, credential.token, parse); } catch { answer = { ok: false, kind: 'unavailable', status: 0 }; }
 		if (!answer.ok && answer.kind === 'unauthorised') dispatch({ type: 'unauthorised', handle });
-		else if (!answer.ok && answer.kind === 'refused' && (answer.status === 403 || answer.status === 404)) dispatch({ type: 'org-refused', handle, organisation });
+		else if (!answer.ok && answer.kind === 'refused' && (answer.status === 403 || answer.status === 404)) dispatch({ type: 'org-refused', handle, organisation, now: now() });
 		const after = machine.state;
 		if (after.kind !== 'signed-in' || after.handle !== handle || machine.generations.organisation !== organisation) return { ok: false, kind: 'superseded' };
 		return answer;
@@ -284,8 +299,8 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 	return {
 		organisationRead,
 		start: () => dispatch({ type: 'boot' }),
-		snapshot: () => viewOf(machine),
-		send: (command) => dispatch(command.type === 'retry' ? { type: 'retry', now: now() } : command),
+		snapshot: () => current,
+		send: (command) => dispatch(command.type === 'retry' || command.type === 'refresh' ? { type: command.type, now: now() } : command),
 		subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener); }; }
 	};
 }

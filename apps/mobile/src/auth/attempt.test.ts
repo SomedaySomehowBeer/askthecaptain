@@ -301,26 +301,45 @@ test('a retry-after beyond the schedule is never cut short: the cleanup goes pen
 	const cleanup = createCleanup({ transport, sleep, now });
 	const attempts = createAttempts({ platform: fakePlatform().platform, transport, cleanup });
 	const started = time.now;
-	const at = (ms: number) => new Date(ms).toISOString();
-	assert.equal(attempts.pendingCleanupRetryAt(), null, 'nothing held yet');
+	assert.equal(attempts.pendingCleanupRetryAfterMs(), null, 'nothing held yet');
 	assert.equal(await cleanup.begin(token, expiresAt), 'still-pending');
 	assert.equal(sent.length, 1, 'no send before the 120 seconds the server asked for');
 	assert.deepEqual(time.slept, []);
 	assert.equal(attempts.state(), 'cleanup-pending');
-	assert.equal(attempts.pendingCleanupRetryAt(), at(started + 120_000), 'the pending state names when a retry may send');
+	assert.equal(attempts.pendingCleanupRetryAfterMs(), 120_000, 'the pending state says how long until a retry may send');
 	time.now = started + 119_999;
+	assert.equal(attempts.pendingCleanupRetryAfterMs(), 1);
 	assert.equal(await attempts.retryCleanup(), 'still-pending'); assert.equal(sent.length, 1, 'an explicit retry is held back too');
 	time.now = started + 120_000;
-	assert.equal(attempts.pendingCleanupRetryAt(), null, 'a retry may send now');
+	assert.equal(attempts.pendingCleanupRetryAfterMs(), null, 'a retry may send now');
 	assert.equal(await attempts.retryCleanup(), 'still-pending'); assert.equal(sent.length, 2, 'one send once the time has come');
 	// That answer asked for 60 more seconds, counted from when it arrived.
-	assert.equal(attempts.pendingCleanupRetryAt(), at(started + 180_000));
+	assert.equal(attempts.pendingCleanupRetryAfterMs(), 60_000);
 	time.now += 59_000;
 	assert.equal(await attempts.retryCleanup(), 'still-pending'); assert.equal(sent.length, 2);
 	time.now += 1_000;
 	assert.equal(await attempts.retryCleanup(), 'revoked'); assert.equal(sent.length, 3);
 	assert.equal(attempts.state(), 'idle');
-	assert.equal(attempts.pendingCleanupRetryAt(), null, 'cleared on completion'); assert.equal(attempts.pendingCleanupExpiresAt(), null);
+	assert.equal(attempts.pendingCleanupRetryAfterMs(), null, 'cleared on completion'); assert.equal(attempts.pendingCleanupExpiresAt(), null);
+});
+
+test('the cleanup is paced only by its injected monotonic clock: a reading near zero works, and no wall time is involved', async () => {
+	// A process-relative clock (performance.now() starts near zero) must not look like "no wait". Every value below is
+	// relative to that injected clock; one read of the device's date would put them off by decades.
+	const answers: Answer[] = [busy(503, 90), answered(200, { ok: true })];
+	const { transport, sent } = fakeTransport(() => answers.shift()!);
+	const time = { now: 5 };
+	const cleanup = createCleanup({ transport, now: () => time.now, sleep: async (ms) => { time.now += ms; } });
+	assert.equal(cleanup.retryAfterMs(), null);
+	assert.equal(await cleanup.begin(token, expiresAt), 'still-pending');
+	assert.equal(cleanup.retryAfterMs(), 90_000);
+	time.now = 90_004;
+	assert.equal(await cleanup.retry(), 'still-pending'); assert.equal(sent.length, 1, 'one millisecond early sends nothing');
+	assert.equal(cleanup.retryAfterMs(), 1);
+	time.now = 90_005;
+	assert.equal(cleanup.retryAfterMs(), null);
+	assert.equal(await cleanup.retry(), 'revoked'); assert.equal(sent.length, 2);
+	assert.equal(cleanup.retryAfterMs(), null);
 });
 
 test('the device clock passing the session’s expiry is not revocation: the token stays held until the server confirms', async () => {

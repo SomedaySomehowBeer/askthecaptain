@@ -1,18 +1,23 @@
-import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { colors } from '../theme/tokens.ts';
+import { AccountProvider } from '../account/AccountProvider.tsx';
+import { AccountStack } from '../account/AccountStack.tsx';
+import { accountInstance } from '../account/instance.ts';
+import { config, webLink, type WebPath } from '../config.ts';
+import { appAccountPlatform } from '../platform/app-account.ts';
 
-/** The app: the three workspace sections, plus Settings (opened from the avatar, never a fourth tab) and the page
- *  for a link this app will not open. This shell has no sign-in, network or storage yet (contract §9: M-auth follows). */
+/** The app: the account provider over the one composed source, and the account stack that holds every route
+ *  (docs/plans/expo-mobile-auth-composition-2026-09.md §4.1). No other routing logic lives here. */
+const links = (path: WebPath) => webLink(config.webOrigin, path);
+
 export default function RootLayout() {
+	// Created on first render and reused for the life of the process (instance.ts); never composed twice.
+	const source = accountInstance(() => appAccountPlatform);
 	return (
 		<>
 			<StatusBar style="dark" />
-			<Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }}>
-				<Stack.Screen name="(tabs)" />
-				<Stack.Screen name="settings" />
-				<Stack.Screen name="link-not-allowed" />
-			</Stack>
+			<AccountProvider source={source} webLink={links}>
+				<AccountStack />
+			</AccountProvider>
 		</>
 	);
 }
