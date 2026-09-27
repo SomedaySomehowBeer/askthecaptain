@@ -1,0 +1,14 @@
+{
+  "machine": "80e39ea6416e18",
+  "image": "registry.fly.io/askthecaptain-api-staging:git-17089ce@sha256:9888f1a419eff548fd1569c30c373e4d14ec9c6ff6779fe0b70677f632e71e2f",
+  "exit": {
+    "guest_signal": -1,
+    "signal": -1,
+    "exited_at": "2026-09-27T06:02:06.119Z",
+    "verified_exit_code": 0
+  },
+  "marker": "CAPTAIN_17089CE_MIGRATION_AND_QUEUES_OK",
+  "applied": [
+    "0044_native_handoff.sql"
+  ]
+}

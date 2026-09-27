@@ -1,0 +1,16 @@
+{
+  "/readyz": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "/auth/google/start?client=native": {
+    "status": 400,
+    "body": {
+      "ok": false,
+      "code": "native_sign_in_unavailable",
+      "error": "Mobile sign-in is not available on this Captain."
+    }
+  }
+}
