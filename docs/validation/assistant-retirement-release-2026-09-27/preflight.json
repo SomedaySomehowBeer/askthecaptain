@@ -1,0 +1,68 @@
+{
+  "checked_at": "2026-09-27T05:58:37.342Z",
+  "read_only": "on",
+  "migrations": [
+    "0001_foundation.sql",
+    "0002_commitments.sql",
+    "0003_connections.sql",
+    "0004_mail.sql",
+    "0005_calendar.sql",
+    "0006_contacts.sql",
+    "0007_inference.sql",
+    "0008_xero.sql",
+    "0009_workflows.sql",
+    "0010_series_routine.sql",
+    "0011_push.sql",
+    "0012_triage.sql",
+    "0013_workflow_runner.sql",
+    "0015_organisation_deletions.sql",
+    "0016_stock.sql",
+    "0018_passkeys.sql",
+    "0019_briefs.sql",
+    "0020_calendar_notes.sql",
+    "0021_shopify.sql",
+    "0023_usage_run_fk.sql",
+    "0024_outbox_invoice.sql",
+    "0025_answers.sql",
+    "0026_triage_gate.sql",
+    "0027_draft_outcomes.sql",
+    "0028_thread_reminders.sql",
+    "0029_notes.sql",
+    "0030_content_vectors.sql",
+    "0031_project_sources.sql",
+    "0032_subtasks_brief.sql",
+    "0033_discovery.sql",
+    "0034_sent_triage.sql",
+    "0035_task_tags.sql",
+    "0036_equipment_reservations.sql",
+    "0037_retire_assistant_workflows.sql",
+    "0038_optional_projects.sql",
+    "0039_work_revisions.sql",
+    "0040_saved_views.sql",
+    "0041_runtime_role.sql",
+    "0042_chat_core.sql",
+    "0043_chat_personal_pins.sql"
+  ],
+  "google": [],
+  "attachment": {
+    "count": 0
+  },
+  "roles": [
+    "app",
+    "captain_runtime"
+  ],
+  "constraint": {
+    "conname": "auth_requests_kind_check",
+    "definition": "CHECK ((kind = ANY (ARRAY['oauth'::text, 'session_exchange'::text, 'google_connection'::text, 'xero_connection'::text, 'xero_selection'::text, 'passkey_challenge'::text, 'shopify_connection'::text])))"
+  },
+  "runtime": {
+    "current_role": "captain_runtime",
+    "session_role": "captain_runtime",
+    "rolsuper": false,
+    "rolbypassrls": false
+  },
+  "native_enabled": false,
+  "pending": [
+    "0044_native_handoff.sql"
+  ]
+}

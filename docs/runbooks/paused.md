@@ -1,7 +1,23 @@
 # Staging resumed; production paused (2026-09-27)
 
-**Staging runs on the restricted `captain_runtime` database login**, with the #176 API and web
-images (retaining the #162 role guard, #173 chat API and #174 Chat screens). The workspace is at https://app.askthecaptain.app/work. One existing
+## Assistant retirement and default-off native handoff release (27 September 2026)
+
+Reviewed #190 and #191 are merged. Staging API and web now run the clean source
+`17089ce409c73eb6cf758113472f704dad359d9a`, identical to merge `02458b7e3fa0c18ce8a57087486180a870a8ab0e`.
+[Final CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36297908439) passed.
+The sole existing API applied 0044 at 06:02:01 UTC and completed queue setup with exit 0;
+normal configuration was verified before restart. Web followed after schema/runtime/readiness checks.
+Exactly one machine per staging app; production and embedding remain stopped. Native sign-in
+is behaviourally confirmed off. No current Work/Chat/demo data was reset or deleted.
+
+See the [release evidence](../validation/assistant-retirement-release-2026-09-27/README.md)
+for images, checks and rollback limits. R5a's reader-free image is now deployed; R5b still
+requires a fresh full legacy-storage audit and reviewed guarded migration. Mobile adapters,
+account screens, signed builds and device acceptance are separate increments.
+
+
+**Staging runs on the restricted `captain_runtime` database login**, with the `git-17089ce` API and web
+images released on 27 September (#190/#191; retaining the #162 role guard, #173 chat API and #174 Chat screens). The workspace is at https://app.askthecaptain.app/work. One existing
 machine per staging app is retained, with normal autostart and idle stop. Production and the
 embedding service remain paused; automatic deploy and backup workflows remain disabled.
 Any API rollback must retain `captain_runtime` and the #162 role guard. Before any future production

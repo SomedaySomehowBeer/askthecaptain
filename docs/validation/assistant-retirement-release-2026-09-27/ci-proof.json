@@ -1,0 +1,293 @@
+{
+  "conclusion": "success",
+  "headSha": "17089ce409c73eb6cf758113472f704dad359d9a",
+  "jobs": [
+    {
+      "completedAt": "2026-09-27T05:50:55Z",
+      "conclusion": "success",
+      "databaseId": 108560177942,
+      "name": "chat-browser",
+      "startedAt": "2026-09-27T05:41:56Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-09-27T05:41:59Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-09-27T05:41:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:28Z",
+          "conclusion": "success",
+          "name": "Initialize containers",
+          "number": 2,
+          "startedAt": "2026-09-27T05:41:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:30Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 3,
+          "startedAt": "2026-09-27T05:42:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:31Z",
+          "conclusion": "success",
+          "name": "Run pnpm/action-setup@v4",
+          "number": 4,
+          "startedAt": "2026-09-27T05:42:30Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:40Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-node@v4",
+          "number": 5,
+          "startedAt": "2026-09-27T05:42:31Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:45Z",
+          "conclusion": "success",
+          "name": "Run pnpm install --frozen-lockfile",
+          "number": 6,
+          "startedAt": "2026-09-27T05:42:40Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:43:16Z",
+          "conclusion": "success",
+          "name": "Install Chromium",
+          "number": 7,
+          "startedAt": "2026-09-27T05:42:45Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:43:43Z",
+          "conclusion": "success",
+          "name": "Build web once (loopback API and origin)",
+          "number": 8,
+          "startedAt": "2026-09-27T05:43:16Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:50:35Z",
+          "conclusion": "success",
+          "name": "Chat suites (fresh fixture each, sequential)",
+          "number": 9,
+          "startedAt": "2026-09-27T05:43:43Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:50:51Z",
+          "conclusion": "success",
+          "name": "Native sign-in browser proof (fresh fixture, virtual authenticator)",
+          "number": 10,
+          "startedAt": "2026-09-27T05:50:35Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:50:53Z",
+          "conclusion": "success",
+          "name": "Retain chat browser evidence",
+          "number": 11,
+          "startedAt": "2026-09-27T05:50:51Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:50:53Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-node@v4",
+          "number": 19,
+          "startedAt": "2026-09-27T05:50:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:50:53Z",
+          "conclusion": "success",
+          "name": "Post Run pnpm/action-setup@v4",
+          "number": 20,
+          "startedAt": "2026-09-27T05:50:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:50:53Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 21,
+          "startedAt": "2026-09-27T05:50:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:50:53Z",
+          "conclusion": "success",
+          "name": "Stop containers",
+          "number": 22,
+          "startedAt": "2026-09-27T05:50:53Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:50:53Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 23,
+          "startedAt": "2026-09-27T05:50:53Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36297908439/job/108560177942"
+    },
+    {
+      "completedAt": "2026-09-27T05:45:03Z",
+      "conclusion": "success",
+      "databaseId": 108560178035,
+      "name": "check",
+      "startedAt": "2026-09-27T05:41:56Z",
+      "status": "completed",
+      "steps": [
+        {
+          "completedAt": "2026-09-27T05:41:59Z",
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "startedAt": "2026-09-27T05:41:57Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:22Z",
+          "conclusion": "success",
+          "name": "Initialize containers",
+          "number": 2,
+          "startedAt": "2026-09-27T05:41:59Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:24Z",
+          "conclusion": "success",
+          "name": "Run actions/checkout@v4",
+          "number": 3,
+          "startedAt": "2026-09-27T05:42:22Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:26Z",
+          "conclusion": "success",
+          "name": "Run pnpm/action-setup@v4",
+          "number": 4,
+          "startedAt": "2026-09-27T05:42:24Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:33Z",
+          "conclusion": "success",
+          "name": "Run actions/setup-node@v4",
+          "number": 5,
+          "startedAt": "2026-09-27T05:42:26Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:37Z",
+          "conclusion": "success",
+          "name": "Run pnpm install --frozen-lockfile",
+          "number": 6,
+          "startedAt": "2026-09-27T05:42:33Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:42:37Z",
+          "conclusion": "success",
+          "name": "relative imports use .ts specifiers",
+          "number": 7,
+          "startedAt": "2026-09-27T05:42:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:43:00Z",
+          "conclusion": "success",
+          "name": "Typecheck workspace",
+          "number": 8,
+          "startedAt": "2026-09-27T05:42:37Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:44:28Z",
+          "conclusion": "success",
+          "name": "Test workspace against Postgres",
+          "number": 9,
+          "startedAt": "2026-09-27T05:43:00Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:44:29Z",
+          "conclusion": "success",
+          "name": "Sprite bootstrap tests (plain node, no workspace)",
+          "number": 10,
+          "startedAt": "2026-09-27T05:44:28Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:44:58Z",
+          "conclusion": "success",
+          "name": "browser regression for React retries",
+          "number": 11,
+          "startedAt": "2026-09-27T05:44:29Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:44:58Z",
+          "conclusion": "skipped",
+          "name": "Retain browser failure evidence",
+          "number": 12,
+          "startedAt": "2026-09-27T05:44:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:44:58Z",
+          "conclusion": "success",
+          "name": "Post Run actions/setup-node@v4",
+          "number": 21,
+          "startedAt": "2026-09-27T05:44:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:44:58Z",
+          "conclusion": "success",
+          "name": "Post Run pnpm/action-setup@v4",
+          "number": 22,
+          "startedAt": "2026-09-27T05:44:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:44:58Z",
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@v4",
+          "number": 23,
+          "startedAt": "2026-09-27T05:44:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:45:00Z",
+          "conclusion": "success",
+          "name": "Stop containers",
+          "number": 24,
+          "startedAt": "2026-09-27T05:44:58Z",
+          "status": "completed"
+        },
+        {
+          "completedAt": "2026-09-27T05:45:00Z",
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 25,
+          "startedAt": "2026-09-27T05:45:00Z",
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36297908439/job/108560178035"
+    }
+  ],
+  "status": "completed"
+}
