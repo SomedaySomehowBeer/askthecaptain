@@ -561,3 +561,49 @@ export function workViewProblemText(copy: WorkViewCopy, problem: WorkProblemView
 
 /** My work's failure wording (unchanged). */
 export const workProblemText = (problem: WorkProblemView): string => workViewProblemText(workCopy, problem);
+
+/** Inventory, counted stock read-only (docs/plans/expo-mobile-inventory-read-2026-09.md §3, §6). Only a loaded row says
+ *  how much is in stock; the empty wording is used only for a successful answer with no items; a failed, pending or
+ *  inert read never says or implies there is no stock. No fixed wording contains a digit. */
+export const stockCopy = {
+	heading: 'Inventory',
+	subtitle: 'Counted stock, by location',
+	loading: 'Loading stock…',
+	emptyTitle: 'No stock items are listed yet.',
+	emptyBody: 'Items are added and counted on the Captain website.',
+	notCounted: 'Not counted yet.',
+	below: 'Below reorder point',
+	failedFirst: "Couldn't load the stock list.",
+	failedRefresh: "Couldn't refresh. This list may be out of date.",
+	access: "Captain couldn't read this organisation's stock. If your access has changed, Captain will show it the next time it checks.",
+	list: "Captain couldn't read the stock list.",
+	refresh: 'Refresh',
+	tryAgain: 'Try again',
+	busy: 'Loading…',
+	openWeb: 'Count stock on the website'
+} as const;
+
+type StockProblemView = { readonly op: 'first' | 'refresh'; readonly kind: 'unavailable' | 'access' | 'list' };
+
+/** The wording for a failed stock read: the operation decides the line for an unavailable answer; a refusal says what
+ *  kind it was. */
+export function stockProblemText(problem: StockProblemView): string {
+	if (problem.kind === 'access') return stockCopy.access;
+	if (problem.kind === 'list') return stockCopy.list;
+	return problem.op === 'first' ? stockCopy.failedFirst : stockCopy.failedRefresh;
+}
+
+type StockRowView = { readonly name: string; readonly count: string | null; readonly unit: string; readonly reorderPoint: string | null; readonly below: boolean };
+
+/** "{count} {unit}", both exactly as the API returned them (no conversion, rounding or pluralising), or "Not counted
+ *  yet." */
+export const stockCountText = (row: StockRowView): string => (row.count === null ? stockCopy.notCounted : `${row.count} ${row.unit}`);
+
+/** "Reorder point: {reorderPoint} {unit}", verbatim, or null when none is set. */
+export const stockReorderText = (row: StockRowView): string | null => (row.reorderPoint === null ? null : `Reorder point: ${row.reorderPoint} ${row.unit}`);
+
+/** One row read as one element: name, count, then reorder point and the below flag when present. */
+export function stockRowLabel(row: StockRowView): string {
+	const reorder = stockReorderText(row);
+	return [row.name, stockCountText(row), ...(reorder === null ? [] : [reorder]), ...(row.below ? [stockCopy.below] : [])].join(', ');
+}

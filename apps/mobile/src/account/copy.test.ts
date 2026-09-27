@@ -5,7 +5,8 @@ import { captureRequested, consumeRequested, requested, requestedConsumed, reset
 import {
 	copy, destinationStep, faultLines, findAccountStack, firstVisitParams, resetToFreshTabs, navigationStep, navMount, navStart, nextWake, releaseWording, requestedDestination, routeFor, routeHolds,
 	signInNotices, snapshotWaits, tabEntryAction, tabsKey, welcomePage, moreTags, workCopy, workProblemText, type NavMemory, type Page,
-	revocationDisabled, revocationLines, revokeOthersCopy
+	revocationDisabled, revocationLines, revokeOthersCopy,
+	stockCopy, stockCountText, stockProblemText, stockReorderText, stockRowLabel
 } from './copy.ts';
 import { idleRevocation, sendingRevocation, settledRevocation, slowRevocation, unknownResult } from './revocation.ts';
 import type { AccountSnapshot, AccountView, StrayView } from './machine.ts';
@@ -45,6 +46,39 @@ const everyState: AccountSnapshot[] = [
 				canRetry: (server === 'pending' || server === 'refused') && local !== 'removing'
 			}))))
 ];
+
+test('inventory: exact fixed wording with no digits; counts, reorder points and units shown exactly as returned', () => {
+	assert.deepEqual({ ...stockCopy }, {
+		heading: 'Inventory', subtitle: 'Counted stock, by location', loading: 'Loading stock…',
+		emptyTitle: 'No stock items are listed yet.', emptyBody: 'Items are added and counted on the Captain website.',
+		notCounted: 'Not counted yet.', below: 'Below reorder point',
+		failedFirst: "Couldn't load the stock list.", failedRefresh: "Couldn't refresh. This list may be out of date.",
+		access: "Captain couldn't read this organisation's stock. If your access has changed, Captain will show it the next time it checks.",
+		list: "Captain couldn't read the stock list.", refresh: 'Refresh', tryAgain: 'Try again', busy: 'Loading…',
+		openWeb: 'Count stock on the website'
+	});
+	for (const text of Object.values(stockCopy)) assert.doesNotMatch(text, /\d/, text);
+	const row = { name: '  Pale malt ', count: '12.50', unit: ' kg', reorderPoint: '0.125', below: true };
+	assert.equal(stockCountText(row), '12.50  kg', 'verbatim: no trimming, rounding or unit change');
+	assert.equal(stockReorderText(row), 'Reorder point: 0.125  kg');
+	assert.equal(stockRowLabel(row), '  Pale malt , 12.50  kg, Reorder point: 0.125  kg, Below reorder point');
+	const long = `${'9'.repeat(80)}`;
+	assert.equal(stockCountText({ ...row, count: long, unit: 'kegs' }), `${long} kegs`, 'an 80-digit count is kept whole');
+	assert.equal(stockCountText({ ...row, count: '0012.500', unit: 'kegs' }), '0012.500 kegs', 'leading zeros and scale kept');
+	const plain = { name: 'Hops', count: null, unit: 'bags', reorderPoint: null, below: false };
+	assert.equal(stockCountText(plain), 'Not counted yet.');
+	assert.equal(stockReorderText(plain), null);
+	assert.equal(stockRowLabel(plain), 'Hops, Not counted yet.');
+	assert.equal(stockCountText({ ...plain, count: '1' }), '1 bags', 'a unit is never pluralised or singularised');
+	assert.equal(stockProblemText({ op: 'first', kind: 'unavailable' }), stockCopy.failedFirst);
+	assert.equal(stockProblemText({ op: 'refresh', kind: 'unavailable' }), stockCopy.failedRefresh);
+	for (const op of ['first', 'refresh'] as const) {
+		assert.equal(stockProblemText({ op, kind: 'access' }), stockCopy.access);
+		assert.equal(stockProblemText({ op, kind: 'list' }), stockCopy.list);
+	}
+	for (const text of [stockCopy.failedFirst, stockCopy.failedRefresh, stockCopy.access, stockCopy.list, stockCopy.loading])
+		assert.doesNotMatch(text, /no stock|nothing (is )?in stock|empty/i, 'no failed or pending state claims there is no stock');
+});
 
 test('sign out everywhere else: exact wording with grammatical plurals; a 429 says why, with or without a time; never "nothing changed"', () => {
 	const after = revokeOthersCopy.afterEnded;

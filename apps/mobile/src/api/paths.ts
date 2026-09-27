@@ -47,6 +47,12 @@ export function organisationPath(organisationId: string, ...segments: string[]):
  *  and satisfies this structurally; this module does not import the account layer. */
 export type ScopeIds = { readonly userId: string; readonly organisationId: string };
 
+/** Active counted stock in every location; the existing API returns one unpaginated list. */
+export function stockPath(scope: ScopeIds): OrganisationPath {
+	if (typeof scope !== 'object' || scope === null) throw new TypeError('stock path: no scope');
+	return organisationPath(scope.organisationId, 'stock');
+}
+
 export type WorkView = 'mine' | 'all';
 /** Work page size, as on the web (apps/web/src/app/work/filters.ts `pageSize`). */
 export const workPageSize = 50;
