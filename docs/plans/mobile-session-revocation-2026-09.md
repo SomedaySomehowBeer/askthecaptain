@@ -228,7 +228,7 @@ Otherwise the runner records the current handle internally, marks the call in fl
   - `{refused, status}`
   - `stale`, `in-flight` or `waiting`
   - `client-bug`
-  
+
   It never rejects, and no outcome or snapshot holds the token.
 - **No `/v1/me` refresh.** The API showed the current session was live at step 2, and memberships are unchanged. If
   the session ends later by another path, the next request's 401 takes the existing session-ended path.
