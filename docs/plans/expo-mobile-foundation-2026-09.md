@@ -65,10 +65,11 @@ See the [validation record](../validation/mobile-all-tasks-read-2026-09-27/READM
 The production web export still makes no API requests. Other reads and all writes remain. The response byte budget is implemented separately in #202;
 native buffering/cancellation and these device gates remain: `expo/fetch` reporting the query URL unchanged, and a real 403/404 on an isolated
 synthetic environment. No simulator or device evidence exists.
-The web export opens view lists as visited pages. Native link-built stacks use the view-list anchor;
-empty resets and first tab visits currently start at the index without that underlying route, by
-installed-source inspection. Explicit native initial routes and seeded resets need a separate reviewed
-navigation increment and device evidence.
+The web export opens view lists as visited pages. Native linking state can carry the view-list anchor,
+but a closed account guard at process boot discards it; the later requested-route replace opens the target alone.
+Empty resets and first tab visits also currently start at the index without that underlying route, by source inspection.
+The adopted [native navigation contract](expo-mobile-native-navigation-2026-09.md) specifies the next source change
+and its separate device evidence; it is not yet implemented.
 Browser history cannot prove native back gestures. Keep the flag off on shared
 staging and for real accounts until the verified-link gate passes. The server and web increments
 through #191, including A1 and A2, are deployed to the single staging API and web machines, and
@@ -456,7 +457,8 @@ readiness**. It is not a foundation blocker.
   where user_id = $me and id <> $current and revoked_at is null`, plus an auth event.
 - It needs no new column. It also signs the person out of their web sessions, and the UI says so.
 - Listing individual devices is a later nicety.
-- Track this readiness increment in #178.
+- Track this readiness increment in #178; the adopted [revocation contract](mobile-session-revocation-2026-09.md)
+  specifies concurrency, expiry revalidation, honest outcomes and separate API/web/mobile increments.
 
 **Account switching.**
 

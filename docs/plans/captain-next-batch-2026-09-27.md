@@ -205,3 +205,25 @@ assigns the next stage. The watcher has a twelve-hour expiry; renew or stop it w
 
 Completed work and new assignments are recorded in the coordinator checkpoint so an old monitor
 notification cannot restart a finished release. No new Captain runtime process is introduced.
+
+## Next foundation batch after #201/#202
+
+All tasks (#201) and the response byte budget (#202) are merged after reciprocal reviews and all
+applicable CI passed. Combined validation passed 247 mobile tests with zero skipped; #202 CI also
+ran the combined mobile exports and browser suite. No deployment or native enablement followed.
+
+Two independently reviewed contracts define the next batch; adoption is not implementation:
+
+- [Native section navigation](expo-mobile-native-navigation-2026-09.md): Claude A owns helpers,
+  call sites and tests in one isolated checkout. Claude B reviews the complete change. Source-level
+  initial routes and fresh reset state put the view list beneath native defaults; device proof remains
+  open. Existing warm view-list duplication and the ready remount edge are explicitly tracked.
+- [Remote session revocation](mobile-session-revocation-2026-09.md): Claude B first implements the
+  API/service/rate-limit increment and its real-Postgres tests. Claude A reviews it. Web and mobile
+  controls follow in separate PRs after the API is reviewed. This ends other existing sessions of
+  the authenticated person; it does not lock the account or cancel sign-ins in progress.
+
+Root owns browser fixtures/checks, all serial validation, integration, documentation, CI and git.
+Reviewed green PRs may merge. Any server release remains staging-only on one existing machine per
+app. Native sign-in, production, signing, DNS and secrets remain untouched. No source implementation
+is complete merely because a draft or agent state is ready.

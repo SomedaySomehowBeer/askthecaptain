@@ -146,8 +146,9 @@ export function workListPath(scope: ScopeIds, view: WorkView, offset: number): O
 
   Whether a view stays mounted when the person switches views is the section stack's existing behaviour, which this
   slice does not change. **It depends on how the Work stack was built, not simply on the platform:**
-  - **A stack built from a link on iOS and Android** (an incoming or initial URL) gets the view list **beneath** the
-    open view, as `sectionStackSettings`' `initialRouteName: 'views'` anchor. There, the header's breadcrumb
+  - **A native stack retaining the linking anchor** can have the view list **beneath** the open view.
+    This is not every cold link: at process boot the closed account guard discards linking state, then the
+    requested-route replace opens the target alone. When the anchor is present, the header's breadcrumb
     (`Screen.toViews`) calls `dismissTo` on the view list, which unmounts the view above it. Switching views then
     unmounts the previous one, and returning to it reads page 0 again.
   - **A stack that starts empty,** on the web and also on native after the #197 tabs reset (a fresh `(tabs)` with no
@@ -158,8 +159,8 @@ export function workListPath(scope: ScopeIds, view: WorkView, offset: number): O
     instance reads page zero, and every mounted instance becomes inert on a scope change.
 
   The seeded view list is the **intended** section-stack convention, not what every native path currently does. A
-  seeded reset, and an explicit `SectionStack` initial route, are the coordinator's **separate future contract**, not part of this
-  read slice. No list cache is added to keep a view across switches.
+  seeded reset, explicit `SectionStack` initial route and anchored entries are specified by the
+  [separate navigation contract](expo-mobile-native-navigation-2026-09.md), not implemented by this read slice. No list cache is added to keep a view across switches.
 - **A scope change makes every mounted list inert.** On a switch or lost-single, every mounted list (one or two,
   depending on the stack above) compares its own bound scope, goes inert in the same render, shows no rows and sends
   no read. The #197 tabs reset then installs fresh tabs with no nested state. By source reading, the new Work stack
