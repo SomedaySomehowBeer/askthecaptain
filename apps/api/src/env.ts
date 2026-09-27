@@ -24,7 +24,10 @@ const schema = z.object({
 	SPRITES_API_TOKEN: z.string().min(1).optional(),
 	GOOGLE_CLIENT_ID: z.string().optional(),
 	GOOGLE_CLIENT_SECRET: z.string().optional(),
-	SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30)
+	SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+	/** Mobile sign-in handoff (docs/plans/expo-mobile-foundation-2026-09.md §3.4). Off unless exactly '1'. It stays
+	 *  off on shared staging and for real accounts until the app-identity (claimed HTTPS link) gate passes. */
+	NATIVE_SIGN_IN: z.enum(['0', '1']).default('0')
 }).refine((env) => Boolean(env.SHOPIFY_CLIENT_ID) === Boolean(env.SHOPIFY_CLIENT_SECRET), { path: ['SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET'], message: 'Configure both Shopify credentials together' });
 export type Env = z.infer<typeof schema>;
 

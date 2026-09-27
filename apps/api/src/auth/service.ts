@@ -1,43 +1,56 @@
 import { createHash, randomBytes } from 'node:crypto';
-import type { Sql } from '@captain/db';
+import type { Sql, TransactionSql } from '@captain/db';
 import { z } from 'zod';
-import { badRequest, unauthorised } from '../errors.ts';
+import { badRequest, type HttpError, unauthorised } from '../errors.ts';
 import type { IdentityProvider } from './google.ts';
+import { handoffPayload, insertHandoff, lockPasskeys, nativeContext, nativeDisabled, nativeExchangeInput, parseStart, s256, sameSecret } from './native.ts';
 import type { PasskeyService } from './passkeys.ts';
 import { safeReturnPath } from './return-path.ts';
 
 export const hashSecret = (secret: string) => createHash('sha256').update(secret).digest('hex');
 const secret = (prefix: string) => `${prefix}${randomBytes(32).toString('base64url')}`;
+type Db = Sql | TransactionSql;
 
 export type SessionUser = { id: string; email: string; name: string };
 export type Session = { id: string; userId: string; expiresAt: Date; user: SessionUser; passkeyVerifiedAt: Date | null };
-export type Exchanged = { token: string; session: Session; returnTo: string } | { stepUp: true; token: string; returnTo: string };
+export type Issued = { token: string; session: Session; returnTo: string };
+/** What spending a web or native exchange code yields. A native sign-in never yields a session here: it
+ *  yields a step-up (marked `native`) or a handoff that only the app can spend (§3 of the mobile contract). */
+export type Exchanged = Issued | { stepUp: true; native?: true; token: string; returnTo: string } | NativeHandoff;
+export type NativeHandoff = { nativeHandoff: string; attempt: string };
 
 const minutes = (n: number) => n * 60_000;
 /** A destination read back from a stored auth request is checked again before it is used: a row written by an
  *  older release, or altered in the database, never sends anyone off this app. It falls back to the home page. */
 const storedReturn = (value: string) => safeReturnPath(value) ?? '/';
+const oauthPayload = z.object({ nonce: z.string(), verifier: z.string(), returnTo: z.string(), native: nativeContext.optional() });
+const exchangePayload = z.object({ returnTo: z.string(), native: nativeContext.optional() });
 
 /** Sign-in and sessions. Sessions are opaque tokens whose hash is stored; the token itself lives
  *  only in the web app's cookie and in the Authorization header on its way here. The Google flow
  *  starts and finishes on this API and hands the web a one-time exchange code, so the session token
- *  never travels in a redirect URL. */
+ *  never travels in a redirect URL. A mobile app uses the same flow and finishes with a native handoff,
+ *  which it spends at `nativeExchange` with its PKCE verifier; that path is off unless `nativeSignIn`. */
 export class AuthService {
-	readonly #db: Sql; readonly #google: IdentityProvider | null; readonly #appUrl: URL; readonly #sessionTtlMs: number; readonly #passkeys: PasskeyService | null;
-	constructor(db: Sql, google: IdentityProvider | null, options: { appUrl: string; sessionTtlDays: number; passkeys?: PasskeyService }) {
+	readonly #db: Sql; readonly #google: IdentityProvider | null; readonly #appUrl: URL; readonly #sessionTtlMs: number; readonly #passkeys: PasskeyService | null; readonly #native: boolean;
+	constructor(db: Sql, google: IdentityProvider | null, options: { appUrl: string; sessionTtlDays: number; passkeys?: PasskeyService; nativeSignIn?: boolean }) {
 		this.#db = db; this.#google = google; this.#appUrl = new URL(options.appUrl); this.#sessionTtlMs = options.sessionTtlDays * 24 * 60 * 60_000; this.#passkeys = options.passkeys ?? null;
+		this.#native = options.nativeSignIn === true;
 	}
 
 	get googleAvailable() { return this.#google !== null; }
 
-	async startGoogle(requestId: string, returnTo?: string): Promise<string> {
+	/** `query` is the whole start query. Without native parameters it is the web flow, unchanged. */
+	async startGoogle(requestId: string, query: Record<string, string[]> = {}): Promise<string> {
 		if (!this.#google) throw badRequest('google_unavailable', 'Google sign-in is not configured');
-		const path = this.#returnPath(returnTo);
+		const start = parseStart(query, this.#native);
+		const path = this.#returnPath(start.returnTo);
 		const state = secret('st_'); const nonce = secret('n_'); const verifier = secret('v_');
 		const challenge = createHash('sha256').update(verifier).digest('base64url');
+		const payload = start.native ? { nonce, verifier, returnTo: path, native: start.native } : { nonce, verifier, returnTo: path };
 		await this.#db`insert into auth_requests (kind, token_hash, payload, expires_at)
-			values ('oauth', ${hashSecret(state)}, ${this.#db.json({ nonce, verifier, returnTo: path })}, ${new Date(Date.now() + minutes(15))})`;
-		await this.#event('auth.google.start', true, requestId);
+			values ('oauth', ${hashSecret(state)}, ${this.#db.json(payload)}, ${new Date(Date.now() + minutes(15))})`;
+		await this.#event('auth.google.start', true, requestId, undefined, start.native ? { client: 'native' } : {});
 		return this.#google.authorizationUrl({ state, nonce, codeChallenge: challenge });
 	}
 
@@ -45,16 +58,22 @@ export class AuthService {
 	async finishGoogle(code: string, state: string, requestId: string): Promise<URL> {
 		const target = new URL('/auth/callback', this.#appUrl);
 		const request = await this.#consume('oauth', state);
-		if (!request || !this.#google) { await this.#event('auth.google.finish', false, requestId, undefined, { reason: 'request_invalid' });
+		const payload = oauthPayload.safeParse(request?.payload);
+		if (!request || !this.#google || !payload.success) { await this.#event('auth.google.finish', false, requestId, undefined, { reason: 'request_invalid' });
 			target.searchParams.set('error', 'request_invalid'); return target; }
-		const payload = z.object({ nonce: z.string(), verifier: z.string(), returnTo: z.string() }).parse(request.payload);
+		const native = payload.data.native;
+		if (native && !this.#native) {
+			// Started while mobile sign-in was on, finished after it was turned off: stop before Google is asked.
+			await this.#event('auth.google.finish', false, requestId, undefined, { client: 'native', reason: 'native_sign_in_disabled' });
+			target.searchParams.set('error', 'native_sign_in_disabled'); return target;
+		}
 		try {
-			const identity = await this.#google.exchange({ code, codeVerifier: payload.verifier, nonce: payload.nonce });
+			const identity = await this.#google.exchange({ code, codeVerifier: payload.data.verifier, nonce: payload.data.nonce });
 			const user = await this.#findOrCreateUser('google', identity);
-			const exchange = secret('x_');
+			const exchange = secret('x_'); const returnTo = storedReturn(payload.data.returnTo);
 			await this.#db`insert into auth_requests (kind, token_hash, user_id, payload, expires_at)
-				values ('session_exchange', ${hashSecret(exchange)}, ${user.id}, ${this.#db.json({ returnTo: storedReturn(payload.returnTo) })}, ${new Date(Date.now() + minutes(2))})`;
-			await this.#event('auth.google.finish', true, requestId, user.id);
+				values ('session_exchange', ${hashSecret(exchange)}, ${user.id}, ${this.#db.json(native ? { returnTo, native } : { returnTo })}, ${new Date(Date.now() + minutes(2))})`;
+			await this.#event('auth.google.finish', true, requestId, user.id, native ? { client: 'native' } : {});
 			target.searchParams.set('code', exchange);
 		} catch (error) {
 			await this.#event('auth.google.finish', false, requestId, undefined, { reason: error instanceof Error ? error.message : 'unknown' });
@@ -64,29 +83,95 @@ export class AuthService {
 	}
 
 	/** Spends the one-time code. A person with a passkey gets a step-up token instead of a session;
-	 *  the session is issued only after `completeStepUp` (plan §9). */
+	 *  the session is issued only after `completeStepUp` (plan §9). For a native sign-in the code is spent,
+	 *  and a step-up or a handoff is created, in one transaction. No session is ever issued here for it. */
 	async exchange(code: string, requestId: string): Promise<Exchanged> {
-		const request = await this.#consume('session_exchange', code);
-		if (!request?.userId) { await this.#event('auth.session.exchange', false, requestId); throw unauthorised('sign-in link is invalid or expired'); }
-		const returnTo = storedReturn(z.object({ returnTo: z.string() }).parse(request.payload).returnTo);
-		if (this.#passkeys && (await this.#passkeys.required(request.userId))) {
-			const token = await this.#passkeys.beginStepUp(request.userId, returnTo);
-			await this.#event('auth.session.step_up_required', true, requestId, request.userId);
+		const outcome = await this.#db.begin(async (tx) => {
+			const request = await this.#consume('session_exchange', code, tx);
+			const payload = exchangePayload.safeParse(request?.payload);
+			if (!request?.userId || !payload.success) {
+				await this.#event('auth.session.exchange', false, requestId, request?.userId ?? undefined, {}, tx);
+				return { error: unauthorised('sign-in link is invalid or expired') as HttpError };
+			}
+			const userId = request.userId; const returnTo = storedReturn(payload.data.returnTo); const native = payload.data.native;
+			if (!native) return { web: { userId, returnTo } };
+			if (!this.#native) {
+				await this.#event('auth.session.exchange', false, requestId, userId, { client: 'native', reason: 'native_sign_in_disabled' }, tx);
+				return { error: nativeDisabled() };
+			}
+			if (this.#passkeys && (await this.#passkeys.required(userId, tx))) {
+				const token = await this.#passkeys.beginStepUp(userId, returnTo, { native, sql: tx });
+				await this.#event('auth.session.step_up_required', true, requestId, userId, { client: 'native' }, tx);
+				return { result: { stepUp: true, native: true, token, returnTo } as Exchanged };
+			}
+			const nativeHandoff = await insertHandoff(tx, userId, { ...native, returnTo, passkeyVerified: false });
+			await this.#event('auth.native.handoff', true, requestId, userId, { client: 'native', passkey: false }, tx);
+			return { result: { nativeHandoff, attempt: native.attempt } as Exchanged };
+		}) as { error: HttpError } | { result: Exchanged } | { web: { userId: string; returnTo: string } };
+		if ('error' in outcome) throw outcome.error;
+		if ('result' in outcome) return outcome.result;
+		// The web flow, unchanged: the spent code has been committed, then a step-up or a session follows.
+		const { userId, returnTo } = outcome.web;
+		if (this.#passkeys && (await this.#passkeys.required(userId))) {
+			const token = await this.#passkeys.beginStepUp(userId, returnTo);
+			await this.#event('auth.session.step_up_required', true, requestId, userId);
 			return { stepUp: true, token, returnTo };
 		}
-		const issued = await this.#issueSession(request.userId);
-		await this.#event('auth.session.exchange', true, requestId, request.userId);
+		const issued = await this.#issueSession(userId);
+		await this.#event('auth.session.exchange', true, requestId, userId);
 		return { ...issued, returnTo };
 	}
 
-	/** Finishes a stepped-up sign-in: the assertion is verified by the passkey service, then the
-	 *  session is issued and marked as passkey-verified. */
-	async completeStepUp(token: string, response: unknown, requestId: string): Promise<{ token: string; session: Session; returnTo: string }> {
+	/** Assertion options for a step-up token. A native step-up gets them only while mobile sign-in is on. */
+	async stepUpOptions(token: string): Promise<unknown> {
 		if (!this.#passkeys) throw unauthorised('passkeys are not available');
-		const done = await this.#passkeys.completeStepUp(token, response, requestId);
+		return this.#passkeys.stepUpOptions(token, { nativeEnabled: this.#native });
+	}
+
+	/** Finishes a stepped-up sign-in: the assertion is verified by the passkey service, then the
+	 *  session is issued and marked as passkey-verified. A native step-up returns its handoff instead. */
+	async completeStepUp(token: string, response: unknown, requestId: string): Promise<Issued | NativeHandoff> {
+		if (!this.#passkeys) throw unauthorised('passkeys are not available');
+		const done = await this.#passkeys.completeStepUp(token, response, requestId, { nativeEnabled: this.#native });
+		if ('nativeHandoff' in done) return { nativeHandoff: done.nativeHandoff, attempt: done.attempt };
 		const issued = await this.#issueSession(done.userId, true);
 		await this.#event('auth.session.exchange', true, requestId, done.userId, { passkey: true });
 		return { ...issued, returnTo: storedReturn(done.returnTo) };
+	}
+
+	/** The app spends its handoff with the verifier and attempt it kept (mobile contract §3.3). Spending the
+	 *  code, the checks, the session and its audit event share one transaction; the token is returned only
+	 *  after commit. A mismatch still burns the code. A handoff issued without a passkey is refused if the
+	 *  person has registered one since (checked under the same lock as registration). */
+	async nativeExchange(input: unknown, requestId: string): Promise<Issued> {
+		const parsed = nativeExchangeInput.safeParse(input);
+		if (!parsed.success) throw badRequest('native_request_invalid', 'That sign-in could not be finished. Start sign-in again.');
+		const { code, verifier, attempt } = parsed.data;
+		const outcome = await this.#db.begin(async (tx) => {
+			const refuse = async (reason: string, userId: string | undefined, error: HttpError = unauthorised('that sign-in has expired; start sign-in again')) => {
+				await this.#event('auth.native.exchange', false, requestId, userId, { client: 'native', reason }, tx);
+				return { error };
+			};
+			const [row] = await tx<{ userId: string | null; payload: unknown }[]>`update auth_requests set consumed_at = now()
+				where kind = 'native_handoff' and token_hash = ${hashSecret(code)} and consumed_at is null and expires_at > now() returning user_id, payload`;
+			if (!row?.userId) return refuse('request_invalid', undefined);
+			if (!this.#native) return refuse('native_sign_in_disabled', row.userId, nativeDisabled());
+			const payload = handoffPayload.safeParse(row.payload);
+			if (!payload.success) return refuse('request_invalid', row.userId);
+			// Both comparisons always run, so the time taken does not say which one failed.
+			const verifierMatches = sameSecret(s256(verifier), payload.data.challenge); const attemptMatches = sameSecret(attempt, payload.data.attempt);
+			if (!verifierMatches || !attemptMatches) return refuse('binding_mismatch', row.userId);
+			if (!payload.data.passkeyVerified) {
+				await lockPasskeys(tx, row.userId);
+				const [passkey] = await tx`select 1 from passkeys where user_id = ${row.userId} limit 1`;
+				if (passkey) return refuse('passkey_required', row.userId, unauthorised('this account now needs its passkey; start sign-in again'));
+			}
+			const issued = await this.#issueSession(row.userId, payload.data.passkeyVerified, tx);
+			await this.#event('auth.native.exchange', true, requestId, row.userId, { client: 'native', passkey: payload.data.passkeyVerified }, tx);
+			return { issued: { ...issued, returnTo: storedReturn(payload.data.returnTo) } };
+		}) as { error: HttpError } | { issued: Issued };
+		if ('error' in outcome) throw outcome.error;
+		return outcome.issued;
 	}
 
 	async requireSession(token: string | undefined): Promise<Session> {
@@ -106,9 +191,9 @@ export class AuthService {
 	/** Test and development seam: a session for a known user without Google. */
 	async issueSessionFor(userId: string) { return this.#issueSession(userId); }
 
-	async #issueSession(userId: string, passkeyVerified = false): Promise<{ token: string; session: Session }> {
+	async #issueSession(userId: string, passkeyVerified = false, sql: Db = this.#db): Promise<{ token: string; session: Session }> {
 		const token = secret('sess_'); const expiresAt = new Date(Date.now() + this.#sessionTtlMs); const verifiedAt = passkeyVerified ? new Date() : null;
-		const [row] = await this.#db<{ id: string; email: string; name: string }[]>`
+		const [row] = await sql<{ id: string; email: string; name: string }[]>`
 			with s as (insert into sessions (user_id, token_hash, expires_at, passkey_verified_at) values (${userId}, ${hashSecret(token)}, ${expiresAt}, ${verifiedAt}) returning id, user_id)
 			select s.id, u.email, u.name from s join users u on u.id = s.user_id`;
 		return { token, session: { id: row!.id, userId, expiresAt, passkeyVerifiedAt: verifiedAt, user: { id: userId, email: row!.email, name: row!.name } } };
@@ -126,8 +211,8 @@ export class AuthService {
 		}) as Promise<SessionUser>;
 	}
 
-	async #consume(kind: 'oauth' | 'session_exchange', token: string): Promise<{ userId: string | null; payload: unknown } | null> {
-		const [row] = await this.#db<{ userId: string | null; payload: unknown }[]>`update auth_requests set consumed_at = now()
+	async #consume(kind: 'oauth' | 'session_exchange', token: string, sql: Db = this.#db): Promise<{ userId: string | null; payload: unknown } | null> {
+		const [row] = await sql<{ userId: string | null; payload: unknown }[]>`update auth_requests set consumed_at = now()
 			where kind = ${kind} and token_hash = ${hashSecret(token)} and consumed_at is null and expires_at > now() returning user_id, payload`;
 		return row ?? null;
 	}
@@ -140,7 +225,7 @@ export class AuthService {
 		return path;
 	}
 
-	async #event(event: string, success: boolean, requestId: string, userId?: string, detail: Record<string, unknown> = {}) {
-		await this.#db`insert into auth_events (event, success, request_id, user_id, detail) values (${event}, ${success}, ${requestId}, ${userId ?? null}, ${this.#db.json(detail as never)})`;
+	async #event(event: string, success: boolean, requestId: string, userId?: string, detail: Record<string, unknown> = {}, sql: Db = this.#db) {
+		await sql`insert into auth_events (event, success, request_id, user_id, detail) values (${event}, ${success}, ${requestId}, ${userId ?? null}, ${sql.json(detail as never)})`;
 	}
 }

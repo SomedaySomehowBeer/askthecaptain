@@ -76,24 +76,33 @@ export function createApp(deps: Deps) {
 	});
 
 	// Sign-in. The web sends people here; Google returns here; the web gets a one-time code.
-	app.get('/auth/google/start', async (c) => c.redirect(await deps.auth.startGoogle(c.get('requestId'), c.req.query('return_to'))));
+	// A mobile app starts the same flow with native parameters (mobile foundation contract §3); refused unless enabled.
+	app.get('/auth/google/start', async (c) => c.redirect(await deps.auth.startGoogle(c.get('requestId'), c.req.queries())));
 	app.get('/auth/google/callback', async (c) => c.redirect((await deps.auth.finishGoogle(c.req.query('code') ?? '', c.req.query('state') ?? '', c.get('requestId'))).toString()));
 	app.post('/auth/session/exchange', async (c) => {
 		const input = z.object({ code: z.string().min(1) }).parse(await c.req.json());
 		const result = await deps.auth.exchange(input.code, c.get('requestId'));
-		if ('stepUp' in result) return c.json({ stepUp: true, token: result.token, returnTo: result.returnTo });
+		// A native sign-in ends in a handoff for the app, never a session; the web only passes the code on.
+		if ('nativeHandoff' in result) return c.json({ nativeHandoff: result.nativeHandoff, attempt: result.attempt });
+		if ('stepUp' in result) return c.json(result.native ? { stepUp: true, native: true, token: result.token, returnTo: result.returnTo } : { stepUp: true, token: result.token, returnTo: result.returnTo });
+		return c.json({ token: result.token, expiresAt: result.session.expiresAt, user: result.session.user, returnTo: result.returnTo });
+	});
+	// The app spends its handoff with the PKCE verifier and attempt it kept; the session token comes back only here.
+	app.post('/auth/native/exchange', async (c) => {
+		const result = await deps.auth.nativeExchange(await c.req.json().catch(() => null), c.get('requestId'));
 		return c.json({ token: result.token, expiresAt: result.session.expiresAt, user: result.session.user, returnTo: result.returnTo });
 	});
 	// Passkey step-up between the Google sign-in and the session (plan §9).
 	app.post('/auth/passkey/options', async (c) => {
 		if (!deps.passkeys) throw unauthorised('passkeys are not available');
 		const input = z.object({ token: z.string().min(1) }).parse(await c.req.json());
-		return c.json({ options: await deps.passkeys.stepUpOptions(input.token) });
+		return c.json({ options: await deps.auth.stepUpOptions(input.token) });
 	});
 	app.post('/auth/passkey/verify', async (c) => {
 		const input = z.object({ token: z.string().min(1), response: z.unknown() }).parse(await c.req.json());
-		const { token, session, returnTo } = await deps.auth.completeStepUp(input.token, input.response, c.get('requestId'));
-		return c.json({ token, expiresAt: session.expiresAt, user: session.user, returnTo });
+		const result = await deps.auth.completeStepUp(input.token, input.response, c.get('requestId'));
+		if ('nativeHandoff' in result) return c.json({ nativeHandoff: result.nativeHandoff, attempt: result.attempt });
+		return c.json({ token: result.token, expiresAt: result.session.expiresAt, user: result.session.user, returnTo: result.returnTo });
 	});
 	app.get('/auth/providers', (c) => c.json({ google: deps.auth.googleAvailable }));
 
