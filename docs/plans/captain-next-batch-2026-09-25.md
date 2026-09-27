@@ -34,8 +34,8 @@ completed the read-only task-handoff audit; [#131](https://github.com/SomedaySom
 records the bounded task-detail contract and implementation, corrected to remove Commitments
 compatibility. [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) tracks scope
 cleanup: runtime retirement (#135), optional projects/reset (#136), and Work record replacement
-(#138) are implemented and deployed. Empty retired storage, the retrieval package, connector capabilities and deployment
-assets still need removal. Private saved views are delivered (#153/#154); linked-chat API/web followed in #169/#171/#173/#174.
+(#138) are implemented and deployed. Remaining retired storage (current contents unverified), the retrieval package, connector capabilities
+and deployment assets still need removal under the [code-removal contract](assistant-code-removal-2026-09.md). Private saved views are delivered (#153/#154); linked-chat API/web followed in #169/#171/#173/#174.
 
 The populated-demo reliability/design follow-up is now delivered through #143/#145/#147 and
 #149/#150: checkable work, parent navigation, project Overview/Tasks/Schedule, continuous
