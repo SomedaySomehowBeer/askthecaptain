@@ -1,14 +1,15 @@
 # Mobile authentication core: implementation partition
 
-Status: implemented and reciprocally reviewed; integration pending, 27 September 2026. This is the first bounded
+Status: merged in #189, 27 September 2026. This is the first bounded
 M-auth increment under the [adopted foundation contract](expo-mobile-foundation-2026-09.md),
 following merged M-shell PR #188. Outcomes: manage shared work, allocate resources and
 discuss work through the same authenticated API. No new product decision or dependency.
 
 The API and web handoff are merged in #186/#187. This increment implements only
 React Native-free protocol and credential-storage logic with injected, testable
-interfaces. Device adapters, the account reducer/provider, screens, authenticated
-business reads and remote session controls follow separately.
+interfaces. Platform adapters and the account reducer and runner follow in the
+[platform and account increment](expo-mobile-platform-account-2026-09.md); the provider,
+screens, authenticated business reads and remote session controls follow after that.
 
 | Owner | Scope |
 |---|---|
@@ -31,8 +32,8 @@ Required behaviours from the contract and implementation review:
   Requests reject redirects before sending where the platform supports that;
   checking the final URL is only a secondary check. Real-account release requires
   device verification of bearer handling on redirects and the existing app-link gate.
-- Credentials remain private to the effect runner and storage boundary. Future
-  reducer state/effects use opaque handles, never bearer strings. Stale successful
+- Credentials remain private to the effect runner and storage boundary. The account
+  reducer's state and effects (next increment) use opaque handles, never bearer strings. Stale successful
   sign-ins are explicitly handed to cleanup rather than silently discarded.
 - Stored sessions have the exact credential schema, issued token format and canonical expiry.
   Invalid data stays unreadable until a deliberate save; errors contain no stored values.

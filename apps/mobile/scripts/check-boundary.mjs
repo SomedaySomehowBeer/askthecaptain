@@ -12,6 +12,13 @@
  *  Tests (*.test.*) and build config (app/metro/babel config) run in Node, so they may use node: built-ins and
  *  allowlisted dev packages, but the other rules hold. Everywhere, the only environment reads are
  *  process.env.EXPO_PUBLIC_API_URL and process.env.EXPO_PUBLIC_APP_URL.
+ *  Network (app source only; docs/plans/expo-mobile-platform-account-2026-09.md): React Native's global fetch ignores
+ *  `redirect: 'error'`, so app code reaches the network only through the API transport's injected `send`, which on
+ *  device is `expo/fetch` bound in src/platform/fetch.ts. So: `expo/fetch` may be imported only by that file, and that
+ *  file must import it; src/platform/native-send.ts must force `redirect: 'error'` and `credentials: 'omit'` (a
+ *  tripwire; its node tests are the proof); and no app file may call a bare `fetch(`, name the global fetch
+ *  (globalThis/global/window/self, dotted or bracketed), XMLHttpRequest, WebSocket, EventSource, sendBeacon or React
+ *  Native's Networking, or use expo-crypto's synchronous getRandomBytes (it returns Math.random bytes in development).
  *  Bundles: no server secret variable name, no postgres:// URL, and no value named in BOUNDARY_CANARY_VALUES.
  *  Findings name the file and the rule, never surrounding content. Exit 1 on any finding.
  *
@@ -21,7 +28,10 @@
  *    hide (never invent) a `process` use or a comment on the rest of that one line;
  *  - a regular-expression literal containing quotes or `//` can be misread in the same bounded way;
  *  - template literal text is kept, so the word "process" in template text is reported (a false positive, never a miss);
- *  - an import or require spelled in a way the patterns do not recognise is not seen.
+ *  - an import or require spelled in a way the patterns do not recognise is not seen;
+ *  - the network rules see names, not values: an alias (`const g = globalThis; g.fetch(…)`), a method call on some other
+ *    object (`x.fetch(…)`) or a name built from strings is not seen, and a word such as `fetch(` in template text is
+ *    reported (a false positive, never a miss).
  *  It is a boundary check that fails closed on common forms, backed by the exported-bundle scan, TypeScript and review;
  *  it is not proof that no other form exists. */
 import { readFile, readdir, stat } from 'node:fs/promises';
@@ -166,6 +176,36 @@ export function checkSource({ file, text, kind, root, runtime, dev }) {
 		findings.push(`${where}: ${named ? `process.env.${named[1]}` : 'a computed, aliased or destructured use of process'} is not allowed; only process.env.${[...allowedEnv].join(' and process.env.')} may be read`);
 	}
 	if (/\bimport\s*\.\s*meta\s*\.\s*env\b/.test(code)) findings.push(`${where}: import.meta.env is not allowed; only ${[...allowedEnv].join(' and ')} may be read through process.env`);
+	if (kind === 'app') findings.push(...checkNetwork({ where, code, identifiers, specifiers }));
+	return findings;
+}
+
+/** The one file that binds `expo/fetch`, and the one that forces its options (see the header). */
+export const nativeFetchFile = 'src/platform/fetch.ts';
+export const forcedOptionsFile = 'src/platform/native-send.ts';
+const expoFetchSpecifier = /^expo\/(?:fetch(?:\/|$)|src\/winter\/fetch|build\/winter\/fetch)/;
+const networkNames = [
+	[/\b(?:globalThis|global|window|self)\s*(?:\?\.|\.)\s*fetch\b/, 'the global fetch'],
+	[/\bXMLHttpRequest\b/, 'XMLHttpRequest'],
+	[/\bWebSocket\b/, 'WebSocket'],
+	[/\bEventSource\b/, 'EventSource'],
+	[/\bsendBeacon\b/, 'sendBeacon'],
+	[/\bNetworking\b/, "React Native's Networking module"]
+];
+
+/** The network rules for one app file. `identifiers` has quoted strings blanked; `code` keeps them (for the bracketed
+ *  global and the forced-option tripwire). */
+function checkNetwork({ where, code, identifiers, specifiers }) {
+	const findings = []; const file = where.split(path.sep).join('/');
+	const through = `requests go through the transport's send, bound to expo/fetch only in ${nativeFetchFile}`;
+	for (const specifier of specifiers) if (expoFetchSpecifier.test(specifier) && file !== nativeFetchFile) findings.push(`${where}: ${specifier} may be imported only by ${nativeFetchFile}`);
+	if (file === nativeFetchFile && !specifiers.has('expo/fetch')) findings.push(`${where}: must import expo/fetch`);
+	for (const [pattern, what] of networkNames) if (pattern.test(identifiers)) findings.push(`${where}: ${what} is not allowed; ${through}`);
+	if (/\b(?:globalThis|global|window|self)\s*(?:\?\.)?\s*\[\s*['"`]fetch['"`]\s*\]/.test(code)) findings.push(`${where}: the global fetch is not allowed; ${through}`);
+	if (/(?<![\w$.])fetch\s*\(/.test(identifiers)) findings.push(`${where}: a call of fetch is not allowed; ${through}`);
+	if (/\bgetRandomBytes\b/.test(identifiers)) findings.push(`${where}: expo-crypto's synchronous getRandomBytes is not allowed (it returns Math.random bytes in development); use getRandomBytesAsync`);
+	if (file === forcedOptionsFile && !(/\bredirect\s*:\s*['"]error['"]/.test(code) && /\bcredentials\s*:\s*['"]omit['"]/.test(code)))
+		findings.push(`${where}: must force redirect: 'error' and credentials: 'omit'`);
 	return findings;
 }
 

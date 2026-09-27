@@ -23,27 +23,33 @@ Pip remains independent in #119.
 
 The planning assignments are complete. Cleanup R1 (#181), R2 (#182), R3 (#184) and R4a (#185)
 are merged after review and green CI. They remove unused assistant code, embedding repository
-assets, legacy catalogue entries and unused Google mailbox connector methods. R4b and R5 retain
-their fresh read-only live-count and deployment/migration gates; no count or storage removal is
+assets, legacy catalogue entries and unused Google mailbox connector methods. After the recorded
+read-only staging count (zero Google connections, empty attachment cache; see
+[paused.md](../runbooks/paused.md)), R5a (#190) removed the attachment-expiry reader and R4b
+(#191) removed the Google mailbox grant path; Google sign-in remains. R5b, the legacy storage
+drop, keeps its own gates: R5a deployed, fresh counts and one migration. No storage removal is
 implied by these code changes. The stopped embedding resource is unchanged.
 
 Native A1 (#186) is merged: the API handoff, default-off flag and migration 0044. A2 (#187) is merged and adds the web
 native branches and a disposable, synthetic browser proof. Neither increment enables native
 sign-in on shared staging or real accounts; the verified claimed-link and device gates remain.
 M-shell (#188) is merged and supplies application source and exported bundles; no signed native build or device
-acceptance is claimed. These cleanup and native increments have
-not been released to staging, and migration 0044 has not been applied there. Operational releases
-remain recorded in [paused.md](../runbooks/paused.md).
+acceptance is claimed. The M-auth pure core (#189) is merged. The server and web increments through
+#191 (the cleanup slices and native A1/A2) are deployed to the single staging API and web machines;
+migration 0044 was applied there on 27 September 2026 at 06:02:01Z, and native sign-in stays off.
+The Expo shell, authentication core and platform/account code are not installed or usable on any
+device. See the [release validation record](../validation/assistant-retirement-release-2026-09-27/README.md);
+operational releases remain recorded in [paused.md](../runbooks/paused.md).
 
 The two existing Claude Opus agents remain in Herdr's Monitor tab. Their historical names and
 shell working directories do not identify the current checkout. Codex assigns explicit absolute
 paths to isolated checkouts and records them in the coordinator checkpoint.
 
-| Owner | Current mobile authentication core | Files owned |
+| Owner | Current mobile platform and account increment | Files owned |
 |---|---|---|
-| Claude `business-views`, `w2:pR` | Single sign-in attempt, PKCE, callback/exchange, transport and private cleanup; independent store review | `apps/mobile/src/auth/`, `apps/mobile/src/api/`, API no-redirect regression test |
-| Claude `linked-chat`, `w2:pS` | Strict credential parsing and serial device-storage queue; independent protocol review | `apps/mobile/src/account/` |
-| Codex | Review, tests, integration and status | Documentation, actual evidence, git and issue/PR records |
+| Claude `business-views`, `w2:pR` | Installed-SDK adapters, `expo/fetch` transport binding, SecureStore adapter, transport `send` rename and boundary rules; independent account review | `apps/mobile/src/platform/`, `apps/mobile/src/api/client.ts` and its test, `apps/mobile/scripts/check-boundary.mjs` and its test |
+| Claude `linked-chat`, `w2:pS` | Account reducer, credential-owning runner and strict `/v1/me` parsing; independent platform review | `apps/mobile/src/account/` |
+| Codex | Dependency lock, review, tests, integration and status | Documentation, actual evidence, git and issue/PR records |
 
 The shell has no authentication, business reads or writes. Its reviewed PR #188 passed workspace,
 browser, client-proof and mobile CI on the combined #187 base. Local evidence includes disposable
@@ -51,11 +57,13 @@ Postgres tests, ten workspace typechecks, SDK compatibility, web/iOS/Android exp
 exported-canary scans and browser approximation at 360/390/430 pixels. Android config introspection
 verifies backup exclusions, not native compilation or device behaviour.
 
-The [authentication-core partition](expo-mobile-auth-core-2026-09.md) implements pure protocol and
-serialized credential-storage logic with injected adapters. Interface review is complete;
-implementation and reciprocal review are complete, with PR integration pending. It introduces no platform adapter, account
-UI or business reads. Those follow separately under the existing mobile contract and real-account
-link/device gates. Browser exports are not installed-app evidence.
+The [authentication-core partition](expo-mobile-auth-core-2026-09.md) (#189, merged) implements
+pure protocol and serialized credential-storage logic with injected adapters. The
+[platform and account increment](expo-mobile-platform-account-2026-09.md) adds the installed-SDK
+adapters and the account reducer and runner; implementation and reciprocal review are complete,
+with PR integration pending. Nothing is wired into the app: the provider, account screens and
+business reads follow under the existing mobile contract and real-account link/device gates.
+Browser exports are not installed-app evidence.
 
 Each Claude reviews the other's implementation. Codex owns git, builds, tests, integration and
 release. All heavy checks remain serial under `flock /tmp/atc-build.lock`.
