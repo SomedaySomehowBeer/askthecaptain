@@ -1,0 +1,14 @@
+{
+  "machine": "80e39ea6416e18",
+  "image": "registry.fly.io/askthecaptain-api-staging:git-02733f2@sha256:1e2cdf9407cda83b3363d5fa763812cedc72114955b255c8a5b15d55057be3aa",
+  "exit": {
+    "guest_signal": -1,
+    "signal": -1,
+    "exited_at": "2026-09-27T06:42:40.933Z",
+    "verified_exit_code": 0
+  },
+  "marker": "CAPTAIN_02733F2_MIGRATION_AND_QUEUES_OK",
+  "applied": [
+    "0045_drop_assistant_storage.sql"
+  ]
+}

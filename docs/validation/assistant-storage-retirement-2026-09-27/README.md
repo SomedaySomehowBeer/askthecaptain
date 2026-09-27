@@ -1,6 +1,6 @@
 # Assistant storage retirement — R5b
 
-Status: implementation reviewed and local checks passed; migration 0045 has **not** been applied to staging.
+Status: reviewed #194 merged and released to staging; migration 0045 applied at **2026-09-27 06:42:39 UTC**.
 Outcome: manage shared business work without retaining the old personal-assistant storage.
 
 ## Live gate
@@ -27,10 +27,43 @@ New database regressions cover refusal for a legacy row, each obsolete cursor an
 
 Validation on the #192 base: all ten forced workspace typechecks passed. Across the successful package runs, **554 tests passed**, none skipped: model 11, web 135, connectors 5, database 93, steps 8, engine 20, API 208, mobile 63 plus 11 boundary checks. Database/integration suites used fresh throwaway PostgreSQL databases. The first run exposed a test-only Result-array prototype mismatch; the corrected database suite and all downstream suites were rerun uncached. No migration assertion was weakened. Both Claude agents reviewed implementation/evidence; root reviewed and ran checks.
 
-The branch will be rebased onto merged #193 before CI, so its newer mobile tests are covered by the combined-tree checks rather than this earlier local count. No web route changed in this PR; the existing Chat/native browser CI still exercises the combined schema. No hosted migration or release acceptance is claimed here.
+The branch was rebased onto merged #193. [Final CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36300326550) passed on `02733f2accdbbb87b299ac629e8c5f1d304beac8`, including the newer mobile tests, Chat browser suites and native sign-in browser proof. Its tree equals squash merge `b7b9bb80fe26e6e805546b3d9f1a4ecc7af0dadd`. No web route changed.
 
 ## Release and rollback
 
 Use the sole existing staging API with HTTP stopped, no public services and restart policy `no` for the one-shot migration. Verify the reviewed image, fresh migration/queue marker and exit 0; restore and compare normal configuration before serving. Remove the earlier postflight query of `attachment_text`; it no longer exists after 0045. Postflight must confirm all 21 tables, seven functions and three columns are absent, full migration history through 0045, safe runtime role, readiness and native sign-in still disabled.
 
 After 0045, forward-fix or use the recorded reader-free API image. Never restore an image containing retired readers, recreate the dropped tables, or repeat the old data-reset procedure. Production cannot resume on its paused old image.
+
+
+## Actual staging release
+
+The [second count-only preflight](release-preflight.json) at 06:40:09 UTC was clear, after the
+reader-free release and immediately before the one-shot. Exactly the existing API machine
+`80e39ea6416e18` ran the migration with no public services and restart policy `no`. The
+[timestamped log](migration-hosted.log) and [exit evidence](migration-verified.json) confirm only
+0045 applied, queue setup completed and the process exited normally with code 0. Normal
+configuration was restored and compared before starting the API. Claude reviewed the migration,
+release procedure and corrections; Codex executed and verified it.
+
+API image: `registry.fly.io/askthecaptain-api-staging:git-02733f2@sha256:1e2cdf9407cda83b3363d5fa763812cedc72114955b255c8a5b15d55057be3aa`.
+Its pushed index is `sha256:4e4d3db1e3d9f3c118b1304f0a3319d3a59b55b3cae69ea004c3155b07288d04`;
+Fly resolves that index to the recorded platform manifest. The web machine `9185776e7cd3d8`
+and image `git-17089ce` were unchanged. [All five applications' machine IDs/configurations](fleet-proof.json) were
+compared; only the staging API image changed. Production and embedding stayed stopped, automatic
+deployment and backups disabled. No DNS, secret, provider, native enablement or reset operation ran.
+
+[Read-only postflight](release-postflight.json) verified the complete 42-file migration history,
+absence of all 21 tables, seven functions and three columns, retained vector extension,
+project/provenance columns and checks, eight auth kinds and three queues. The deployed runtime-role
+safety guard passed; `app` and `captain_runtime` have equal sets of 228 direct scoped grants and
+66 policies. All 27 retained table counts exactly match preflight, including one project, 26 tasks,
+one conversation/message, five equipment records, seven reservations and seven stock items.
+This is count preservation evidence, alongside the transactional migration tests; it is not
+hosted signed-in acceptance.
+
+[HTTP checks](http-proof.json) returned readiness 200, Google identity available, and native sign-in
+400 `native_sign_in_unavailable`. The [anonymous 390-pixel browser check](browser-proof.json) and [screenshot](login-390.png) passed;
+no real account or device sign-in was attempted. The rollback set is this API image or the earlier
+recorded reader-free `git-17089ce` API image. Never deploy the paused production image against this
+schema or recreate the removed storage.

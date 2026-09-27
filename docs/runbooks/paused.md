@@ -1,5 +1,16 @@
 # Staging resumed; production paused (2026-09-27)
 
+## Legacy storage retired (27 September 2026, 06:42 UTC)
+
+Reviewed #194 is merged; [CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36300326550)
+passed. The sole staging API applied 0045 at 06:42:39 UTC, completed queue setup and exited 0,
+then resumed with verified normal configuration and image `git-02733f2`. All 21 legacy tables,
+seven functions and three obsolete columns are absent. All 27 retained table counts match the
+fresh 06:40 preflight, including current demo Work/Chat. No reset ran. Web remains `git-17089ce`;
+production/embedding remain stopped, native sign-in off, one existing machine per staging app.
+See [release evidence](../validation/assistant-storage-retirement-2026-09-27/README.md).
+
+
 ## Legacy-storage audit for R5b (27 September 2026, 06:13 UTC)
 
 After the reader-free API/web release below, a fresh verified-TLS owner audit ran read-only
@@ -8,7 +19,7 @@ were empty, all three obsolete retained columns were null, all seven functions e
 and no unexpected external dependency was found. The only retained FK is the known contacts
 reference. See the [audit and migration evidence](../validation/assistant-storage-retirement-2026-09-27/README.md).
 This satisfies the count gate for the guarded R5b migration planned in #180 and now reviewed; it is not
-proof of a migration or deployment. **0045 has not been applied to staging.** No data reset
+proof of a migration or deployment. The subsequent 0045 release is recorded above. No data reset
 or current business/Chat deletion occurred.
 
 ## Assistant retirement and default-off native handoff release (27 September 2026)
@@ -23,11 +34,11 @@ is behaviourally confirmed off. No current Work/Chat/demo data was reset or dele
 
 See the [release evidence](../validation/assistant-retirement-release-2026-09-27/README.md)
 for images, checks and rollback limits. R5a's reader-free image is now deployed; the R5b
-audit is recorded above, while the guarded migration and its release remain pending. Mobile adapters,
+audit and completed guarded migration release are recorded above. Mobile adapters,
 account screens, signed builds and device acceptance are separate increments.
 
-**Staging runs on the restricted `captain_runtime` database login**, with the `git-17089ce` API and web
-images released on 27 September (#190/#191; retaining the #162 role guard, #173 chat API and #174 Chat screens). The workspace is at https://app.askthecaptain.app/work. One existing
+**Staging runs on the restricted `captain_runtime` database login**, with API `git-02733f2` and web `git-17089ce`
+images released on 27 September (#194/#191; retaining the #162 role guard, #173 chat API and #174 Chat screens). The workspace is at https://app.askthecaptain.app/work. One existing
 machine per staging app is retained, with normal autostart and idle stop. Production and the
 embedding service remain paused; automatic deploy and backup workflows remain disabled.
 Any API rollback must retain `captain_runtime` and the #162 role guard. Before any future production

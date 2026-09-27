@@ -1,0 +1,3 @@
+2026-09-27T06:42:39Z app[80e39ea6416e18] syd [info][db:migrate] applied 0045_drop_assistant_storage.sql
+2026-09-27T06:42:39Z app[80e39ea6416e18] syd [info]CAPTAIN_02733F2_MIGRATION_AND_QUEUES_OK
+2026-09-27T06:42:40Z app[80e39ea6416e18] syd [info] INFO Main child exited normally with code: 0

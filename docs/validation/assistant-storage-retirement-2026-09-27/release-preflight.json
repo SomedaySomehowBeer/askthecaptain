@@ -1,0 +1,104 @@
+{
+  "gate": "clear",
+  "review": [],
+  "audit": {
+    "checked_at": "2026-09-27T06:40:09.399994+00:00",
+    "read_only": "on",
+    "row_security": "off",
+    "isolation": "repeatable read",
+    "migration_tail": [
+      "0044_native_handoff.sql",
+      "0043_chat_personal_pins.sql",
+      "0042_chat_core.sql"
+    ],
+    "tables": {
+      "mail_threads": 0,
+      "mail_messages": 0,
+      "mail_attachments": 0,
+      "mail_triage": 0,
+      "mail_senders": 0,
+      "sent_triage": 0,
+      "attachment_text": 0,
+      "outbox": 0,
+      "calendars": 0,
+      "calendar_events": 0,
+      "notes": 0,
+      "note_triage": 0,
+      "content_vectors": 0,
+      "project_sources": 0,
+      "project_candidates": 0,
+      "project_candidate_sources": 0,
+      "discovery_seeds": 0,
+      "briefs": 0,
+      "answers": 0,
+      "webhook_events": 0,
+      "webhook_attempts": 0
+    },
+    "missing_tables": [],
+    "inheritance_children": [],
+    "retained_columns": {
+      "contacts.last_thread_id": 0,
+      "workflow_enablements.mail_cursor": 0,
+      "workflow_enablements.sent_cursor": 0
+    },
+    "functions_present": {
+      "gmail_sync_organisations()": true,
+      "calendar_sync_organisations()": true,
+      "attachment_text_organisations()": true,
+      "index_organisations()": true,
+      "content_vectors_cascade()": true,
+      "project_sources_cascade()": true,
+      "clear_changed_event_note()": true
+    },
+    "fk_into_legacy_from_retained": [
+      {
+        "table": "contacts",
+        "constraint": "contacts_organisation_id_last_thread_id_fkey"
+      }
+    ],
+    "views_or_rules_elsewhere": [],
+    "policies_elsewhere": [],
+    "rowtype_columns_elsewhere": [],
+    "triggers_elsewhere": [],
+    "functions_depending_on_legacy_functions": [],
+    "functions_naming_legacy_for_review": [],
+    "retained_counts": {
+      "organisations": 1,
+      "users": 1,
+      "memberships": 1,
+      "projects": 1,
+      "tasks": 26,
+      "evidence": 1,
+      "task_series": 2,
+      "contacts": 0,
+      "companies": 0,
+      "conversations": 1,
+      "conversation_participants": 1,
+      "conversation_links": 1,
+      "messages": 1,
+      "message_pins": 0,
+      "conversation_stars": 0,
+      "chat_audit_events": 4,
+      "saved_views": 0,
+      "tags": 5,
+      "task_tags": 35,
+      "equipment": 5,
+      "equipment_reservations": 7,
+      "stock_items": 7,
+      "stock_counts": 6,
+      "workflow_enablements": 0,
+      "workflow_runs": 0,
+      "connections": 0,
+      "sync_cursors": 0
+    },
+    "informational": {
+      "evidence_by_kind": {},
+      "tasks_by_source_kind": {},
+      "projects_proposed_unaccepted": 0,
+      "google_connections": 0,
+      "auth_requests_google_connection": 0,
+      "sync_cursors_by_provider_resource": {},
+      "legacy_table_grant_entries": 332
+    }
+  }
+}
