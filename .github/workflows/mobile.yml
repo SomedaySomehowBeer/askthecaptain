@@ -1,7 +1,6 @@
 name: mobile
 # apps/mobile (mobile foundation contract §8 and §9, M-shell): client boundary guard, SDK compatibility, typecheck,
-# pure-logic tests and web/iOS/Android bundle exports. Exports prove that the JavaScript bundles build and contain no
-# server secret; they are not a native build, a signed build or device evidence. No secret is available to this workflow.
+# pure-logic tests and web/iOS/Android bundle exports. Exports verify JavaScript bundling; the scan checks named server secrets and canaries; they are not a native build, a signed build or device evidence. No secret is available to this workflow.
 on:
   pull_request:
     paths:

@@ -26,11 +26,15 @@ The document keeps four kinds of statement apart:
 - **Device/build evidence:** exports, simulator builds, real-device runs and signed builds, recorded
   separately (§10). This contract claims none of them.
 
-**Implementation status.** A1 (#186) adds the API handoff, default-off `NATIVE_SIGN_IN` flag and
-migration 0044. A2 adds the web callback/passkey branches and a synthetic browser proof using the
+**Implementation status.** A1 (#186) is merged and adds the API handoff, default-off `NATIVE_SIGN_IN` flag and
+migration 0044. A2 (#187) is merged and adds the web callback/passkey branches and a synthetic browser proof using the
 real API, disposable Postgres and a virtual authenticator. The proof intercepts the custom-scheme
 destination; it does not establish that an installed app receives it or that a platform authentication
-session closes. There is no mobile application or device evidence yet. Keep the flag off on shared
+session closes. The M-shell increment adds `apps/mobile` with Work/Chat/Resources, grouped view lists,
+SDK 57 dependencies, boundary checks and signed-out states. Three-platform JavaScript exports,
+a browser approximation at 360/390/430 pixels and generated Android backup configuration are
+verified; there is no signed native build or device evidence, nor mobile authentication or business
+reads yet. Browser history differs from native stacks and cannot prove native back gestures. Keep the flag off on shared
 staging and for real accounts until the verified-link gate passes. These increments have not been
 released to staging and migration 0044 has not been applied there. The repository facts below
 describe the baseline audited for this contract; §§3 and 9 define the additions and remaining work.

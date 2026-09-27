@@ -27,10 +27,11 @@ assets, legacy catalogue entries and unused Google mailbox connector methods. R4
 their fresh read-only live-count and deployment/migration gates; no count or storage removal is
 implied by these code changes. The stopped embedding resource is unchanged.
 
-Native A1 (#186) is merged: the API handoff, default-off flag and migration 0044. A2 adds the web
+Native A1 (#186) is merged: the API handoff, default-off flag and migration 0044. A2 (#187) is merged and adds the web
 native branches and a disposable, synthetic browser proof. Neither increment enables native
 sign-in on shared staging or real accounts; the verified claimed-link and device gates remain.
-No native application or device acceptance is claimed. These cleanup and native increments have
+M-shell now supplies application source and exported bundles; no signed native build or device
+acceptance is claimed. These cleanup and native increments have
 not been released to staging, and migration 0044 has not been applied there. Operational releases
 remain recorded in [paused.md](../runbooks/paused.md).
 
@@ -38,16 +39,23 @@ The two existing Claude Opus agents remain in Herdr's Monitor tab. Their histori
 shell working directories do not identify the current checkout. Codex assigns explicit absolute
 paths to isolated checkouts and records them in the coordinator checkpoint.
 
-| Owner | Current A2 deliverable | Files owned |
+| Owner | Current mobile work | Files owned |
 |---|---|---|
-| Claude `linked-chat`, `w2:pS` | Web native callback/passkey branches and unit coverage | `apps/web/src/app/auth/`, sign-in error wording and `apps/web/src/lib/native-handoff*` |
-| Claude `business-views`, `w2:pR` | Independent synthetic browser proof and CI integration | `apps/api/test/native-fixture.ts`, `apps/e2e/scripts/native-*`, bounded CI wiring |
-| Codex | Review, execution, plan/status reconciliation and integration | Documentation, actual check evidence, git and issue/PR records |
+| Claude `linked-chat`, `w2:pS` | Expo routes/components, navigation and browser approximation; independent guard review | `apps/mobile/src/`, app/package/TypeScript config, `apps/e2e/scripts/mobile-shell-check.cjs` |
+| Claude `business-views`, `w2:pR` | Client boundary guard and mobile CI; independent shell review; next authentication partition | `apps/mobile/scripts/`, `.github/workflows/mobile.yml` and a reviewed M-auth proposal |
+| Codex | Integration, SDK/lockfile validation, browser execution, generated backup checks and status | Dependency lock/overrides, CI runner, documentation, actual evidence, git and issue/PR records |
 
-Each Claude reviews the other's implementation without editing those owned files. Codex owns git,
-builds, tests, integration and release. All heavy checks remain serial under
-`flock /tmp/atc-build.lock`. After A2, the adopted contract orders the Expo shell, secure device
-session handling and authenticated reads; it does not treat this browser proof as an installed app.
+The shell has no authentication, business reads or writes. Initial local evidence comprises 500
+uncached tests against disposable Postgres on the #186 base plus shell, ten workspace typechecks,
+SDK compatibility, web/iOS/Android exports, exported-canary scans and a browser approximation at
+360/390/430 pixels. It is rebased onto merged #187; CI verifies the combined tree. Android config
+introspection verifies backup exclusions, not native compilation or device behaviour.
+
+Each Claude reviews the other's implementation. Codex owns git, builds, tests, integration and
+release. All heavy checks remain serial under `flock /tmp/atc-build.lock`. Next is M-auth: review
+protocol and serial credential-storage interfaces first, then implement those bounded foundations
+before account UI and platform adapters. Authenticated reads follow. The existing contract and
+real-account link/device gates remain; browser exports are not installed-app evidence.
 
 ## Review and execution sequence
 
