@@ -1,12 +1,22 @@
 # Mobile transport response byte-budget contract
 
-Status: adopted by this planning amendment, 27 September 2026. Outcome: **manage shared work** through bounded
+Status: adopted in #200, 27 September 2026. Outcome: **manage shared work** through bounded
 mobile reads. My work (#199) is merged. This addresses the JavaScript response-budget gate in
-[the My work contract](expo-mobile-my-work-read-2026-09.md); implementation follows adoption.
-Native buffering remains a separate device gate.
+[the My work contract](expo-mobile-my-work-read-2026-09.md). Native buffering remains a separate device gate.
+
+**Implementation status (27 September 2026): implemented and independently reviewed; local validation passed.**
+- The transport change is written on branch `feat/mobile-response-byte-budget`: `apps/mobile/src/api/client.ts` and
+  the adapted and added tests in `client.test.ts` and `platform/native-send.test.ts`.
+- Local tests, typechecks and exports passed; see the [validation record](../validation/mobile-response-byte-budget-2026-09-27/README.md).
+  Repository CI is tracked by the implementation PR.
+- **There is no simulator or device evidence.** Every §4 gate is open.
+- Nothing here guarantees a bound on total memory for a request (see "What this bounds" below).
+- Two review additions to the adopted design are implemented and described in §2.2:
+  - the redirect, final-URL and 3xx refusals also call `halt`;
+  - empty decoder output is not kept.
 
 Outcome: the transport **accumulates and passes to `JSON.parse` at most a fixed number of body bytes per response**
-(`maxResponseBytes`). A response whose body would exceed that is abandoned: the download is cancelled, nothing of it is
+(`maxResponseBytes`). A response whose body would exceed that is abandoned: cancellation is requested, nothing of it is
 parsed, and it is treated like any unusable answer, never as data and never as a client bug.
 
 **What this bounds, and what it does not.** It bounds the **accumulated body bytes kept in JavaScript** and the **JSON
@@ -29,21 +39,20 @@ Unchanged:
 
 ## 1. Evidence (installed SDK, expo 57.0.25; read locally, not browsed)
 
-**Today** (`apps/mobile/src/api/client.ts:94-97`): the transport calls `response.text()` and `JSON.parse`, bounded
+**Before this increment** (`apps/mobile/src/api/client.ts` on #199): the transport calls `response.text()` and `JSON.parse`, bounded
 only by the 30 s timeout, so a large body is read whole.
 
 **`expo/fetch` exposes a real stream** (`expo/src/winter/fetch/FetchResponse.ts:281-349`).
 `response.body` is a `ReadableStream<Uint8Array>` whose `pull` calls native `startStreaming()`. From then on, each
 native chunk is delivered as `didReceiveResponseData`. Cancelling the stream calls native `cancelStreaming`; aborting
-the request's `AbortSignal` calls `response.abort()` and `request.cancel()` (`fetch.ts:80-85`), which stops the
-native download.
+the request's `AbortSignal` calls `response.abort()` and `request.cancel()` (`fetch.ts:80-85`), which requests native cancellation by source reading. Whether the transfer actually stops remains device gate 1.
 
 **Native buffering before streaming starts** (the important limit):
 - iOS (`ios/Fetch/NativeResponse.swift:160-176`, `ResponseSink.swift`) and Android (`NativeResponse.kt:194-216`)
   append body data to an in-memory `ResponseSink` from the moment headers arrive **until JS starts streaming**.
 - `startStreaming()` then emits everything buffered so far as **one chunk**, or, if the body already completed,
   returns the **whole body** as one chunk (`NativeResponse.swift:40-53`, `NativeResponse.kt:56-69`).
-- A JS byte count therefore bounds what JS keeps and parses, and cancels the download at the first chunk that crosses
+- A JS byte count therefore bounds what JS keeps and parses, and requests cancellation at the first chunk that crosses
   the budget. It **cannot** bound what native (or the OS network stack) has already buffered, or the size of one
   chunk.
 
@@ -93,8 +102,10 @@ to be reviewed together.
 `body: ReadableStream<Uint8Array> | null`. `expo/fetch`, browser and Node responses all provide it, so `nativeSend`
 still passes the response through and no new dependency is needed.
 
-The existing checks come first, unchanged: redirect, final URL, 3xx, then status and `Retry-After` read from the
-headers. After them, the body is read under the **same single 30 s timer** that already covers the request (B's S4).
+The existing checks come first: redirect, final URL, 3xx, then status and `Retry-After` read from the headers. A
+redirected, 3xx or foreign-URL response is still no answer (`redirect`), and its body is never touched. As a review
+addition, that refusal also calls `halt(state, controller, 'redirect')`. With no reader, this is a guarded abort, which
+requests cancellation for the refused response; native cancellation behaviour remains a device gate. After them, the body is read under the **same single 30 s timer** that already covers the request (B's S4).
 There is no second timer.
 
 **0. Stop state, `halt`, and the timer** (B's F1–F3).
@@ -115,7 +126,7 @@ There is no second timer.
 
   The order is: stop, clear, cancel (guarded against both rejection and a synchronous throw), then abort (guarded).
   Cancelling before aborting keeps B's S3 reasoning: it marks the expo stream closed, so late native events are
-  dropped, and the abort then stops the native request.
+  dropped, and the abort then requests cancellation of the native request.
 - **The timer resolves first, then cleans up:**
   `timer = setTimeout(() => { resolve({ timeout: true }); halt(state, controller, 'timeout'); }, timeoutMs)`.
   - Today's callback (`client.ts:87`) is `controller.abort(); resolve(...)`. `abort()` runs the signal's listeners
@@ -178,7 +189,7 @@ There is no second timer.
   - **Count before decoding** (B's R3). If `total + value.byteLength > maxResponseBytes`, the order is (B's S3, F3):
     1. drop the chunk: it is neither decoded nor kept;
     2. `halt(state, controller, 'budget')`: stop, clear the parts, a guarded cancel (which marks the expo stream
-       closed, so late native events are dropped), then a guarded abort (which stops the native request, since
+       closed, so late native events are dropped), then a guarded abort (which requests native cancellation, since
        `abort` alone would be a no-op once the stream is closed);
     3. return unreadable, whatever `halt`'s calls did.
 
@@ -188,10 +199,14 @@ There is no second timer.
   - On `done`: `parts.push(decoder.decode())` flushes; an incomplete final sequence throws under `fatal`. Then join
     the parts once and `JSON.parse` the result, exactly as today. The flush, join and parse happen synchronously right
     after the stop check, so a stopped request never reaches them.
-- **Any throw** (`getReader`, a `read()` rejection when the abort errors the stream, a `fatal` decode error, or
-  `JSON.parse`) calls `halt(state, controller, 'error')` and makes the body unreadable. No partial text is ever
-  parsed. If `state.stopped` was already set, the throw is simply the expected consequence of that stop, and `halt` is
-  idempotent.
+- **Empty output is not kept** (a review addition). A zero-byte chunk, or a chunk ending mid-character, decodes to
+  `''`. That string, and an empty final flush, is not pushed to `state.parts`, so chunks carrying no text add no
+  entries.
+- A chunk that is not a `Uint8Array` calls `halt(state, controller, 'unreadable')`.
+- **Any throw** (the `body` getter, `getReader`, a `read()` rejection when the abort errors the stream, a `fatal`
+  decode error, or `JSON.parse`) makes the body unreadable, and calls `halt(state, controller, 'error')` unless the
+  request is already stopped. No partial text is ever parsed. A throw after a stop is simply the expected consequence
+  of that stop, so cleanup is not repeated.
 
 **4. Reader lock** (B's R4).
 - `reader.releaseLock()` is called **only** after the loop ended normally with `done` and no read is pending, inside
@@ -238,8 +253,8 @@ and the adopted `client-bug` outcome is reserved for the latter.
 
 ## 3. Tests (Claude A except the scoped-read regression; node, with `Response`/`ReadableStream` fakes, no device)
 
-A test-wide `process.on('unhandledRejection')` (and `uncaughtException`) hook fails the test on any unhandled
-rejection or throw, so every "no unhandled rejection" item below is checked, not assumed.
+Node's test runner fails on unhandled rejections and uncaught exceptions, including asynchronous activity
+after a test. Each test ends with a settle wait. No process hooks are added; the client boundary guard forbids them.
 
 - **Exactly at the limit:** a body of `maxResponseBytes` bytes (valid JSON, padded) parses. One byte more is
   unreadable; the order is `reader.cancel('budget')`, then `abort`; and the crossing chunk is never passed to the
@@ -293,7 +308,7 @@ rejection or throw, so every "no unhandled rejection" item below is checked, not
 - **An abort that throws synchronously** (B's F2, F3), using a **controllable fake controller**.
   - A throwing listener on a real Node `AbortSignal` cannot test this. Node's `EventTarget` catches listener exceptions
     and reports them asynchronously as an uncaught exception, so `abort()` itself never throws: that setup would not
-    exercise the `try`, and would trip the test-wide `uncaughtException` hook.
+    exercise the `try`, and would be reported by the test runner as an uncaught exception.
   - Instead, `globalThis.AbortController` is replaced for the test (restored in `finally`) by a fake:
     - its `signal` comes from an inner, real `AbortController`, so `send` fakes still observe it;
     - its `abort()` aborts that inner controller and then throws.
@@ -323,7 +338,7 @@ rejection or throw, so every "no unhandled rejection" item below is checked, not
 - **Existing tests:** every current transport, client, failure and attempt test is adapted from `text()` fakes to
   `body` streams, with the same expectations.
 - **Scoped read (Claude B, after the transport implementation):** a My work read whose body is oversized resolves `{ kind: 'unavailable', wait: null }`, not
-  `client-bug`, and the list keeps its rows (a runner test plus a hook-level check).
+  `client-bug`, and the list keeps its rows (runner tests over the real transport and client; pure list rules verify retained rows).
 
 Additional ordinary-stream and body-acquisition cases:
 - A valid multi-chunk JSON body ending in `{ done: true, value: undefined }` parses successfully.
@@ -374,6 +389,13 @@ Decided by root after B's review:
 
 Adopted in revision 4, with root's agreement: B's F1–F3. They are the stop state, resolve-before-cleanup, and every
 cleanup call guarded.
+
+Review additions during implementation (root, with B's confirmation):
+- the redirect, final-URL and 3xx refusal calls `halt`. Its test checks that the `body` getter is never touched, that
+  the signal is aborted, and that the only event is the abort;
+- empty decoder output is not kept, with a zero-byte chunk in the ordinary-body test.
+
+Neither changes an outcome, a retry rule or a type.
 
 **Not directly tested:** that `halt` clears `state.parts` isn't observable without exposing the state. It is checked in
 code review, and indirectly by the decode and parse spies.

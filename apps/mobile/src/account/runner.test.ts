@@ -3,7 +3,10 @@ import { test } from 'node:test';
 import type { Cleanup } from '../auth/cleanup.ts';
 import type { ApiClient, ApiOutcome, AttemptOutcome, Attempts, AttemptState } from '../auth/contracts.ts';
 import { createClampedClock } from './clock.ts';
+import { createApiClient, createTransport, maxResponseBytes } from '../api/client.ts';
 import { myWorkPath } from '../api/paths.ts';
+import { beginRead, finishRead, initialWorkList } from '../work/my-work-list.ts';
+import { parseMyWorkPage } from '../work/my-work.ts';
 import type { CredentialStore, Generation, ReadScope, StoredSession } from './contracts.ts';
 import { createAccountRunner, type AccountRunner, type Timers } from './runner.ts';
 
@@ -37,7 +40,8 @@ class Calls {
 	async fail(name: string, error: unknown = new Error(`platform detail ${token('p')}`)) { await drain(); this.take(name).reject(error); await drain(); }
 }
 
-function harness(options: { storage?: boolean } = {}) {
+/** `client`: a real client to use instead of the recording fake (the byte-budget regression below). */
+function harness(options: { storage?: boolean; client?: ApiClient } = {}) {
 	const calls = new Calls();
 	let generation: (() => Generation) | null = null;
 	const store: CredentialStore = {
@@ -80,7 +84,7 @@ function harness(options: { storage?: boolean } = {}) {
 	const snapshots: unknown[] = [];
 	const runner = createAccountRunner({
 		createStore: options.storage === false ? null : (current) => { generation = current; return store; },
-		attempts, client, cleanup, timers: fakeTimers, clock: createClampedClock(() => clock.now), wallNow: () => 0
+		attempts, client: options.client ?? client, cleanup, timers: fakeTimers, clock: createClampedClock(() => clock.now), wallNow: () => 0
 	});
 	runner.subscribe((s) => snapshots.push(s));
 	return { calls, runner, attemptState, cleanupState, timers, clock, snapshots, flags, generation: () => generation!() };
@@ -651,4 +655,101 @@ test('refresh: a 401 releases the session', async () => {
 	await t.calls.answer('get', { ok: false, kind: 'unauthorised' });
 	const releasing = account(t.runner);
 	assert.ok(releasing.kind === 'releasing' && releasing.reason === 'session-ended' && releasing.server === 'not-needed');
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Byte budget through a scoped read (docs/plans/expo-mobile-response-byte-budget-2026-09.md §2.3 and §3 "Scoped read").
+// The real transport and client, with a fake `send` whose body is a byte stream.
+
+type FakeStream = { reads: number; cancels: unknown[] };
+/** A response whose body yields `chunks`, then done; records reads and cancels. */
+function streamed(url: string, status: number, chunks: readonly Uint8Array[], headers: Record<string, string> = {}, record?: FakeStream) {
+	let next = 0;
+	return {
+		status, redirected: false, url, headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
+		body: {
+			getReader: () => ({
+				read: async () => {
+					if (record) record.reads += 1;
+					return next < chunks.length ? { done: false, value: chunks[next++] } : { done: true, value: undefined };
+				},
+				cancel: async (reason?: unknown) => { record?.cancels.push(reason); },
+				releaseLock: () => undefined
+			})
+		}
+	};
+}
+const jsonChunk = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
+/** More than `maxResponseBytes` in 64 KiB chunks, with no content-length: only the byte count can refuse it. */
+const oversizedChunks = () => {
+	const chunk = new Uint8Array(65_536).fill(0x20);
+	const first = chunk.slice();
+	// A valid task page followed by legal JSON whitespace: absent the budget this would be usable data.
+	first.set(jsonChunk(taskBody('00000000-0000-4000-8000-000000000001')));
+	return Array.from({ length: Math.floor(maxResponseBytes / chunk.byteLength) + 2 }, (_, index) => index === 0 ? first : chunk);
+};
+const taskBody = (id: string) => ({ tasks: [{ id, title: 'Kept task', ownerId: userId, status: 'open', due: null, tags: [] }], nextOffset: null });
+
+/** A ready runner (organisation A) over the real client; `tasks` answers each organisation read in order. */
+async function readyOverRealTransport(tasks: ((url: string) => ReturnType<typeof streamed>)[]) {
+	const signals: AbortSignal[] = [];
+	const origin = 'https://api.example.test';
+	const send = (async (url: string, init: { signal: AbortSignal }) => {
+		signals.push(init.signal);
+		if (url === `${origin}/v1/me`) return streamed(url, 200, [jsonChunk(meBody(orgA, orgB))]);
+		const answer = tasks.shift();
+		assert.ok(answer, 'no unexpected organisation read');
+		return answer(url);
+	}) as unknown as Parameters<typeof createTransport>[0]['send'];
+	const t = harness({ client: createApiClient(createTransport({ origin, send })) });
+	t.runner.start();
+	await t.calls.answer('read', stored('a'));
+	await drain();
+	await t.calls.answer('readOrg', orgA);
+	return { t, signals };
+}
+
+test('byte budget: an oversized scoped read is unavailable, never a client bug; the list keeps its rows; the account is untouched', async () => {
+	const record: FakeStream = { reads: 0, cancels: [] };
+	const chunks = oversizedChunks();
+	const kept = '00000000-0000-4000-8000-000000000001';
+	const { t, signals } = await readyOverRealTransport([
+		(url) => streamed(url, 200, [jsonChunk(taskBody(kept))]),
+		(url) => streamed(url, 200, chunks, {}, record)
+	]);
+	const scope = shown(t.runner);
+	const readPage = (offset: number) => t.runner.organisationRead(scope, (current) => myWorkPath(current, offset), (value) => parseMyWorkPage(value, { scope, offset }));
+
+	// A first page loads through the real transport and parser.
+	const first = beginRead(initialWorkList, 'first', 0)!;
+	const loaded = finishRead(first.state, first.seq, await readPage(0));
+	assert.deepEqual(loaded.rows.map((row) => row.id), [kept]);
+
+	// Refresh: the answer is a 200 whose body crosses the budget.
+	const refresh = beginRead(loaded, 'refresh', 0)!;
+	const outcome = await readPage(0);
+	assert.deepEqual(outcome, { kind: 'unavailable', wait: null }, 'unavailable, not client-bug');
+	const after = finishRead(refresh.state, refresh.seq, outcome);
+	assert.deepEqual(after.rows.map((row) => row.id), [kept], 'the list keeps its rows');
+	assert.deepEqual(after.problem, { op: 'refresh', kind: 'unavailable', wait: null }, '"Couldn\'t refresh", never an empty list');
+
+	// The transport stopped at the crossing chunk: no further read, the stream cancelled, the request aborted.
+	const crossing = Math.floor(maxResponseBytes / 65_536) + 1;
+	assert.equal(record.reads, crossing, 'no read after the chunk that crossed the budget');
+	assert.deepEqual(record.cancels, ['budget']);
+	assert.equal(signals.at(-1)!.aborted, true);
+
+	// The account is unaffected: still ready, same scope, no session effect.
+	const view = account(t.runner);
+	assert.ok(view.kind === 'signed-in' && view.ready && view.scope?.epoch === scope.epoch);
+	tokenFree(t.snapshots);
+});
+
+test('byte budget: an oversized 429 keeps its Retry-After as the read\'s own wait', async () => {
+	const { t } = await readyOverRealTransport([(url) => streamed(url, 429, oversizedChunks(), { 'retry-after': '20' })]);
+	const scope = shown(t.runner);
+	const outcome = await t.runner.organisationRead(scope, (current) => myWorkPath(current, 0), (value) => parseMyWorkPage(value, { scope, offset: 0 }));
+	assert.deepEqual(outcome, { kind: 'unavailable', wait: { until: 20_000, about: new Date(20_000).toISOString() } });
+	const view = account(t.runner);
+	assert.ok(view.kind === 'signed-in' && view.ready, 'a business wait never touches the account');
 });

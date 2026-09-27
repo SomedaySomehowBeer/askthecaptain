@@ -483,7 +483,7 @@ staleness labels and organisation separation.
 
 The [response-budget increment](expo-mobile-response-byte-budget-2026-09.md) specifies a 1 MiB
 limit on decompressed bytes accepted for decoding and parsing, with guarded cancellation and the
-existing shared timeout. It remains unimplemented until its own reviewed code PR. Native buffering,
+existing shared timeout. Its implementation is written and under validation; see its contract and validation record for current evidence. Native buffering,
 a single delivered chunk and process-memory overhead are not bounded by that JavaScript limit;
 streaming/cancellation, compression and decoder behaviour remain device gates.
 

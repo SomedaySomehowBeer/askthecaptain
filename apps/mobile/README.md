@@ -19,9 +19,21 @@ See the [validation record](../../docs/validation/mobile-my-work-read-2026-09-27
   person or organisation shows nothing and sends nothing until the tabs reset.
 - **What it doesn't do:** Chat and Resources, other Work views, detail pages and all writes are not
   implemented. There is no local business cache.
-- **Open limits:** the transport has no response byte budget yet. `expo/fetch` reporting the query
-  URL unchanged, and a real 403/404, are device gates. Nothing is installed or usable on a device,
-  and there is no simulator or device evidence.
+- **Open limits:** `expo/fetch` reporting the query URL unchanged, and a real 403/404, are device
+  gates. Nothing is installed or usable on a device, and there is no simulator or device evidence.
+
+**The [response byte budget](../../docs/plans/expo-mobile-response-byte-budget-2026-09.md) is implemented and independently reviewed, with local checks passing.** The transport (`src/api/client.ts`) reads each response body as a byte stream:
+- it keeps, decodes and parses at most 1 MiB of decoded bytes (a policy limit);
+- it refuses an oversized declared `Content-Length` without touching the body;
+- it stops at the first chunk that crosses the limit;
+- it decodes UTF-8 strictly, so invalid bytes make the body unreadable;
+- one 30-second timer covers the headers and body.
+
+An unusable body keeps its status and `Retry-After`. It is never data, and never a client bug.
+
+This bounds only what JavaScript keeps and parses. It is **not** a guarantee on total memory: native buffering before
+streaming, one delivered chunk, and decoding and parsing overhead are not bounded. Whether cancelling actually stops the
+native download is a device gate with no evidence yet. See the [validation record](../../docs/validation/mobile-response-byte-budget-2026-09-27/README.md).
 
 The source contract is [the mobile foundation plan](../../docs/plans/expo-mobile-foundation-2026-09.md).
 Tokens cite the reviewed mockups in `src/theme/tokens.ts`; system fonts are used.

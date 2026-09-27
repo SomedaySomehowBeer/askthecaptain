@@ -123,8 +123,9 @@ release. All heavy checks remain serial under `flock /tmp/atc-build.lock`.
 ## Next mobile read increments
 
 The [All tasks contract](expo-mobile-all-tasks-read-2026-09.md) and
-[transport response-budget contract](expo-mobile-response-byte-budget-2026-09.md) define separate
-implementation PRs after adoption. Neither is implemented by this planning amendment.
+[transport response-budget contract](expo-mobile-response-byte-budget-2026-09.md) were adopted in #200 and define
+separate implementation PRs. The transport implementation is written and under validation; its own
+contract and validation record track review and checks. All tasks has a separate implementation PR.
 
 - Claude A implements the transport budget and its regressions; Claude B independently reviews it.
 - Claude B implements the shared My work/All tasks screen, hook, copy and harness. Codex supplies
