@@ -18,9 +18,11 @@ name and added a grouping test that distinguishes API order from alphabetical or
 - Final tests passed: 289 total, 269 pure/source plus 20 boundary, zero skipped.
 - Production web/iOS/Android and separate synthetic harness exports passed, with secret/canary and
   harness-exclusion scans.
-- Full synthetic browser acceptance: running at 360/390/430 px. The 360 px pass includes parser-driven
+- Full synthetic browser acceptance passed at 360/390/430 px. Each width includes parser-driven
   malformed failure, empty/uncounted states, exact decimal strings, refresh failure retaining rows,
   retry waits, fixed website destination and stale answers after organisation changes.
+- The complete existing account/navigation/My work/All tasks/session-control suite also passed with no page errors, console errors, outside-origin requests or overflow.
+- A separate focused [390 px screenshot](390-inventory.png) records the loaded synthetic screen; the harness controls beneath the app are test-only.
 - CI: pending. No implementation PR is merged yet.
 
 No server source, dependency, schema or API changes. No real-Postgres rerun is claimed for this
