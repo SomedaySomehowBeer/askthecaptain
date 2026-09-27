@@ -67,8 +67,9 @@ jobs:
   # fixture (loopback only, synthetic data, no hosted credentials). Separate from `check` for its own time budget.
   chat-browser:
     runs-on: ubuntu-latest
-    # Two suites of at most 12 minutes each (chat-ci.mjs), plus install, build, fixture setup/cleanup and upload.
-    timeout-minutes: 40
+    # Two suites of at most 12 minutes each (chat-ci.mjs), the native sign-in proof of at most 8 minutes (native-ci.mjs),
+    # plus install, build, fixture setup/cleanup and upload.
+    timeout-minutes: 50
     services:
       postgres:
         image: pgvector/pgvector:pg18
@@ -101,6 +102,12 @@ jobs:
         env:
           CHAT_CI_OUT: ${{ github.workspace }}/apps/e2e/chat-ci-output
         run: node apps/e2e/scripts/chat-ci.mjs
+      # Mobile foundation contract §3.5 (A2): the same web build on its own ports and origin, with its own fixture.
+      - name: Native sign-in browser proof (fresh fixture, virtual authenticator)
+        if: success() || failure()
+        env:
+          NATIVE_CI_OUT: ${{ github.workspace }}/apps/e2e/chat-ci-output/native-sign-in
+        run: node apps/e2e/scripts/native-ci.mjs
       # Only synthetic screenshots and redacted logs are written to this directory; fixture data.json never is.
       - name: Retain chat browser evidence
         if: always()

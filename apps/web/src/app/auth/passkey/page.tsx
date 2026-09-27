@@ -2,18 +2,29 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { Captain } from '../../../components/Captain.tsx';
 import { Notice } from '../../../components/Notice.tsx';
+import { nativeStepUp } from '../../../lib/native-handoff.ts';
 import { readSession } from '../../../lib/session.ts';
 import { StepUp } from './StepUp.tsx';
 
 export const metadata: Metadata = { title: 'Your passkey' };
 
 /** Between Google and the session: this account has a passkey, so it must be presented. */
-export default async function PasskeyPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
+export default async function PasskeyPage({ searchParams }: { searchParams: Promise<{ token?: string | string[]; native?: string | string[] }> }) {
+	const params = await searchParams;
+	const token = typeof params.token === 'string' ? params.token : undefined;
+	// A mobile app's step-up is never skipped because this browser also holds an unrelated web sign-in: a
+	// Custom Tab can share one. The API decides what a verified step-up yields.
+	if (nativeStepUp(params.native)) return (
+		<main className="page page--narrow">
+			<header className="stack"><Captain size={48} /><h1>One more step</h1><p>This account is protected by a passkey. Confirm it is you to finish signing in to the Captain app.</p></header>
+			{token && /^pks_[A-Za-z0-9_-]+$/.test(token) ? <StepUp token={token} native /> : <Notice tone="attention" title="This sign-in link is not complete.">Close this window and start again from the app.</Notice>}
+			<p className="muted">To start over, close this window and sign in again from the app.</p>
+		</main>
+	);
 	// Already signed in: go on. If the check itself cannot be answered, say so and keep the step-up
 	// available: it works from its own pending token, not from a full session.
 	const session = await readSession();
 	if (session.state === 'signed-in') redirect('/');
-	const { token } = await searchParams;
 	return (
 		<main className="page page--narrow">
 			<header className="stack"><Captain size={48} /><h1>One more step</h1><p>This account is protected by a passkey. Confirm it is you.</p></header>

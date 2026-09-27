@@ -1,28 +1,28 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { api, ApiError } from '../../../lib/api.ts';
+import { api } from '../../../lib/api.ts';
 import { appUrl } from '../../../lib/env.ts';
+import { callbackFailure, callbackOutcome, signInError, type CallbackOutcome, type Exchanged } from '../../../lib/native-handoff.ts';
 import { cookieOptions, sessionCookie } from '../../../lib/session.ts';
-import { appReturnUrl } from '../../../lib/session-state.ts';
-
-type Exchanged = { token: string; expiresAt: string; returnTo: string } | { stepUp: true; token: string; returnTo: string };
 
 /** The API sends the person here with a one-time code. The code is spent server-side for a session
  *  token, which goes into the HttpOnly cookie; the browser never holds the token in a page. A person
- *  with a passkey gets a step-up token instead and is sent to present the passkey first. */
+ *  with a passkey gets a step-up token instead and is sent to present the passkey first. A mobile app's
+ *  sign-in gets a one-time handoff, which is passed to the app's fixed callback. That path sets, replaces
+ *  and clears no cookie. */
 export async function GET(request: NextRequest) {
 	const code = request.nextUrl.searchParams.get('code');
 	const error = request.nextUrl.searchParams.get('error');
-	const signIn = new URL('/sign-in', appUrl);
-	if (!code) { signIn.searchParams.set('error', error && /^[a-z_]+$/.test(error) ? error : 'request_invalid'); return NextResponse.redirect(signIn, 303); }
-	try {
-		const result = await api<Exchanged>('/auth/session/exchange', { method: 'POST', body: { code } });
-		if ('stepUp' in result) { const stepUp = new URL('/auth/passkey', appUrl); stepUp.searchParams.set('token', result.token); return NextResponse.redirect(stepUp, 303); }
-		// The API checks the destination too; this is the sink, so it never trusts that alone.
-		const response = NextResponse.redirect(appReturnUrl(result.returnTo, appUrl), 303);
-		response.cookies.set(sessionCookie, result.token, cookieOptions(Math.max(60, Math.floor((Date.parse(result.expiresAt) - Date.now()) / 1000))));
+	if (!code) return NextResponse.redirect(signInError(error && /^[a-z_]+$/.test(error) ? error : 'request_invalid', appUrl), 303);
+	let outcome: CallbackOutcome;
+	try { outcome = callbackOutcome(await api<Exchanged>('/auth/session/exchange', { method: 'POST', body: { code } }), appUrl); }
+	catch (caught) { return NextResponse.redirect(signInError(callbackFailure(caught), appUrl), 303); }
+	if (outcome.kind === 'native') {
+		const response = NextResponse.redirect(outcome.location, 303);
+		response.headers.set('cache-control', 'no-store'); response.headers.set('referrer-policy', 'no-referrer');
 		return response;
-	} catch (caught) {
-		signIn.searchParams.set('error', caught instanceof ApiError && caught.unauthorised ? 'request_invalid' : 'exchange_failed');
-		return NextResponse.redirect(signIn, 303);
 	}
+	if (outcome.kind === 'redirect') return NextResponse.redirect(outcome.location, 303);
+	const response = NextResponse.redirect(outcome.location, 303);
+	response.cookies.set(sessionCookie, outcome.token, cookieOptions(outcome.maxAgeSeconds));
+	return response;
 }
