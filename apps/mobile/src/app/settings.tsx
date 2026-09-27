@@ -2,6 +2,7 @@ import { router, useNavigation } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { accountCopy, faultLines, isSignedIn, roleLabel, signedInNotices } from '../account/copy.ts';
+import { returnToMyWork } from '../account/tab-entry.ts';
 import { Actions, Button, Lines, RevokeOthers, useWaitWake } from '../components/AccountPage.tsx';
 import { Notice } from '../components/Notice.tsx';
 import { PlainScreen } from '../components/Screen.tsx';
@@ -12,7 +13,8 @@ export default function Settings() {
 	const account = useAccount();
 	useWaitWake(account);
 	const navigation = useNavigation();
-	const back = () => { if (navigation.canGoBack()) router.back(); else router.replace('/work'); };
+	// Back to the page Account was opened from; with nothing to go back to, My work (an anchored tab entry, E12).
+	const back = () => { if (navigation.canGoBack()) router.back(); else returnToMyWork(); };
 	const view = account.snapshot.account;
 	if (!isSignedIn(view) || view.org.kind !== 'chosen') return null; // the guard removes this route
 	const membership = view.org.membership;

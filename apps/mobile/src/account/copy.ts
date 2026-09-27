@@ -120,11 +120,55 @@ export function findAccountStack(state: unknown): string | null {
 	return null;
 }
 
-/** Replaces every route in the account stack with one tabs route given no key and no nested state. The installed
- *  StackRouter defers RESET to BaseRouter, which returns it as partial state; rehydration gives the route a new key,
- *  so the old tabs subtree unmounts and a new one mounts at Work. Handled only by the navigator whose key is `target`. */
-export const resetToFreshTabs = (target: string) =>
-	({ type: 'RESET', payload: { index: 0, routes: [{ name: '(tabs)' }] }, target }) as const;
+/** Replaces every route in the account stack with one fresh tabs route (docs/plans/expo-mobile-native-navigation-
+ *  2026-09.md §3.3). The installed StackRouter defers RESET to BaseRouter, which returns it as partial state; rehydration
+ *  gives every route a new key, so the old tabs subtree unmounts and a new one mounts at Work. Handled only by the
+ *  navigator whose key is `target`.
+ *  - `seedViews` (iOS and Android): Work is given as `[views, index]` with My work focused, so the view list is beneath
+ *    it from the first render. The tab router fills in Chat and Resources with no state; their first visit is the tab
+ *    bar's (`firstVisitParams`).
+ *  - Otherwise (the web): no nested state, as before, so Work starts at `index` alone.
+ *  No key is given at any depth. */
+export const resetToFreshTabs = (target: string, seedViews: boolean) =>
+	({
+		type: 'RESET',
+		payload: {
+			index: 0,
+			routes: [seedViews
+				? { name: '(tabs)', state: { index: 0, routes: [{ name: 'work', state: { index: 1, routes: [{ name: 'views' }, { name: 'index' }] } }] } }
+				: { name: '(tabs)' }]
+		},
+		target
+	}) as const;
+
+/** The tab bar's params for a tab never visited (§3.2, E1). With the view list as the section stack's initial route
+ *  (iOS and Android), `initial: false` builds `[views, index]` in the section navigator's first render; on the web the
+ *  default view opens alone, because there every route needs its own history entry. */
+export const firstVisitParams = (anchored: boolean): { readonly screen: 'index'; readonly initial?: false } =>
+	(anchored ? { screen: 'index', initial: false } : { screen: 'index' });
+
+/** An app-initiated entry into the tabs (§3.2a):
+ *  - `arrive`: the account's own route changes (becoming ready, a sign-in destination, the requested cold-start route,
+ *    the fail-closed reopen, and the index redirect);
+ *  - `return-to-my-work`: a control that promises My work ("Go to My work", and Back fallbacks with nowhere to go back). */
+export type TabEntry = { readonly intent: 'arrive'; readonly href: string } | { readonly intent: 'return-to-my-work' };
+export type TabEntryCall = { readonly method: 'replace' | 'dismissTo'; readonly href: string; readonly options: { readonly withAnchor?: true } };
+
+const tabHref = (href: string) => /^\/(work|chat|resources)(\/|$)/.test(href);
+
+/** The one router call for an app-initiated tab entry.
+ *  - Native (`anchored`): `withAnchor` makes every nested level `initial: false`, so a section stack built by the entry
+ *    has its view list beneath the target from its first render. `return-to-my-work` is `dismissTo('/work')`: it pops back
+ *    to the existing tabs (never a second tabs route) and opens My work there, or builds fresh tabs when there are none.
+ *    It is never `back()`, which could reach any page. `withAnchor` is applied only to tab routes; the account's other
+ *    routes (welcome, the chooser) take no anchor.
+ *  - Web: exactly the call made before this contract (`replace`, no options), so browser history is unchanged. */
+export function tabEntryAction(anchored: boolean, entry: TabEntry): TabEntryCall {
+	if (entry.intent === 'return-to-my-work') {
+		return anchored ? { method: 'dismissTo', href: '/work', options: { withAnchor: true } } : { method: 'replace', href: '/work', options: {} };
+	}
+	return { method: 'replace', href: entry.href, options: anchored && tabHref(entry.href) ? { withAnchor: true } : {} };
+}
 
 // ---------------------------------------------------------------------------------------------------------------
 // Waits.

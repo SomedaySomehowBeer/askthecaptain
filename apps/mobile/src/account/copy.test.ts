@@ -3,8 +3,8 @@ import { test } from 'node:test';
 import { outsideSnapshots } from './account-source.ts';
 import { captureRequested, consumeRequested, requested, requestedConsumed, resetRequestedForTests } from './requested.ts';
 import {
-	copy, destinationStep, faultLines, findAccountStack, resetToFreshTabs, navigationStep, navMount, navStart, nextWake, releaseWording, requestedDestination, routeFor, routeHolds,
-	signInNotices, snapshotWaits, tabsKey, welcomePage, moreTags, workCopy, workProblemText, type NavMemory, type Page,
+	copy, destinationStep, faultLines, findAccountStack, firstVisitParams, resetToFreshTabs, navigationStep, navMount, navStart, nextWake, releaseWording, requestedDestination, routeFor, routeHolds,
+	signInNotices, snapshotWaits, tabEntryAction, tabsKey, welcomePage, moreTags, workCopy, workProblemText, type NavMemory, type Page,
 	revocationDisabled, revocationLines, revokeOthersCopy
 } from './copy.ts';
 import { idleRevocation, sendingRevocation, settledRevocation, slowRevocation, unknownResult } from './revocation.ts';
@@ -195,7 +195,90 @@ test('findAccountStack: the account stack by its allowed (tabs) screen, using th
 	assert.equal(findAccountStack(root(['organisation', 'index', 'link-not-allowed', '+not-found'])), null);
 	assert.equal(findAccountStack(root(['welcome', 'index', 'link-not-allowed', '+not-found'])), null);
 	assert.equal(findAccountStack(undefined), null);
-	assert.deepEqual(resetToFreshTabs('stack-7'), { type: 'RESET', payload: { index: 0, routes: [{ name: '(tabs)' }] }, target: 'stack-7' });
+	assert.deepEqual(resetToFreshTabs('stack-7', false), { type: 'RESET', payload: { index: 0, routes: [{ name: '(tabs)' }] }, target: 'stack-7' }, 'web: unchanged');
+});
+
+/** Every `key` anywhere in a value, and every route `name`, walking objects and arrays. */
+function collect(value: unknown, found: { keys: number; names: Set<string> } = { keys: 0, names: new Set() }) {
+	if (Array.isArray(value)) { for (const item of value) collect(item, found); return found; }
+	if (typeof value !== 'object' || value === null) return found;
+	for (const [field, inner] of Object.entries(value)) {
+		if (field === 'key') found.keys += 1;
+		if (field === 'name' && typeof inner === 'string') found.names.add(inner);
+		collect(inner, found);
+	}
+	return found;
+}
+
+test('native navigation: the seeded tabs reset gives Work [views, index] with My work focused, and no key at any depth', () => {
+	const seeded = resetToFreshTabs('stack-7', true);
+	assert.deepEqual(seeded, {
+		type: 'RESET', target: 'stack-7',
+		payload: { index: 0, routes: [{ name: '(tabs)', state: { index: 0, routes: [{ name: 'work', state: { index: 1, routes: [{ name: 'views' }, { name: 'index' }] } }] } }] }
+	});
+	const { keys, names } = collect(seeded.payload);
+	assert.equal(keys, 0, 'no key: rehydration gives every route a fresh one, so nothing from the old tabs survives');
+	assert.deepEqual([...names].sort(), ['(tabs)', 'index', 'views', 'work'], 'only declared route names');
+	assert.equal(collect(resetToFreshTabs('stack-7', false).payload).keys, 0);
+});
+
+test('native navigation: a first tab visit names its default view; anchored stacks build [views, index] in one render, the web opens it alone', () => {
+	assert.deepEqual(firstVisitParams(true), { screen: 'index', initial: false });
+	assert.deepEqual(firstVisitParams(false), { screen: 'index' });
+	assert.ok(!('initial' in firstVisitParams(false)), 'the web call is exactly the previous one');
+});
+
+test('native navigation: every app-initiated tab entry has one call; the web keeps exactly its previous calls', () => {
+	// Arriving (becoming ready, a destination, the requested route, the fail-closed reopen, the index redirect).
+	for (const href of ['/work', '/work/all', '/work/views', '/chat', '/resources/inventory']) {
+		assert.deepEqual(tabEntryAction(true, { intent: 'arrive', href }), { method: 'replace', href, options: { withAnchor: true } }, href);
+		assert.deepEqual(tabEntryAction(false, { intent: 'arrive', href }), { method: 'replace', href, options: {} }, href);
+	}
+	// The account's other routes are never anchored: they are not section stacks.
+	for (const href of ['/welcome', '/organisation', '/settings', '/link-not-allowed', '/workshop', '/']) {
+		assert.deepEqual(tabEntryAction(true, { intent: 'arrive', href }), { method: 'replace', href, options: {} }, href);
+	}
+	// "Go to My work" and Back fallbacks: always /work, never back(); native returns to the existing tabs.
+	assert.deepEqual(tabEntryAction(true, { intent: 'return-to-my-work' }), { method: 'dismissTo', href: '/work', options: { withAnchor: true } });
+	assert.deepEqual(tabEntryAction(false, { intent: 'return-to-my-work' }), { method: 'replace', href: '/work', options: {} });
+});
+
+test('native navigation pin: within a mount started at process boot, route changes happen only on the first ready or after a not-ready snapshot', () => {
+	resetRequestedForTests();
+	try {
+		captureRequested('/work/all');
+		const checking = snap({ kind: 'checking' }).account;
+		const signedOut = snap({ kind: 'signed-out', notice: null, gate: 'idle' }).account;
+		const sequence: [AccountView, string][] = [
+			[checking, '/welcome'], [signedIn('choose'), '/welcome'], [signedIn(orgA), '/organisation'], [signedIn(orgA), '/work/all'],
+			[signedIn(orgA), '/settings'], [signedIn(orgA), '/organisation'], [signedIn(orgB), '/organisation'], [signedIn(orgB), '/work'],
+			[signedIn('choose'), '/work'], [signedIn(orgA), '/organisation'], [signedOut, '/work'], [signedIn(orgB, '/chat'), '/welcome'],
+			[signedIn(orgB, '/chat'), '/chat']
+		];
+		let memory = navMount(requestedConsumed()); let previousReady = false; let firstReadySeen = false;
+		for (const [account, pathname] of sequence) {
+			const step = navigationStep(memory, account, pathname, requested()); memory = step.memory;
+			if (step.memory.requestedUsed && !requestedConsumed()) consumeRequested();
+			const ready = routeFor(account) === '/work';
+			const changesRoute = step.action.kind === 'replace' || step.action.kind === 'destination' || step.action.kind === 'open-requested';
+			if (changesRoute && ready) assert.ok(!previousReady || !firstReadySeen, `${step.action.kind} at ${pathname} follows a not-ready snapshot or is this mount's first ready`);
+			if (ready) firstReadySeen = true;
+			previousReady = ready;
+		}
+	} finally { resetRequestedForTests(); }
+});
+
+test('native navigation pin: a mount started while ready changes nothing except on the organisation page (L2, unchanged)', () => {
+	resetRequestedForTests();
+	try {
+		captureRequested('/work/all'); consumeRequested();
+		for (const pathname of ['/work', '/work/all', '/work/views', '/chat', '/resources/inventory', '/settings', '/', '/link-not-allowed']) {
+			assert.deepEqual(mount([[signedIn(orgA), pathname]]), ['none'], pathname);
+		}
+		// The recorded limitation: a remount while ready on Switch organisation replaces it with Work (a second tabs route
+		// when the navigation state was retained). Pinned so that any change to it is deliberate.
+		assert.deepEqual(mount([[signedIn(orgA), '/organisation']]), ['replace /work']);
+	} finally { resetRequestedForTests(); }
 });
 
 test('navigation: a tabs reset is only ever issued while ready (a reset while not ready would be silently ignored)', () => {

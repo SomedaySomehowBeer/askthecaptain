@@ -145,10 +145,10 @@ Completed ownership:
 - Codex owns serial tests, integration, documentation and git. Combine the latest reviewed main
   before final checks; no overlapping file ownership or simultaneous heavy tests.
 
-The [adopted navigation contract](expo-mobile-native-navigation-2026-09.md), not yet implemented,
+The [navigation contract](expo-mobile-native-navigation-2026-09.md), now implemented and independently reviewed,
 specifies native initial routes, anchored entries and freshly seeded resets to put the view list beneath the open view.
-An empty reset currently starts My work by source inspection; this is not a claim that it lands on
-Views. Native behaviour, gestures and shape require device evidence. Neither read contract changes
+Before this navigation increment, an empty reset started My work without its view list beneath it.
+The new native reset explicitly seeds that view list and focuses My work. Native behaviour, gestures and shape require device evidence. Neither read contract changes
 native navigation or enables sign-in.
 
 ## Review and execution sequence
@@ -227,3 +227,10 @@ Root owns browser fixtures/checks, all serial validation, integration, documenta
 Reviewed green PRs may merge. Any server release remains staging-only on one existing machine per
 app. Native sign-in, production, signing, DNS and secrets remain untouched. No source implementation
 is complete merely because a draft or agent state is ready.
+
+### Native navigation implementation
+
+The source changes and reciprocal review are complete; validation and remaining device gates are
+recorded in [the evidence](../validation/mobile-native-navigation-2026-09-27/README.md). Native initial
+routes, fresh reset state and app-initiated tab entry share one platform decision. Web history keeps
+its previous behaviour. L1/L2 remain open; native sign-in stays off.
