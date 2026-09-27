@@ -5,6 +5,10 @@ remains authoritative; the 25 September scope audit corrects this sequence. Outc
 shared work**, **allocate resources**, and **discuss work**. Equipment API/web #125/#127 are live on staging;
 [the release record](../runbooks/paused.md) distinguishes that from native acceptance.
 
+Current continuation: [27 September assignments](captain-next-batch-2026-09-27.md). Default business
+views and linked-chat API/web are now delivered; this document retains the original sequence and
+acceptance gates. Remaining retirement and native foundation are the active parallel work.
+
 ## Outcome
 
 Make the existing web workspace dependable, then let two people discuss shared work without
@@ -31,7 +35,7 @@ records the bounded task-detail contract and implementation, corrected to remove
 compatibility. [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) tracks scope
 cleanup: runtime retirement (#135), optional projects/reset (#136), and Work record replacement
 (#138) are implemented and deployed. Empty retired storage, the retrieval package, connector capabilities and deployment
-assets still need removal. Private saved views are delivered (#153/#154); linked chat is the next feature increment.
+assets still need removal. Private saved views are delivered (#153/#154); linked-chat API/web followed in #169/#171/#173/#174.
 
 The populated-demo reliability/design follow-up is now delivered through #143/#145/#147 and
 #149/#150: checkable work, parent navigation, project Overview/Tasks/Schedule, continuous
@@ -49,7 +53,8 @@ not shared views or Chat/Files delivery.
 The [next assignments](business-views-and-chat-delivery-2026-09-26.md) add a bounded default
 business-view contract before linked-chat implementation, while the two contract drafts run in
 parallel. The owner asked about the missing Production/Marketing/etc. defaults after the private
-saved-view release. Both are planning assignments, not shipped features.
+saved-view release. Both contracts were adopted; default business views shipped in #159 and linked-chat API/web in
+#169/#171/#173/#174. Hosted signed-in Chat acceptance, capacity and native delivery remain open.
 
 ## Ordered increments
 
@@ -151,4 +156,4 @@ The [optional-project/reset increment](optional-work-projects-2026-09.md) implem
 null projects, checklist and equipment links, and a separately invoked staging legacy-data reset
 authorised by the owner. The [Work record increment](work-record-pages-2026-09.md) shipped in
 #138; release evidence is in the [operational record](../runbooks/paused.md). Private saved views
-followed in #153/#154; linked chat remains the next feature increment.
+followed in #153/#154; linked-chat API/web subsequently shipped in #169/#171/#173/#174.
