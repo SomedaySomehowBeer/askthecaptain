@@ -865,3 +865,28 @@ to the owner.
 3. Unpause the Better Stack monitor if it was paused.
 4. Check: `curl https://api-staging.askthecaptain.app/healthz`, then sign in on the phone and let the
    mail poll catch up.
+
+
+### 27 September 2026 — legacy-retirement read-only gate
+
+At **05:22:22.969Z**, Codex ran count-only queries through the existing staging API
+machine `80e39ea6416e18`, using its owner connection with verified TLS. The transaction
+was `READ ONLY`, with `row_security = off` so incomplete RLS-filtered counts would fail
+rather than appear empty. The result confirmed `transaction_read_only = on`. No row
+content, account email, provider token or database credential was printed.
+
+- Google-provider connections grouped by status: **no rows** (zero grants of every status).
+- `attachment_text`: **0 total**, **0 expired**, **0 unexpired**, **0 without expiry**.
+
+This satisfies the code-removal gates for R4b and R5a in the adopted
+[retirement plan](../plans/assistant-code-removal-2026-09.md). It is not an R5b
+all-table audit and does not authorise a storage drop or repeat the old data reset.
+The sole existing staging API machine was initially stopped and was started for
+this audit; its image/configuration and normal autostop policy were unchanged.
+No additional machine, migration, release, grant revocation or data write occurred.
+R5a still requires a reviewed release before R5b can proceed.
+
+Owner documentation follow-up: the unpublished legacy legal drafts still describe attachment
+extraction and an hourly expiry reader (`docs/legal/privacy-notice.md:114` and
+`docs/legal/README.md`). A later revision must prepare factual current-product wording
+for owner legal review; this code cleanup does not publish or approve those drafts.
