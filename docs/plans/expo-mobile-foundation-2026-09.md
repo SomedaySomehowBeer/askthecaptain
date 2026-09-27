@@ -34,7 +34,8 @@ session closes. The M-shell increment adds `apps/mobile` with Work/Chat/Resource
 SDK 57 dependencies, boundary checks and signed-out states. Three-platform JavaScript exports,
 a browser approximation at 360/390/430 pixels and generated Android backup configuration are
 verified; there is no signed native build or device evidence, nor mobile authentication or business
-reads yet. Browser history differs from native stacks and cannot prove native back gestures. Keep the flag off on shared
+reads yet. The web export opens view lists as visited pages; native stacks place them beneath the open view.
+Browser history cannot prove native back gestures. Keep the flag off on shared
 staging and for real accounts until the verified-link gate passes. These increments have not been
 released to staging and migration 0044 has not been applied there. The repository facts below
 describe the baseline audited for this contract; §§3 and 9 define the additions and remaining work.

@@ -183,7 +183,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				failed = true;
 				console.error('navigation paths', JSON.stringify(history));
 				console.error('console errors', JSON.stringify(consoleErrors));
-				console.error('visible text', (await page.locator('body').innerText()).replaceAll(canary, '[canary]'));
+				console.error('visible text', (await page.locator('body').innerText().catch(() => '(unreadable)')).replaceAll(canary, '[canary]'));
 				if (shots) await page.screenshot({ path: path.join(shots, `${width}-failure.png`), fullPage: true }).catch(() => undefined);
 				for (const message of errors) console.error(`${width}px page error: ${message}`);
 				throw error;

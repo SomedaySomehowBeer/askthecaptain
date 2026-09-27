@@ -28,7 +28,7 @@ const child = spawn(process.execPath, [path.join(root, 'apps/e2e/scripts/mobile-
 const signalGroup = signal => { if (child.pid) { try { process.kill(-child.pid, signal); } catch { /* already stopped */ } } };
 const stop = () => signalGroup('SIGTERM');
 process.once('SIGINT', stop); process.once('SIGTERM', stop);
-const timer = setTimeout(() => signalGroup('SIGKILL'), 180_000);
+const timer = setTimeout(() => { console.error('mobile shell check exceeded 180 seconds; stopping its process group'); signalGroup('SIGKILL'); }, 180_000);
 try {
   process.exitCode = await new Promise(resolve => {
     child.once('error', () => resolve(1));

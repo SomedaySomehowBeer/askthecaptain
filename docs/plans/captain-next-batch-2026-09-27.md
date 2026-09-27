@@ -30,7 +30,7 @@ implied by these code changes. The stopped embedding resource is unchanged.
 Native A1 (#186) is merged: the API handoff, default-off flag and migration 0044. A2 (#187) is merged and adds the web
 native branches and a disposable, synthetic browser proof. Neither increment enables native
 sign-in on shared staging or real accounts; the verified claimed-link and device gates remain.
-M-shell now supplies application source and exported bundles; no signed native build or device
+M-shell (#188, under review) supplies application source and exported bundles; no signed native build or device
 acceptance is claimed. These cleanup and native increments have
 not been released to staging, and migration 0044 has not been applied there. Operational releases
 remain recorded in [paused.md](../runbooks/paused.md).
@@ -48,7 +48,7 @@ paths to isolated checkouts and records them in the coordinator checkpoint.
 The shell has no authentication, business reads or writes. Initial local evidence comprises 500
 uncached tests against disposable Postgres on the #186 base plus shell, ten workspace typechecks,
 SDK compatibility, web/iOS/Android exports, exported-canary scans and a browser approximation at
-360/390/430 pixels. It is rebased onto merged #187; CI verifies the combined tree. Android config
+360/390/430 pixels. It is rebased onto merged #187; CI must verify the combined tree before merge. Android config
 introspection verifies backup exclusions, not native compilation or device behaviour.
 
 Each Claude reviews the other's implementation. Codex owns git, builds, tests, integration and
