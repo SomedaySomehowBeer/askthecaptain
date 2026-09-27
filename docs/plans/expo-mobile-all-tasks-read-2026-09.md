@@ -309,9 +309,8 @@ export function workListPath(scope: ScopeIds, view: WorkView, offset: number): O
   owner display and the cap link together.
 
 **Separate, not in this slice (root):** a seeded tabs reset, and an explicit `SectionStack` initial route, so that native
-stacks built without a link also have the view list beneath. It is a future navigation contract with its own device
-checks. This slice neither relies on it nor changes navigation.
+stacks built without a link also have the view list beneath. The [navigation contract](expo-mobile-native-navigation-2026-09.md) is adopted but not yet implemented,
+with its own device checks. This slice neither relies on it nor changes navigation.
 
-**Still open:**
-- The [transport response byte budget](expo-mobile-response-byte-budget-2026-09.md) is a separate
-  implementation, not a blocker for this slice. The same exposure as My work.
+**Separate transport work:** the [response byte budget](expo-mobile-response-byte-budget-2026-09.md)
+merged in #202. Native buffering and cancellation evidence remain open; see its validation record.

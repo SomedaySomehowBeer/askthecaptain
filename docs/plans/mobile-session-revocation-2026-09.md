@@ -190,7 +190,7 @@ The runner, not the screen, owns everything that must survive a remount or an ac
 
 **Binding (token-free)**
 - `revokeOthers(expected: PersonScope)`, where `PersonScope = { epoch, userId }`.
-  - `epoch` is the account generation, which advances on every sign-in, sign-out and session end.
+  - `epoch` is the account generation, which advances on every sign-in, sign-out, session end and account switch.
   - `userId` comes from the signed-in snapshot.
   - It contains no token, handle or hash.
 - The screen captures the scope when the confirmation is shown, and passes it on confirm.

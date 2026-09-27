@@ -54,8 +54,7 @@ after independent review and all three CI jobs passed. Local tests, exports and 
 - the 30-second spacing for membership refreshes after a 403/404;
 - synthetic harness reads for the browser proof.
 
-The second, [All tasks](expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2, adopted in #200), is **implemented
-and independently reviewed**, with local tests, exports and browser checks passing.
+The second, [All tasks](expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2, adopted in #200), merged in #201 after independent review and green CI. Local tests, exports and browser checks passed.
 See the [validation record](../validation/mobile-all-tasks-read-2026-09-27/README.md); native and device gates remain. It adds:
 - a read-only Work → All tasks list at `/work/all`: open tasks assigned to anyone, with one owner fact per row and
   no names;

@@ -120,14 +120,14 @@ installed-app evidence.
 Each Claude reviews the other's implementation. Codex owns git, builds, tests, integration and
 release. All heavy checks remain serial under `flock /tmp/atc-build.lock`.
 
-## Next mobile read increments
+## Completed mobile read increments
 
 The [All tasks contract](expo-mobile-all-tasks-read-2026-09.md) and
 [transport response-budget contract](expo-mobile-response-byte-budget-2026-09.md) were adopted in #200 and define
-separate implementation PRs. All tasks merged in #201. The transport implementation is independently
-reviewed with local validation passing; see its [validation record](../validation/mobile-response-byte-budget-2026-09-27/README.md) and #202.
+separate implementation PRs. All tasks merged in #201 and the transport budget merged in #202
+after independent review and green CI; see its [validation record](../validation/mobile-response-byte-budget-2026-09-27/README.md) and #202.
 
-**All tasks status (27 September 2026): implemented and independently reviewed; local validation passed.**
+**All tasks status (27 September 2026): merged in #201 after independent review and green CI.**
 - **Written:**
   - Codex: paths, parser, links, sections and configuration, with tests;
   - Claude B: the shared screen and hook (one bound view per screen), per-view copy and owner facts, the `/work/all`
@@ -137,16 +137,16 @@ reviewed with local validation passing; see its [validation record](../validatio
 - Tests, exports and browser checks passed; see the [validation record](../validation/mobile-all-tasks-read-2026-09-27/README.md).
   Native, simulator and device evidence remain unavailable; native sign-in stays off.
 
-Ownership:
+Completed ownership:
 
-- Claude A implements the transport budget and its regressions; Claude B independently reviews it.
-- Claude B implements the shared My work/All tasks screen, hook, copy and harness. Codex supplies
-  the paths, parser, links/configuration and browser checks; Claude A independently reviews them.
+- Claude A implemented the transport budget and its regressions; Claude B independently reviewed it.
+- Claude B implemented the shared My work/All tasks screen, hook, copy and harness. Codex supplied
+  the paths, parser, links/configuration and browser checks; Claude A independently reviewed them.
 - Codex owns serial tests, integration, documentation and git. Combine the latest reviewed main
   before final checks; no overlapping file ownership or simultaneous heavy tests.
 
-The current native section-stack shape still needs a separate reviewed navigation increment:
-explicit native initial routes and freshly seeded resets to put the view list beneath the open view.
+The [adopted navigation contract](expo-mobile-native-navigation-2026-09.md), not yet implemented,
+specifies native initial routes, anchored entries and freshly seeded resets to put the view list beneath the open view.
 An empty reset currently starts My work by source inspection; this is not a claim that it lands on
 Views. Native behaviour, gestures and shape require device evidence. Neither read contract changes
 native navigation or enables sign-in.
