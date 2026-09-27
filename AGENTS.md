@@ -57,6 +57,7 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 |---|---|
 | `apps/api` | Hono API: auth, routes over services, webhooks, health |
 | `apps/web` | Next.js app, phone-first, server components read the API; Work/Chat/Resources client; remaining legacy routes are cleanup debt |
+| `apps/mobile` | Expo Work/Chat/Resources shell; authentication core in progress under the adopted mobile contract; device acceptance open |
 | `apps/e2e` | Playwright deployment smoke suite and isolated browser regression checks |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Xero, Shopify and the remaining legacy Google grant/revocation helper; Google identity is in `apps/api` |
@@ -66,7 +67,7 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 | `packages/ui` | tokens/components follow reviewed repository workspace designs (D14); `packages/ui/design/` is an unedited legacy Claude Design mirror, so author new work outside it |
 | `infra` | OpenTofu (`infra/tofu`) and the inference Sprite's bootstrap files (`infra/sprites`, D18); the retired embedding app remains stopped with repository assets removed (D21) |
 
-There is no `apps/mobile` yet; the plan names it for a later slice. The Expo client proof under
+The Expo shell is application code in `apps/mobile` (merged #188). The earlier client proof under
 `docs/proposals/assets/captain-client-proof-2026-09-23` is a standalone, fictional harness outside the
 pnpm workspace, not application code.
 
@@ -74,9 +75,10 @@ pnpm workspace, not application code.
   request. Drizzle describes the schema; SQL is what runs.
 - Services are plain functions over a transaction with tenant context set. Routes call services.
   Steps call services and connectors. Nothing reaches into another package's tables.
-- Tests run against a real Postgres. Set `DATABASE_URL` to a throwaway database; a test suite that
-  was not run against a database was not run. Store tests, RLS tests and workflow tests are
-  integration tests by nature.
+- API and database integration tests run against real Postgres. Set `DATABASE_URL` to a throwaway
+  database; skipped database tests do not count as passing. Database-store, RLS and workflow tests
+  are integration tests. Pure mobile protocol and device-storage queue tests use injected adapters
+  under Node; they do not prove SecureStore or native device behaviour.
 - Web routes touched by a change get a Playwright check. Every page has designed empty, loading,
   failed and disabled states.
 - Conventional commits: `feat(api): …`, `fix(web): …`, `docs(plan): …`.

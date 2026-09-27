@@ -30,7 +30,7 @@ implied by these code changes. The stopped embedding resource is unchanged.
 Native A1 (#186) is merged: the API handoff, default-off flag and migration 0044. A2 (#187) is merged and adds the web
 native branches and a disposable, synthetic browser proof. Neither increment enables native
 sign-in on shared staging or real accounts; the verified claimed-link and device gates remain.
-M-shell (#188, under review) supplies application source and exported bundles; no signed native build or device
+M-shell (#188) is merged and supplies application source and exported bundles; no signed native build or device
 acceptance is claimed. These cleanup and native increments have
 not been released to staging, and migration 0044 has not been applied there. Operational releases
 remain recorded in [paused.md](../runbooks/paused.md).
@@ -39,23 +39,26 @@ The two existing Claude Opus agents remain in Herdr's Monitor tab. Their histori
 shell working directories do not identify the current checkout. Codex assigns explicit absolute
 paths to isolated checkouts and records them in the coordinator checkpoint.
 
-| Owner | Current mobile work | Files owned |
+| Owner | Current mobile authentication core | Files owned |
 |---|---|---|
-| Claude `linked-chat`, `w2:pS` | Expo routes/components, navigation and browser approximation; independent guard review | `apps/mobile/src/`, app/package/TypeScript config, `apps/e2e/scripts/mobile-shell-check.cjs` |
-| Claude `business-views`, `w2:pR` | Client boundary guard and mobile CI; independent shell review; next authentication partition | `apps/mobile/scripts/`, `.github/workflows/mobile.yml` and a reviewed M-auth proposal |
-| Codex | Integration, SDK/lockfile validation, browser execution, generated backup checks and status | Dependency lock/overrides, CI runner, documentation, actual evidence, git and issue/PR records |
+| Claude `business-views`, `w2:pR` | Single sign-in attempt, PKCE, callback/exchange, transport and private cleanup; independent store review | `apps/mobile/src/auth/`, `apps/mobile/src/api/`, API no-redirect regression test |
+| Claude `linked-chat`, `w2:pS` | Strict credential parsing and serial device-storage queue; independent protocol review | `apps/mobile/src/account/` |
+| Codex | Review, tests, integration and status | Documentation, actual evidence, git and issue/PR records |
 
-The shell has no authentication, business reads or writes. Initial local evidence comprises 500
-uncached tests against disposable Postgres on the #186 base plus shell, ten workspace typechecks,
-SDK compatibility, web/iOS/Android exports, exported-canary scans and a browser approximation at
-360/390/430 pixels. It is rebased onto merged #187; CI must verify the combined tree before merge. Android config
-introspection verifies backup exclusions, not native compilation or device behaviour.
+The shell has no authentication, business reads or writes. Its reviewed PR #188 passed workspace,
+browser, client-proof and mobile CI on the combined #187 base. Local evidence includes disposable
+Postgres tests, ten workspace typechecks, SDK compatibility, web/iOS/Android exports,
+exported-canary scans and browser approximation at 360/390/430 pixels. Android config introspection
+verifies backup exclusions, not native compilation or device behaviour.
+
+The [authentication-core partition](expo-mobile-auth-core-2026-09.md) implements pure protocol and
+serialized credential-storage logic with injected adapters. Interface review is complete;
+implementation and reciprocal review are complete, with PR integration pending. It introduces no platform adapter, account
+UI or business reads. Those follow separately under the existing mobile contract and real-account
+link/device gates. Browser exports are not installed-app evidence.
 
 Each Claude reviews the other's implementation. Codex owns git, builds, tests, integration and
-release. All heavy checks remain serial under `flock /tmp/atc-build.lock`. Next is M-auth: review
-protocol and serial credential-storage interfaces first, then implement those bounded foundations
-before account UI and platform adapters. Authenticated reads follow. The existing contract and
-real-account link/device gates remain; browser exports are not installed-app evidence.
+release. All heavy checks remain serial under `flock /tmp/atc-build.lock`.
 
 ## Review and execution sequence
 
