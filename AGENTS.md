@@ -59,11 +59,10 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 | `apps/web` | Next.js app, phone-first, server components read the API; Work/Chat/Resources client; remaining legacy routes are cleanup debt |
 | `apps/e2e` | Playwright deployment smoke suite and isolated browser regression checks |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
-| `packages/connectors` | Google, Xero, Shopify |
+| `packages/connectors` | Xero, Shopify and the remaining legacy Google grant/revocation helper; Google identity is in `apps/api` |
 | `packages/steps` | the step catalog and workflow definitions |
 | `packages/engine` | pg-boss workflow runner in the API process (D19) |
 | `packages/model` | inference client, structured output, budgets, usage |
-| `packages/retrieval` | embedding units, the embedding-service client, similarity search (D21) |
 | `packages/ui` | tokens/components follow reviewed repository workspace designs (D14); `packages/ui/design/` is an unedited legacy Claude Design mirror, so author new work outside it |
 | `infra` | OpenTofu (`infra/tofu`), the embedding service (`infra/embed`, D21) and the inference Sprite's bootstrap files (`infra/sprites`, D18) |
 

@@ -1,6 +1,6 @@
 # Removing the remaining assistant code
 
-Status: **draft for peer review**, 27 September 2026 (revised after root review). Planning only:
+Status: **adopted in #180**, 27 September 2026. Planning only:
 this document changes no code, schema, deployment, credential or data. Implementation increment for
 [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) under D1, D2, D5, D6, D8,
 D13, D19, D21–D23 in the [plan](../plan.md). It follows the
@@ -18,7 +18,7 @@ passkeys and Google sign-in keep working unchanged.
   (reported as main `edc81b8`; the commit was not independently verified by this author). No build,
   test, shell, database or provider command was run to produce this plan.
 - "No live caller" means no import or SQL reference in `apps/*/src`, `packages/*/src`,
-  `apps/api/test`, `apps/e2e`, Dockerfiles or CI workflows, found by repository search. It is a
+  `apps/api/test`, `apps/e2e`, `packages/*/test`, Dockerfiles or CI workflows, found by repository search. It is a
   code fact, not a claim about stored rows or running machines.
 - The [operational record](../runbooks/paused.md) records that the owner-authorised reset
   (25 September) emptied the legacy content tables before 0037/0038 and that staging now runs #176.
@@ -52,7 +52,7 @@ passkeys and Google sign-in keep working unchanged.
 | `packages/connectors/src/gmail.ts`, `calendar.ts` (exports `./gmail`, `./calendar`) | their own tests; `apps/api/src/sync-failure.test.ts` imports `GmailError` |
 | `apps/api/src/sync-failure.ts` | its own test |
 | `apps/api/src/contacts/addresses.ts` | one parser test in `contacts/contacts.test.ts` (import line 9, test at lines 22–27) |
-| `apps/api/src/workflows/bindings.ts` (`inferenceStep`, `notificationStep`) | nothing. The live notify handlers are registered directly in `chase/service.ts` and `stock/workflow.ts`; D2 inference stays available through `InferenceService.infer`. A future business infer step writes its own handler against that interface in its own reviewed PR |
+| `apps/api/src/workflows/bindings.ts` (`notificationStep` only) | no caller. `inferenceStep` is used by `packages/engine/test/fixture.ts`; preserve that D2 adapter and regression (P6) |
 | `env.ts` keys `CALENDAR_SYNC_DISABLED`, `GMAIL_PUBSUB_TOPIC`, `GMAIL_PUSH_AUDIENCE`, `MAIL_SYNC_DISABLED`, `EMBED_URL`, `EMBED_TOKEN`, `INDEX_DISABLED` and the Gmail refine | declared and parsed by `readEnv`, never read by any code |
 | `GoogleConnector` methods `authorizationUrl`, `exchange`, `refresh`, `profile`, `googleScopes` | `packages/connectors/test/google.test.ts`; only `revoke` is live (`connections/service.ts:37`) |
 | Legacy step-catalogue entries: every key in `packages/steps/src/catalog.ts` not in the registered-handler list above and not named by `defs/*`, plus `Requirement` `'connection:google'` | `packages/steps/test/definitions.test.ts` lines 24–32 (negative validation); the API route filters the catalogue to active steps |
@@ -135,9 +135,10 @@ Delete:
   `packages/connectors/test/fixtures/{thread,history,calendar-events}.json`.
 - `apps/api/src/sync-failure.ts`, `apps/api/src/sync-failure.test.ts`.
 - `apps/api/src/contacts/addresses.ts`.
-- `apps/api/src/workflows/bindings.ts`.
 
 Edit:
+- `apps/api/src/workflows/bindings.ts`: remove only unused `notificationStep` and its imports; retain
+  `inferenceStep`, which the engine integration fixture imports, and correct its obsolete inbox comment.
 - `apps/api/package.json`: remove `"@captain/retrieval": "workspace:*"` (line 22).
 - `packages/connectors/package.json`: remove exports `"./gmail"` and `"./calendar"` (lines 7–8).
 - `apps/api/src/contacts/contacts.test.ts`: remove the `addresses` import (line 9) and the
@@ -160,6 +161,8 @@ these deliberate exceptions:
 
 | Exception | Why it remains | Removed by |
 |---|---|---|
+| `apps/api/src/workflows/bindings.ts` and `packages/engine/test/fixture.ts` (`inferenceStep`/binding import only) | retained generic D2 adapter and its integration regression | retained |
+| `apps/api/src/env.test.ts` (removed environment-key names only) | regression inputs prove stale settings cannot block startup; no runtime reader | retained test |
 | `infra/embed/server.mjs`, `infra/embed/server.test.mjs` (`EMBED_TOKEN`) | the stopped service's own code and test | R2 |
 | `.github/workflows/deploy.yml` embed job (disabled workflow) | stopped deployment configuration | R2 |
 | `docs/**` other than AGENTS.md/plan text updated above | history, validation records and runbooks | R6 (runbooks); history stays |
@@ -318,7 +321,7 @@ replaces them with redirects; that is not required to complete #133.
 | P3 | `webhook_events`/`webhook_attempts` look generic but only Gmail push used them | Drop in R5b; a future Xero/Shopify webhook contract re-adds what it needs |
 | P4 | `projects.state` is generated from `proposed_at`/`accepted_at`, and Work/tag tests set them | Keep discovery-proposal columns; a separate reviewed change can simplify them |
 | P5 | `reset-legacy-staging.ts` and its test are dead but document the destructive reset | Delete both in R5b; paused.md and the validation record keep the digest and counts |
-| P6 | `bindings.ts` is unused adapter glue | Delete in R1. D2 is preserved by `InferenceService.infer`, `packages/model`, the runner and `infer` step validation; a new business infer step binds its own handler |
+| P6 | Initial source-only audit missed `packages/engine/test/fixture.ts` importing `inferenceStep` | Preserve that generic D2 adapter and integration coverage. R1 removes only unused `notificationStep`; include package test trees in caller searches |
 | P7 | `pgvector` looks removable after R5b | Keep the CI image and extension: historical 0030 needs it |
 | P8 | `env.ts`, `index.ts`, `app.ts` and `auth/*` are also touched by native-foundation work | Root sequences R1/R4b/R5a against the mobile A1/A2 PRs; no parallel edits of those files |
 | P9 | The Google OAuth client still lists Gmail/Calendar scopes at the provider | Owner operation: reduce consent-screen scopes to sign-in; not a code slice |

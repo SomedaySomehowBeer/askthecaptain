@@ -89,11 +89,10 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `apps/e2e` | Playwright deployment smoke suite (deploy workflow, currently paused) and isolated browser regression in CI |
 | `apps/mobile` | Planned React Native/Expo development-build client for iOS and Android; not in the repository yet; native-device acceptance precedes release |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
-| `packages/connectors` | Xero and Shopify business adapters; legacy Google mail/calendar adapters pending retirement; sign-in remains separate |
+| `packages/connectors` | Xero and Shopify business adapters; remaining legacy Google grant/revocation helper; sign-in remains separate |
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
 | `packages/engine` | durable workflow execution: pg-boss and a small typed runner in the API process |
 | `packages/model` | the inference client: provider adapter, structured output, budgets, usage |
-| `packages/retrieval` | unused embedding client and legacy index code pending deletion; ingestion is retired (D21) |
 | `infra/embed` | former stateless mail/note embedding service, stopped with autostart off; deployment assets pending removal (D21) |
 | `packages/ui` | design tokens and shared components |
 | `infra` | OpenTofu for Neon, Cloudflare and monitoring; the inference Sprite's bootstrap files, which the API uploads when an owner sets up a subscription |
@@ -333,8 +332,11 @@ or vendor MCP step sources. Deduplicate webhooks, bound syncs and show source fr
 | Pip or another authorised client | Deliberately shared correspondence and normal work actions through authenticated APIs |
 | Google sign-in | Identity; independent of retiring Gmail/Calendar product access |
 
-Existing Gmail/Calendar sync and send adapters are legacy. Do not expand them to keep a “business
-inbox” inside Captain. Pip's personal providers need separate consent, never copied credentials.
+The unused Gmail/Calendar read/send adapters and retrieval package are removed by the first
+[code-removal increment](plans/assistant-code-removal-2026-09.md#r1--unused-legacy-leaf-modules-first-code-removal-no-schema-no-gate).
+The Google grant/revocation helper still supports remaining disconnect handling; its separate
+retirement gate preserves identity sign-in. No business inbox replaces the removed code. Pip's
+personal providers need separate consent, never copied credentials.
 
 ## 9. Security and tenancy
 
