@@ -104,7 +104,10 @@ navigation/gesture/keyboard code platform-appropriate. The isolated proof in #11
 web checks and native bundle exports, not native-device acceptance. Do not replace Next.js or
 claim a signed native build from that evidence. Browser and device access use the same API;
 never bundle server credentials, database access or model secrets into a client. New shared
-packages/dependencies are named in the slice that introduces them, not added speculatively.
+packages/dependencies are named in the slice that introduces them, not added speculatively. The
+[mobile foundation contract](plans/expo-mobile-foundation-2026-09.md) names `apps/mobile` and its
+proposed Expo/React Native dependencies (§8), with API/web handoff changes gated off until the
+reviewed identity-binding and real-device proofs pass.
 
 **Hosting.** Fly.io in Sydney for the API and web; Neon Postgres; Cloudflare DNS; GitHub Actions
 for CI and deploy. The checked-in DNS records are not proxied through Cloudflare; they do not
@@ -497,8 +500,12 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 - Files: provider/version identity, permissions, preview/extraction retention and explicitly shared
   correspondence contract. Provider originals and version-scoped chat are adopted; the entire
   older files/sidebars/paper-record proposal is not.
-- Mobile: secure sessions, links, native notifications, actual iPhone/Android gesture, keyboard,
-  accessibility and performance evidence. Next.js remains web; Expo remains mobile direction.
+- Mobile: the [foundation contract](plans/expo-mobile-foundation-2026-09.md), tracked in #178,
+  specifies secure sessions, app-bound handoff, the three-tab shell and authenticated reads. Native
+  sign-in stays off on shared staging and for real accounts until verified claimed HTTPS links
+  (or a reviewed equivalent) pass the app-identity gate. Remote session revocation is required for
+  first-customer native readiness. Native notifications, actual iPhone/Android gesture, keyboard,
+  accessibility and performance evidence remain separate. Next.js remains web; Expo remains mobile direction.
 - Server inference tiers and any future API-key/cost-budget alternative (#32) are business-runtime
   decisions, separate from Pip's hard Apple/Siri requirements.
 - Pip platform proofs remain in #119. No Captain milestone depends on them. No new claim about
