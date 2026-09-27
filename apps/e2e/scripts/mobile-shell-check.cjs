@@ -154,7 +154,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				await page.getByRole('link', { name: 'Inventory. Counted stock', exact: true }).click();
 				await expect(heading('Inventory')).toBeVisible();
 				check(at(page) === '/resources/inventory', `${width}px: Inventory is at /resources/inventory`);
-				await expect(page.getByText("Counted stock isn't shown in the app yet", { exact: true })).toBeVisible();
+				await expect(page.getByTestId("stock-loading")).toBeVisible();
 				await noRecords('Inventory'); await noOverflow('Inventory'); await shot('inventory');
 				await page.goBack();
 				await expect(page.getByRole('heading', { name: /^libraries$/i })).toBeVisible();
@@ -377,6 +377,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 
 				await require('./mobile-shell-work-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
 				await require('./mobile-shell-all-work-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
+				await require('./mobile-shell-stock-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
 				await require('./mobile-shell-revocation-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
 
 				check(errors.length === 0, `${width}px: no page errors (${errors.length})`);

@@ -52,9 +52,17 @@ function task(n: number, ownerId: string | null) {
 	};
 }
 
-/** The resolutions a pending read can be given (harness controls `harness-read-{name}`). */
-export const readControls = ['ok-page', 'ok-last', 'ok-overlap', 'empty', 'unavailable', 'unavailable-wait', 'refused-404', 'refused-400', 'unauthorised', 'client-bug'] as const;
+/** The resolutions a pending read can be given (harness controls `harness-read-{name}`). The `stock-…` controls answer
+ *  only Inventory's read (harness/stock-fixtures.ts); given to a Work list read, they answer as an unreadable body. */
+export const readControls = [
+	'ok-page', 'ok-last', 'ok-overlap', 'empty', 'unavailable', 'unavailable-wait', 'refused-404', 'refused-400', 'unauthorised', 'client-bug',
+	'stock-uncounted', 'stock-unusual', 'stock-malformed'
+] as const;
 export type ReadControl = (typeof readControls)[number];
+
+/** The controls with a Work list body. */
+export const isWorkBodyControl = (control: ReadControl): control is 'ok-page' | 'ok-last' | 'ok-overlap' | 'empty' =>
+	control === 'ok-page' || control === 'ok-last' || control === 'ok-overlap' || control === 'empty';
 
 /** The raw body for a body-carrying control, for a read of `path` by the person `userId`. The offset and the view come
  *  from the requested path itself, never from harness state:

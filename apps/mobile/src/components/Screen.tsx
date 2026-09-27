@@ -1,16 +1,30 @@
 import { router, useNavigation } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sectionOf, type SectionKey } from '../navigation/sections.ts';
 import { colors, space, tabBar, type } from '../theme/tokens.ts';
 import { Chevron, Magnifier } from './Icons.tsx';
 
+/** What a list page gets from `Screen` so its own virtualised list scrolls the whole page: the heading (to put first in
+ *  its list header) and the same content padding the scrolling page uses. */
+export type ScreenListFrame = { readonly heading: ReactNode; readonly contentContainerStyle: StyleProp<ViewStyle> };
+
+type ScreenProps = { section: SectionKey; title?: string; onViewList?: boolean } & (
+	| { children: ReactNode; list?: undefined }
+	/** A page whose content is one virtualised list (Inventory): `Screen` renders the header, then a bounded, non-scrolling
+	 *  container holding what `list` returns, so the list is never nested inside a ScrollView. */
+	| { list: (frame: ScreenListFrame) => ReactNode; children?: undefined }
+);
+
 /** A workspace page (mockup README): a compact header with a breadcrumb back to the section's view list, search and
  *  the account avatar, with no logo or wordmark; then an optional 26 pt heading and the page. Content leaves room for
  *  the floating tab bar. A view list passes no title: its groups carry the context. Accessibility uses React Native's
- *  `role` and `aria-*` props, which iOS, Android and React Native Web all map. */
-export function Screen({ section, title, onViewList = false, children }: { section: SectionKey; title?: string; onViewList?: boolean; children: ReactNode }) {
+ *  `role` and `aria-*` props, which iOS, Android and React Native Web all map.
+ *
+ *  By default the page scrolls in a ScrollView. A page that passes `list` instead scrolls in its own virtualised list,
+ *  with the same header, heading, padding and tab-bar clearance. */
+export function Screen({ section, title, onViewList = false, children, list }: ScreenProps) {
 	const insets = useSafeAreaInsets(); const current = sectionOf(section); const navigation = useNavigation();
 	// Back to this section's view list when it is in this stack; otherwise open it, so it never leaves the section and,
 	// on the web, never pops to a route without its own history entry. On iOS and Android the view list is beneath every
@@ -21,6 +35,8 @@ export function Screen({ section, title, onViewList = false, children }: { secti
 		if (routes.some((route) => route.name === 'views')) router.dismissTo(current.viewsHref);
 		else router.push(current.viewsHref);
 	};
+	const contentContainerStyle = { paddingHorizontal: space.page, paddingBottom: tabBar.contentClearance + insets.bottom };
+	const heading = title ? <Text role="heading" style={styles.heading}>{title}</Text> : null;
 	return (
 		<View style={[styles.page, { paddingTop: insets.top }]}>
 			<View style={styles.header}>
@@ -38,10 +54,12 @@ export function Screen({ section, title, onViewList = false, children }: { secti
 					</Pressable>
 				</View>
 			</View>
-			<ScrollView aria-label={onViewList ? current.viewsLabel : undefined} contentContainerStyle={{ paddingHorizontal: space.page, paddingBottom: tabBar.contentClearance + insets.bottom }}>
-				{title ? <Text role="heading" style={styles.heading}>{title}</Text> : null}
-				{children}
-			</ScrollView>
+			{list ? <View style={styles.fill}>{list({ heading, contentContainerStyle })}</View> : (
+				<ScrollView aria-label={onViewList ? current.viewsLabel : undefined} contentContainerStyle={contentContainerStyle}>
+					{heading}
+					{children}
+				</ScrollView>
+			)}
 		</View>
 	);
 }
@@ -66,6 +84,7 @@ export function PlainScreen({ title, back, children }: { title: string; back: { 
 
 const styles = StyleSheet.create({
 	page: { flex: 1, backgroundColor: colors.page },
+	fill: { flex: 1 },
 	header: { minHeight: 52, paddingHorizontal: space.page - 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 	crumb: { minHeight: 44, minWidth: 44, flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
 	crumbText: { fontSize: type.body, color: colors.body, fontWeight: '600' },

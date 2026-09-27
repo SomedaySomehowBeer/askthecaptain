@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { apiPaths, maxWorkPages, myWorkPath, nativeStartPath, organisationPath, workPageSize } from './paths.ts';
+import { apiPaths, maxWorkPages, myWorkPath, nativeStartPath, organisationPath, stockPath, workPageSize } from './paths.ts';
 
 const id = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+
+test('stock requests active items across locations without query or user-controlled segments', () => {
+	assert.equal(stockPath({ userId: id, organisationId: id }), `/v1/organisations/${id}/stock`);
+	for (const organisationId of ['', id.toUpperCase(), `${id}?includeArchived=1`, '../stock']) assert.throws(() => stockPath({ userId: id, organisationId }), TypeError);
+});
 
 test('the fixed paths are the routes the app calls, and the start path is separate', () => {
 	assert.deepEqual(apiPaths, { me: '/v1/me', nativeExchange: '/auth/native/exchange', signOut: '/auth/sign-out', revokeOthers: '/v1/me/sessions/revoke-others' });

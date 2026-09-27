@@ -27,8 +27,9 @@ export function readConfig(values: { api: unknown; app: unknown }, development: 
 	return Object.freeze({ apiOrigin: originOrNull(values.api, development), webOrigin: originOrNull(values.app, development) });
 }
 
-/** The only website paths the app links to. Anything else is not linkable. */
-export const webPaths = ['/', '/settings', '/work', '/work?owner=all'] as const;
+/** The only website paths the app links to. Anything else is not linkable. `/resources/inventory` is where stock is
+ *  counted and edited (docs/plans/expo-mobile-inventory-read-2026-09.md, decision D1). */
+export const webPaths = ['/', '/settings', '/work', '/work?owner=all', '/resources/inventory'] as const;
 export type WebPath = (typeof webPaths)[number];
 
 /** The website link for an allow-listed path, built as text from the validated origin and a fixed path; never from

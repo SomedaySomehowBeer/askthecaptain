@@ -17,7 +17,7 @@ See the [validation record](../../docs/validation/mobile-my-work-read-2026-09-27
 - **How it reads:** every read goes through the account runner's single scoped entry point, bound to
   a token-free read scope and epoch. A list is bound to the scope it first showed, so a change of
   person or organisation shows nothing and sends nothing until the tabs reset.
-- **What it doesn't do:** Chat and Resources, other Work views (except All tasks, below), detail
+- **What it doesn't do:** Chat and other Resources views (except Inventory, below), other Work views (except All tasks), detail
   pages and all business writes are not implemented. There is no local business cache.
 
 The [All tasks read](../../docs/plans/expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2) is
@@ -35,6 +35,18 @@ No native or device result is claimed.
   page 0. No list is cached across views.
 - **Open limits:** `expo/fetch` reporting the query URL unchanged, and a real 403/404, are device gates. Nothing is installed or usable on a device,
   and there is no simulator or device evidence.
+
+The [Inventory read](../../docs/plans/expo-mobile-inventory-read-2026-09.md) (M-read slice 3) is
+implemented and independently reviewed; final validation is recorded in the
+[evidence](../../docs/validation/mobile-inventory-read-2026-09-27/README.md).
+- Resources → Inventory shows active counted stock grouped by location, with exact decimal strings,
+  stored units, uncounted states, reorder points and the server's below-reorder flag.
+- The API returns one unpaginated list, subject to the mobile response byte budget. One virtualised
+  SectionList contains the heading, controls, groups and footer; it is never nested in a ScrollView.
+- Reads are bound to the person/organisation scope. Refresh and retry are explicit, waits are respected,
+  a failed refresh retains labelled older rows, and a changed scope immediately hides them.
+- The fixed website link appears after a successful load, including an empty list. There are no count,
+  edit, add or archive controls. No business writes, installed-app proof or native enablement is added.
 
 **The [response byte budget](../../docs/plans/expo-mobile-response-byte-budget-2026-09.md) merged in #202 after independent review and passing local checks and CI.** The transport (`src/api/client.ts`) reads each response body as a byte stream:
 - it keeps, decodes and parses at most 1 MiB of decoded bytes (a policy limit);
@@ -77,10 +89,10 @@ Two web exports are built and checked separately:
   only by `CAPTAIN_MOBILE_HARNESS=1` at build time, and `app.config.ts` refuses it for
   native builds. It renders the production account stack, screens and tabs over
   scripted, token-free account states, with no API, credentials or account data.
-  My work's and All tasks' reads stay pending until a harness control resolves them with
+  My work, All tasks and Inventory reads stay pending until a harness control resolves them with
   synthetic fixtures through the real parser (`work-read-log`, `work-read-pending`,
   `harness-read-{control}`). The fixtures' view and owners come from the requested path's
-  query. Account revocation uses `account-revoke-log`, `account-revoke-pending` and
+  query; stock fixtures use the exact stock path and include uncounted, unusual-decimal and malformed answers. Account revocation uses `account-revoke-log`, `account-revoke-pending` and
   `harness-revoke-{control}` for controlled pending replies. It is never deployed, and it must
   contain the harness marker.
 

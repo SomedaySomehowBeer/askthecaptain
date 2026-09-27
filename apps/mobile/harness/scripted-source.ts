@@ -4,7 +4,11 @@ import { createClampedClock, type Wait } from '../src/account/clock.ts';
 import type { ReadOutcome, ReadScope, ScopedRead } from '../src/account/contracts.ts';
 import type { OrganisationPath } from '../src/api/paths.ts';
 import type { Parse } from '../src/auth/contracts.ts';
-import { fixtureBody, type ReadControl } from './work-fixtures.ts';
+import { stockFixture } from './stock-fixtures.ts';
+import { fixtureBody, isWorkBodyControl, type ReadControl } from './work-fixtures.ts';
+
+/** Inventory's read: exactly `/v1/organisations/{id}/stock`, with no query (`stockPath`). */
+const stockPathPattern = /^\/v1\/organisations\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/stock$/;
 import { slowAfterMs, type AccountSnapshot, type AccountView } from '../src/account/machine.ts';
 import {
 	admit, idleRevocation, samePerson, sendingRevocation, settledRevocation, slowRevocation, staleOutcome,
@@ -193,8 +197,13 @@ export function createScriptedSource(name: ScenarioName, readClock: () => number
 		if (control === 'refused-400') return { kind: 'refused', status: 400 };
 		if (control === 'unauthorised') return superseded; // as a 401 does in production: the screen applies nothing
 		if (control === 'client-bug') return { kind: 'client-bug' };
-		// The fixture's offset and view (owners) come from the exact path this read asked for.
-		try { return { kind: 'ok', value: p.parse(fixtureBody(control, p.entry.path, p.scope.userId)) }; } catch { return { kind: 'unavailable', wait: null }; }
+		// The read's own path decides the fixture: Inventory's stock list, or a Work list (whose offset and view, and so
+		// owners, come from the exact path). A body control with no fixture for that list answers as an unreadable body.
+		try {
+			if (stockPathPattern.test(p.entry.path)) return { kind: 'ok', value: p.parse(stockFixture(control)) };
+			if (!isWorkBodyControl(control)) return { kind: 'unavailable', wait: null };
+			return { kind: 'ok', value: p.parse(fixtureBody(control, p.entry.path, p.scope.userId)) };
+		} catch { return { kind: 'unavailable', wait: null }; }
 	}
 
 	// Sign out everywhere else, as the runner does it, with the same pure rules (src/account/revocation.ts): checked
