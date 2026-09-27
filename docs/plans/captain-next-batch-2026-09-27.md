@@ -249,15 +249,39 @@ Web validation includes 141 tests and real two-session browser acceptance. Mobil
 [mobile evidence](../validation/session-revocation-mobile-2026-09-27/README.md) distinguish these
 checks from native acceptance. Any staging release is recorded separately in the runbook.
 
-### Next increment: read-only Inventory
+### Completed increment: read-only Inventory
 
 The [Inventory contract](expo-mobile-inventory-read-2026-09.md) extends the existing Resources route.
 It shows counted stock grouped by location, preserves exact decimal strings and business-defined
 units, and links to the website for changes. It adds no schema, dependency, server endpoint or
 business write. The stock API is unpaginated; the response budget and list virtualisation bound
-this initial client. Adopting the contract does not implement it.
+this initial client. Implementation merged in #210 after independent reviews and all three CI jobs passed.
+Local validation passed 289 mobile tests, ten workspace checks, four exports/scans and the complete
+browser suite at 360/390/430 px; [evidence](../validation/mobile-inventory-read-2026-09-27/README.md).
+The ownership below is completed. No native enablement or deployment accompanied the merge.
 
 - Codex owns the pure parser and fixed API path, tests, fixture bodies, browser checks and integration.
 - Claude B owns list state, hook, screen, copy, website-link configuration and harness controls.
 - Claude A independently reviews both implementations. B also reviews root’s parser and browser proof.
 - All checks remain serial under the shared build lock; native sign-in and device gates are unchanged.
+
+
+### Next increment: read-only equipment timeline
+
+The [equipment contract](expo-mobile-equipment-read-2026-09.md) preserves the approved multi-day,
+cross-equipment view. Hours/Days/Weeks buttons keep the focal date; continuous bars include setup,
+cleanup and maintenance. Unread, incomplete, failed or stale coverage never establishes free time.
+The range reaches one calendar month back and six ahead, with bounded reads in the business timezone.
+
+Claude A audited the API and independently reviewed Claude B’s contract. Root reviewed both against
+the approved mockups; both Claude agents reviewed the final corrections and status updates.
+
+- E-1: A owns fixed paths and strict parsers; B owns pure timezone, range and geometry helpers;
+  Codex owns pure cell/queue state. Each includes meaningful tests. A and B review each other’s work
+  and the root cell/queue implementation.
+- E-2 follows reviewed E-1 interfaces: B owns hooks, UI, copy and configuration; A reviews independently.
+  Codex owns fixtures, browser proof, serial validation, integration and git.
+
+Adoption does not implement equipment reads. Pinch, native performance/accessibility and signed-device
+acceptance remain open, and native sign-in stays off. No API, schema, dependency or infrastructure change
+is part of this read-only increment.
