@@ -1,4 +1,5 @@
-/** Synthetic My work answers for the test harness (docs/plans/expo-mobile-my-work-read-2026-09.md §3.7). Not a route.
+/** Synthetic My work and All tasks answers for the test harness (docs/plans/expo-mobile-my-work-read-2026-09.md §3.7;
+ *  docs/plans/expo-mobile-all-tasks-read-2026-09.md §7). Not a route.
  *  Each is a raw body in the API's own shape (with unknown fields, so the real parser's filtering runs in the browser),
  *  passed through the screen's own `parse`. Titles and tag names are synthetic, contain no digits, and are outside the
  *  fictional mockup names the browser check forbids. Only due dates contain digits.
@@ -18,14 +19,32 @@ export const taskId = (n: number) => `00000000-0000-4000-8000-${String(n).padSta
 export const taskCode = (n: number) => `${String.fromCharCode(65 + Math.floor(n / 26) % 26)}${String.fromCharCode(65 + (n % 26))}`;
 export const longTitle = `Sample long title ${'word '.repeat(81)}`;
 
-/** What the screen shows for the three special rows (for the browser check). */
+/** What My work shows for the three special rows (for the browser check). */
 export const expectedRows = Object.freeze({
 	first: Object.freeze({ title: 'Sample task AA', detail: 'Open · Alpha · Bravo · Charlie · +2 more', due: 'Due 3 Oct 2026' }),
 	long: Object.freeze({ title: `${Array.from(longTitle.trim()).slice(0, 299).join('')}…`, detail: 'Open', due: 'No due date' }),
 	blank: Object.freeze({ title: 'Untitled task', detail: 'Open', due: 'No due date' })
 });
 
-function task(n: number, ownerId: string) {
+/** The other owner in All tasks fixtures: a fixed lower-case UUID that is never the signed-in person. */
+export const otherOwnerId = '5a3c9e1d-2b4f-4c6a-8d7e-0f1a2b3c4d5e';
+
+/** All tasks owners by global index (docs/plans/expo-mobile-all-tasks-read-2026-09.md §7): index 0 (AA) is the
+ *  person, index 1 (the long title) someone else, index 2 (the blank title) no owner, then repeating by `index % 3`.
+ *  My work's tasks are always the person's own. */
+export const allOwnerAt = (n: number, userId: string): string | null => (n % 3 === 0 ? userId : n % 3 === 1 ? otherOwnerId : null);
+
+/** What All tasks shows for the same three rows: the same titles and dates, with one owner fact each. */
+export const expectedAllRows = Object.freeze({
+	first: Object.freeze({ title: expectedRows.first.title, detail: 'Open · Assigned to you · Alpha · Bravo · Charlie · +2 more', due: 'Due 3 Oct 2026' }),
+	long: Object.freeze({ title: expectedRows.long.title, detail: 'Open · Assigned to someone else', due: 'No due date' }),
+	blank: Object.freeze({ title: 'Untitled task', detail: 'Open · No owner', due: 'No due date' })
+});
+
+/** Which list a requested path is for: My work's query names `ownerId`; All tasks' has none. */
+export const viewOfPath = (path: string): 'mine' | 'all' => (/[?&]ownerId=/.test(path) ? 'mine' : 'all');
+
+function task(n: number, ownerId: string | null) {
 	const title = n === 0 ? 'Sample task AA' : n === 1 ? longTitle : n === 2 ? '   ' : `Sample task ${taskCode(n)}`;
 	return {
 		id: taskId(n), projectId: null, seriesId: null, revision: 1, title, ownerId, status: 'open',
@@ -37,14 +56,19 @@ function task(n: number, ownerId: string) {
 export const readControls = ['ok-page', 'ok-last', 'ok-overlap', 'empty', 'unavailable', 'unavailable-wait', 'refused-404', 'refused-400', 'unauthorised', 'client-bug'] as const;
 export type ReadControl = (typeof readControls)[number];
 
-/** The raw body for a body-carrying control, for a read at `offset` by `ownerId`:
+/** The raw body for a body-carrying control, for a read of `path` by the person `userId`. The offset and the view come
+ *  from the requested path itself, never from harness state:
  *  - `ok-page`: 50 tasks from index `offset`, `nextOffset` = offset + 50;
  *  - `ok-last`: 3 tasks from index `offset`, `nextOffset` null;
  *  - `ok-overlap`: 50 tasks from index `offset − 25` (0 at the first page), `nextOffset` = offset + 50, so 25 of them
  *    repeat the previous page and are dropped;
- *  - `empty`: no tasks, `nextOffset` null. */
-export function fixtureBody(control: 'ok-page' | 'ok-last' | 'ok-overlap' | 'empty', offset: number, ownerId: string): unknown {
-	const range = (from: number, count: number) => Array.from({ length: count }, (_, i) => task(from + i, ownerId));
+ *  - `empty`: no tasks, `nextOffset` null.
+ *  Owners: My work, every task the person's; All tasks, `allOwnerAt`. */
+export function fixtureBody(control: 'ok-page' | 'ok-last' | 'ok-overlap' | 'empty', path: string, userId: string): unknown {
+	const offset = Number(/[?&]offset=(\d+)/.exec(path)?.[1] ?? '0');
+	const view = viewOfPath(path);
+	const range = (from: number, count: number) => Array.from({ length: count }, (_, i) =>
+		task(from + i, view === 'mine' ? userId : allOwnerAt(from + i, userId)));
 	if (control === 'empty') return { tasks: [], nextOffset: null, unexpected: 'ignored' };
 	if (control === 'ok-last') return { tasks: range(offset, 3), nextOffset: null };
 	if (control === 'ok-overlap') return { tasks: range(Math.max(0, offset - 25), 50), nextOffset: offset + 50 };

@@ -1,9 +1,9 @@
-import { myWorkPath, workPageSize, type ScopeIds } from '../api/paths.ts';
+import { workListPath, workPageSize, type ScopeIds, type WorkView } from '../api/paths.ts';
 
 export type WorkTag = { readonly id: string; readonly name: string };
 export type DueDate = { readonly year: number; readonly month: number; readonly day: number };
 export type WorkRow = {
-	readonly id: string; readonly displayTitle: string; readonly status: 'open'; readonly due: DueDate | null;
+	readonly id: string; readonly displayTitle: string; readonly owner: 'you' | 'someone-else' | 'none'; readonly status: 'open'; readonly due: DueDate | null;
 	readonly tags: readonly WorkTag[]; readonly tagCount: number;
 };
 export type WorkPage = { readonly rows: readonly WorkRow[]; readonly nextOffset: number | null };
@@ -51,8 +51,8 @@ export function formatDue(due: DueDate | null): string {
 /** Parse the existing tasks API, retaining only display data. Unknown fields are ignored. Every tag is validated,
  * including those beyond the three shown; neither the raw title nor the full tag array enters screen state.
  * Row and request counts are bounded; the transport's whole-response byte budget remains a separate readiness gate. */
-export function parseMyWorkPage(value: unknown, request: { scope: ScopeIds; offset: number }): WorkPage {
-	myWorkPath(request.scope, request.offset); // Validate the expected query, including the page cap.
+export function parseWorkPage(value: unknown, request: { scope: ScopeIds; offset: number; view: WorkView }): WorkPage {
+	workListPath(request.scope, request.view, request.offset); // Validate the expected query, including the page cap.
 	const page = record(value);
 	if (!Array.isArray(page.tasks) || page.tasks.length > workPageSize) return invalid();
 	if (page.nextOffset !== null && (page.nextOffset !== request.offset + workPageSize || page.tasks.length !== workPageSize)) return invalid();
@@ -61,7 +61,10 @@ export function parseMyWorkPage(value: unknown, request: { scope: ScopeIds; offs
 		const task = record(value); const id = identifier(task.id);
 		if (ids.has(id)) return invalid();
 		ids.add(id);
-		if (typeof task.title !== 'string' || task.status !== 'open' || task.ownerId !== request.scope.userId || !Array.isArray(task.tags)) return invalid();
+		if (typeof task.title !== 'string' || task.status !== 'open' || !Array.isArray(task.tags)) return invalid();
+		if (request.view === 'mine' && task.ownerId !== request.scope.userId) return invalid();
+		if (task.ownerId !== null) identifier(task.ownerId);
+		const owner = task.ownerId === null ? 'none' : task.ownerId === request.scope.userId ? 'you' : 'someone-else';
 		const tags: WorkTag[] = [];
 		for (const value of task.tags) {
 			const tag = record(value); const tagId = identifier(tag.id);
@@ -70,7 +73,11 @@ export function parseMyWorkPage(value: unknown, request: { scope: ScopeIds; offs
 			for (const _ of tag.name) { if (++characters > 60) return invalid(); }
 			if (tags.length < 3) tags.push(Object.freeze({ id: tagId, name: tag.name }));
 		}
-		return Object.freeze({ id, displayTitle: displayTitle(task.title), status: 'open', due: parseDue(task.due), tags: Object.freeze(tags), tagCount: task.tags.length });
+		return Object.freeze({ id, displayTitle: displayTitle(task.title), owner, status: 'open', due: parseDue(task.due), tags: Object.freeze(tags), tagCount: task.tags.length });
 	});
 	return Object.freeze({ rows: Object.freeze(rows), nextOffset: page.nextOffset as number | null });
 }
+
+/** My work enforces the signed-in owner; both views share every other response rule. */
+export const parseMyWorkPage = (value: unknown, request: { scope: ScopeIds; offset: number }): WorkPage =>
+	parseWorkPage(value, { ...request, view: 'mine' });

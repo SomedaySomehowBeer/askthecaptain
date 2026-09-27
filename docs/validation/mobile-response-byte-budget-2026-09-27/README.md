@@ -11,7 +11,9 @@ Retry-After still determine the account/read outcome when a body is unusable.
 
 ## Evidence
 
-- **236 tests passed, zero failed or skipped:** 216 pure tests and 20 client-boundary tests.
+- Initial isolated validation: **236 tests passed, zero failed or skipped** (216 pure tests and 20 boundary tests).
+  After integrating merged All tasks #201: **247 passed, zero failed or skipped** (227 pure and 20 boundary tests),
+  with mobile typecheck and boundary check passing again.
   Coverage includes exact limit/one byte over, oversized first chunks, misleading Content-Length,
   split UTF-8 sequences, invalid UTF-8, incomplete characters, empty/null bodies, stalled reads,
   synchronous cleanup throws, rejected or non-settling cancellation, late resolutions/rejections,
@@ -30,8 +32,7 @@ Retry-After still determine the account/read outcome when a body is unusable.
 Claude A implemented the transport/tests, Claude B independently reviewed them and wrote the
 scoped-read regressions, and A reviewed those regressions. Root reviewed and integrated the fixes
 and ran checks serially. Both agents reviewed the documentation. No production screen changed;
-no additional local browser run was needed for this transport-only increment. CI retains the
-existing shell/account/My work browser regression.
+no additional local browser run was needed for this transport-only increment. CI runs the combined shell/account/My work/All tasks browser regression on the updated branch.
 
 ## Limits
 

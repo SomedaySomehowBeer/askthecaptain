@@ -7,6 +7,7 @@ test('exactly three sections, Work, Chat and Resources, in that order; Work open
 	assert.deepEqual(sections.map((s) => s.label), ['Work', 'Chat', 'Resources']);
 	const work = sections[0]!;
 	assert.equal(work.href, '/work');
+	assert.deepEqual(work.groups[0]!.rows[1], { label: 'All tasks', detail: 'Open tasks assigned to anyone', href: '/work/all' });
 	assert.deepEqual(work.groups[0]!.rows[0], { label: 'My work', detail: 'Assigned to you, across all tags', href: '/work' });
 });
 

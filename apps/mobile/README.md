@@ -17,10 +17,24 @@ See the [validation record](../../docs/validation/mobile-my-work-read-2026-09-27
 - **How it reads:** every read goes through the account runner's single scoped entry point, bound to
   a token-free read scope and epoch. A list is bound to the scope it first showed, so a change of
   person or organisation shows nothing and sends nothing until the tabs reset.
-- **What it doesn't do:** Chat and Resources, other Work views, detail pages and all writes are not
-  implemented. There is no local business cache.
-- **Open limits:** `expo/fetch` reporting the query URL unchanged, and a real 403/404, are device
-  gates. Nothing is installed or usable on a device, and there is no simulator or device evidence.
+- **What it doesn't do:** Chat and Resources, other Work views (except All tasks, below), detail
+  pages and all writes are not implemented. There is no local business cache.
+
+The [All tasks read](../../docs/plans/expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2) is
+implemented and independently reviewed, with local tests, exports and browser checks passing.
+See the [validation record](../../docs/validation/mobile-all-tasks-read-2026-09-27/README.md).
+No native or device result is claimed.
+- **What it shows:** Work → Views → All tasks (`/work/all`) lists the open tasks the Work API returns
+  for the chosen organisation, assigned to anyone, read-only, under the subtitle "Open tasks assigned
+  to anyone".
+  - It is open tasks only: In progress, Suggested and Done are not included.
+  - Each row shows one owner fact, "Assigned to you", "Assigned to someone else" or "No owner", and no
+    names.
+- **How it works:** it uses the same shared screen, list rules and scope binding as My work, with the
+  view fixed when the screen mounts. Each mounted list keeps its own rows, and every new mount reads
+  page 0. No list is cached across views.
+- **Open limits:** `expo/fetch` reporting the query URL unchanged, and a real 403/404, are device gates. Nothing is installed or usable on a device,
+  and there is no simulator or device evidence.
 
 **The [response byte budget](../../docs/plans/expo-mobile-response-byte-budget-2026-09.md) is implemented and independently reviewed, with local checks passing.** The transport (`src/api/client.ts`) reads each response body as a byte stream:
 - it keeps, decodes and parses at most 1 MiB of decoded bytes (a policy limit);
@@ -63,9 +77,10 @@ Two web exports are built and checked separately:
   only by `CAPTAIN_MOBILE_HARNESS=1` at build time, and `app.config.ts` refuses it for
   native builds. It renders the production account stack, screens and tabs over
   scripted, token-free account states, with no API, credentials or account data.
-  My work's reads stay pending until a harness control resolves them with synthetic
-  fixtures through the real parser (`work-read-log`, `work-read-pending`,
-  `harness-read-{control}`). It is never deployed, and it must contain the harness marker.
+  My work's and All tasks' reads stay pending until a harness control resolves them with
+  synthetic fixtures through the real parser (`work-read-log`, `work-read-pending`,
+  `harness-read-{control}`). The fixtures' view and owners come from the requested path's
+  query. It is never deployed, and it must contain the harness marker.
 
 A browser approximation runs both exports at 360, 390 and 430 pixels. After editing
 anything under `src/auth`, `src/account` or `src/platform`, fully reload the app
@@ -91,6 +106,14 @@ evidence. An exact sign-in callback delivered as a system link does not navigate
 pending authentication session reads it. Every other `/auth/*` link and every lookalike is
 refused.
 
-The web-export check uses browser history for every visited route; native stacks
-place the grouped view list beneath the selected page. Browser checks therefore
-do not prove that native stack arrangement or its swipe-back gesture.
+The web-export check uses browser history for every visited route. On iOS and Android the
+arrangement depends on how the section's stack was built, by source reading:
+- **A stack built from a link** (an incoming or initial URL) gets the grouped view list beneath
+  the open page, as `sectionStackSettings`' `views` anchor.
+- **A stack that starts empty** (a first visit through the tab bar, or after an organisation
+  change's tabs reset) starts at the section's default page, with no view list beneath. The first
+  header use pushes the view list on top.
+
+Putting the view list beneath every native stack, with an explicit initial route and seeded resets,
+is a separate follow-up. Browser checks prove neither native stack arrangement nor its swipe-back
+gesture; both remain device checks.

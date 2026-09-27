@@ -54,8 +54,16 @@ after independent review and all three CI jobs passed. Local tests, exports and 
 - the 30-second spacing for membership refreshes after a 403/404;
 - synthetic harness reads for the browser proof.
 
-The production web export still makes no API requests. Other reads and all writes remain. So do a transport response byte
-budget and the device gates: `expo/fetch` reporting the query URL unchanged, and a real 403/404 on an isolated
+The second, [All tasks](expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2, adopted in #200), is **implemented
+and independently reviewed**, with local tests, exports and browser checks passing.
+See the [validation record](../validation/mobile-all-tasks-read-2026-09-27/README.md); native and device gates remain. It adds:
+- a read-only Work → All tasks list at `/work/all`: open tasks assigned to anyone, with one owner fact per row and
+  no names;
+- one shared list screen, hook and parser for both views, with the view fixed at mount;
+- the exact app route and the fixed website link `/work?owner=all`.
+
+The production web export still makes no API requests. Other reads and all writes remain. The response byte budget is implemented separately in #202;
+native buffering/cancellation and these device gates remain: `expo/fetch` reporting the query URL unchanged, and a real 403/404 on an isolated
 synthetic environment. No simulator or device evidence exists.
 The web export opens view lists as visited pages. Native link-built stacks use the view-list anchor;
 empty resets and first tab visits currently start at the index without that underlying route, by
@@ -483,7 +491,8 @@ staleness labels and organisation separation.
 
 The [response-budget increment](expo-mobile-response-byte-budget-2026-09.md) specifies a 1 MiB
 limit on decompressed bytes accepted for decoding and parsing, with guarded cancellation and the
-existing shared timeout. Its implementation is written and under validation; see its contract and validation record for current evidence. Native buffering,
+existing shared timeout. Its implementation is independently reviewed with local validation passing; see its
+[validation record](../validation/mobile-response-byte-budget-2026-09-27/README.md). Native buffering,
 a single delivered chunk and process-memory overhead are not bounded by that JavaScript limit;
 streaming/cancellation, compression and decoder behaviour remain device gates.
 

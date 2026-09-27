@@ -7,7 +7,7 @@ import {
 } from './my-work-list.ts';
 import type { WorkPage, WorkRow } from './my-work.ts';
 
-const row = (n: number): WorkRow => Object.freeze({ id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`, displayTitle: `Task ${n}`, status: 'open', due: null, tags: [], tagCount: 0 });
+const row = (n: number): WorkRow => Object.freeze({ id: `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`, displayTitle: `Task ${n}`, owner: 'you', status: 'open', due: null, tags: [], tagCount: 0 });
 const page = (from: number, count: number, nextOffset: number | null): ReadOutcome<WorkPage> =>
 	({ kind: 'ok', value: { rows: Array.from({ length: count }, (_, i) => row(from + i)), nextOffset } });
 

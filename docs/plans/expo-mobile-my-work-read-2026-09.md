@@ -11,6 +11,10 @@ honest loading, empty and failure states.
 Unchanged: native sign-in stays off on shared staging and for real accounts; the §8/§10 device gates remain; browser
 checks are an approximation, not native proof.
 
+The response-body budget originally left open by this increment is implemented in #202; see the
+[budget validation record](../validation/mobile-response-byte-budget-2026-09-27/README.md). Native
+buffering/cancellation and device proof remain open.
+
 ## 1. Scope
 
 **Delivers.** Work → My work, with the visible fixed-filter subtitle "Open tasks assigned to you",

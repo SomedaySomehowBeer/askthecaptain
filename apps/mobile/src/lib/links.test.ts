@@ -82,3 +82,11 @@ test('every linkable route is one the link rule itself accepts', () => {
 	for (const route of linkableRoutes) assert.equal(linkTarget(route), route, route);
 	assert.ok(!linkableRoutes.has(refusedLink));
 });
+
+test('All tasks is an exact app route; incoming queries do not select a Work filter', () => {
+ for (const incoming of ['/work/all', '/work/all/', '/work/all?x=1']) assert.equal(linkTarget(incoming), '/work/all');
+ assert.equal(linkTarget('/work?owner=all'), '/work');
+ assert.equal(linkTarget('/work/all/../views'), '/work/views');
+ for (const incoming of ['/work/ALL', '/work/all/../chat', '//work/all', '/work\\all'])
+  assert.equal(linkTarget(incoming), refusedLink);
+});

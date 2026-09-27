@@ -1,3 +1,4 @@
+import type { WorkView } from '../api/paths.ts';
 import type { WebPath } from '../config.ts';
 import { linkableRoutes, refusedLink } from '../lib/links.ts';
 import type { Wait } from './clock.ts';
@@ -428,13 +429,49 @@ export const workCopy = {
 	openWebWork: 'Open My work on the web'
 } as const;
 
+/** All tasks (docs/plans/expo-mobile-all-tasks-read-2026-09.md §5): open tasks only, assigned to anyone. It never says
+ *  "in progress" or "everything", names no total, and says nothing about a person beyond the three owner facts. */
+export const allWorkCopy = {
+	heading: 'All tasks',
+	subtitle: 'Open tasks assigned to anyone',
+	loading: 'Loading open tasks…',
+	emptyTitle: 'No open tasks in this organisation',
+	emptyBody: 'Tasks appear here while they are open, whoever they are assigned to.',
+	failedFirst: "Couldn't load open tasks",
+	failedRefresh: workCopy.failedRefresh,
+	failedMore: workCopy.failedMore,
+	access: workCopy.access,
+	list: workCopy.list,
+	open: workCopy.open,
+	refresh: workCopy.refresh,
+	more: workCopy.more,
+	tryAgain: workCopy.tryAgain,
+	busy: workCopy.busy,
+	capNotice: workCopy.capNotice,
+	// Tied to the checked web title for owner=all ("All tasks"); if that title changes, this label changes with it.
+	openWebWork: 'Open All tasks on the Captain website'
+} as const;
+
+export type WorkViewCopy = { readonly [K in keyof typeof workCopy]: string };
+
+/** The whole wording for one view, looked up once by the screen's bound view (never picked string by string). */
+export const workViewCopy = (view: WorkView): WorkViewCopy => (view === 'all' ? allWorkCopy : workCopy);
+
+/** The owner facts All tasks shows, and nothing more: no names in this slice. */
+export const ownerLabels = Object.freeze({ you: 'Assigned to you', 'someone-else': 'Assigned to someone else', none: 'No owner' } as const);
+
 /** "+N more" for a row's tags beyond the ones shown; null when there are none. */
 export const moreTags = (tagCount: number, shown: number): string | null => (tagCount > shown ? `+${tagCount - shown} more` : null);
 
-/** The wording for a failed My work read: the operation decides the line for an unavailable answer; a refusal says
+type WorkProblemView = { readonly op: 'first' | 'refresh' | 'more'; readonly kind: 'unavailable' | 'access' | 'list' };
+
+/** The wording for a failed read in one view: the operation decides the line for an unavailable answer; a refusal says
  *  what kind it was, the same for every operation. */
-export function workProblemText(problem: { readonly op: 'first' | 'refresh' | 'more'; readonly kind: 'unavailable' | 'access' | 'list' }): string {
-	if (problem.kind === 'access') return workCopy.access;
-	if (problem.kind === 'list') return workCopy.list;
-	return problem.op === 'first' ? workCopy.failedFirst : problem.op === 'refresh' ? workCopy.failedRefresh : workCopy.failedMore;
+export function workViewProblemText(copy: WorkViewCopy, problem: WorkProblemView): string {
+	if (problem.kind === 'access') return copy.access;
+	if (problem.kind === 'list') return copy.list;
+	return problem.op === 'first' ? copy.failedFirst : problem.op === 'refresh' ? copy.failedRefresh : copy.failedMore;
 }
+
+/** My work's failure wording (unchanged). */
+export const workProblemText = (problem: WorkProblemView): string => workViewProblemText(workCopy, problem);
