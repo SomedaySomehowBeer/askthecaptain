@@ -6,6 +6,7 @@ import type { AuthPlatform } from '../auth/contracts.ts';
 import type { AccountPlatform } from '../platform/account-platform.ts';
 import type { DeviceStorage } from '../platform/secure-storage.ts';
 import { compose, defaultBuilders, type Builders } from './compose.ts';
+import { idleRevocation, staleOutcome } from './revocation.ts';
 import type { AccountRunner, AccountRunnerDeps } from './runner.ts';
 
 const refusedOrigin = 'http://secret-host.invalid:9999';
@@ -38,7 +39,7 @@ function recordingBuilders(overrides: Partial<Builders> = {}) {
 		createAttempts: (options) => { made.attempts.push(options); return {} as never; },
 		createAccountRunner: (deps) => {
 			made.runners.push(deps);
-			return { start: () => { made.starts += 1; }, snapshot: () => ({}) as never, send: () => undefined, subscribe: () => () => undefined, organisationRead: async () => ({}) as never } as AccountRunner;
+			return { start: () => { made.starts += 1; }, snapshot: () => ({}) as never, send: () => undefined, subscribe: () => () => undefined, organisationRead: async () => ({}) as never, revokeOthers: async () => staleOutcome, revocationView: () => idleRevocation } as AccountRunner;
 		},
 		...overrides
 	};

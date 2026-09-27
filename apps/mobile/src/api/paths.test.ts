@@ -5,7 +5,7 @@ import { apiPaths, maxWorkPages, myWorkPath, nativeStartPath, organisationPath, 
 const id = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
 test('the fixed paths are the routes the app calls, and the start path is separate', () => {
-	assert.deepEqual(apiPaths, { me: '/v1/me', nativeExchange: '/auth/native/exchange', signOut: '/auth/sign-out' });
+	assert.deepEqual(apiPaths, { me: '/v1/me', nativeExchange: '/auth/native/exchange', signOut: '/auth/sign-out', revokeOthers: '/v1/me/sessions/revoke-others' });
 	assert.equal(nativeStartPath, '/auth/google/start');
 	assert.ok(!(Object.values(apiPaths) as string[]).includes(nativeStartPath), 'the client never requests the start');
 });

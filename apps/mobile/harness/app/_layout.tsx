@@ -4,7 +4,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AccountProvider, useAccount } from '../../src/account/AccountProvider.tsx';
 import { AccountStack } from '../../src/account/AccountStack.tsx';
 import { config, webLink, type WebPath } from '../../src/config.ts';
-import { createScriptedSource, scenarioFrom, transitions, type ScriptedSource } from '../scripted-source.ts';
+import { createScriptedSource, revocationControls, scenarioFrom, transitions, type ScriptedSource } from '../scripted-source.ts';
 import { readControls } from '../work-fixtures.ts';
 
 /** The test-only harness root (docs/plans/expo-mobile-auth-composition-2026-09.md §7.1), bundled only when
@@ -64,6 +64,30 @@ function HarnessPanel({ source }: { source: ScriptedSource }) {
 			</View>
 			{/* Inside the marker panel, so the browser's no-digits check strips it with the rest of the harness text. */}
 			<ReadPanel source={source} />
+			<RevocationPanel source={source} />
+		</View>
+	);
+}
+
+/** Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §5, increment 3), kept apart from the
+ *  command log:
+ *  - `account-revoke-log`: a JSON array of the person epoch each request was sent for, oldest first;
+ *  - `account-revoke-pending`: `true` while one is pending;
+ *  - `harness-revoke-{control}`: answers the pending request (see scripted-source.ts `revocationControls`). An answer
+ *    after the person changed changes nothing, as in the runner. */
+function RevocationPanel({ source }: { source: ScriptedSource }) {
+	const sent = useSyncExternalStore(source.subscribeRevocations, source.revocations, source.revocations);
+	return (
+		<View style={styles.reads}>
+			<Text testID="account-revoke-log" numberOfLines={1} style={styles.small}>{JSON.stringify(sent.log)}</Text>
+			<Text testID="account-revoke-pending" style={styles.small}>{String(sent.pending)}</Text>
+			<View style={styles.wrap}>
+				{revocationControls.map((control) => (
+					<Pressable key={control} testID={`harness-revoke-${control}`} role="button" onPress={() => source.resolveRevocation(control)} style={styles.control}>
+						<Text style={styles.small}>{control}</Text>
+					</Pressable>
+				))}
+			</View>
 		</View>
 	);
 }

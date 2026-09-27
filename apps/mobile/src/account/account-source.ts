@@ -1,6 +1,7 @@
 import type { Composition } from './compose.ts';
 import type { ScopedRead } from './contracts.ts';
 import { slowAfterMs, type AccountSnapshot, type AccountView } from './machine.ts';
+import { idleRevocation, staleOutcome, type PersonScope, type RevocationView, type RevokeOutcome } from './revocation.ts';
 import type { Timers, UiCommand } from './runner.ts';
 
 /** The token-free surface screens read (docs/plans/expo-mobile-auth-composition-2026-09.md §3). Production builds it
@@ -16,6 +17,12 @@ export type AccountSource = {
 	/** Organisation-scoped reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.1): the runner's own, token-free.
 	 *  With no runner (starting, web-only, misconfigured, startup failed) it answers `superseded` and sends nothing. */
 	readonly read: ScopedRead;
+	/** Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §4): the runner's own, token-free. With
+	 *  no runner it answers `stale` and sends nothing. */
+	readonly revokeOthers: (expected: PersonScope) => Promise<RevokeOutcome>;
+	/** The current person's revocation state, for `useSyncExternalStore` with `subscribe`: the same object until it
+	 *  changes; the shared idle object with no runner. */
+	readonly revocationView: () => RevocationView;
 };
 
 const noRead: ScopedRead = () => Promise.resolve(Object.freeze({ kind: 'superseded' as const }));
@@ -94,6 +101,8 @@ export function createAccountSource(composition: () => Promise<Composition>, tim
 		send(command: UiCommand) { if (phase.kind === 'runner') phase.ready.runner.send(command); },
 		// Before a runner there is no wait to measure; 0 keeps every wait calculation at "nothing left".
 		now: () => (phase.kind === 'runner' ? phase.ready.clock.now() : 0),
-		read: ((expected, path, parse) => phase.kind === 'runner' ? phase.ready.runner.organisationRead(expected, path, parse) : noRead(expected, path, parse)) as ScopedRead
+		read: ((expected, path, parse) => phase.kind === 'runner' ? phase.ready.runner.organisationRead(expected, path, parse) : noRead(expected, path, parse)) as ScopedRead,
+		revokeOthers: (expected: PersonScope): Promise<RevokeOutcome> => (phase.kind === 'runner' ? phase.ready.runner.revokeOthers(expected) : Promise.resolve(staleOutcome)),
+		revocationView: (): RevocationView => (phase.kind === 'runner' ? phase.ready.runner.revocationView() : idleRevocation)
 	});
 }

@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { accountCopy, faultLines, isSignedIn, roleLabel, signedInNotices } from '../account/copy.ts';
 import { returnToMyWork } from '../account/tab-entry.ts';
-import { Actions, Button, Lines, useWaitWake } from '../components/AccountPage.tsx';
+import { Actions, Button, Lines, RevokeOthers, useWaitWake } from '../components/AccountPage.tsx';
 import { Notice } from '../components/Notice.tsx';
 import { PlainScreen } from '../components/Screen.tsx';
 import { colors, type } from '../theme/tokens.ts';
@@ -33,6 +33,7 @@ export default function Settings() {
 				<Lines body={[]} notices={notices} />
 				<Button testID="account-action-switch" label={accountCopy.switch} onPress={() => router.push('/organisation')} />
 				<Actions actions={[{ kind: 'sign-out', id: 'sign-out', label: 'Sign out', primary: false }]} account={account} />
+				<RevokeOthers account={account} />
 				<Notice title="Other settings">{accountCopy.elsewhere}</Notice>
 				<Actions actions={[{ kind: 'web', id: 'web-settings', label: accountCopy.otherSettings, path: '/settings' }]} account={account} />
 			</View>

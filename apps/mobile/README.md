@@ -9,7 +9,7 @@ composes sign-in and adds the account screens:
 - Account, available alongside the tabs only after identity is verified and an organisation is chosen.
 
 The [My work read](../../docs/plans/expo-mobile-my-work-read-2026-09.md) (M-read slice 1) is
-implemented and independently reviewed, with local tests, exports and browser checks passing.
+merged in #199 after independent review and passing local tests, exports, browser checks and CI.
 See the [validation record](../../docs/validation/mobile-my-work-read-2026-09-27/README.md).
 - **What it shows:** Work → My work lists the person's open tasks in the chosen organisation,
   read-only, under the subtitle "Open tasks assigned to you". Page 0 loads on each mount, with
@@ -18,10 +18,10 @@ See the [validation record](../../docs/validation/mobile-my-work-read-2026-09-27
   a token-free read scope and epoch. A list is bound to the scope it first showed, so a change of
   person or organisation shows nothing and sends nothing until the tabs reset.
 - **What it doesn't do:** Chat and Resources, other Work views (except All tasks, below), detail
-  pages and all writes are not implemented. There is no local business cache.
+  pages and all business writes are not implemented. There is no local business cache.
 
 The [All tasks read](../../docs/plans/expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2) is
-implemented and independently reviewed, with local tests, exports and browser checks passing.
+merged in #201 after independent review and passing local tests, exports, browser checks and CI.
 See the [validation record](../../docs/validation/mobile-all-tasks-read-2026-09-27/README.md).
 No native or device result is claimed.
 - **What it shows:** Work → Views → All tasks (`/work/all`) lists the open tasks the Work API returns
@@ -36,7 +36,7 @@ No native or device result is claimed.
 - **Open limits:** `expo/fetch` reporting the query URL unchanged, and a real 403/404, are device gates. Nothing is installed or usable on a device,
   and there is no simulator or device evidence.
 
-**The [response byte budget](../../docs/plans/expo-mobile-response-byte-budget-2026-09.md) is implemented and independently reviewed, with local checks passing.** The transport (`src/api/client.ts`) reads each response body as a byte stream:
+**The [response byte budget](../../docs/plans/expo-mobile-response-byte-budget-2026-09.md) merged in #202 after independent review and passing local checks and CI.** The transport (`src/api/client.ts`) reads each response body as a byte stream:
 - it keeps, decodes and parses at most 1 MiB of decoded bytes (a policy limit);
 - it refuses an oversized declared `Content-Length` without touching the body;
 - it stops at the first chunk that crosses the limit;
@@ -80,7 +80,9 @@ Two web exports are built and checked separately:
   My work's and All tasks' reads stay pending until a harness control resolves them with
   synthetic fixtures through the real parser (`work-read-log`, `work-read-pending`,
   `harness-read-{control}`). The fixtures' view and owners come from the requested path's
-  query. It is never deployed, and it must contain the harness marker.
+  query. Account revocation uses `account-revoke-log`, `account-revoke-pending` and
+  `harness-revoke-{control}` for controlled pending replies. It is never deployed, and it must
+  contain the harness marker.
 
 A browser approximation runs both exports at 360, 390 and 430 pixels. After editing
 anything under `src/auth`, `src/account` or `src/platform`, fully reload the app
@@ -106,16 +108,17 @@ evidence. An exact sign-in callback delivered as a system link does not navigate
 pending authentication session reads it. Every other `/auth/*` link and every lookalike is
 refused.
 
-The web-export check uses browser history for every visited route. On iOS and Android the
-arrangement depends on how the section's stack was built, by source reading:
-- **Linking state** can include the `views` anchor. At process boot, however, the closed account guard
-  discards that state; the later requested-route `replace` currently opens the target alone. A warm link
-  into a ready app follows a different path and may preserve the anchor.
-- **A stack that starts empty** (a first visit through the tab bar, or after an organisation
-  change's tabs reset) starts at the section's default page, with no view list beneath. The first
-  header use pushes the view list on top.
+The web-export check uses browser history for every visited route. Native navigation merged in
+#205: explicit section initial routes, anchored app entries and fresh `[views, index]` Work resets
+place the view list beneath the target by source inspection. The
+[navigation contract](../../docs/plans/expo-mobile-native-navigation-2026-09.md) records two existing
+limitations: a warm view-list link can add a duplicate view list, and a ready remount on the
+organisation page can add a second tabs route. Browser checks prove neither native stack
+arrangement nor swipe-back gestures; both remain device checks.
 
-The [native navigation contract](../../docs/plans/expo-mobile-native-navigation-2026-09.md)
-specifies explicit initial routes, anchored entries and seeded resets, with named existing limitations.
-It is adopted separately and not yet implemented. Browser checks prove neither native stack arrangement nor its swipe-back
-gesture; both remain device checks.
+The Account screen now implements **Sign out everywhere else** under the
+[session revocation contract](../../docs/plans/mobile-session-revocation-2026-09.md). State belongs
+to the person and account generation, survives screen remounts, and is discarded on sign-out or
+account change. No business writes or native enablement accompany this account control. See
+[the validation record](../../docs/validation/session-revocation-mobile-2026-09-27/README.md) for
+passed checks and remaining gates.

@@ -4,10 +4,14 @@ import type { ApiClient, ApiOutcome, Attempts, AttemptOutcome, Parse } from '../
 import { createClampedClock, waitFor, type Clock } from './clock.ts';
 import type { CredentialStore, Generation, ReadOutcome, ReadScope, ScopedRead } from './contracts.ts';
 import {
-	holds, initial, readScope, reduce, slowAfterMs, storeGeneration, view as viewOf,
+	holds, initial, personScope, readScope, reduce, slowAfterMs, storeGeneration, view as viewOf,
 	type AccountSnapshot, type Command, type CredentialHandle, type Effect, type Event, type LocalResult, type Machine
 } from './machine.ts';
 import { parseMe } from './me.ts';
+import {
+	admit, clientBugOutcome, idleRevocation, parseRevoked, resultOf, samePerson, sendingRevocation, settledRevocation, slowRevocation,
+	staleOutcome, unknownResult, type PersonScope, type RevocationView, type Revoked, type RevokeOutcome
+} from './revocation.ts';
 
 export type { AccountSnapshot } from './machine.ts';
 
@@ -37,6 +41,8 @@ export type AccountRunnerDeps = {
 	readonly clock?: Clock;
 	/** Wall-clock milliseconds, for wording "about {time}" only; never to decide a send. */
 	readonly wallNow?: () => number;
+	/** When an in-flight "Sign out everywhere else" is worded as slow (default: the account's ten seconds). */
+	readonly slowAfterMs?: number;
 };
 
 /** Commands from screens. Try again and a foreground refresh carry no time; the runner adds its clock. */
@@ -60,6 +66,20 @@ export type AccountRunner = {
 	 *    account's `/v1/me` wait.
 	 *  - It never rejects, and the token never leaves the runner. */
 	organisationRead: ScopedRead;
+	/** Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §4, §5a.3-4, C1-C4).
+	 *  - Before sending, in one synchronous step: `stale` if not signed in or the person scope differs from `expected`;
+	 *    `in-flight` if one is already out for this person; `waiting` if this person's server wait has not passed. None of
+	 *    these sends anything, changes anything or notifies.
+	 *  - Sending clears the previous result (C4) and marks it in flight, in one change with one notification.
+	 *  - After the answer: if the person scope or the handle changed meanwhile, `stale` and nothing else (C1): no result,
+	 *    no wait, no dispatch (not even a 401 for the old handle) and no notification. Otherwise a 401 ends the session
+	 *    through the existing event; any other answer becomes `last`, with its own server wait kept apart from the
+	 *    `/v1/me` wait. A 403/404 here is a plain refusal: this route is not organisation-scoped.
+	 *  - No `/v1/me` refresh follows. It never rejects, and the token never leaves the runner. */
+	revokeOthers(expected: PersonScope): Promise<RevokeOutcome>;
+	/** The current person's revocation state: one frozen object until it changes (the shared idle object when there is
+	 *  none, or no person). Changes are published to `subscribe`'s listeners, once each. */
+	revocationView(): RevocationView;
 };
 
 type Credential = { readonly token: string; readonly expiresAt: string; readonly userId: string };
@@ -97,6 +117,9 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 				for (const effect of step.effects) perform(effect);
 			}
 		} finally { dispatching = false; }
+		// A person scope other than the one the revocation state belongs to discards that state before anyone can see it
+		// (C1). Such a change always comes with a machine change, so the notification below covers it.
+		alignRevocation();
 		if (machine === viewed) return;
 		viewed = machine; current = viewOf(machine);
 		const snapshot = current;
@@ -325,8 +348,125 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 		return { kind: 'unavailable', wait: answer.retryAfter === undefined ? null : waitFor(answer.retryAfter * 1000, clock, wallNow) };
 	}
 
+	// ---------------------------------------------------------------------------------------------------------------
+	// Sign out everywhere else. The state belongs to one person scope and lives here, outside the reducer, so it
+	// survives any screen or stack remount (this runner is the process's one instance) and is discarded only when the
+	// person scope changes. `sent` numbers each request; an answer for any other number is not current.
+
+	const revocationSlowMs = deps.slowAfterMs ?? slowAfterMs;
+	let revocation: { readonly person: PersonScope | null; readonly view: RevocationView } = { person: null, view: idleRevocation };
+	let sent = 0; let slowTimer: { readonly send: number; readonly timer: unknown } | null = null;
+
+	/** Tells the listeners that the revocation view changed, with the (unchanged) account snapshot: account consumers
+	 *  see the same object and do not re-render. */
+	function publish(): void {
+		const snapshot = current;
+		for (const listener of [...listeners]) { try { listener(snapshot); } catch { /* a screen's error is its own */ } }
+	}
+	function clearSlowTimer(): void {
+		if (slowTimer !== null) { timers.clear(slowTimer.timer); slowTimer = null; }
+	}
+	/** One change of the current person's view, published once. Nothing is published if nothing changed. */
+	function setRevocation(view: RevocationView): void {
+		if (view === revocation.view) return;
+		revocation = { person: revocation.person, view };
+		publish();
+	}
+	/** Keeps the state with the current person scope: a different scope drops the view, ends the current request's
+	 *  claim to it and clears its slow timer (C1). No notification: the caller's machine change carries one. */
+	function alignRevocation(): void {
+		const person = personScope(machine);
+		if (samePerson(revocation.person, person) || (revocation.person === null && person === null)) return;
+		if (revocation.view.inFlight) sent += 1;
+		clearSlowTimer();
+		revocation = { person, view: idleRevocation };
+	}
+	/** Whether the handle and person scope a request was sent under, and that request itself, are still current. */
+	function stillRevoking(id: number, handle: CredentialHandle, sentFor: PersonScope): boolean {
+		const state = machine.state;
+		return id === sent && state.kind === 'signed-in' && state.handle === handle && samePerson(personScope(machine), sentFor);
+	}
+
+	/** Not `async`: everything up to and including the send runs synchronously in this call. */
+	function revokeOthers(expected: PersonScope): Promise<RevokeOutcome> {
+		// The request this call started, once it has one: every failure path below settles exactly that request.
+		let started: { readonly id: number; readonly handle: CredentialHandle; readonly person: PersonScope } | null = null;
+		try {
+			const state = machine.state; const person = personScope(machine);
+			if (state.kind !== 'signed-in' || person === null || !samePerson(person, expected)) return Promise.resolve(staleOutcome);
+			alignRevocation();
+			const refusal = admit(revocation.view, now());
+			if (refusal !== null) return Promise.resolve(refusal);
+			const handle = state.handle; const credential = credentials.get(handle);
+			if (!credential) return Promise.resolve(staleOutcome);
+			const id = ++sent;
+			const request = started = { id, handle, person };
+			clearSlowTimer();
+			setRevocation(sendingRevocation);
+			slowTimer = { send: id, timer: timers.set(revocationSlowMs, () => {
+				if (slowTimer === null || slowTimer.send !== id) return;
+				slowTimer = null;
+				if (id === sent && samePerson(revocation.person, personScope(machine))) setRevocation(slowRevocation(revocation.view));
+			}) };
+			let answer: Promise<ApiOutcome<Revoked>>;
+			try { answer = client.post(apiPaths.revokeOthers, credential.token, {}, parseRevoked); } catch (error) { answer = Promise.reject(error); }
+			return answer.then(
+				(value) => settleRevocation(request, value),
+				() => failRevocation(request)
+			).catch((): RevokeOutcome => failRevocation(request));
+		} catch {
+			// Nothing started (before the request was numbered): nothing changed. Otherwise that request is settled.
+			return Promise.resolve(started === null ? clientBugOutcome : failRevocation(started));
+		}
+	}
+
+	/** A failure that is this app's fault, not the network's: the client rejected or resolved something unusable, or a
+	 *  step threw (a timer, the answer's mapping). For the request still current it clears the slow timer and shows
+	 *  `unknown` (a request may have left), and answers `client-bug`; for any other request, `stale` with no effect. It
+	 *  never throws, so no failure can leave the view in flight. */
+	function failRevocation(request: { readonly id: number; readonly handle: CredentialHandle; readonly person: PersonScope }): RevokeOutcome {
+		try {
+			if (!stillRevoking(request.id, request.handle, request.person)) return staleOutcome;
+			clearSlowTimer();
+			setRevocation(settledRevocation(unknownResult));
+			return clientBugOutcome;
+		} catch {
+			// Only a broken timer's clear can throw here: drop the record and settle the view directly.
+			slowTimer = null;
+			if (stillRevoking(request.id, request.handle, request.person)) { revocation = { person: revocation.person, view: settledRevocation(unknownResult) }; publish(); }
+			return clientBugOutcome;
+		}
+	}
+
+	/** After a resolved answer. It may throw on an answer that isn't a client outcome; the caller then fails it. */
+	function settleRevocation(request: { readonly id: number; readonly handle: CredentialHandle; readonly person: PersonScope }, answer: ApiOutcome<Revoked>): RevokeOutcome {
+		const { id, handle, person: sentFor } = request;
+		// C1: an answer for a person scope, handle or request no longer current changes nothing and notifies nobody.
+		if (!stillRevoking(id, handle, sentFor)) return staleOutcome;
+		const result = resultOf(answer, (seconds) => waitFor(seconds * 1000, clock, wallNow));
+		clearSlowTimer();
+		if (result === 'unauthorised') {
+			// The session has ended: the existing event releases it (and advances the account generation, which drops this
+			// state). The request no longer claims the view either way.
+			sent += 1;
+			revocation = { person: revocation.person, view: idleRevocation };
+			const before = machine;
+			dispatch({ type: 'unauthorised', handle });
+			if (machine === before) publish();
+			return staleOutcome;
+		}
+		setRevocation(settledRevocation(result));
+		return result;
+	}
+
+	function revocationView(): RevocationView {
+		return samePerson(revocation.person, personScope(machine)) ? revocation.view : idleRevocation;
+	}
+
 	return {
 		organisationRead,
+		revokeOthers,
+		revocationView,
 		start: () => dispatch({ type: 'boot' }),
 		snapshot: () => current,
 		send: (command) => dispatch(command.type === 'retry' || command.type === 'refresh' ? { type: command.type, now: now() } : command),

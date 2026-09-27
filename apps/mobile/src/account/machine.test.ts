@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { holds, initial, reduce, view, type CredentialHandle, type Effect, type Event, type Machine } from './machine.ts';
+import { holds, initial, personScope, reduce, view, type CredentialHandle, type Effect, type Event, type Machine } from './machine.ts';
 import type { Me } from './me.ts';
 
 const h = (n: number) => n as CredentialHandle;
@@ -380,6 +380,46 @@ test('read scope: a switch, a loss that auto-chooses, and a new session each giv
 	const a3 = scopeOf(again)!;
 	assert.equal(a3.organisationId, orgA);
 	assert.ok(![a1.epoch, b.epoch, a2.epoch, auto.epoch].includes(a3.epoch), 'the same person and organisation in a new session is a new epoch');
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Person scope (docs/plans/mobile-session-revocation-2026-09.md §5a.3).
+
+test('person scope: whenever signed in, token-free, and the same object as the view shows', () => {
+	const read = run(initial(), { type: 'boot' }, { type: 'launch-read', now: 0, result: { kind: 'session', handle: h(1), userId } });
+	assert.equal(personScope(read.machine), null, 'checking: no person yet');
+	const loading = launched(orgA, orgB).machine;
+	const person = personScope(loading)!;
+	assert.equal(person.userId, userId);
+	assert.deepEqual(Object.keys(person).sort(), ['epoch', 'userId'], 'nothing else: no handle, token or storage key');
+	assert.ok(Object.isFrozen(person));
+	const shownView = view(loading).account;
+	assert.ok(shownView.kind === 'signed-in' && !shownView.ready);
+	assert.deepEqual(shownView.person, person, 'present before an organisation is chosen: it is per person');
+	assert.equal(personScope(run(chosenA(orgA, orgB), { type: 'sign-out' }).machine), null, 'releasing: no person');
+});
+
+test('person scope: a refresh and an organisation switch keep it; sign-out and a new sign-in as the same person change it (ABA)', () => {
+	const chosen = chosenA(orgA, orgB);
+	const first = personScope(chosen)!;
+	const refreshed = run(chosen, { type: 'refresh', now: 30_000 }).machine;
+	const kept = run(refreshed, { type: 'me-finished', handle: h(1), membership: refreshed.generations.membership, outcome: { kind: 'ok', me: me(orgA, orgB, orgC) } }).machine;
+	assert.deepEqual(personScope(kept), first, 'a membership refresh keeps it');
+	const toB = run(kept, { type: 'choose-organisation', organisationId: orgB }).machine;
+	assert.notEqual(scopeOf(toB)!.epoch, scopeOf(kept)!.epoch, 'the read scope changes with the organisation');
+	assert.deepEqual(personScope(toB), first, 'the person scope does not');
+	const lostSingle = run(run(chosen, { type: 'refresh', now: 30_000 }).machine, { type: 'me-finished', handle: h(1), membership: refreshed.generations.membership, outcome: { kind: 'ok', me: me(orgB) } }).machine;
+	assert.deepEqual(personScope(lostSingle), first, 'an organisation loss that auto-chooses keeps it');
+	const out = run(chosen, { type: 'sign-out' }, { type: 'local-finished', handle: h(1), result: 'deleted' }, { type: 'server-finished', handle: h(1), result: 'ended', wait: null }).machine;
+	const signed = run(out, { type: 'sign-in' }, { type: 'gate-checked', result: 'settled' },
+		{ type: 'attempt-finished', outcome: { kind: 'signed-in', handle: h(2), userId, returnTo: '/' } });
+	const written = run(signed.machine, { type: 'install-finished', handle: h(2), result: 'written', now: 100_000 }).machine;
+	const verified = run(written, { type: 'me-finished', handle: h(2), membership: written.generations.membership, outcome: { kind: 'ok', me: me(orgA, orgB) } }).machine;
+	const again = personScope(verified)!;
+	assert.equal(again.userId, first.userId);
+	assert.notEqual(again.epoch, first.epoch, 'the same person in a new session is a new person scope');
+	const ended = run(verified, { type: 'unauthorised', handle: h(2) }).machine;
+	assert.equal(personScope(ended), null, 'a session end: no person');
 });
 
 test('organisation loss: the chosen one is named; a person choosing clears it; the only remaining membership keeps it', () => {

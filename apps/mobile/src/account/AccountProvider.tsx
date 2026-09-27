@@ -4,6 +4,7 @@ import type { WebPath } from '../config.ts';
 import type { AccountSource } from './account-source.ts';
 import type { ScopedRead } from './contracts.ts';
 import type { AccountSnapshot } from './machine.ts';
+import type { PersonScope, RevocationView, RevokeOutcome } from './revocation.ts';
 import type { UiCommand } from './runner.ts';
 
 /** The account for screens (docs/plans/expo-mobile-auth-composition-2026-09.md §3). Production passes the one source
@@ -36,6 +37,9 @@ export type Account = {
 	/** Organisation-scoped reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.1): token-free, never rejecting.
 	 *  Call only from effects and handlers, never during render. */
 	readonly read: ScopedRead;
+	/** Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §4): token-free, never rejecting. Call
+	 *  only from handlers, with the person scope captured when the confirmation was shown. */
+	readonly revokeOthers: (expected: PersonScope) => Promise<RevokeOutcome>;
 };
 
 export function useAccount(): Account {
@@ -44,5 +48,13 @@ export function useAccount(): Account {
 	const { source, webLink } = value;
 	// The source's own stable functions, passed directly: `snapshot` returns the same object until the state changes.
 	const snapshot = useSyncExternalStore(source.subscribe, source.snapshot, source.snapshot);
-	return { snapshot, send: source.send, now: source.now, webLink, read: source.read };
+	return { snapshot, send: source.send, now: source.now, webLink, read: source.read, revokeOthers: source.revokeOthers };
+}
+
+/** The current person's revocation state (the runner's, so it survives this screen's remount). Only the control that
+ *  shows it subscribes, so other screens do not re-render for it. */
+export function useRevocation(): RevocationView {
+	const value = useContext(AccountContext);
+	if (value === null) throw new Error('useRevocation: no AccountProvider above this screen');
+	return useSyncExternalStore(value.source.subscribe, value.source.revocationView, value.source.revocationView);
 }

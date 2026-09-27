@@ -8,6 +8,7 @@ import { myWorkPath } from '../api/paths.ts';
 import { beginRead, finishRead, initialWorkList } from '../work/my-work-list.ts';
 import { parseMyWorkPage } from '../work/my-work.ts';
 import type { CredentialStore, Generation, ReadScope, StoredSession } from './contracts.ts';
+import { idleRevocation, type PersonScope } from './revocation.ts';
 import { createAccountRunner, type AccountRunner, type Timers } from './runner.ts';
 
 const userId = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
@@ -40,8 +41,9 @@ class Calls {
 	async fail(name: string, error: unknown = new Error(`platform detail ${token('p')}`)) { await drain(); this.take(name).reject(error); await drain(); }
 }
 
-/** `client`: a real client to use instead of the recording fake (the byte-budget regression below). */
-function harness(options: { storage?: boolean; client?: ApiClient } = {}) {
+/** `client`: a real client to use instead of the recording fake (the byte-budget regression below).
+ *  `slowAfterMs`: the runner's injected slow delay for "Sign out everywhere else". */
+function harness(options: { storage?: boolean; client?: ApiClient; slowAfterMs?: number } = {}) {
 	const calls = new Calls();
 	let generation: (() => Generation) | null = null;
 	const store: CredentialStore = {
@@ -60,14 +62,24 @@ function harness(options: { storage?: boolean; client?: ApiClient } = {}) {
 		cancel: () => { if (!attemptState.cancel) return false; attemptState.value = 'closing'; return true; },
 		retryCleanup: async () => 'revoked', pendingCleanupExpiresAt: () => null, pendingCleanupRetryAfterMs: () => null
 	};
-	/** `getThrows`: the next `get` throws synchronously (a broken client), without recording a call. */
-	const flags = { getThrows: false };
+	/** `getThrows` / `postThrows`: the next `get` / `post` throws synchronously (a broken client), without recording a
+	 *  call. `postRaw`: the next `post` resolves with exactly what the test answers, not mapped to a client outcome (a
+	 *  broken client resolving something unusable). */
+	const flags = { getThrows: false, postThrows: false, postRaw: false };
 	const client: ApiClient = {
 		get: <T>(path: unknown, t: string | null, parse: (value: unknown) => T) => {
 			if (flags.getThrows) { flags.getThrows = false; throw new Error(`client detail ${token('q')}`); }
 			return calls.make<ApiOutcome<unknown>>('get', [path, t]).then((answer) => answer.ok ? { ok: true as const, value: parse(answer.value) } : answer as ApiOutcome<T>);
 		},
-		post: () => { throw new Error('no post expected'); }
+		// As the real client: a 2xx body the parser refuses is `unavailable` with its status, never a rejection.
+		post: <T>(path: unknown, t: string | null, body: unknown, parse: (value: unknown) => T) => {
+			if (flags.postThrows) { flags.postThrows = false; throw new Error(`client detail ${token('q')}`); }
+			if (flags.postRaw) { flags.postRaw = false; return calls.make<ApiOutcome<T>>('post', [path, t, body]); }
+			return calls.make<ApiOutcome<unknown>>('post', [path, t, body]).then((answer): ApiOutcome<T> => {
+				if (!answer.ok) return answer as ApiOutcome<T>;
+				try { return { ok: true, value: parse(answer.value) }; } catch { return { ok: false, kind: 'unavailable', status: 200 }; }
+			});
+		}
 	};
 	const cleanupState = { value: 'none' as 'none' | 'running' | 'pending', retryAfterMs: null as number | null };
 	const cleanup: Cleanup = {
@@ -76,15 +88,23 @@ function harness(options: { storage?: boolean; client?: ApiClient } = {}) {
 		retry: () => { cleanupState.value = 'running'; return calls.make<'revoked' | 'still-pending'>('retry', []).then((r) => { cleanupState.value = r === 'revoked' ? 'none' : 'pending'; return r; }); },
 		expiresAt: () => null, retryAfterMs: () => cleanupState.retryAfterMs
 	};
-	const timers = { fired: new Map<number, () => void>(), next: 0 };
-	const fakeTimers: Timers = { set: (_ms, run) => { const id = ++timers.next; timers.fired.set(id, run); return id; }, clear: (id) => { timers.fired.delete(id as number); } };
+	/** `throwNext`: the next `set` throws (a broken timer), setting nothing. */
+	const timers = { fired: new Map<number, () => void>(), delays: new Map<number, number>(), next: 0, throwNext: false };
+	const fakeTimers: Timers = {
+		set: (ms, run) => {
+			if (timers.throwNext) { timers.throwNext = false; throw new Error('timer detail'); }
+			const id = ++timers.next; timers.fired.set(id, run); timers.delays.set(id, ms); return id;
+		},
+		clear: (id) => { timers.fired.delete(id as number); }
+	};
 	// `clock.now` is the raw monotonic reading the test controls; the runner clamps it. The wall clock is fixed at the
 	// epoch, so a wait of N ms reads "about" new Date(N).
 	const clock = { now: 0 };
 	const snapshots: unknown[] = [];
 	const runner = createAccountRunner({
 		createStore: options.storage === false ? null : (current) => { generation = current; return store; },
-		attempts, client: options.client ?? client, cleanup, timers: fakeTimers, clock: createClampedClock(() => clock.now), wallNow: () => 0
+		attempts, client: options.client ?? client, cleanup, timers: fakeTimers, clock: createClampedClock(() => clock.now), wallNow: () => 0,
+		...(options.slowAfterMs === undefined ? {} : { slowAfterMs: options.slowAfterMs })
 	});
 	runner.subscribe((s) => snapshots.push(s));
 	return { calls, runner, attemptState, cleanupState, timers, clock, snapshots, flags, generation: () => generation!() };
@@ -93,8 +113,8 @@ const account = (runner: AccountRunner) => runner.snapshot().account;
 /** Nothing a screen can see ever holds a token. */
 const tokenFree = (snapshots: unknown[]) => { const text = JSON.stringify(snapshots); assert.ok(!text.includes('sess_'), 'a token reached a snapshot'); };
 
-async function signedInWithStoredSession(organisations: string[], storedChoice: string | null) {
-	const t = harness();
+async function signedInWithStoredSession(organisations: string[], storedChoice: string | null, options: Parameters<typeof harness>[0] = {}) {
+	const t = harness(options);
 	t.runner.start();
 	await t.calls.answer('read', stored('a'));
 	const me = t.calls.take('get');
@@ -743,6 +763,311 @@ test('byte budget: an oversized scoped read is unavailable, never a client bug; 
 	const view = account(t.runner);
 	assert.ok(view.kind === 'signed-in' && view.ready && view.scope?.epoch === scope.epoch);
 	tokenFree(t.snapshots);
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §4, §5a.3-4; C1-C4).
+
+/** The person scope the snapshot shows now (what the screen captures when the confirmation opens). */
+const personShown = (runner: AccountRunner): PersonScope => {
+	const view = account(runner);
+	assert.ok(view.kind === 'signed-in', 'expected a signed-in person');
+	return view.person;
+};
+const postCount = (t: ReturnType<typeof harness>) => t.calls.all.filter((c) => c.name === 'post').length;
+/** The newest timer the runner has set since `before` (its id and fire function). */
+const newestTimer = (t: ReturnType<typeof harness>, before: number) => {
+	assert.ok(t.timers.next > before, 'expected a timer');
+	const id = t.timers.next;
+	return { id, fire: t.timers.fired.get(id)!, delay: t.timers.delays.get(id) };
+};
+const waitAt = (ms: number) => ({ until: ms, about: new Date(ms).toISOString() });
+/** Signs out (the local copy deleted, the session revoked) and back in as the same person with organisation A. */
+async function signOutAndBackIn(t: ReturnType<typeof harness>) {
+	t.runner.send({ type: 'sign-out' }); await drain();
+	await t.calls.answer('removeIf', 'deleted');
+	await t.calls.answer('begin', 'revoked');
+	t.runner.send({ type: 'sign-in' }); await drain();
+	t.calls.take('start').resolve({ kind: 'signed-in', session: { token: token('b'), expiresAt: '2030-10-01T08:30:00.000Z', user: { id: userId, email: 'o@example.test', name: 'O' }, returnTo: '/' } });
+	await drain();
+	await t.calls.answer('install', 'written');
+	await t.calls.answer('get', { ok: true, value: meBody(orgA, orgB) });
+	await t.calls.answer('readOrg', orgA);
+}
+
+test('revocation: one request for the current person, a count as the result, one notification per change, no /v1/me refresh', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA);
+	const expected = personShown(t.runner);
+	assert.equal(expected.userId, userId); assert.deepEqual(Object.keys(expected).sort(), ['epoch', 'userId'], 'token-free: an epoch and the person only');
+	assert.equal(t.runner.revocationView(), idleRevocation);
+	const accountBefore = t.runner.snapshot(); const notified = t.snapshots.length; const meBefore = meSends(t);
+	const outcome = t.runner.revokeOthers(expected);
+	assert.equal(t.snapshots.length, notified + 1, 'sending: one notification');
+	assert.deepEqual(t.runner.revocationView(), { inFlight: true, slow: false, wait: null, last: null });
+	const post = t.calls.take('post');
+	assert.deepEqual(post.args, ['/v1/me/sessions/revoke-others', token('a'), {}], 'the fixed path, the current credential, no input');
+	post.resolve({ ok: true, value: { ended: 2 } });
+	assert.deepEqual(await outcome, { kind: 'ok', ended: 2 });
+	assert.equal(t.snapshots.length, notified + 2, 'settling: one notification');
+	const settled = t.runner.revocationView();
+	assert.deepEqual(settled, { inFlight: false, slow: false, wait: null, last: { kind: 'ok', ended: 2 } });
+	assert.equal(t.runner.revocationView(), settled, 'the same object until it changes');
+	assert.equal(t.runner.snapshot(), accountBefore, 'the account snapshot is untouched');
+	assert.ok(t.snapshots.slice(notified).every((s) => s === accountBefore), 'listeners get the unchanged account snapshot');
+	assert.equal(meSends(t), meBefore, 'no /v1/me refresh follows');
+	outcomesTokenFree(await outcome, settled, t.snapshots);
+});
+
+test('revocation C4: a new send clears the last result in the same change; a refused press changes nothing and notifies nobody', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA);
+	const expected = personShown(t.runner);
+	const first = t.runner.revokeOthers(expected);
+	await t.calls.answer('post', { ok: true, value: { ended: 2 } }); await first;
+	const notified = t.snapshots.length;
+	const second = t.runner.revokeOthers(expected);
+	assert.equal(t.snapshots.length, notified + 1, 'one change, one notification');
+	assert.deepEqual(t.runner.revocationView(), { inFlight: true, slow: false, wait: null, last: null }, 'never the old count beside a new request');
+	const inFlight = t.runner.revocationView();
+	assert.deepEqual(await t.runner.revokeOthers(expected), { kind: 'in-flight' }, 'a duplicate press');
+	assert.equal(postCount(t), 2, 'exactly one request per press that was admitted');
+	assert.equal(t.snapshots.length, notified + 1, 'a refused press notifies nobody');
+	assert.equal(t.runner.revocationView(), inFlight);
+	await t.calls.answer('post', { ok: true, value: { ended: 0 } });
+	assert.deepEqual(await second, { kind: 'ok', ended: 0 });
+	assert.deepEqual(t.runner.revocationView().last, { kind: 'ok', ended: 0 });
+});
+
+test('revocation: a 429 keeps its status and its own wait (C2); the wait cannot be bypassed, even after the screen remounts; /v1/me pacing is untouched', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA);
+	const expected = personShown(t.runner);
+	const accountBefore = t.runner.snapshot();
+	const first = t.runner.revokeOthers(expected);
+	await t.calls.answer('post', { ok: false, kind: 'unavailable', status: 429, retryAfter: 20 });
+	const limited = await first;
+	assert.deepEqual(limited, { kind: 'unknown', status: 429, wait: waitAt(20_000), seconds: 20 });
+	// A remounted screen reads the runner's view: the wait and the result are still there.
+	const view = t.runner.revocationView();
+	assert.deepEqual(view, { inFlight: false, slow: false, wait: waitAt(20_000), last: limited });
+	assert.equal(t.runner.snapshot(), accountBefore, 'this wait is not the account\'s /v1/me wait');
+	t.clock.now = 19_999;
+	const notified = t.snapshots.length;
+	assert.deepEqual(await t.runner.revokeOthers(expected), { kind: 'waiting', wait: waitAt(20_000) });
+	assert.equal(postCount(t), 1, 'nothing sent before the wait');
+	assert.equal(t.snapshots.length, notified); assert.equal(t.runner.revocationView(), view, 'the last result is kept');
+	t.clock.now = 20_000;
+	const next = t.runner.revokeOthers(expected);
+	assert.equal(postCount(t), 2, 'at exactly the wait, the press sends');
+	assert.deepEqual(t.runner.revocationView(), { inFlight: true, slow: false, wait: null, last: null });
+	await t.calls.answer('post', { ok: false, kind: 'unavailable', status: 503 });
+	assert.deepEqual(await next, { kind: 'unknown', status: 503, wait: null, seconds: null });
+	assert.deepEqual(t.runner.revocationView().wait, null);
+	// The account's /v1/me pacing never saw the revocation's wait: a refresh at 30 s after launch is sent as usual.
+	t.clock.now = 30_000; t.runner.send({ type: 'refresh' }); await drain();
+	assert.equal(meSends(t), 2, 'the /v1/me refresh follows its own pacing only');
+});
+
+test('revocation: other 4xx are refusals with no organisation effect; malformed and oversized answers are unknown; a broken client is a client bug', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA);
+	const expected = personShown(t.runner);
+	const accountBefore = t.runner.snapshot(); const meBefore = meSends(t);
+	for (const status of [403, 404, 409]) {
+		const outcome = t.runner.revokeOthers(expected);
+		await t.calls.answer('post', { ok: false, kind: 'refused', status, code: 'x' });
+		assert.deepEqual(await outcome, { kind: 'refused', status });
+		assert.deepEqual(t.runner.revocationView().last, { kind: 'refused', status });
+	}
+	await drain();
+	assert.equal(t.runner.snapshot(), accountBefore, 'no organisation refusal, no membership refresh: this route is not organisation-scoped');
+	assert.equal(meSends(t), meBefore);
+	for (const value of [{ ended: -1 }, { ended: 1.5 }, { ended: 2 ** 53 }, { ended: '2' }, {}, { ended: 1, extra: true }, null, [1]]) {
+		const outcome = t.runner.revokeOthers(expected);
+		await t.calls.answer('post', { ok: true, value });
+		assert.deepEqual(await outcome, { kind: 'unknown', status: 200, wait: null, seconds: null }, JSON.stringify(value));
+	}
+	const rejected = t.runner.revokeOthers(expected);
+	await t.calls.fail('post');
+	assert.deepEqual(await rejected, { kind: 'client-bug' });
+	assert.deepEqual(t.runner.revocationView(), { inFlight: false, slow: false, wait: null, last: { kind: 'unknown', status: 0, wait: null, seconds: null } }, 'shown as unknown: a request may have left');
+	t.flags.postThrows = true;
+	assert.deepEqual(await t.runner.revokeOthers(expected), { kind: 'client-bug' }, 'a client that throws before sending');
+	assert.equal(t.runner.revocationView().inFlight, false, 'never left in flight');
+	outcomesTokenFree(await rejected, t.runner.revocationView(), t.snapshots);
+});
+
+test('revocation: a client that resolves something unusable, or a timer that throws, never leaves the view in flight; an old request\'s failure has no effect', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA);
+	const expected = personShown(t.runner);
+
+	// The client resolves `undefined` (not an outcome): the answer's mapping throws, and the request is failed.
+	const before = t.timers.next;
+	t.flags.postRaw = true;
+	const unusable = t.runner.revokeOthers(expected);
+	const slow = newestTimer(t, before);
+	await t.calls.answer('post', undefined);
+	assert.deepEqual(await unusable, { kind: 'client-bug' });
+	assert.deepEqual(t.runner.revocationView(), { inFlight: false, slow: false, wait: null, last: { kind: 'unknown', status: 0, wait: null, seconds: null } },
+		'shown as unknown, not in flight');
+	assert.ok(!t.timers.fired.has(slow.id), 'its slow timer was cleared');
+	const next = t.runner.revokeOthers(expected);
+	assert.equal(postCount(t), 2, 'the next press sends: nothing was stuck');
+	await t.calls.answer('post', { ok: true, value: { ended: 0 } });
+	assert.deepEqual(await next, { kind: 'ok', ended: 0 });
+
+	// The timer throws before anything is sent: the request is failed at once, and nothing is sent.
+	t.timers.throwNext = true;
+	assert.deepEqual(await t.runner.revokeOthers(expected), { kind: 'client-bug' });
+	assert.equal(postCount(t), 2, 'nothing sent');
+	assert.deepEqual(t.runner.revocationView(), { inFlight: false, slow: false, wait: null, last: { kind: 'unknown', status: 0, wait: null, seconds: null } });
+	const after = t.runner.revokeOthers(expected);
+	assert.equal(postCount(t), 3, 'and the next press sends');
+	await t.calls.answer('post', { ok: true, value: { ended: 1 } });
+	assert.deepEqual(await after, { kind: 'ok', ended: 1 });
+
+	// An unusable answer for a request that is no longer current (the person signed out meanwhile): stale, no effect.
+	t.flags.postRaw = true;
+	const old = t.runner.revokeOthers(expected);
+	t.runner.send({ type: 'sign-out' }); await drain();
+	const notified = t.snapshots.length; const accountNow = t.runner.snapshot();
+	t.calls.take('post').resolve(undefined);
+	assert.deepEqual(await old, { kind: 'stale' });
+	assert.equal(t.snapshots.length, notified, 'no notification'); assert.equal(t.runner.snapshot(), accountNow);
+	assert.equal(t.runner.revocationView(), idleRevocation);
+	outcomesTokenFree(await unusable, await old, t.snapshots);
+});
+
+test('revocation: a 401 on the current handle ends the session through the existing event', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA);
+	const outcome = t.runner.revokeOthers(personShown(t.runner));
+	await t.calls.answer('post', { ok: false, kind: 'unauthorised' });
+	assert.deepEqual(await outcome, { kind: 'stale' });
+	const releasing = account(t.runner);
+	assert.ok(releasing.kind === 'releasing' && releasing.reason === 'session-ended' && releasing.server === 'not-needed');
+	assert.deepEqual(t.calls.take('removeIf').args, [token('a')]);
+	assert.equal(t.runner.revocationView(), idleRevocation);
+});
+
+test('revocation C1: sign out and back in as the same person: the old control is stale, and the old answer changes nothing and notifies nobody', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA);
+	const old = personShown(t.runner);
+	const timersBefore = t.timers.next;
+	const pending = t.runner.revokeOthers(old);
+	const slow = newestTimer(t, timersBefore);
+	await signOutAndBackIn(t);
+	const renewed = personShown(t.runner);
+	assert.equal(renewed.userId, old.userId); assert.notEqual(renewed.epoch, old.epoch, 'ABA: a new epoch for the same person');
+	assert.ok(!t.timers.fired.has(slow.id), 'the old request\'s slow timer was cleared with the scope');
+	assert.equal(t.runner.revocationView(), idleRevocation, 'the old state is gone');
+	const accountNow = t.runner.snapshot(); const notified = t.snapshots.length;
+	t.calls.take('post').resolve({ ok: true, value: { ended: 3 } });
+	assert.deepEqual(await pending, { kind: 'stale' });
+	slow.fire(); await drain();
+	assert.equal(t.snapshots.length, notified, 'no notification for a late answer or a late tick');
+	assert.equal(t.runner.snapshot(), accountNow);
+	assert.equal(t.runner.revocationView(), idleRevocation, 'no result, no slow flag under the new scope');
+	assert.deepEqual(await t.runner.revokeOthers(old), { kind: 'stale' }, 'a control confirmed for the old sign-in sends nothing');
+	assert.equal(postCount(t), 1);
+});
+
+test('revocation C1: a 429 or a 401 that arrives after the account changed records nothing and dispatches nothing', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA);
+	const first = t.runner.revokeOthers(personShown(t.runner));
+	t.runner.send({ type: 'sign-out' }); await drain();
+	let notified = t.snapshots.length; let accountNow = t.runner.snapshot();
+	t.calls.take('post').resolve({ ok: false, kind: 'unavailable', status: 429, retryAfter: 60 });
+	assert.deepEqual(await first, { kind: 'stale' });
+	assert.equal(t.snapshots.length, notified); assert.equal(t.runner.snapshot(), accountNow);
+	assert.equal(t.runner.revocationView(), idleRevocation, 'no wait recorded');
+	await t.calls.answer('removeIf', 'deleted'); await t.calls.answer('begin', 'revoked');
+
+	// A second person's run: signed in again, a request out, then the session ends another way; its 401 comes late.
+	await signOutAndBackInFromSignedOut(t);
+	const second = t.runner.revokeOthers(personShown(t.runner));
+	t.clock.now = 30_000; t.runner.send({ type: 'refresh' }); await drain();
+	await t.calls.answer('get', { ok: false, kind: 'unauthorised' });
+	await t.calls.answer('removeIf', 'deleted');
+	const removals = t.calls.all.filter((c) => c.name === 'removeIf').length;
+	notified = t.snapshots.length; accountNow = t.runner.snapshot();
+	t.calls.take('post').resolve({ ok: false, kind: 'unauthorised' });
+	assert.deepEqual(await second, { kind: 'stale' });
+	await drain();
+	assert.equal(t.calls.all.filter((c) => c.name === 'removeIf').length, removals, 'the old handle\'s 401 dispatched nothing');
+	assert.equal(t.snapshots.length, notified); assert.equal(t.runner.snapshot(), accountNow);
+});
+/** From signed out: signs in again as the same person with organisation A. */
+async function signOutAndBackInFromSignedOut(t: ReturnType<typeof harness>) {
+	t.runner.send({ type: 'sign-in' }); await drain();
+	t.calls.take('start').resolve({ kind: 'signed-in', session: { token: token('c'), expiresAt: '2030-10-01T08:30:00.000Z', user: { id: userId, email: 'o@example.test', name: 'O' }, returnTo: '/' } });
+	await drain();
+	await t.calls.answer('install', 'written');
+	await t.calls.answer('get', { ok: true, value: meBody(orgA, orgB) });
+	await t.calls.answer('readOrg', orgA);
+}
+
+test('revocation: a membership refresh and an organisation switch in flight keep the person scope, so the answer still applies', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA);
+	const expected = personShown(t.runner);
+	const outcome = t.runner.revokeOthers(expected);
+	t.clock.now = 30_000; t.runner.send({ type: 'refresh' }); await drain();
+	await t.calls.answer('get', { ok: true, value: meBody(orgA, orgB) });
+	t.runner.send({ type: 'choose-organisation', organisationId: orgB }); await drain();
+	const now = account(t.runner);
+	assert.ok(now.kind === 'signed-in' && now.org.kind === 'chosen' && now.org.membership.organisationId === orgB);
+	assert.deepEqual(now.person, expected, 'the same person scope');
+	assert.equal(t.runner.revocationView().inFlight, true, 'still in flight');
+	await t.calls.answer('post', { ok: true, value: { ended: 1 } });
+	assert.deepEqual(await outcome, { kind: 'ok', ended: 1 });
+	assert.deepEqual(t.runner.revocationView().last, { kind: 'ok', ended: 1 });
+});
+
+test('revocation C3: slow after the injected delay, one notification per flip, and the timer cleared on every settle', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA, { slowAfterMs: 5_000 });
+	const expected = personShown(t.runner);
+	let before = t.timers.next;
+	const first = t.runner.revokeOthers(expected);
+	const timer = newestTimer(t, before);
+	assert.equal(timer.delay, 5_000, 'the injected delay');
+	let notified = t.snapshots.length;
+	timer.fire(); t.timers.fired.delete(timer.id);
+	assert.equal(t.snapshots.length, notified + 1, 'false → true: one notification');
+	assert.deepEqual(t.runner.revocationView(), { inFlight: true, slow: true, wait: null, last: null });
+	timer.fire();
+	assert.equal(t.snapshots.length, notified + 1, 'a repeated tick changes nothing');
+	await t.calls.answer('post', { ok: true, value: { ended: 1 } }); await first;
+	assert.equal(t.snapshots.length, notified + 2, 'settling clears slow in the same single notification');
+	assert.equal(t.runner.revocationView().slow, false);
+	// Settled before the delay: the timer is cleared, and a late tick does nothing.
+	before = t.timers.next;
+	const second = t.runner.revokeOthers(expected);
+	const early = newestTimer(t, before);
+	await t.calls.answer('post', { ok: true, value: { ended: 0 } }); await second;
+	assert.ok(!t.timers.fired.has(early.id), 'cleared at settle');
+	notified = t.snapshots.length; const view = t.runner.revocationView();
+	early.fire();
+	assert.equal(t.snapshots.length, notified); assert.equal(t.runner.revocationView(), view);
+});
+
+test('revocation: the default slow delay is the account\'s ten seconds; with no person, nothing is sent', async () => {
+	const t = harness();
+	t.runner.start();
+	assert.deepEqual(await t.runner.revokeOthers({ epoch: 'a0', userId }), { kind: 'stale' }, 'starting: nothing sent');
+	await t.calls.answer('read', stored('a'));
+	assert.deepEqual(await t.runner.revokeOthers({ epoch: 'a0', userId }), { kind: 'stale' }, 'checking: not signed in yet');
+	await t.calls.answer('get', { ok: true, value: meBody(orgA, orgB) });
+	const expected = personShown(t.runner);
+	assert.deepEqual(await t.runner.revokeOthers({ ...expected, userId: orgA }), { kind: 'stale' }, 'another person');
+	const before = t.timers.next;
+	const outcome = t.runner.revokeOthers(expected);
+	assert.equal(newestTimer(t, before).delay, 10_000);
+	await t.calls.answer('post', { ok: true, value: { ended: 0 } });
+	assert.deepEqual(await outcome, { kind: 'ok', ended: 0 }, 'signed in without a chosen organisation is enough: it is per person');
+	assert.equal(postCount(t), 1);
+});
+
+test('byte budget: an oversized 200 from "Sign out everywhere else" is unknown, never a count', async () => {
+	const { t } = await readyOverRealTransport([(url) => streamed(url, 200, oversizedChunks())]);
+	const outcome = await t.runner.revokeOthers(personShown(t.runner));
+	assert.deepEqual(outcome, { kind: 'unknown', status: 200, wait: null, seconds: null });
+	assert.equal(account(t.runner).kind, 'signed-in', 'the account is untouched');
 });
 
 test('byte budget: an oversized 429 keeps its Retry-After as the read\'s own wait', async () => {
