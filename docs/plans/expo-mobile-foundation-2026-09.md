@@ -453,8 +453,9 @@ couldn't confirm the server session ended. It expires on {date}."
 readiness**. It is not a foundation blocker.
 
 - A signed-in person needs to end their other sessions, for example after losing a phone.
-- The smallest API is `POST /v1/me/sessions/revoke-others`: `update sessions set revoked_at = now()
-  where user_id = $me and id <> $current and revoked_at is null`, plus an auth event.
+- The API is `POST /v1/me/sessions/revoke-others`. The original SQL sketch is superseded by the
+  revocation contract: serialise per person, recheck the current session after the lock, revoke other
+  sessions using statement time, and commit the auth event in the same transaction.
 - It needs no new column. It also signs the person out of their web sessions, and the UI says so.
 - Listing individual devices is a later nicety.
 - Track this readiness increment in #178; the adopted [revocation contract](mobile-session-revocation-2026-09.md)

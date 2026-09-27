@@ -147,7 +147,7 @@ whether a remount keeps the navigation container's state, so both kinds are cove
 - **Opening the guard later** only changes `routeNames`: R4 `getStateForRouteNamesChange` filters and never adds. Its
   empty-routes fallback is `routeNames[0]`, which is `organisation` whenever ready, because `organisation` (signed in)
   precedes `(tabs)` in the guard order.
-- **So at boot `(tabs)` is created only by E3, E5, E6 or E7 (§3.2),** each of which builds a fresh, anchored
+- **So at boot `(tabs)` is created by E3–E7, E11 or E12 (§3.2/§3.2a),** each of which builds a fresh, anchored
   `(tabs)`.
 
 **Case R-kept, a remount with the navigation state retained** (the container's state survives; only the layout
@@ -471,7 +471,6 @@ No simulator or device evidence is claimed by the implementation PR.
 |---|---|
 | A | **All of it, in an isolated navigation checkout** (root's split, 27 September 2026): `components/SectionStack.tsx`; the pure helpers in `account/copy.ts` (`resetToFreshTabs`, `firstVisitParams`, `tabEntryAction`); every call site (`account/AccountStack.tsx` for the seeded reset and E3–E6, `app/index.tsx` for E7, `components/TabBar.tsx` for E1, `components/RefusedLink.tsx` for E11, `app/settings.tsx:15` and `app/organisation.tsx:21` for E12); the `Screen.tsx` comment; and every node test in §6 |
 | B | Independent peer review of the whole navigation change. B's own implementation is the session-revocation API, in a separate API checkout, with no shared files |
-| B | Independent review of all navigation changes |
 | Root | Browser regression, CI, documentation, git and integration |
 
 **Not in scope:**

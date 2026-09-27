@@ -328,8 +328,9 @@ Runner tests:
 The harness browser check covers confirmation, in flight, N, 0 and unknown. No native, simulator or device evidence
 is claimed.
 
-**Ownership (proposed; root decides)**
-- B implements 1 and 3, and A reviews them. A or B implements 2, and the other reviews it.
+**Ownership**
+- B implements the API increment (1); A independently reviews it. Owners for the later web and mobile
+  increments are assigned when those PRs start.
 - Root owns tests, git, browser checks, docs and integration, including the already-authorised release to the single
   staging machine.
 - This contract adds no deployment constraint.
@@ -409,7 +410,7 @@ is claimed.
 - **Threading.** `revokeOthers` and `revocationView` are added to `AccountSource` (`account-source.ts`) and exposed by
   `useAccount`. They are token-free, like `read`. The harness scripted source implements both for the browser check.
 - **Remount (A's R3).** The runner, and so `revocationView()`, belongs to the one process-wide instance
-  (`instance.ts`). It is never reset by an `AccountStack` or screen remount. The native navigation draft now treats
+  (`instance.ts`). It is never reset by an `AccountStack` or screen remount. The [native navigation contract](expo-mobile-native-navigation-2026-09.md) treats
   such remounts as possible (its §3.0).
   - Only a change of person scope discards the state.
   - A process restart loses it, together with the in-memory token.
