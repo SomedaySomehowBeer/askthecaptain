@@ -31,10 +31,9 @@ The branch was rebased onto merged #193. [Final CI](https://github.com/SomedaySo
 
 ## Release and rollback
 
-Use the sole existing staging API with HTTP stopped, no public services and restart policy `no` for the one-shot migration. Verify the reviewed image, fresh migration/queue marker and exit 0; restore and compare normal configuration before serving. Remove the earlier postflight query of `attachment_text`; it no longer exists after 0045. Postflight must confirm all 21 tables, seven functions and three columns are absent, full migration history through 0045, safe runtime role, readiness and native sign-in still disabled.
+Use the sole existing staging API with HTTP stopped, no public services and restart policy `no` for the one-shot migration. Verify the reviewed image, fresh migration/queue marker and exit 0; restore and compare normal configuration before serving. The postflight no longer queries `attachment_text`, which 0045 removed. Postflight must confirm all 21 tables, seven functions and three columns are absent, full migration history through 0045, safe runtime role, readiness and native sign-in still disabled.
 
 After 0045, forward-fix or use the recorded reader-free API image. Never restore an image containing retired readers, recreate the dropped tables, or repeat the old data-reset procedure. Production cannot resume on its paused old image.
-
 
 ## Actual staging release
 
@@ -43,8 +42,8 @@ reader-free release and immediately before the one-shot. Exactly the existing AP
 `80e39ea6416e18` ran the migration with no public services and restart policy `no`. The
 [timestamped log](migration-hosted.log) and [exit evidence](migration-verified.json) confirm only
 0045 applied, queue setup completed and the process exited normally with code 0. Normal
-configuration was restored and compared before starting the API. Claude reviewed the migration,
-release procedure and corrections; Codex executed and verified it.
+configuration was restored and compared before starting the API. Claude A reviewed the migration/tests and this evidence; Claude B reviewed the migration and
+release scripts, including the removed bypass path. Codex executed and verified the release.
 
 API image: `registry.fly.io/askthecaptain-api-staging:git-02733f2@sha256:1e2cdf9407cda83b3363d5fa763812cedc72114955b255c8a5b15d55057be3aa`.
 Its pushed index is `sha256:4e4d3db1e3d9f3c118b1304f0a3319d3a59b55b3cae69ea004c3155b07288d04`;
@@ -53,7 +52,7 @@ and image `git-17089ce` were unchanged. [All five applications' machine IDs/conf
 compared; only the staging API image changed. Production and embedding stayed stopped, automatic
 deployment and backups disabled. No DNS, secret, provider, native enablement or reset operation ran.
 
-[Read-only postflight](release-postflight.json) verified the complete 42-file migration history,
+[Read-only postflight](release-postflight.json) verified the complete 42-file migration history (0014, 0017 and 0022 were never repository migrations),
 absence of all 21 tables, seven functions and three columns, retained vector extension,
 project/provenance columns and checks, eight auth kinds and three queues. The deployed runtime-role
 safety guard passed; `app` and `captain_runtime` have equal sets of 228 direct scoped grants and

@@ -1,10 +1,17 @@
 {
-  "checked_at": "2026-09-27T06:43:26.591Z",
+  "checked_at": "2026-09-27T06:46:38.732Z",
   "read_only": "on",
   "parity": {
     "grants": 228,
     "policies": 66
   },
+  "project_columns_retained": [
+    "accepted_at",
+    "brief",
+    "proposed_at",
+    "state"
+  ],
+  "provenance_checks_retained": true,
   "migrations": [
     "0001_foundation.sql",
     "0002_commitments.sql",

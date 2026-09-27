@@ -10,7 +10,6 @@ fresh 06:40 preflight, including current demo Work/Chat. No reset ran. Web remai
 production/embedding remain stopped, native sign-in off, one existing machine per staging app.
 See [release evidence](../validation/assistant-storage-retirement-2026-09-27/README.md).
 
-
 ## Legacy-storage audit for R5b (27 September 2026, 06:13 UTC)
 
 After the reader-free API/web release below, a fresh verified-TLS owner audit ran read-only
