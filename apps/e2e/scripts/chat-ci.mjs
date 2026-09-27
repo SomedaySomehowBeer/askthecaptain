@@ -1,4 +1,4 @@
-/** CI runner for the linked-chat browser suites (chat-views-check.cjs, then chat-check.cjs). No dependencies.
+/** CI runner for the linked-chat and session-control browser suites. No dependencies.
  *
  *  Expects the production web build to exist already (built once, with API_URL=http://127.0.0.1:8084 and
  *  APP_URL=http://127.0.0.1:3034) and DATABASE_URL to name a loopback Postgres admin connection. Then:
@@ -19,16 +19,16 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const out = path.resolve(process.env.CHAT_CI_OUT ?? path.join(root, 'apps/e2e/chat-ci-output'));
-/** Both suites by default (CI). For a focused local rerun, name suites as arguments, e.g.
+/** All three suites by default (CI). For a focused local rerun, name suites as arguments, e.g.
  *  `node apps/e2e/scripts/chat-ci.mjs chat-check.cjs`; only these exact names, each at most once, run in the
  *  default order. Anything else is refused before any child starts. */
-const allSuites = ['chat-views-check.cjs', 'chat-check.cjs'];
+const allSuites = ['chat-views-check.cjs', 'chat-check.cjs', 'session-revocation-check.cjs'];
 const asked = process.argv.slice(2);
 const unknown = asked.filter(name => !allSuites.includes(name));
 if (unknown.length) throw new Error(`Unknown suite(s): ${unknown.join(', ')}. Choose from: ${allSuites.join(', ')}.`);
 if (new Set(asked).size !== asked.length) throw new Error(`A suite is named more than once: ${asked.join(', ')}.`);
 const suites = asked.length ? allSuites.filter(name => asked.includes(name)) : allSuites;
-/** Per-suite limit: 12 minutes by default and at most, so two suites plus setup fit the 40-minute CI job. */
+/** Chat suites take at most 12 minutes each; the smaller session-control suite takes at most 3 minutes. */
 const maxSuiteMs = 12 * 60_000;
 const askedMs = Number(process.env.CHAT_CI_SUITE_TIMEOUT_MS ?? maxSuiteMs);
 const suiteLimitMs = Number.isFinite(askedMs) && askedMs > 0 ? Math.min(askedMs, maxSuiteMs) : maxSuiteMs;
@@ -117,7 +117,7 @@ async function runSuite(suite) {
 		await until('port 8084 free', async () => !(await portOpen(API)), 60_000);
 		log(`${suite}: starting a fresh fixture in ${probe}`);
 		const env = { ...process.env, WORKSPACE_PROBE_DIR: probe, WORKSPACE_PROBE_FAST_LIMITS: '1' };
-		delete env.CHROME_CDP_URL;
+		// Local checks may explicitly use the existing shared Chromium over loopback CDP; CI launches its own.
 		// Node itself runs the fixture (cwd apps/api, where `tsx` resolves), so stopping it waits for its own cleanup.
 		fixture = start('fixture', process.execPath, ['--import', 'tsx', 'test/workspace-fixture.ts'], env, path.join(root, 'apps/api'));
 		await until('fixture', async () => await exists(path.join(probe, 'data.json')) && await portOpen(API)
@@ -125,12 +125,13 @@ async function runSuite(suite) {
 		// Ready means its SIGTERM handler (drop database, remove data.json) is installed.
 		ready = true;
 		const data = JSON.parse(await readFile(path.join(probe, 'data.json'), 'utf8'));
-		for (const key of ['token', 'memberToken']) if (typeof data[key] === 'string') secrets.add(data[key]);
+		for (const key of ['token', 'memberToken', 'ownerOtherToken', 'memberOtherToken']) if (typeof data[key] === 'string') secrets.add(data[key]);
 		if (!(await portOpen(WEB))) throw new Error('web server on 3034 is not answering');
 
-		log(`${suite}: running (limit ${Math.round(suiteLimitMs / 60_000)} min)`);
+		const limitMs = suite === 'session-revocation-check.cjs' ? Math.min(suiteLimitMs, 180_000) : suiteLimitMs;
+		log(`${suite}: running (limit ${Math.round(limitMs / 60_000)} min)`);
 		browser = start(suite, process.execPath, [path.join(root, 'apps/e2e/scripts', suite)], env);
-		const outcome = await Promise.race([browser.exited, sleep(suiteLimitMs).then(() => null)]);
+		const outcome = await Promise.race([browser.exited, sleep(limitMs).then(() => null)]);
 		if (!outcome) { log(`${suite}: time limit reached; stopping it`); await stop(browser, 10_000); }
 		passed = !!outcome && outcome.code === 0;
 		log(`${suite}: ${passed ? 'passed' : 'FAILED'}`);

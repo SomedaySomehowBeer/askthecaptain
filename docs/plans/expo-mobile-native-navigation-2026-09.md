@@ -1,6 +1,6 @@
 # Mobile native section-stack navigation contract
 
-Status: source implementation and independent review complete, 27 September 2026; release checks in progress. Outcome: **manage shared work** through predictable navigation.
+Status: merged in #205 after independent review and all CI passed, 27 September 2026. Outcome: **manage shared work** through predictable navigation.
 Source evidence is from the installed Expo Router 57.0.23 and Captain after #201/#202. The source implementation now follows this contract. Validation is recorded in
 [the implementation evidence](../validation/mobile-native-navigation-2026-09-27/README.md). No native/device evidence is claimed; native sign-in stays off.
 

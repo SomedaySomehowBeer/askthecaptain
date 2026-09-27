@@ -15,7 +15,7 @@ call-site coverage; they are not evidence of native runtime behaviour.
 - Mobile tests: 254 passed (234 pure/source tests, 20 boundary tests), zero skipped.
 - Production web/iOS/Android and synthetic web harness exports passed, including secret/canary and harness-exclusion boundary scans.
 - Production/harness Chromium checks at 360, 390 and 430 pixels: passed, including account transitions, tab/view history, refused links, My work and All tasks reads, no overflow and no page errors.
-- CI: pending.
+- CI: workspace/database, mobile and Chat browser jobs passed on source `094276f`; merged as #205.
 
 No database changes or local Postgres test run for this mobile-only change. CI provides the usual
 server regression. No staging deployment, signed native build, simulator or device test is claimed.
