@@ -389,15 +389,18 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 
 	/** Not `async`: everything up to and including the send runs synchronously in this call. */
 	function revokeOthers(expected: PersonScope): Promise<RevokeOutcome> {
+		// The request this call started, once it has one: every failure path below settles exactly that request.
+		let started: { readonly id: number; readonly handle: CredentialHandle; readonly person: PersonScope } | null = null;
 		try {
 			const state = machine.state; const person = personScope(machine);
-			if (state.kind !== 'signed-in' || !samePerson(person, expected)) return Promise.resolve(staleOutcome);
+			if (state.kind !== 'signed-in' || person === null || !samePerson(person, expected)) return Promise.resolve(staleOutcome);
 			alignRevocation();
 			const refusal = admit(revocation.view, now());
 			if (refusal !== null) return Promise.resolve(refusal);
 			const handle = state.handle; const credential = credentials.get(handle);
 			if (!credential) return Promise.resolve(staleOutcome);
 			const id = ++sent;
+			const request = started = { id, handle, person };
 			clearSlowTimer();
 			setRevocation(sendingRevocation);
 			slowTimer = { send: id, timer: timers.set(revocationSlowMs, () => {
@@ -405,22 +408,43 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 				slowTimer = null;
 				if (id === sent && samePerson(revocation.person, personScope(machine))) setRevocation(slowRevocation(revocation.view));
 			}) };
-			let request: Promise<ApiOutcome<Revoked>>;
-			try { request = client.post(apiPaths.revokeOthers, credential.token, {}, parseRevoked); } catch (error) { request = Promise.reject(error); }
-			return request.then(
-				(answer) => settleRevocation(id, handle, person!, answer),
-				() => settleRevocation(id, handle, person!, null)
-			).catch((): RevokeOutcome => clientBugOutcome);
-		} catch { return Promise.resolve(clientBugOutcome); }
+			let answer: Promise<ApiOutcome<Revoked>>;
+			try { answer = client.post(apiPaths.revokeOthers, credential.token, {}, parseRevoked); } catch (error) { answer = Promise.reject(error); }
+			return answer.then(
+				(value) => settleRevocation(request, value),
+				() => failRevocation(request)
+			).catch((): RevokeOutcome => failRevocation(request));
+		} catch {
+			// Nothing started (before the request was numbered): nothing changed. Otherwise that request is settled.
+			return Promise.resolve(started === null ? clientBugOutcome : failRevocation(started));
+		}
 	}
 
-	/** After the answer (`null`: the client rejected, a bug in this app, not the network). */
-	function settleRevocation(id: number, handle: CredentialHandle, sentFor: PersonScope, answer: ApiOutcome<Revoked> | null): RevokeOutcome {
+	/** A failure that is this app's fault, not the network's: the client rejected or resolved something unusable, or a
+	 *  step threw (a timer, the answer's mapping). For the request still current it clears the slow timer and shows
+	 *  `unknown` (a request may have left), and answers `client-bug`; for any other request, `stale` with no effect. It
+	 *  never throws, so no failure can leave the view in flight. */
+	function failRevocation(request: { readonly id: number; readonly handle: CredentialHandle; readonly person: PersonScope }): RevokeOutcome {
+		try {
+			if (!stillRevoking(request.id, request.handle, request.person)) return staleOutcome;
+			clearSlowTimer();
+			setRevocation(settledRevocation(unknownResult));
+			return clientBugOutcome;
+		} catch {
+			// Only a broken timer's clear can throw here: drop the record and settle the view directly.
+			slowTimer = null;
+			if (stillRevoking(request.id, request.handle, request.person)) { revocation = { person: revocation.person, view: settledRevocation(unknownResult) }; publish(); }
+			return clientBugOutcome;
+		}
+	}
+
+	/** After a resolved answer. It may throw on an answer that isn't a client outcome; the caller then fails it. */
+	function settleRevocation(request: { readonly id: number; readonly handle: CredentialHandle; readonly person: PersonScope }, answer: ApiOutcome<Revoked>): RevokeOutcome {
+		const { id, handle, person: sentFor } = request;
 		// C1: an answer for a person scope, handle or request no longer current changes nothing and notifies nobody.
 		if (!stillRevoking(id, handle, sentFor)) return staleOutcome;
-		clearSlowTimer();
-		if (answer === null) { setRevocation(settledRevocation(unknownResult)); return clientBugOutcome; }
 		const result = resultOf(answer, (seconds) => waitFor(seconds * 1000, clock, wallNow));
+		clearSlowTimer();
 		if (result === 'unauthorised') {
 			// The session has ended: the existing event releases it (and advances the account generation, which drops this
 			// state). The request no longer claims the view either way.

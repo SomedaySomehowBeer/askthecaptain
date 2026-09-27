@@ -63,8 +63,9 @@ function harness(options: { storage?: boolean; client?: ApiClient; slowAfterMs?:
 		retryCleanup: async () => 'revoked', pendingCleanupExpiresAt: () => null, pendingCleanupRetryAfterMs: () => null
 	};
 	/** `getThrows` / `postThrows`: the next `get` / `post` throws synchronously (a broken client), without recording a
-	 *  call. */
-	const flags = { getThrows: false, postThrows: false };
+	 *  call. `postRaw`: the next `post` resolves with exactly what the test answers, not mapped to a client outcome (a
+	 *  broken client resolving something unusable). */
+	const flags = { getThrows: false, postThrows: false, postRaw: false };
 	const client: ApiClient = {
 		get: <T>(path: unknown, t: string | null, parse: (value: unknown) => T) => {
 			if (flags.getThrows) { flags.getThrows = false; throw new Error(`client detail ${token('q')}`); }
@@ -73,6 +74,7 @@ function harness(options: { storage?: boolean; client?: ApiClient; slowAfterMs?:
 		// As the real client: a 2xx body the parser refuses is `unavailable` with its status, never a rejection.
 		post: <T>(path: unknown, t: string | null, body: unknown, parse: (value: unknown) => T) => {
 			if (flags.postThrows) { flags.postThrows = false; throw new Error(`client detail ${token('q')}`); }
+			if (flags.postRaw) { flags.postRaw = false; return calls.make<ApiOutcome<T>>('post', [path, t, body]); }
 			return calls.make<ApiOutcome<unknown>>('post', [path, t, body]).then((answer): ApiOutcome<T> => {
 				if (!answer.ok) return answer as ApiOutcome<T>;
 				try { return { ok: true, value: parse(answer.value) }; } catch { return { ok: false, kind: 'unavailable', status: 200 }; }
@@ -86,8 +88,15 @@ function harness(options: { storage?: boolean; client?: ApiClient; slowAfterMs?:
 		retry: () => { cleanupState.value = 'running'; return calls.make<'revoked' | 'still-pending'>('retry', []).then((r) => { cleanupState.value = r === 'revoked' ? 'none' : 'pending'; return r; }); },
 		expiresAt: () => null, retryAfterMs: () => cleanupState.retryAfterMs
 	};
-	const timers = { fired: new Map<number, () => void>(), delays: new Map<number, number>(), next: 0 };
-	const fakeTimers: Timers = { set: (ms, run) => { const id = ++timers.next; timers.fired.set(id, run); timers.delays.set(id, ms); return id; }, clear: (id) => { timers.fired.delete(id as number); } };
+	/** `throwNext`: the next `set` throws (a broken timer), setting nothing. */
+	const timers = { fired: new Map<number, () => void>(), delays: new Map<number, number>(), next: 0, throwNext: false };
+	const fakeTimers: Timers = {
+		set: (ms, run) => {
+			if (timers.throwNext) { timers.throwNext = false; throw new Error('timer detail'); }
+			const id = ++timers.next; timers.fired.set(id, run); timers.delays.set(id, ms); return id;
+		},
+		clear: (id) => { timers.fired.delete(id as number); }
+	};
 	// `clock.now` is the raw monotonic reading the test controls; the runner clamps it. The wall clock is fixed at the
 	// epoch, so a wait of N ms reads "about" new Date(N).
 	const clock = { now: 0 };
@@ -883,6 +892,47 @@ test('revocation: other 4xx are refusals with no organisation effect; malformed 
 	assert.deepEqual(await t.runner.revokeOthers(expected), { kind: 'client-bug' }, 'a client that throws before sending');
 	assert.equal(t.runner.revocationView().inFlight, false, 'never left in flight');
 	outcomesTokenFree(await rejected, t.runner.revocationView(), t.snapshots);
+});
+
+test('revocation: a client that resolves something unusable, or a timer that throws, never leaves the view in flight; an old request\'s failure has no effect', async () => {
+	const t = await signedInWithStoredSession([orgA, orgB], orgA);
+	const expected = personShown(t.runner);
+
+	// The client resolves `undefined` (not an outcome): the answer's mapping throws, and the request is failed.
+	const before = t.timers.next;
+	t.flags.postRaw = true;
+	const unusable = t.runner.revokeOthers(expected);
+	const slow = newestTimer(t, before);
+	await t.calls.answer('post', undefined);
+	assert.deepEqual(await unusable, { kind: 'client-bug' });
+	assert.deepEqual(t.runner.revocationView(), { inFlight: false, slow: false, wait: null, last: { kind: 'unknown', status: 0, wait: null, seconds: null } },
+		'shown as unknown, not in flight');
+	assert.ok(!t.timers.fired.has(slow.id), 'its slow timer was cleared');
+	const next = t.runner.revokeOthers(expected);
+	assert.equal(postCount(t), 2, 'the next press sends: nothing was stuck');
+	await t.calls.answer('post', { ok: true, value: { ended: 0 } });
+	assert.deepEqual(await next, { kind: 'ok', ended: 0 });
+
+	// The timer throws before anything is sent: the request is failed at once, and nothing is sent.
+	t.timers.throwNext = true;
+	assert.deepEqual(await t.runner.revokeOthers(expected), { kind: 'client-bug' });
+	assert.equal(postCount(t), 2, 'nothing sent');
+	assert.deepEqual(t.runner.revocationView(), { inFlight: false, slow: false, wait: null, last: { kind: 'unknown', status: 0, wait: null, seconds: null } });
+	const after = t.runner.revokeOthers(expected);
+	assert.equal(postCount(t), 3, 'and the next press sends');
+	await t.calls.answer('post', { ok: true, value: { ended: 1 } });
+	assert.deepEqual(await after, { kind: 'ok', ended: 1 });
+
+	// An unusable answer for a request that is no longer current (the person signed out meanwhile): stale, no effect.
+	t.flags.postRaw = true;
+	const old = t.runner.revokeOthers(expected);
+	t.runner.send({ type: 'sign-out' }); await drain();
+	const notified = t.snapshots.length; const accountNow = t.runner.snapshot();
+	t.calls.take('post').resolve(undefined);
+	assert.deepEqual(await old, { kind: 'stale' });
+	assert.equal(t.snapshots.length, notified, 'no notification'); assert.equal(t.runner.snapshot(), accountNow);
+	assert.equal(t.runner.revocationView(), idleRevocation);
+	outcomesTokenFree(await unusable, await old, t.snapshots);
 });
 
 test('revocation: a 401 on the current handle ends the session through the existing event', async () => {
