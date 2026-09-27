@@ -120,14 +120,14 @@ installed-app evidence.
 Each Claude reviews the other's implementation. Codex owns git, builds, tests, integration and
 release. All heavy checks remain serial under `flock /tmp/atc-build.lock`.
 
-## Next mobile read increments
+## Completed mobile read increments
 
 The [All tasks contract](expo-mobile-all-tasks-read-2026-09.md) and
 [transport response-budget contract](expo-mobile-response-byte-budget-2026-09.md) were adopted in #200 and define
-separate implementation PRs. All tasks merged in #201. The transport implementation is independently
-reviewed with local validation passing; see its [validation record](../validation/mobile-response-byte-budget-2026-09-27/README.md) and #202.
+separate implementation PRs. All tasks merged in #201 and the transport budget merged in #202
+after independent review and green CI; see its [validation record](../validation/mobile-response-byte-budget-2026-09-27/README.md) and #202.
 
-**All tasks status (27 September 2026): implemented and independently reviewed; local validation passed.**
+**All tasks status (27 September 2026): merged in #201 after independent review and green CI.**
 - **Written:**
   - Codex: paths, parser, links, sections and configuration, with tests;
   - Claude B: the shared screen and hook (one bound view per screen), per-view copy and owner facts, the `/work/all`
@@ -137,16 +137,16 @@ reviewed with local validation passing; see its [validation record](../validatio
 - Tests, exports and browser checks passed; see the [validation record](../validation/mobile-all-tasks-read-2026-09-27/README.md).
   Native, simulator and device evidence remain unavailable; native sign-in stays off.
 
-Ownership:
+Completed ownership:
 
-- Claude A implements the transport budget and its regressions; Claude B independently reviews it.
-- Claude B implements the shared My work/All tasks screen, hook, copy and harness. Codex supplies
-  the paths, parser, links/configuration and browser checks; Claude A independently reviews them.
+- Claude A implemented the transport budget and its regressions; Claude B independently reviewed it.
+- Claude B implemented the shared My work/All tasks screen, hook, copy and harness. Codex supplied
+  the paths, parser, links/configuration and browser checks; Claude A independently reviewed them.
 - Codex owns serial tests, integration, documentation and git. Combine the latest reviewed main
   before final checks; no overlapping file ownership or simultaneous heavy tests.
 
-The current native section-stack shape still needs a separate reviewed navigation increment:
-explicit native initial routes and freshly seeded resets to put the view list beneath the open view.
+The [adopted navigation contract](expo-mobile-native-navigation-2026-09.md), not yet implemented,
+specifies native initial routes, anchored entries and freshly seeded resets to put the view list beneath the open view.
 An empty reset currently starts My work by source inspection; this is not a claim that it lands on
 Views. Native behaviour, gestures and shape require device evidence. Neither read contract changes
 native navigation or enables sign-in.
@@ -205,3 +205,25 @@ assigns the next stage. The watcher has a twelve-hour expiry; renew or stop it w
 
 Completed work and new assignments are recorded in the coordinator checkpoint so an old monitor
 notification cannot restart a finished release. No new Captain runtime process is introduced.
+
+## Next foundation batch after #201/#202
+
+All tasks (#201) and the response byte budget (#202) are merged after reciprocal reviews and all
+applicable CI passed. Combined validation passed 247 mobile tests with zero skipped; #202 CI also
+ran the combined mobile exports and browser suite. No deployment or native enablement followed.
+
+Two independently reviewed contracts define the next batch; adoption is not implementation:
+
+- [Native section navigation](expo-mobile-native-navigation-2026-09.md): Claude A owns helpers,
+  call sites and tests in one isolated checkout. Claude B reviews the complete change. Source-level
+  initial routes and fresh reset state put the view list beneath native defaults; device proof remains
+  open. Existing warm view-list duplication and the ready remount edge are explicitly tracked.
+- [Remote session revocation](mobile-session-revocation-2026-09.md): Claude B first implements the
+  API/service/rate-limit increment and its real-Postgres tests. Claude A reviews it. Web and mobile
+  controls follow in separate PRs after the API is reviewed. This ends other existing sessions of
+  the authenticated person; it does not lock the account or cancel sign-ins in progress.
+
+Root owns browser fixtures/checks, all serial validation, integration, documentation, CI and git.
+Reviewed green PRs may merge. Any server release remains staging-only on one existing machine per
+app. Native sign-in, production, signing, DNS and secrets remain untouched. No source implementation
+is complete merely because a draft or agent state is ready.

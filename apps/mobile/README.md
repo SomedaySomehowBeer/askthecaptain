@@ -108,12 +108,14 @@ refused.
 
 The web-export check uses browser history for every visited route. On iOS and Android the
 arrangement depends on how the section's stack was built, by source reading:
-- **A stack built from a link** (an incoming or initial URL) gets the grouped view list beneath
-  the open page, as `sectionStackSettings`' `views` anchor.
+- **Linking state** can include the `views` anchor. At process boot, however, the closed account guard
+  discards that state; the later requested-route `replace` currently opens the target alone. A warm link
+  into a ready app follows a different path and may preserve the anchor.
 - **A stack that starts empty** (a first visit through the tab bar, or after an organisation
   change's tabs reset) starts at the section's default page, with no view list beneath. The first
   header use pushes the view list on top.
 
-Putting the view list beneath every native stack, with an explicit initial route and seeded resets,
-is a separate follow-up. Browser checks prove neither native stack arrangement nor its swipe-back
+The [native navigation contract](../../docs/plans/expo-mobile-native-navigation-2026-09.md)
+specifies explicit initial routes, anchored entries and seeded resets, with named existing limitations.
+It is adopted separately and not yet implemented. Browser checks prove neither native stack arrangement nor its swipe-back
 gesture; both remain device checks.

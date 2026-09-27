@@ -54,8 +54,7 @@ after independent review and all three CI jobs passed. Local tests, exports and 
 - the 30-second spacing for membership refreshes after a 403/404;
 - synthetic harness reads for the browser proof.
 
-The second, [All tasks](expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2, adopted in #200), is **implemented
-and independently reviewed**, with local tests, exports and browser checks passing.
+The second, [All tasks](expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2, adopted in #200), merged in #201 after independent review and green CI. Local tests, exports and browser checks passed.
 See the [validation record](../validation/mobile-all-tasks-read-2026-09-27/README.md); native and device gates remain. It adds:
 - a read-only Work → All tasks list at `/work/all`: open tasks assigned to anyone, with one owner fact per row and
   no names;
@@ -65,10 +64,11 @@ See the [validation record](../validation/mobile-all-tasks-read-2026-09-27/READM
 The production web export still makes no API requests. Other reads and all writes remain. The response byte budget is implemented separately in #202;
 native buffering/cancellation and these device gates remain: `expo/fetch` reporting the query URL unchanged, and a real 403/404 on an isolated
 synthetic environment. No simulator or device evidence exists.
-The web export opens view lists as visited pages. Native link-built stacks use the view-list anchor;
-empty resets and first tab visits currently start at the index without that underlying route, by
-installed-source inspection. Explicit native initial routes and seeded resets need a separate reviewed
-navigation increment and device evidence.
+The web export opens view lists as visited pages. Native linking state can carry the view-list anchor,
+but a closed account guard at process boot discards it; the later requested-route replace opens the target alone.
+Empty resets and first tab visits also currently start at the index without that underlying route, by source inspection.
+The adopted [native navigation contract](expo-mobile-native-navigation-2026-09.md) specifies the next source change
+and its separate device evidence; it is not yet implemented.
 Browser history cannot prove native back gestures. Keep the flag off on shared
 staging and for real accounts until the verified-link gate passes. The server and web increments
 through #191, including A1 and A2, are deployed to the single staging API and web machines, and
@@ -452,11 +452,13 @@ couldn't confirm the server session ended. It expires on {date}."
 readiness**. It is not a foundation blocker.
 
 - A signed-in person needs to end their other sessions, for example after losing a phone.
-- The smallest API is `POST /v1/me/sessions/revoke-others`: `update sessions set revoked_at = now()
-  where user_id = $me and id <> $current and revoked_at is null`, plus an auth event.
+- The API is `POST /v1/me/sessions/revoke-others`. The original SQL sketch is superseded by the
+  revocation contract: serialise per person, recheck the current session after the lock, revoke other
+  sessions using statement time, and commit the auth event in the same transaction.
 - It needs no new column. It also signs the person out of their web sessions, and the UI says so.
 - Listing individual devices is a later nicety.
-- Track this readiness increment in #178.
+- Track this readiness increment in #178; the adopted [revocation contract](mobile-session-revocation-2026-09.md)
+  specifies concurrency, expiry revalidation, honest outcomes and separate API/web/mobile increments.
 
 **Account switching.**
 
