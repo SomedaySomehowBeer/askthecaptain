@@ -87,7 +87,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `apps/api` | Hono HTTP API: auth, routes over services, webhooks, health |
 | `apps/web` | Next.js; server components read the API. Work/Chat/Resources web client; legacy navigation still present is cleanup debt, not target scope |
 | `apps/e2e` | Playwright deployment smoke suite (deploy workflow, currently paused) and isolated browser regression in CI |
-| `apps/mobile` | React Native/Expo development-build client for iOS and Android: shell (#188), authentication core (#189) and platform adapters/account state (#193) merged; sign-in composition and account screens merged in #197 ([composition plan](plans/expo-mobile-auth-composition-2026-09.md)); a read-only Work → My work list ([M-read slice 1](plans/expo-mobile-my-work-read-2026-09.md)) implemented and independently reviewed, with local tests, exports and browser checks passing; read-only [All tasks](plans/expo-mobile-all-tasks-read-2026-09.md) also implemented and locally validated; no other business reads or any writes; native sign-in stays off; not usable on a device and no simulator or device evidence; native-device acceptance precedes release |
+| `apps/mobile` | React Native/Expo development-build client for iOS and Android: shell/auth/platform/account composition (#188/#189/#193/#197), My work (#199), All tasks (#201), native navigation (#205) and person-scoped session controls (#207) merged after review and CI. Read-only [Inventory](plans/expo-mobile-inventory-read-2026-09.md) is the next increment, not implemented by adopting its contract. Other business reads and all business writes remain; native sign-in stays off, with no installed-app, simulator or device evidence. Native acceptance precedes device release. |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Xero and Shopify business adapters; Google sign-in remains separate |
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
@@ -513,12 +513,13 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   accessibility and performance evidence remain separate. Next.js remains web; Expo remains mobile direction.
   Sign-in composition and the account screens ([composition plan](plans/expo-mobile-auth-composition-2026-09.md))
   merged in #197. The read-only [My work read](plans/expo-mobile-my-work-read-2026-09.md) (M-read slice 1)
-  merged in #199 after independent review and green CI. Other reads, writes, native
+  merged in #199 after independent review and green CI. Other business reads and writes, native
   sign-in and device evidence remain. The response byte budget merged in #202 after review and green CI.
   [All tasks](plans/expo-mobile-all-tasks-read-2026-09.md) merged in #201.
   [Native navigation](plans/expo-mobile-native-navigation-2026-09.md) merged in #205 after review and green CI;
   native device evidence remains open. The [remote session revocation](plans/mobile-session-revocation-2026-09.md)
-  API merged in #204; its web control is in final checks and its mobile control is in review.
+  API merged in #204, its web control in #206, and its mobile control in #207 after review and green CI.
+  The [Inventory read contract](plans/expo-mobile-inventory-read-2026-09.md) is adopted next; its code is not yet implemented.
 - Server inference tiers and any future API-key/cost-budget alternative (#32) are business-runtime
   decisions, separate from Pip's hard Apple/Siri requirements.
 - Pip platform proofs remain in #119. No Captain milestone depends on them. No new claim about

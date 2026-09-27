@@ -152,7 +152,7 @@ organisation from a `captain_organisation` cookie, falling back to the first mem
 **Failure classification.** The web ends a session only on a confirmed 401. An unreachable API, a
 rate limit (429) or a server failure keeps the session and shows a retry state (`sessionFailure`, #130).
 
-**Existing reads.** All are bounded and paginated, and the web already uses them.
+**Existing reads.** The web already uses these endpoints. Paging and bounds must be checked per endpoint; they are not a shared API guarantee. Counted stock returns one unpaginated list. The [Inventory read contract](expo-mobile-inventory-read-2026-09.md) applies the mobile transport’s 1 MiB decoded-response budget and virtualises the displayed list.
 
 | Use | Endpoint |
 |---|---|
