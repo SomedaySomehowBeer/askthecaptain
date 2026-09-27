@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { catalog, type Requirement } from './catalog.ts';
+import { catalog, type Catalog, type Requirement } from './catalog.ts';
 import { predicatePaths, type ParameterSpec, type Step, type WorkflowDefinition } from './definition.ts';
 
 export type Problem = { path: string; message: string };
@@ -10,8 +10,9 @@ const MAX_DEPTH = 3;
 
 /** Checks a definition is well-formed before it is offered to anyone: every step key exists in the
  *  catalogue with the right kind, every reference names something an earlier step saved (or the
- *  loop item, or a parameter), control flow is bounded, and triggers and parameters are sane. */
-export function validateDefinition(definition: WorkflowDefinition): Problem[] {
+ *  loop item, or a parameter), control flow is bounded, and triggers and parameters are sane.
+ *  `steps` defaults to the product catalogue; tests pass their own to check kinds the product does not offer. */
+export function validateDefinition(definition: WorkflowDefinition, steps: Catalog = catalog): Problem[] {
 	const problems: Problem[] = [];
 	const at = (path: string, message: string) => problems.push({ path, message });
 	if (!key.test(definition.key)) at('key', 'must be lower-case words joined by hyphens');
@@ -22,7 +23,7 @@ export function validateDefinition(definition: WorkflowDefinition): Problem[] {
 	if (definition.triggers.length === 0) at('triggers', 'at least one trigger');
 	definition.triggers.forEach((trigger, i) => {
 		if ((trigger.kind === 'daily' || trigger.kind === 'weekly') && !time.test(trigger.at)) at(`triggers.${i}.at`, 'must be HH:MM');
-		if (trigger.kind === 'event' && !/^[a-z]+(\.[a-z]+)+$/.test(trigger.event)) at(`triggers.${i}.event`, 'must look like mail.synced');
+		if (trigger.kind === 'event' && !/^[a-z]+(\.[a-z]+)+$/.test(trigger.event)) at(`triggers.${i}.event`, 'must look like stock.counted');
 	});
 	for (const [paramName, spec] of Object.entries(definition.parameters)) {
 		if (!name.test(paramName)) at(`parameters.${paramName}`, 'must be a camelCase name');
@@ -30,27 +31,27 @@ export function validateDefinition(definition: WorkflowDefinition): Problem[] {
 	}
 	if (definition.steps.length === 0) at('steps', 'at least one step');
 	const params = new Set(Object.keys(definition.parameters));
-	walk(definition.steps, 'steps', new Set<string>(), 0, params, at);
+	walk(definition.steps, 'steps', new Set<string>(), 0, params, at, steps);
 	return problems;
 }
 
-function walk(steps: Step[], path: string, saved: Set<string>, depth: number, params: Set<string>, at: (path: string, message: string) => void): void {
+function walk(steps: Step[], path: string, saved: Set<string>, depth: number, params: Set<string>, at: (path: string, message: string) => void, entries: Catalog): void {
 	if (depth > MAX_DEPTH) { at(path, `nesting deeper than ${MAX_DEPTH} is not allowed`); return; }
 	steps.forEach((step, i) => {
 		const here = `${path}.${i}`;
 		if (step.kind === 'each') {
 			checkPath(step.list, here + '.list', saved, params, at);
-			walk(step.steps, here + '.steps', new Set([...saved, 'item']), depth + 1, params, at);
+			walk(step.steps, here + '.steps', new Set([...saved, 'item']), depth + 1, params, at, entries);
 			return;
 		}
 		if (step.kind === 'branch') {
 			for (const p of predicatePaths(step.when)) checkPath(p, here + '.when', saved, params, at);
 			// Both arms see the same earlier outputs; what an arm saves is not promised after the branch.
-			walk(step.then, here + '.then', new Set(saved), depth + 1, params, at);
-			if (step.else) walk(step.else, here + '.else', new Set(saved), depth + 1, params, at);
+			walk(step.then, here + '.then', new Set(saved), depth + 1, params, at, entries);
+			if (step.else) walk(step.else, here + '.else', new Set(saved), depth + 1, params, at, entries);
 			return;
 		}
-		const entry = catalog[step.key];
+		const entry = entries[step.key];
 		if (!entry) { at(here + '.key', `${step.key} is not in the step catalogue`); return; }
 		if (entry.kind !== step.kind) at(here + '.kind', `${step.key} is a ${entry.kind} step, not ${step.kind}`);
 		if (step.kind === 'infer') {
@@ -76,13 +77,13 @@ function checkPath(path: string, where: string, saved: Set<string>, params: Set<
 	if (!root || !saved.has(root)) at(where, `${path} refers to nothing saved before this step`);
 }
 
-/** Every requirement any step in the definition has. */
-export function requirementsOf(definition: WorkflowDefinition): Requirement[] {
+/** Every requirement any step in the definition has, from `entries` (by default the product catalogue). */
+export function requirementsOf(definition: WorkflowDefinition, entries: Catalog = catalog): Requirement[] {
 	const found = new Set<Requirement>();
 	const visit = (steps: Step[]) => { for (const step of steps) {
 		if (step.kind === 'each') visit(step.steps);
 		else if (step.kind === 'branch') { visit(step.then); if (step.else) visit(step.else); }
-		else for (const r of catalog[step.key]?.requires ?? []) found.add(r);
+		else for (const r of entries[step.key]?.requires ?? []) found.add(r);
 	} };
 	visit(definition.steps);
 	return [...found];

@@ -24,7 +24,7 @@ export type Args = Record<string, string | number | boolean | null | { ref: Path
 
 export type ActionStep = {
 	kind: StepKind;
-	/** A key from the step catalogue, for example `gmail.newThreads` or `tasks.suggestFromTriage`. */
+	/** A key from the step catalogue, for example `tasks.due` or `stock.recordCount`. */
 	key: string;
 	args?: Args;
 	/** Name the output is saved under for later steps. */
