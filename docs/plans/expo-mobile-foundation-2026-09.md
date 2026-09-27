@@ -64,11 +64,10 @@ See the [validation record](../validation/mobile-all-tasks-read-2026-09-27/READM
 The production web export still makes no API requests. Other reads and all writes remain. The response byte budget is implemented separately in #202;
 native buffering/cancellation and these device gates remain: `expo/fetch` reporting the query URL unchanged, and a real 403/404 on an isolated
 synthetic environment. No simulator or device evidence exists.
-The web export opens view lists as visited pages. Native linking state can carry the view-list anchor,
-but a closed account guard at process boot discards it; the later requested-route replace opens the target alone.
-Empty resets and first tab visits also currently start at the index without that underlying route, by source inspection.
-The adopted [native navigation contract](expo-mobile-native-navigation-2026-09.md) specifies the next source change
-and its separate device evidence; it is not yet implemented.
+The web export opens view lists as visited pages. [Native navigation](expo-mobile-native-navigation-2026-09.md)
+merged in #205: explicit native initial routes, anchored app entries and seeded resets place the view
+list beneath its target by source inspection. Native device evidence and the documented L1/L2 edge cases
+remain open.
 Browser history cannot prove native back gestures. Keep the flag off on shared
 staging and for real accounts until the verified-link gate passes. The server and web increments
 through #191, including A1 and A2, are deployed to the single staging API and web machines, and
@@ -91,7 +90,7 @@ together with `expires_at`, `revoked_at` and `passkey_verified_at` (`0018_passke
 - The signed-in router accepts only `Authorization: Bearer sess_…` (`apps/api/src/app.ts:46,120`).
 - The API sets no cookie. The web keeps the token in its HttpOnly `captain_session` cookie and
   forwards it as a bearer (`apps/web/src/lib/session.ts`).
-- `POST /auth/sign-out` revokes only the token presented. No route lists sessions or revokes other ones.
+- `POST /auth/sign-out` revokes only the token presented. `POST /v1/me/sessions/revoke-others` (#204) ends the authenticated person's other existing sessions. No route lists sessions.
 
 **Google sign-in.**
 

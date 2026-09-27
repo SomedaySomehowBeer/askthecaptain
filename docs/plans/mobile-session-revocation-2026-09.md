@@ -173,7 +173,7 @@ policies, and uses the existing 429 shape.
     before any request is made.
 
 **Results** (plain text, no identifiers)
-- **N > 0:** "{N} other active session(s) ended." Then: "Anything already open on another screen stays visible
+- **N > 0:** "1 other active session ended." / "{N} other active sessions ended." Then: "Anything already open on another screen stays visible
   until that screen next checks with Captain. Sign-ins already in progress, and new sign-ins, can still start new
   sessions."
 - **0:** "No other active sessions were ended."

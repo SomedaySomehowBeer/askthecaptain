@@ -516,8 +516,9 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   merged in #199 after independent review and green CI. Other reads, writes, native
   sign-in and device evidence remain. The response byte budget merged in #202 after review and green CI.
   [All tasks](plans/expo-mobile-all-tasks-read-2026-09.md) merged in #201.
-  Next are the [native navigation contract](plans/expo-mobile-native-navigation-2026-09.md) and
-  [remote session revocation](plans/mobile-session-revocation-2026-09.md); adoption is not implementation.
+  [Native navigation](plans/expo-mobile-native-navigation-2026-09.md) merged in #205 after review and green CI;
+  native device evidence remains open. The [remote session revocation](plans/mobile-session-revocation-2026-09.md)
+  API merged in #204; its web control is in final checks and its mobile control is in review.
 - Server inference tiers and any future API-key/cost-budget alternative (#32) are business-runtime
   decisions, separate from Pip's hard Apple/Siri requirements.
 - Pip platform proofs remain in #119. No Captain milestone depends on them. No new claim about
