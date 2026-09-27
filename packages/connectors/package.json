@@ -3,7 +3,6 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/google.ts",
     "./xero": "./src/xero.ts",
     "./shopify": "./src/shopify.ts"
   },

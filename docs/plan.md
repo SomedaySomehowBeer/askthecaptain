@@ -89,7 +89,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `apps/e2e` | Playwright deployment smoke suite (deploy workflow, currently paused) and isolated browser regression in CI |
 | `apps/mobile` | Planned React Native/Expo development-build client for iOS and Android; not in the repository yet; native-device acceptance precedes release |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
-| `packages/connectors` | Xero and Shopify business adapters; remaining legacy Google grant/revocation helper; sign-in remains separate |
+| `packages/connectors` | Xero and Shopify business adapters; Google sign-in remains separate |
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
 | `packages/engine` | durable workflow execution: pg-boss and a small typed runner in the API process |
 | `packages/model` | the inference client: provider adapter, structured output, budgets, usage |
@@ -339,9 +339,10 @@ or vendor MCP step sources. Deduplicate webhooks, bound syncs and show source fr
 
 The unused Gmail/Calendar read/send adapters and retrieval package are removed by the first
 [code-removal increment](plans/assistant-code-removal-2026-09.md#r1--unused-legacy-leaf-modules-first-code-removal-no-schema-no-gate).
-The Google grant/revocation helper still supports remaining disconnect handling; its separate
-retirement gate preserves identity sign-in. No business inbox replaces the removed code. Pip's
-personal providers need separate consent, never copied credentials.
+The Google mailbox grant/revocation path is removed after the R4b live-count gate confirmed
+zero Google connections on staging (27 September, 05:22:22.969Z). Google identity sign-in remains.
+No business inbox replaces the removed code. Pip's personal providers need separate consent,
+never copied credentials. The shared connection schema remains for Xero and Shopify.
 
 ## 9. Security and tenancy
 

@@ -22,7 +22,6 @@ import { ContactsService } from './contacts/service.ts';
 import { inferenceRoutes } from './inference/routes.ts';
 import type { InferenceService } from './inference/service.ts';
 import { connectionRoutes } from './connections/routes.ts';
-import type { ConnectionService } from './connections/service.ts';
 import { randomUUID } from 'node:crypto';
 import type { Sql } from '@captain/db';
 import { Hono } from 'hono';
@@ -40,7 +39,7 @@ import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
 
-export type Deps = { stock?: StockService; shopifyConnections?: ShopifyConnections; shopifySync?: ShopifySync; shopifyScheduleEnabled?: boolean; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; connections?: ConnectionService; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
+export type Deps = { stock?: StockService; shopifyConnections?: ShopifyConnections; shopifySync?: ShopifySync; shopifyScheduleEnabled?: boolean; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
 type Vars = { Variables: { requestId: string; session: Session } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
