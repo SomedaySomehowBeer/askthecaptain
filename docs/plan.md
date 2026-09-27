@@ -417,18 +417,19 @@ do not invent an unreviewed dark palette or require a Claude Design round-trip f
 ## 11. Delivery
 
 Follow the [delivery plan](plans/captain-workspace-delivery-2026-09.md) and
-[next batch](plans/captain-next-batch-2026-09-25.md). The next work corrects the scope debt before
+[current assignments](plans/captain-next-batch-2026-09-27.md). The next work corrects the scope debt before
 adding more legacy-backed screens. Assistant navigation/runtime retirement, optional projects and
 Work details and private saved views are delivered; remaining retired storage/code cleanup continues
-alongside linked chat and the Expo client. Equipment scheduling is
+alongside the Expo client. Linked-chat API/web is delivered; hosted signed-in and native acceptance remain. Equipment scheduling is
 mandatory in the first usable workflow. Web and iOS need two-person acceptance; Android smoke
 checks start during mobile development and broader Android release follows.
 
 Implemented: web shell, filtered Work/task creation, tags, counted inventory access, equipment
 API/web, session recovery, and the assistant UI/API/runtime retirement with revised task/stock
 workflows, optional projects/Obligations removal, and revision-aware Work task/project/series
-pages (#138), and private saved Work views (#153/#154). Not complete: remaining retired assistant
-storage/connector cleanup, linked chat, files/DAM, native application and device acceptance.
+pages (#138), private saved Work views (#153/#154), default business views (#159), and linked-chat
+API/web (#169/#171/#173/#174). Not complete: remaining retired assistant storage/connector cleanup,
+hosted signed-in Chat acceptance and capacity, files/DAM, native application and device acceptance.
 Do not call the remaining screens implemented because mockups or bundle exports exist.
 
 The old phases 0–5 and six jobs are historical. Their completed issues document earlier work;
