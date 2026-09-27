@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { faultLines, isSignedIn, organisationCopy, roleLabel, signedInNotices, type Action } from '../account/copy.ts';
+import { returnToMyWork } from '../account/tab-entry.ts';
 import { AccountPageFrame, Actions, Lines, useWaitWake } from '../components/AccountPage.tsx';
 import { PlainScreen } from '../components/Screen.tsx';
 import { colors, space, type } from '../theme/tokens.ts';
@@ -18,7 +19,8 @@ export default function Organisation() {
 	const faults = faultLines(account.snapshot);
 	const notices = [...signedInNotices(view), ...(faults.length > 0 ? [{ title: 'Unexpected problem', text: faults.join(' ') }] : [])];
 	const choose = (organisationId: string) => {
-		if (organisationId === current) { if (router.canGoBack()) router.back(); else router.replace('/work'); return; }
+		// The current one: back where Switch was opened from; with nothing to go back to, My work (E12).
+		if (organisationId === current) { if (router.canGoBack()) router.back(); else returnToMyWork(); return; }
 		account.send({ type: 'choose-organisation', organisationId });
 	};
 	const signOut: Action = { kind: 'sign-out', id: 'sign-out', label: 'Sign out', primary: false };
