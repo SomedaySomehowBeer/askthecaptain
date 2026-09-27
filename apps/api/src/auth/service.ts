@@ -11,6 +11,10 @@ export const hashSecret = (secret: string) => createHash('sha256').update(secret
 const secret = (prefix: string) => `${prefix}${randomBytes(32).toString('base64url')}`;
 type Db = Sql | TransactionSql;
 
+/** The per-person lock that orders "sign out everywhere else" calls, before hashing. Exported so a test can hold or
+ *  find that exact lock. It is distinct from the passkey lock and taken by no other path. */
+export const sessionLockName = (userId: string) => `captain.sessions:${userId}`;
+
 export type SessionUser = { id: string; email: string; name: string };
 export type Session = { id: string; userId: string; expiresAt: Date; user: SessionUser; passkeyVerifiedAt: Date | null };
 export type Issued = { token: string; session: Session; returnTo: string };
@@ -186,6 +190,39 @@ export class AuthService {
 		if (!token) return;
 		const rows = await this.#db`update sessions set revoked_at = now() where token_hash = ${hashSecret(token)} and revoked_at is null returning user_id`;
 		if (rows.length) await this.#event('auth.sign_out', true, requestId, rows[0]!.userId);
+	}
+
+	/** Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §2): ends the person's other existing
+	 *  sessions and keeps the one making the call. It takes no input: the person and the current session come only from
+	 *  the verified bearer. Pending sign-ins are not touched, so this is not an account lockout.
+	 *  - A per-person lock orders these calls. After it, the current session is checked again at the statement's own
+	 *    time (`statement_timestamp()`, never `now()`, which was taken before the lock wait): one ended while queued,
+	 *    by a concurrent call or by expiry, is refused with the same 401 as the middleware's. The refusal's event
+	 *    commits: the failure is returned from the transaction and thrown after it.
+	 *  - One statement revokes and counts at one instant. `ended` counts only sessions that had not expired; one revoked
+	 *    concurrently by another path is skipped by the update's recheck. The current session is excluded by this call;
+	 *    nothing here keeps another path from ending it afterwards.
+	 *  - The response and the event carry a count, or the refusal's reason, and nothing else. */
+	async revokeOtherSessions(session: Session, requestId: string): Promise<{ ended: number }> {
+		const outcome = await this.#db.begin(async (tx) => {
+			await tx`select pg_advisory_xact_lock(hashtextextended(${sessionLockName(session.userId)}, 0))`;
+			const [live] = await tx`select 1 from sessions
+				where id = ${session.id} and user_id = ${session.userId} and revoked_at is null and expires_at > statement_timestamp()`;
+			if (!live) {
+				await this.#event('auth.sessions.revoke_others', false, requestId, session.userId, { reason: 'current_session_ended' }, tx);
+				return { error: unauthorised() };
+			}
+			const [row] = await tx<{ ended: number }[]>`with revoked as (
+					update sessions set revoked_at = statement_timestamp()
+					where user_id = ${session.userId} and id <> ${session.id} and revoked_at is null
+					returning expires_at)
+				select count(*) filter (where expires_at > statement_timestamp())::int as ended from revoked`;
+			const ended = row!.ended;
+			await this.#event('auth.sessions.revoke_others', true, requestId, session.userId, { ended }, tx);
+			return { ended };
+		}) as { error: HttpError } | { ended: number };
+		if ('error' in outcome) throw outcome.error;
+		return { ended: outcome.ended };
 	}
 
 	/** Test and development seam: a session for a known user without Google. */

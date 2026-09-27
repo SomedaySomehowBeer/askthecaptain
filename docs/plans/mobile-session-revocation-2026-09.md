@@ -1,7 +1,8 @@
 # Remote session revocation contract
 
-Status: adopted by this planning amendment, 27 September 2026. Outcome: **manage shared work** through secure account access.
-Independently reviewed by both existing Claude Opus agents and root. No implementation is included.
+Status: API increment implemented and independently reviewed, 27 September 2026; release checks in progress. Outcome: **manage shared work** through secure account access.
+Independently reviewed by both existing Claude Opus agents and root. Increment 1 implements the API only;
+web and mobile controls remain pending. See [implementation evidence](../validation/session-revocation-api-2026-09-27/README.md).
 
 It implements foundation §4 "Remote revocation" and §9 step 6 (#178) at the foundation's small scope: **end the
 person's existing sessions, other than the current one.** It is a per-person control, required before
