@@ -48,7 +48,7 @@ paths to isolated checkouts and records them in the coordinator checkpoint.
 
 | Owner | Current mobile composition increment | Files owned |
 |---|---|---|
-| Claude `business-views`, `w2:pR` | Platform composition binding, retry clock adapter, validated configuration, callback mapping and harness boundary; independent account UI review | `src/platform/app-account.ts`, `src/auth/cleanup.ts`, configuration, links and boundary checks |
+| Claude `business-views`, `w2:pR` | Platform composition binding, retry clock adapter, validated configuration, callback mapping and harness boundary; independent account UI review | `src/platform/{account-platform,app-account}.ts`, auth retry clock contracts, configuration, links, boundary checks and `.github/workflows/mobile.yml` |
 | Claude `linked-chat`, `w2:pS` | Account composition/provider, protected navigation, account screens, state pacing and test harness; independent platform review | `src/account/`, account routes/layouts and `harness/app/` |
 | Codex | Browser proof, export canary, review, tests, integration and status | Test orchestration, documentation, git and issue/PR records |
 
@@ -62,11 +62,29 @@ The [authentication-core partition](expo-mobile-auth-core-2026-09.md) (#189, mer
 pure protocol and serialized credential-storage logic with injected adapters. The
 [platform and account increment](expo-mobile-platform-account-2026-09.md) adds the installed-SDK
 adapters and the account reducer and runner; implementation and reciprocal review are complete,
-merged as #193. Nothing is wired into the app yet. The reviewed
-[composition and account-screen contract](expo-mobile-auth-composition-2026-09.md) defines the
-next assignment above. Business reads follow separately, with real-account link/device gates
-still required.
-Browser exports are not installed-app evidence.
+merged as #193. The reviewed
+[composition and account-screen contract](expo-mobile-auth-composition-2026-09.md) is the
+assignment above.
+
+**Current status (27 September 2026): implemented.**
+- The app is now composed: the root layout provides one account source per process over the platform binding, and a
+  protected root stack gates welcome, organisation and the tabs/Account on verified identity and a chosen organisation.
+- The account screens (welcome for every state that is not signed in, the organisation chooser/switcher and Account)
+  are present, with one `/v1/me` pacing rule and organisation-change tab resets.
+- The tabs still show no business data: there are no business reads or writes yet.
+- Native sign-in stays off on shared staging and for real accounts.
+- Nothing is installed or usable on a device, and no simulator or device evidence exists.
+- Two web exports are checked separately:
+  - The **production** web export is web-only. It offers no sign-in and contains no harness.
+  - The **synthetic harness** export is a separate test-only web export, selected only at build time. It renders the
+    production screens and stack over scripted account states: no API, credentials or tokens. It is never deployed.
+- A valid tab route the app was opened at is kept for that process. It is the sign-in `returnTo`, and it is opened once
+  when a restored saved session becomes ready.
+- All 185 mobile tests, four exports, boundary scans and browser checks at 360/390/430 px pass; see
+  the [validation record](../validation/mobile-account-composition-2026-09-27/README.md).
+
+Business reads follow separately, with real-account link/device gates still required. Browser exports are not
+installed-app evidence.
 
 Each Claude reviews the other's implementation. Codex owns git, builds, tests, integration and
 release. All heavy checks remain serial under `flock /tmp/atc-build.lock`.

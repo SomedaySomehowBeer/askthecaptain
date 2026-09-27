@@ -1,4 +1,4 @@
-/** Mobile shell smoke check on the production Expo **web** export (mobile foundation contract §6, §10; M-shell).
+/** Mobile shell and account checks using separate production and scripted-account Expo **web** exports (mobile foundation contract §6, §10; M-shell).
  *
  *  This is a browser approximation of the native shell, not native proof. It runs React Native Web in Chromium at
  *  phone widths. It shows nothing about iOS or Android rendering, native stacks or gestures, safe areas, VoiceOver or
@@ -25,6 +25,8 @@ const path = require('node:path');
 
 const base = new URL(process.env.MOBILE_SHELL_URL ?? 'http://127.0.0.1:8092');
 if (!['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname) || base.protocol !== 'http:') throw new Error('MOBILE_SHELL_URL must be a loopback http origin');
+const production = new URL(process.env.MOBILE_PRODUCTION_URL ?? 'http://127.0.0.1:8093');
+if (!['127.0.0.1', 'localhost', '[::1]'].includes(production.hostname) || production.protocol !== 'http:') throw new Error('MOBILE_PRODUCTION_URL must be a loopback http origin');
 const shots = process.env.MOBILE_SHELL_SCREENSHOTS;
 const STEP_MS = 20_000;
 const widths = [360, 390, 430];
@@ -47,16 +49,23 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 		for (const width of widths) {
 			const context = await browser.newContext({ viewport: { width, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 			contexts.push(context);
+			let expectedOrigin = base.origin;
 			const errors = []; const outside = new Set(); const consoleErrors = []; const history = [];
 			await context.route(() => true, async (route) => {
 				const url = new URL(route.request().url());
-				if (url.origin !== base.origin) { outside.add(url.protocol === 'data:' ? 'data' : url.origin); await route.abort(); return; }
+				if (url.origin !== expectedOrigin) { outside.add(url.protocol === 'data:' ? 'data' : url.origin); await route.abort(); return; }
 				await route.fulfill({ response: await route.fetch({ maxRedirects: 0 }) });
 			});
-			const page = await context.newPage(); page.setDefaultTimeout(STEP_MS);
-			page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text().replaceAll(canary, '[canary]')); });
-			page.on('framenavigated', frame => { if (frame === page.mainFrame()) history.push(new URL(frame.url()).pathname); });
-			page.on('pageerror', (error) => errors.push(error.message.replaceAll(canary, '[canary]')));
+			let page;
+			const freshPage = async () => {
+				if (page) await page.close();
+				page = await context.newPage(); page.setDefaultTimeout(STEP_MS);
+				page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text().replaceAll(canary, '[canary]')); });
+				page.on('framenavigated', frame => { if (frame === page.mainFrame()) history.push(new URL(frame.url()).pathname); });
+				page.on('pageerror', error => errors.push(error.message.replaceAll(canary, '[canary]')));
+			};
+			await freshPage();
+			const goto = async url => { expectedOrigin = new URL(url).origin; return page.goto(url); };
 			const shot = async (name) => { if (shots) await page.screenshot({ path: path.join(shots, `${width}-${name}.png`), fullPage: true }); };
 			const heading = (name) => page.getByRole('heading', { name, exact: true });
 			const tab = (name) => page.getByRole('tab', { name, exact: true });
@@ -67,7 +76,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 			};
 			/** Visible page text holds no digits (so no counts, dates or times) and no fictional record names. */
 			const noRecords = async (where) => {
-				const text = await page.evaluate(() => document.body.innerText);
+				const text = await page.evaluate(() => document.body.innerText.replace(document.querySelector('[data-testid="CAPTAIN_MOBILE_HARNESS_7f3a"]')?.innerText ?? '', '').replace(document.querySelector('[data-testid="harness-tabs-mount"]')?.innerText ?? '', ''));
 				check(!/\d/.test(text), `${width}px ${where}: no numbers, counts, dates or times are shown`);
 				for (const name of fictional) check(!text.includes(name), `${width}px ${where}: no fictional record is shown`);
 			};
@@ -83,11 +92,11 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 
 			try {
 				// Default: Work → My work.
-				await page.goto(base.href);
+				await goto(new URL('/?scenario=ready', base).href);
 				await expect(heading('My work')).toBeVisible();
 				check(at(page) === '/work', `${width}px: the app opens at /work`);
 				await tabs('Work');
-				await expect(page.getByText('Sign in to see your work', { exact: true })).toBeVisible();
+				await expect(page.getByText("Tasks aren't shown in the app yet", { exact: true })).toBeVisible();
 				await expect(button('Search')).toHaveAttribute('aria-disabled', 'true');
 				await noRecords('My work'); await noOverflow('My work');
 
@@ -118,7 +127,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				await expect(heading('All conversations')).toBeVisible();
 				check(at(page) === '/chat', `${width}px: Chat opens at /chat`);
 				await tabs('Chat');
-				await expect(page.getByText('Sign in to see your conversations', { exact: true })).toBeVisible();
+				await expect(page.getByText("Conversations aren't shown in the app yet", { exact: true })).toBeVisible();
 				await button('Chat views').click();
 				await expect(page.getByRole('heading', { name: /^conversations$/i })).toBeVisible();
 				check(at(page) === '/chat/views', `${width}px: the Chat view list is at /chat/views`);
@@ -138,14 +147,14 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				await tab('Resources').click();
 				await expect(heading('Equipment schedule')).toBeVisible();
 				check(at(page) === '/resources', `${width}px: Resources opens at /resources`);
-				await expect(page.getByText('Sign in to see the equipment schedule', { exact: true })).toBeVisible();
+				await expect(page.getByText("The equipment schedule isn't shown in the app yet", { exact: true })).toBeVisible();
 				await button('Resources views').click();
 				await expect(page.getByRole('heading', { name: /^libraries$/i })).toBeVisible();
 				await unavailable('Files & assets. Not available yet');
 				await page.getByRole('link', { name: 'Inventory. Counted stock', exact: true }).click();
 				await expect(heading('Inventory')).toBeVisible();
 				check(at(page) === '/resources/inventory', `${width}px: Inventory is at /resources/inventory`);
-				await expect(page.getByText('Sign in to see counted stock', { exact: true })).toBeVisible();
+				await expect(page.getByText("Counted stock isn't shown in the app yet", { exact: true })).toBeVisible();
 				await noRecords('Inventory'); await noOverflow('Inventory'); await shot('inventory');
 				await page.goBack();
 				await expect(page.getByRole('heading', { name: /^libraries$/i })).toBeVisible();
@@ -158,15 +167,16 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				await expect(heading('Account')).toBeVisible();
 				check(at(page) === '/settings', `${width}px: Settings is at /settings`);
 				await expect(page.getByRole('tablist')).toBeHidden();
-				await expect(page.getByText('Not signed in', { exact: true })).toBeVisible();
-				await noRecords('Settings'); await noOverflow('Settings'); await shot('settings');
+				await expect(button('Switch organisation')).toBeVisible();
+				await expect(button('Sign out')).toBeVisible();
+				await noOverflow('Settings'); await shot('settings');
 				await button('Back').click();
 				await expect(heading('My work')).toBeVisible();
 				check(at(page) === '/work', `${width}px: Settings goes back to where it was opened`);
 
 				// Links the shell does not have, including a sign-in callback, are refused without being echoed.
 				for (const link of [`/work/tasks/0190c0de-0000-7000-8000-000000000000?code=${canary}`, `/auth/callback?code=nh_${canary}&attempt=${canary}`, `/${canary}`]) {
-					await page.goto(new URL(link, base).href);
+					await goto(new URL(`${link}${link.includes('?') ? '&' : '?'}scenario=ready`, base).href);
 					await expect(heading('This link can’t be opened in Captain')).toBeVisible();
 					const text = await page.evaluate(() => document.body.innerText);
 					check(!text.includes(canary) && !text.includes('/work/tasks') && !text.includes('/auth/callback'), `${width}px: a refused link is not echoed`);
@@ -176,7 +186,197 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				await button('Go to My work').click();
 				await expect(heading('My work')).toBeVisible();
 
+				// The production export always stays web-only; the harness uses the exact same screens and stack.
+				for (const route of ['/?scenario=ready', '/work', '/work/views?scenario=ready']) {
+				await goto(new URL(route, production).href);
+				await expect(page.getByText("Signing in isn't available in this preview. Use Captain on the web.", { exact: true })).toBeVisible();
+				await expect(button('Sign in with Google')).toHaveCount(0);
+				await expect(page.getByTestId('CAPTAIN_MOBILE_HARNESS_7f3a')).toHaveCount(0);
+				await expect(page.getByRole('tablist')).toHaveCount(0);
+				await expect(page.getByTestId('account-command-log')).toHaveCount(0);
+				await expect(page.getByTestId('harness-scenario')).toHaveCount(0);
+				await noOverflow('production welcome');
+				}
+				await shot('production-welcome');
+
+				const scenario = async (name, route = '/') => {
+					await goto(new URL(`${route}?scenario=${name}`, base).href);
+					await expect(page.getByTestId('harness-scenario')).toHaveText(name);
+				};
+				const commands = async () => JSON.parse(await page.getByTestId('account-command-log').textContent());
+				const commandTypes = async () => (await commands()).map(c => c.type);
+				const expectTypes = async (types) => expect.poll(commandTypes).toEqual(types);
+				const states = [
+					['starting', 'Opening…'],
+					['starting-slow', "Still opening this phone's secure storage. If this continues, close and reopen Captain."],
+					['startup-failed', "Captain couldn't start sign-in on this phone. Close and reopen Captain."],
+					['misconfigured', 'This build has no valid Captain address.'],
+					['storage-unavailable', "This phone can't keep a saved sign-in, so Captain can't sign in here."],
+					['storage-unreadable', "Couldn't read your saved sign-in"],
+					['signed-out', 'Sign in to Captain'],
+					['signed-out-cancelled', 'Sign-in was cancelled.'],
+					['signing-in', 'Continue in your browser'],
+					['closing', 'Closing the sign-in window…'],
+					['saving', 'Saving your sign-in…'],
+					['checking', 'Checking your saved sign-in…'],
+					['unverified', "Couldn't check your saved sign-in"],
+					['releasing-warning', "Your saved sign-in may still be on this phone and the session hasn't ended. If you close Captain now, you may still be signed in the next time you open it."],
+					['choose', 'Choose an organisation'],
+					['none', "You aren't in an organisation yet. Organisations are created and joined on the Captain website."],
+					['lost-named', 'You no longer have access to Anchor Ales.'],
+					['lost-unnamed', "The organisation Captain remembered for you isn't available to you any more."],
+					['fault', 'Captain hit an unexpected problem with a sign-in on this phone.']
+				];
+				for (const [name, text] of states) {
+					await scenario(name);
+					await expect(page.getByText(text, { exact: name !== 'fault' })).toBeVisible();
+					await expect(page.getByRole('tablist')).toHaveCount(0);
+					await noOverflow(name);
+				}
+				await scenario('signed-out', '/work');
+				await expect(heading('Sign in to Captain')).toBeVisible();
+				check(at(page) === '/welcome', 'unready /work is guarded');
+				await button('Sign in with Google').click();
+				await expectTypes(['sign-in']);
+				check((await commands())[0].returnTo === '/work', 'sign-in retains an allowed requested tab');
+				await scenario('signing-in'); await button('Cancel').click(); await expectTypes(['cancel']);
+				await scenario('storage-unreadable');
+				await button('Try reading again').click(); await expectTypes(['retry']);
+				await button('Sign in again').click(); await expectTypes(['retry', 'sign-in']);
+				await scenario('unverified');
+				await button('Try again').click(); await expectTypes(['retry']);
+				await page.getByTestId('account-action-sign-out').click();
+				await expect(page.getByText("Sign out of Captain on this phone? Uninstalling Captain doesn't sign you out.", { exact: true })).toBeVisible();
+				await page.getByTestId('account-action-sign-out-cancel').click(); await expectTypes(['retry']);
+				await page.getByTestId('account-action-sign-out').click();
+				await page.getByTestId('account-action-sign-out-confirm').click(); await expectTypes(['retry', 'sign-out']);
+				await scenario('releasing-warning'); await button('Try again').click(); await expectTypes(['retry']);
+				await scenario('signed-out-busy'); await button('Try again').click(); await expectTypes(['retry']);
+				await scenario('fault'); await button('Try again').click(); await expectTypes(['retry']);
+				await scenario('signed-out-released'); await expect(heading('Signed out')).toBeVisible();
+				await expect(page.getByText('Your session has ended. Sign in again. Signed out.', { exact: true })).toBeVisible();
+				await scenario('not-remembered'); await expect(heading('My work')).toBeVisible();
+				await button('Account and settings').click();
+				await expect(page.getByText("Captain will use this organisation now but couldn't remember it for next time.", { exact: true })).toBeVisible();
+				await page.getByTestId('account-action-sign-out').click();
+				await page.getByTestId('account-action-sign-out-cancel').click(); await expectTypes([]);
+				await page.getByTestId('account-action-sign-out').click();
+				await page.getByTestId('account-action-sign-out-confirm').click(); await expectTypes(['sign-out']);
+				await scenario('refreshing'); await expect(heading('My work')).toBeVisible();
+				await button('Account and settings').click();
+				await expect(page.getByText('Checking your access…', { exact: true })).toBeVisible();
+
+				await scenario('choose', '/work');
+				await expect(heading('Choose an organisation')).toBeVisible();
+				check(at(page) === '/organisation', 'identity without organisation cannot reach tabs');
+				await button('Harbour Brewing, Owner').click(); await expectTypes(['choose-organisation']);
+				check((await commands())[0].organisationId === 'c0ffee00-1234-4abc-9def-0123456789ab', 'choosing sends the actual organisation ID');
+				await scenario('ready'); await expect(heading('My work')).toBeVisible();
+				await button('Account and settings').click(); await button('Switch organisation').click();
+				await expect(heading('Switch organisation')).toBeVisible();
+				await button('Quayside Cellars, Member').click(); await expectTypes(['choose-organisation']);
+				check((await commands())[0].organisationId === 'd00dfeed-5678-4def-8abc-ba9876543210', 'switch chooses the other membership');
+
+				await scenario('ready-destination');
+				await expect.poll(() => at(page)).toBe('/chat/views');
+				await expectTypes(['destination-used']);
+				const renders = await page.getByTestId('account-render-count').textContent();
+				await page.waitForTimeout(2_000);
+				await expect(page.getByTestId('account-render-count')).toHaveText(renders);
+				await expectTypes(['destination-used']);
+
+				await scenario('ready'); await expect(heading('My work')).toBeVisible();
+				await page.getByTestId('harness-transition-lost').click();
+				await expect(heading('Choose an organisation')).toBeVisible();
+				await expect(page.getByText('You no longer have access to Harbour Brewing.', { exact: true })).toBeVisible();
+				await expect(page.getByRole('tablist')).toHaveCount(0);
+				await scenario('ready'); await expect(heading('My work')).toBeVisible();
+				await page.getByTestId('harness-transition-release').click();
+				await expect.poll(() => at(page)).toBe('/welcome');
+				await expect(page.getByRole('tablist')).toHaveCount(0);
+				await shot('release-warning');
+
+				for (const transition of ['switch', 'lost-single']) {
+					await freshPage(); // History belongs to this app session, never an earlier scenario document.
+					await scenario('ready'); await expect(heading('My work')).toBeVisible();
+					await button('Work views').click();
+					await tab('Chat').click(); await button('Chat views').click();
+					const oldMount = await page.getByTestId('harness-tabs-mount').textContent();
+					await page.evaluate(() => { window.__sessionProof = 'same-document'; });
+					await page.getByTestId(`harness-transition-${transition}`).click();
+					await expect(heading('My work')).toBeVisible();
+					await expect.poll(() => at(page)).toBe('/work');
+					await expect(page.getByTestId('harness-tabs-mount')).not.toHaveText(oldMount);
+					await tab('Chat').click();
+					await expect(heading('All conversations')).toBeVisible();
+					check(at(page) === '/chat', 'the new organisation has a fresh Chat stack');
+					await tab('Work').click(); await expect(heading('My work')).toBeVisible();
+					await page.goBack(); await page.goForward();
+					check(await page.evaluate(() => window.__sessionProof) === 'same-document', 'history keeps the same account process');
+					await expect(page.getByTestId('harness-tabs-mount')).not.toHaveText(oldMount);
+					await button('Account and settings').click();
+					await expect(page.getByText('Quayside Cellars', { exact: true })).toBeVisible();
+					await expect(page.getByText('Harbour Brewing', { exact: true })).toHaveCount(0);
+				}
+				for (const transition of ['lost', 'release']) {
+					await freshPage();
+					await scenario('ready'); await expect(heading('My work')).toBeVisible();
+					await button('Work views').click(); await tab('Chat').click(); await button('Chat views').click();
+					await page.evaluate(() => { window.__sessionProof = 'same-document'; });
+					await page.getByTestId(`harness-transition-${transition}`).click();
+					await expect(page.getByRole('tablist')).toHaveCount(0);
+					await page.goBack(); await expect(page.getByRole('tablist')).toHaveCount(0);
+					await page.goForward(); await expect(page.getByRole('tablist')).toHaveCount(0);
+					check(await page.evaluate(() => window.__sessionProof) === 'same-document', 'guard history keeps the same account process');
+					await expect(heading(transition === 'lost' ? 'Choose an organisation' : 'Signing out…')).toBeVisible();
+				}
+				await scenario('checking', '/work/views');
+				await expect(heading('Checking your saved sign-in…')).toBeVisible();
+				await page.getByTestId('harness-transition-verify').click();
+				await expect.poll(() => at(page)).toBe('/work/views');
+				await expect(heading('For you')).toBeVisible();
+				await expectTypes([]);
+
+				// Freeze the browser clock before constructing each timed source: its deadline is exactly +5 seconds.
+				await page.clock.install();
+				for (const name of ['unverified-retry-at', 'releasing-retry-at']) {
+					await page.clock.pauseAt(await page.evaluate(() => Date.now()));
+					await scenario(name);
+					await expect(button('Try again')).toHaveAttribute('aria-disabled', 'true');
+					const beforeWaitRender = await page.getByTestId('account-render-count').textContent();
+					await page.clock.runFor(2_000);
+					await expect(page.getByTestId('account-render-count')).toHaveText(beforeWaitRender);
+					await page.clock.runFor(2_999);
+					await expect(button('Try again')).toHaveAttribute('aria-disabled', 'true');
+					await button('Try again').dispatchEvent('click'); await expectTypes([]);
+					await page.clock.runFor(1);
+					await expect(button('Try again')).toBeEnabled();
+					const afterWaitRender = await page.getByTestId('account-render-count').textContent();
+					await page.clock.runFor(2_000);
+					await expect(page.getByTestId('account-render-count')).toHaveText(afterWaitRender);
+					await expectTypes([]);
+					await page.clock.resume();
+					await button('Try again').click(); await expectTypes(['retry']);
+				}
+
+				// Record actual Linking.openURL output, prevent a synthetic website navigation, and assert the fixed path.
+				await scenario('none');
+				await page.evaluate(() => { window.__opened = []; window.open = url => { window.__opened.push(String(url)); return null; }; });
+				await button('Open Captain on the web').click();
+				check(JSON.stringify(await page.evaluate(() => window.__opened)) === JSON.stringify(['https://app.example.invalid/']), 'website button opens configured origin only');
+				await expectTypes([]);
+				await page.getByTestId('account-action-sign-out').click();
+				await page.getByTestId('account-action-sign-out-confirm').click(); await expectTypes(['sign-out']);
+				await scenario('ready'); await expect(heading('My work')).toBeVisible();
+				await button('Account and settings').click();
+				await page.evaluate(() => { window.__opened = []; window.open = url => { window.__opened.push(String(url)); return null; }; });
+				await button('Other settings on the web').click();
+				check(JSON.stringify(await page.evaluate(() => window.__opened)) === JSON.stringify(['https://app.example.invalid/settings']), 'settings link uses the fixed configured path');
+				await expectTypes([]);
+				console.log(`PASS ${width}px: account states, guarded navigation, command wiring, organisation loss, destination-once and stable subscriptions`);
+
 				check(errors.length === 0, `${width}px: no page errors (${errors.length})`);
+				check(consoleErrors.length === 0, `${width}px: no console errors (${consoleErrors.length})`);
 				check(outside.size === 0, `${width}px: no request left the export's origin (${[...outside].join(', ')})`);
 				console.log(`PASS ${width}px: three tabs, My work default, independent tab history, view lists, Inventory, Settings, disabled unavailable views, no records, refused links, no overflow or page errors`);
 			} catch (error) {

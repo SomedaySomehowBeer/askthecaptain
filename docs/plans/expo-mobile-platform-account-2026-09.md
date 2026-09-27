@@ -1,6 +1,7 @@
 # Mobile platform adapters and account state
 
-Status: implemented and reciprocally reviewed; integration pending, 27 September 2026.
+Status: implemented and reciprocally reviewed; merged as #193. As of 27 September 2026, the
+[composition increment](expo-mobile-auth-composition-2026-09.md) that wires it into the app is implemented. The paragraphs below describe this increment as it merged.
 Continues the adopted [foundation](expo-mobile-foundation-2026-09.md) after merged
 shell #188 and pure authentication core #189. Outcomes: manage shared work,
 allocate resources and discuss work through the same authenticated API.

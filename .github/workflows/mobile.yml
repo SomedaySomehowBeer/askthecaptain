@@ -70,24 +70,41 @@ jobs:
           MASTER_KEY: canary-mobile-master-key-must-not-bundle
           GOOGLE_CLIENT_SECRET: canary-mobile-google-secret-must-not-bundle
           SPRITES_API_TOKEN: canary-mobile-sprites-token-must-not-bundle
+        # The harness selector is explicitly unset for every production export (docs/plans/
+        # expo-mobile-auth-composition-2026-09.md §7.1), so these bundles use the default router root, src/app.
         run: |
           rm -rf apps/mobile/dist
           for platform in web ios android; do
-            pnpm --dir apps/mobile exec expo export --platform "$platform" --output-dir "dist/$platform" --max-workers 2
+            env -u CAPTAIN_MOBILE_HARNESS pnpm --dir apps/mobile exec expo export --platform "$platform" --output-dir "dist/$platform" --max-workers 2
           done
-      - name: Client boundary guard (exported bundles)
+      # The test-only account harness: a separate web-only export into its own directory, with the same synthetic public
+      # URLs and secret canaries. It is never a native build (app.config.ts refuses one) and is never deployed.
+      - name: Export the account harness (web only; test-only)
+        env:
+          EXPO_PUBLIC_API_URL: https://api.example.invalid
+          EXPO_PUBLIC_APP_URL: https://app.example.invalid
+          DATABASE_URL: postgres://canary-mobile-export@db.example.invalid/canary
+          MASTER_KEY: canary-mobile-master-key-must-not-bundle
+          GOOGLE_CLIENT_SECRET: canary-mobile-google-secret-must-not-bundle
+          SPRITES_API_TOKEN: canary-mobile-sprites-token-must-not-bundle
+        run: |
+          rm -rf apps/mobile/dist-harness
+          CAPTAIN_MOBILE_HARNESS=1 pnpm --dir apps/mobile exec expo export --platform web --output-dir dist-harness --max-workers 2
+      # Secrets and canaries in all four exports; the harness marker and any harness/app path absent from all three
+      # production exports, and the marker present in the harness export (so its absence elsewhere means something).
+      - name: Client boundary guard (exported bundles and harness exclusion)
         env:
           BOUNDARY_CANARY_VALUES: canary-mobile-export,canary-mobile-master-key-must-not-bundle,canary-mobile-google-secret-must-not-bundle,canary-mobile-sprites-token-must-not-bundle
-        run: node apps/mobile/scripts/check-boundary.mjs apps/mobile/dist/web apps/mobile/dist/ios apps/mobile/dist/android
-      # React Native Web in Chromium at phone widths, served from the web export on an ephemeral loopback port. A browser
+        run: node apps/mobile/scripts/check-boundary.mjs apps/mobile/dist/web apps/mobile/dist/ios apps/mobile/dist/android --harness-export apps/mobile/dist-harness
+      # React Native Web in Chromium at phone widths, served from separate production and test-only harness exports on ephemeral loopback ports. A browser
       # approximation of the shell: not native rendering, gestures, accessibility services or device evidence.
       - name: Install Chromium for the shell approximation
         run: pnpm --filter @captain/e2e exec playwright install --with-deps chromium
-      - name: Mobile shell browser approximation (web export)
+      - name: Mobile shell and account browser approximation
         env:
           MOBILE_SHELL_SCREENSHOTS: ${{ github.workspace }}/apps/e2e/test-results/mobile-shell
         run: node apps/e2e/scripts/mobile-shell-ci.mjs
-      # Synthetic screenshots of the shell only: no fixture, account, credential or business data exists in this job.
+      # Synthetic account and shell screenshots only: no real account, credential or business data exists in this job.
       - name: Retain shell screenshots on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -103,5 +120,5 @@ jobs:
             echo '### Mobile shell checks'
             echo 'Bundle exports for web, iOS and Android are JavaScript bundles only.'
             echo 'They are not a native build, a signed build, a simulator run or device acceptance.'
-            echo 'The shell browser check runs the web export in Chromium; it approximates layout and navigation only.'
+            echo 'The browser check runs separate production and synthetic account harness web exports in Chromium; it approximates layout, navigation and account controls only.'
           } >> "$GITHUB_STEP_SUMMARY"

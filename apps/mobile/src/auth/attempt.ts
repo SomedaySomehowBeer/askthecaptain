@@ -15,7 +15,8 @@
  *  interface and has no test of its own; the cleanup it calls is tested directly. It is a guard, not a feature: any
  *  change that can discard an attempt mid-exchange must keep it and add a test that reaches it. The cleanup states are
  *  likewise reached today only through an injected cleanup (as the tests do); the runner (next increment) must still
- *  present `cleanup-pending` as an actionable state, with `pendingCleanupRetryAt()` and a Try again action. */
+ *  present `cleanup-pending` as an actionable state, with `pendingCleanupRetryAfterMs()` and a Try again action. The
+ *  injected `now` is the app's clamped monotonic clock (composition plan §3), never a wall clock. */
 import type { Transport } from '../api/client.ts';
 import { nativeStartPath } from '../api/paths.ts';
 import { linkTarget, refusedLink, safeReturnPath } from '../lib/links.ts';
@@ -93,6 +94,6 @@ export function createAttempts(options: {
 		},
 		retryCleanup: () => cleanup.retry(),
 		pendingCleanupExpiresAt: () => cleanup.expiresAt(),
-		pendingCleanupRetryAt: () => cleanup.retryAt()
+		pendingCleanupRetryAfterMs: () => cleanup.retryAfterMs()
 	};
 }

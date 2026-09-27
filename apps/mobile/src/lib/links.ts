@@ -4,9 +4,13 @@
  *  - Only this development build's own scheme, `app.askthecaptain.dev`, or a bare path is considered, and only with no host.
  *  - The path must pass the same safe-return rule as the API and web, then match an app route exactly.
  *  - Query strings and fragments are dropped: no route in this shell takes a parameter.
- *  - Every other link, including every `/auth/callback`, goes to the refusal screen. Sign-in callbacks are accepted
- *    only as the return value of the app's own pending authentication session (M-auth, contract §3.2 step 6), never
- *    through this path; this hook runs outside the app's state and could not check a pending attempt. */
+ *  - Every other link goes to the refusal screen. Sign-in callbacks are accepted only as the return value of the app's
+ *    own pending authentication session (M-auth, contract §3.2 step 6), never through routing; this hook runs outside
+ *    the app's state and could not check a pending attempt.
+ *  - Android also delivers the callback as a system link. `systemLinkTarget` answers null (no navigation) for this
+ *    build's exact callback forms, so the router never sees the code or attempt and the sign-in screen stays in place
+ *    while the attempt core settles (docs/plans/expo-mobile-auth-composition-2026-09.md §5). Every other `/auth/*`
+ *    path and every lookalike still goes to the refusal screen. */
 export const appScheme = 'app.askthecaptain.dev';
 export const refusedLink = '/link-not-allowed';
 
@@ -57,4 +61,16 @@ export function linkTarget(incoming: unknown): string {
 	const pathname = new URL(safe, probe).pathname;
 	const path = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
 	return routes.get(path) ?? refusedLink;
+}
+
+/** This build's sign-in callback as a system link, in exactly the forms the platform can deliver it: the host-less
+ *  `app.askthecaptain.dev:/auth/callback` and the empty-host `app.askthecaptain.dev:///auth/callback`, each either on
+ *  its own or followed by `?` and a query. The scheme is compared exactly (lower case, as the attempt core requires);
+ *  the query is not read, so nothing in it is parsed, kept or logged. No fragment, no trailing slash, no other case. */
+const callbackLink = new RegExp(`^${appScheme.replace(/\./g, '\\.')}:(?:///|/)auth/callback(?:\\?[^#]*)?$`);
+
+/** What `redirectSystemPath` returns: null (no navigation) for an exact sign-in callback, otherwise `linkTarget`. */
+export function systemLinkTarget(incoming: unknown): string | null {
+	if (typeof incoming === 'string' && incoming.length <= maxLength && callbackLink.test(incoming)) return null;
+	return linkTarget(incoming);
 }

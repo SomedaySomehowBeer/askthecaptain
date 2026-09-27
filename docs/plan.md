@@ -87,7 +87,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `apps/api` | Hono HTTP API: auth, routes over services, webhooks, health |
 | `apps/web` | Next.js; server components read the API. Work/Chat/Resources web client; legacy navigation still present is cleanup debt, not target scope |
 | `apps/e2e` | Playwright deployment smoke suite (deploy workflow, currently paused) and isolated browser regression in CI |
-| `apps/mobile` | React Native/Expo development-build client for iOS and Android: shell (#188) and authentication core (#189) merged; platform adapters and account state in integration; not wired to screens and not usable on a device; native-device acceptance precedes release |
+| `apps/mobile` | React Native/Expo development-build client for iOS and Android: shell (#188), authentication core (#189) and platform adapters/account state (#193) merged; sign-in composition and account screens implemented ([composition plan](plans/expo-mobile-auth-composition-2026-09.md)); tabs show no business data yet; native sign-in stays off; not usable on a device and no simulator or device evidence; native-device acceptance precedes release |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Xero and Shopify business adapters; Google sign-in remains separate |
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
@@ -511,6 +511,8 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   (or a reviewed equivalent) pass the app-identity gate. Remote session revocation is required for
   first-customer native readiness. Native notifications, actual iPhone/Android gesture, keyboard,
   accessibility and performance evidence remain separate. Next.js remains web; Expo remains mobile direction.
+  Sign-in composition and the account screens ([composition plan](plans/expo-mobile-auth-composition-2026-09.md))
+  are implemented; business reads, native sign-in and device evidence remain.
 - Server inference tiers and any future API-key/cost-budget alternative (#32) are business-runtime
   decisions, separate from Pip's hard Apple/Siri requirements.
 - Pip platform proofs remain in #119. No Captain milestone depends on them. No new claim about

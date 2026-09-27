@@ -5,8 +5,8 @@ import { Screen } from '../../../components/Screen.tsx';
 export default function MyWork() {
 	return (
 		<Screen section="work" title="My work">
-			<Notice title="Sign in to see your work">
-				Signing in from this app is not available in this build yet, so it shows no tasks. Your work is unchanged on the web.
+			<Notice title="Tasks aren't shown in the app yet">
+				This version of the app doesn't read tasks yet, so it shows none. Your work is unchanged on the web.
 			</Notice>
 		</Screen>
 	);
