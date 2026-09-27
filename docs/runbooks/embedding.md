@@ -1,5 +1,24 @@
 # Embedding service
 
+> **Historical maintenance record (R2, #133).**
+>
+> **Removed from the repository:**
+> - the `infra/embed` source, tests, Dockerfile and Fly configuration;
+> - its CI test pattern;
+> - the `deploy` workflow's `embed` job and path filter;
+> - its `.gitignore` entry.
+>
+> See the [code-removal contract](../plans/assistant-code-removal-2026-09.md).
+>
+> **Still in existence, unchanged:** the Fly app `askthecaptain-embed` and its `EMBED_TOKEN` secret.
+> The app is stopped with autostart off, as recorded in [paused.md](paused.md). This change neither
+> restarts nor deletes them. Removing them is a separate authorised infrastructure operation, to be
+> recorded in paused.md when it happens.
+>
+> **No procedure here re-enables the service.** The owner steps, deploy commands and local
+> instructions below refer to files and a workflow job that no longer exist. They are kept only as
+> history of what was deployed.
+
 > **Retired implementation:** the assistant runtime is removed in #135. Commands below are
 > historical recovery context, not current setup instructions. Do not re-enable these sources.
 > Follow the [retirement contract](../plans/assistant-runtime-retirement-2026-09.md), including

@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: pgvector/pgvector:pg18 # Postgres 18 with the vector extension the retrieval index needs (D21)
+        image: pgvector/pgvector:pg18 # Postgres 18 with the vector extension: historical migration 0030 runs `create extension vector` on every fresh database
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -48,8 +48,8 @@ jobs:
         run: pnpm check --log-order=stream
       - name: Test workspace against Postgres
         run: pnpm test --log-order=stream
-      - name: infra services (plain node, no workspace)
-        run: node --test infra/sprites/*.test.mjs infra/embed/*.test.mjs
+      - name: Sprite bootstrap tests (plain node, no workspace)
+        run: node --test infra/sprites/*.test.mjs
       - name: browser regression for React retries
         run: |
           pnpm --filter @captain/e2e exec playwright install --with-deps chromium
