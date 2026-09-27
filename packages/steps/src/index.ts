@@ -3,7 +3,7 @@ import { stocktake } from './defs/stocktake.ts';
 import type { WorkflowDefinition } from './definition.ts';
 
 export * from './definition.ts';
-export { catalog, requirementWords, type CatalogEntry, type Requirement } from './catalog.ts';
+export { catalog, requirementWords, type Catalog, type CatalogEntry, type Requirement } from './catalog.ts';
 export { digestOf, requirementsOf, resolveParameters, validateDefinition, type Problem } from './validate.ts';
 
 /** The catalogue of workflows the product offers (plan §6 "The first workflows"), in the order the

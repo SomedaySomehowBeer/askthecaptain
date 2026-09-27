@@ -2,7 +2,7 @@ import type { StepKind } from './definition.ts';
 
 /** What a step needs before an organisation can enable a workflow that uses it (plan §6: a
  *  definition that names a capability the enabling person lacks fails at enablement). */
-export type Requirement = 'connection:google' | 'connection:xero' | 'connection:shopify' | 'inference' | 'push';
+export type Requirement = 'connection:xero' | 'connection:shopify' | 'inference' | 'push';
 
 export type CatalogEntry = {
 	kind: StepKind;
@@ -15,73 +15,30 @@ export type CatalogEntry = {
 	until?: string;
 };
 
+export type Catalog = Readonly<Record<string, CatalogEntry>>;
+
 /** The step catalogue (plan §6). Keys are stable names the runner binds to services and connectors;
- *  a definition may only name keys that exist here, with the matching kind. */
-export const catalog: Record<string, CatalogEntry> = {
+ *  a definition may only name keys that exist here, with the matching kind. It holds exactly the steps
+ *  the offered workflows use; the retired assistant's steps were removed with it (#133). */
+export const catalog: Catalog = {
 	// read
-	'gmail.newThreads': { kind: 'read', does: 'reads mail threads that arrived since the last run', requires: ['connection:google'] },
-	'attachments.extractText': { kind: 'read', does: 'extracts text from allowed attachments under the size cap (D13)', requires: ['connection:google'] },
 	'tasks.due': { kind: 'read', does: 'reads tasks due within a window, and overdue ones', requires: [] },
-	'tasks.overdueAndThisWeek': { kind: 'read', does: 'reads overdue tasks and tasks due this week', requires: [] },
-	'outbox.waiting': { kind: 'read', does: 'reads drafts waiting in the outbox', requires: [] },
-	'calendar.today': { kind: 'read', does: "reads today's cached events and connection state", requires: [] },
-	'calendar.tomorrow': { kind: 'read', does: "reads tomorrow's events", requires: ['connection:google'] },
-	'mail.relatedThreads': { kind: 'read', does: 'reads recent threads with the people in an event', requires: ['connection:google'] },
-	'contacts.forEvent': { kind: 'read', does: 'reads the contacts attending an event', requires: [] },
-	'xero.overdueReceivables': { kind: 'read', does: 'reads cached overdue invoices and explicit Xero connection state', requires: [] },
 	'stock.items': { kind: 'read', does: 'reads the counted stock list for a location', requires: [] },
-	'triage.draftScore': { kind: 'read', does: 'scores the thread for drafting by rules, with no model: needs you, a request, a familiar sender and how past drafts to them ended; none when already replied, over a day old, or twenty drafted this run', requires: [] },
-	'triage.gate': { kind: 'read', does: 'decides by rules, with no model, whether the thread is bulk or automated mail (D20)', requires: [] },
 	'shopify.stockLevels': { kind: 'read', does: 'reads shop levels or reports that Shopify is disconnected or incomplete', requires: [] },
-	// infer
-	'answer': { kind: 'infer', does: 'answers one question from deterministically retrieved records, with sources', requires: ['inference'], schemas: ['answer'] },
-	'notes.new': { kind: 'read', does: 'reads notes written or changed since they were last read, skipping very short ones', requires: [] },
-	'classifyNote': { kind: 'infer', does: 'classifies a note the person wrote: category, summary, facts, tasks; nothing needs the owner', requires: ['inference'], schemas: ['noteTriage'] },
-	'triage.projectRule': { kind: 'read', does: 'links the thread to a project by rule: an existing link, its counterparty’s one project, or a quoted task reference', requires: [] },
-	'classifyThread': { kind: 'infer', does: 'classifies a thread: category, needs owner, summary, facts, and the project it belongs to', requires: ['inference'], schemas: ['triage'] },
-	'draftReply': { kind: 'infer', does: 'drafts a reply in the owner’s voice', requires: ['inference'], schemas: ['draft'] },
-	'writeBrief': { kind: 'infer', does: 'writes the morning brief from the day’s data', requires: ['inference'], schemas: ['brief'] },
-	'draftChaser': { kind: 'infer', does: 'drafts a courteous chaser from Xero for the connected mailbox', requires: ['inference', 'connection:xero', 'connection:google'], schemas: ['draft'] },
-	'prepareEventNote': { kind: 'infer', does: 'writes a one-paragraph preparation note for an event', requires: ['inference'], schemas: ['note'] },
-	'draftOrderEmail': { kind: 'infer', does: 'drafts a short order email to the preferred supplier', requires: ['inference'], schemas: ['draft'] },
 	// write
-	'briefs.record': { kind: 'write', does: 'saves the validated morning brief for Today', requires: [] },
-	'triage.record': { kind: 'write', does: 'records the triage result for the thread and its project link or candidate', requires: [] },
-	'triage.file': { kind: 'write', does: 'files the thread as information, naming the rule that filed it', requires: [] },
-	'notes.record': { kind: 'write', does: 'records the triage result for the note and its project link or candidate', requires: [] },
-	'tasks.suggestFromNote': { kind: 'write', does: 'creates suggested tasks from what the note says', requires: [] },
-	'mail.newSent': { kind: 'read', does: 'reads messages the person sent since the last run that carry enough of their own words, skipping acknowledgements', requires: ['connection:google'] },
-	'classifySent': { kind: 'infer', does: 'classifies a message the person sent: category, summary, facts, tasks and project; nothing needs the owner', requires: ['inference'], schemas: ['noteTriage'] },
-	'sent.record': { kind: 'write', does: 'records the triage result for the sent message and its project link or candidate, as the person’s own writing', requires: [] },
-	'tasks.suggestFromSent': { kind: 'write', does: 'creates suggested tasks from what the person committed to in the message', requires: [] },
-	'tasks.suggestFromTriage': { kind: 'write', does: 'creates suggested tasks from the facts found', requires: [] },
-	'tasks.completeFromConfirmations': { kind: 'write', does: 'completes duties whose confirmation arrived', requires: [] },
-	'contacts.upsertFromTriage': { kind: 'write', does: 'keeps contacts current from the thread', requires: [] },
-	'outbox.create': { kind: 'write', does: 'puts a draft in the outbox for a person to send (D5)', requires: ['connection:google'] },
-	'gmail.label': { kind: 'write', does: 'labels the thread in Gmail', requires: ['connection:google'] },
 	'tasks.createInProject': { kind: 'write', does: 'creates a task in a named project', requires: [] },
 	'stock.recordCount': { kind: 'write', does: 'journals the person’s recorded stock count without counting twice', requires: [] },
-	'calendar.writeNote': { kind: 'write', does: 'attaches a preparation note to an event', requires: ['connection:google'] },
 	// await
-	'outbox.sent': { kind: 'await', does: 'waits until a person sends or discards the draft', requires: [], until: 'the draft is sent or discarded' },
 	'time.beforeDue': { kind: 'await', does: 'waits until the reminder time before a task is due', requires: [], until: 'the reminder time' },
 	'time.afterDue': { kind: 'await', does: 'waits until a task is past due', requires: [], until: 'the due date has passed' },
 	'stock.counted': { kind: 'await', does: 'waits for the counter to enter a count', requires: [], until: 'a count is entered' },
 	// notify
-	'push.owner': { kind: 'notify', does: 'pushes a message to the owner', requires: ['push'] },
-	// discovery (D22)
-	'discovery.seeds': { kind: 'read', does: 'finds what is worth a discovery call: candidate names past their thresholds, suggested duties sharing a reference, a thread or note a person chose, or clusters of the backlog on the first run; at most ten', requires: [] },
-	'discovery.evidence': { kind: 'read', does: 'gathers the threads and notes nearest a seed from the index, widened by counterparty, references, reply chain, subject and dates; at most fifty', requires: [] },
-	'discoverProject': { kind: 'infer', does: 'judges the assembled evidence: a project with its brief and tasks, one task, a relationship, or nothing', requires: ['inference'], schemas: ['discovery'] },
-	'discovery.record': { kind: 'write', does: 'writes a proposed project with its brief, links, suggested tasks and evidence, or one suggested task, or a company link; nothing is active until a person accepts it', requires: [] },
-	'discovery.notify': { kind: 'notify', does: 'tells the enabling person what was proposed, on a subscribed device', requires: [] },
 	'push.taskOwner': { kind: 'notify', does: 'pushes a reminder to the task’s owner', requires: ['push'] },
 	'push.escalate': { kind: 'notify', does: 'escalates an overdue task to the owner', requires: ['push'] },
 	'push.counter': { kind: 'notify', does: 'asks the stock counter to count', requires: ['push'] }
 };
 
 export const requirementWords: Record<Requirement, string> = {
-	'connection:google': 'a connected Google account',
 	'connection:xero': 'a connected Xero organisation',
 	'connection:shopify': 'a connected Shopify store',
 	inference: 'an inference runtime that is ready',
