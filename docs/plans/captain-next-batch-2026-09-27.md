@@ -45,11 +45,11 @@ The two existing Claude Opus agents remain in Herdr's Monitor tab. Their histori
 shell working directories do not identify the current checkout. Codex assigns explicit absolute
 paths to isolated checkouts and records them in the coordinator checkpoint.
 
-| Owner | Current mobile platform and account increment | Files owned |
+| Owner | Current mobile composition increment | Files owned |
 |---|---|---|
-| Claude `business-views`, `w2:pR` | Installed-SDK adapters, `expo/fetch` transport binding, SecureStore adapter, transport `send` rename and boundary rules; independent account review | `apps/mobile/src/platform/`, `apps/mobile/src/api/client.ts` and its test, `apps/mobile/scripts/check-boundary.mjs` and its test |
-| Claude `linked-chat`, `w2:pS` | Account reducer, credential-owning runner and strict `/v1/me` parsing; independent platform review | `apps/mobile/src/account/` |
-| Codex | Dependency lock, review, tests, integration and status | Documentation, actual evidence, git and issue/PR records |
+| Claude `business-views`, `w2:pR` | Platform composition binding, retry clock adapter, validated configuration, callback mapping and harness boundary; independent account UI review | `src/platform/app-account.ts`, `src/auth/cleanup.ts`, configuration, links and boundary checks |
+| Claude `linked-chat`, `w2:pS` | Account composition/provider, protected navigation, account screens, state pacing and test harness; independent platform review | `src/account/`, account routes/layouts and `harness/app/` |
+| Codex | Browser proof, export canary, review, tests, integration and status | Test orchestration, documentation, git and issue/PR records |
 
 The shell has no authentication, business reads or writes. Its reviewed PR #188 passed workspace,
 browser, client-proof and mobile CI on the combined #187 base. Local evidence includes disposable
@@ -61,8 +61,10 @@ The [authentication-core partition](expo-mobile-auth-core-2026-09.md) (#189, mer
 pure protocol and serialized credential-storage logic with injected adapters. The
 [platform and account increment](expo-mobile-platform-account-2026-09.md) adds the installed-SDK
 adapters and the account reducer and runner; implementation and reciprocal review are complete,
-with PR integration pending. Nothing is wired into the app: the provider, account screens and
-business reads follow under the existing mobile contract and real-account link/device gates.
+merged as #193. Nothing is wired into the app yet. The reviewed
+[composition and account-screen contract](expo-mobile-auth-composition-2026-09.md) defines the
+next assignment above. Business reads follow separately, with real-account link/device gates
+still required.
 Browser exports are not installed-app evidence.
 
 Each Claude reviews the other's implementation. Codex owns git, builds, tests, integration and
