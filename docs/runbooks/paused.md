@@ -1,5 +1,16 @@
 # Staging resumed; production paused (2026-09-27)
 
+## Legacy-storage audit for R5b (27 September 2026, 06:13 UTC)
+
+After the reader-free API/web release below, a fresh verified-TLS owner audit ran read-only
+at repeatable-read isolation with row security off, then rolled back. All 21 legacy tables
+were empty, all three obsolete retained columns were null, all seven functions existed,
+and no unexpected external dependency was found. The only retained FK is the known contacts
+reference. See the [audit and migration evidence](../validation/assistant-storage-retirement-2026-09-27/README.md).
+This satisfies the count gate for the guarded R5b migration planned in #180 and now reviewed; it is not
+proof of a migration or deployment. **0045 has not been applied to staging.** No data reset
+or current business/Chat deletion occurred.
+
 ## Assistant retirement and default-off native handoff release (27 September 2026)
 
 Reviewed #190 and #191 are merged. Staging API and web now run the clean source
@@ -11,10 +22,9 @@ Exactly one machine per staging app; production and embedding remain stopped. Na
 is behaviourally confirmed off. No current Work/Chat/demo data was reset or deleted.
 
 See the [release evidence](../validation/assistant-retirement-release-2026-09-27/README.md)
-for images, checks and rollback limits. R5a's reader-free image is now deployed; R5b still
-requires a fresh full legacy-storage audit and reviewed guarded migration. Mobile adapters,
+for images, checks and rollback limits. R5a's reader-free image is now deployed; the R5b
+audit is recorded above, while the guarded migration and its release remain pending. Mobile adapters,
 account screens, signed builds and device acceptance are separate increments.
-
 
 **Staging runs on the restricted `captain_runtime` database login**, with the `git-17089ce` API and web
 images released on 27 September (#190/#191; retaining the #162 role guard, #173 chat API and #174 Chat screens). The workspace is at https://app.askthecaptain.app/work. One existing
@@ -881,7 +891,6 @@ to the owner.
 3. Unpause the Better Stack monitor if it was paused.
 4. Check: `curl https://api-staging.askthecaptain.app/healthz`, then sign in on the phone and let the
    mail poll catch up.
-
 
 ### 27 September 2026 — legacy-retirement read-only gate
 

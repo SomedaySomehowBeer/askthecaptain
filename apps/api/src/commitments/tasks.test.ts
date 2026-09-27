@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
 import { CommitmentsService } from './service.ts';
@@ -48,14 +49,15 @@ it('the brief and stage are saved by a person; existing citations survive but ne
 		const c = new CommitmentsService(db.app);
 		const taproom = await c.createProject(f.actor, f.org, { name: 'City taproom' });
 		assert.equal(taproom.stage, 'underway'); assert.deepEqual(taproom.brief, { what: [], standing: [], people: [], questions: [] });
-		// Existing evidence remains addressable during retirement; no Notes product is started.
-		const [note] = await f.tx(tx => tx`insert into notes (organisation_id, title, body, author_id) values (${f.org}, 'Site visit', 'Site has a licence', ${f.userId}) returning id`);
-		const brief = { what: [{ text: 'A second taproom in the city.', evidence: null }], standing: [{ text: 'Two sites seen.', evidence: { kind: 'note' as const, id: note!.id } }], people: [], questions: [{ text: 'Which site?', evidence: null }] };
+		// An existing citation is kept as provenance text (removal plan §3.5): its note exists nowhere, and nothing
+		// resolves it. No Notes product is started.
+		const note = { id: randomUUID() };
+		const brief = { what: [{ text: 'A second taproom in the city.', evidence: null }], standing: [{ text: 'Two sites seen.', evidence: { kind: 'note' as const, id: note.id } }], people: [], questions: [{ text: 'Which site?', evidence: null }] };
 		await assert.rejects(c.updateProject(f.actor, f.org, taproom.id, { expectedRevision: await rev('projects', taproom.id), brief }), { code: 'evidence_retired' });
 		await f.tx(tx => tx`update projects set brief = ${tx.json(brief)} where id = ${taproom.id}`);
 		const saved = await c.updateProject(f.actor, f.org, taproom.id, { expectedRevision: await rev('projects', taproom.id), stage: 'idea', brief });
 		assert.equal(saved.stage, 'idea'); assert.deepEqual(saved.brief, brief); assert.ok(saved.briefUpdatedAt instanceof Date);
-		await assert.rejects(c.updateProject(f.actor, f.org, taproom.id, { expectedRevision: await rev('projects', taproom.id), brief: { ...brief, people: [{ text: 'Sam', evidence: { kind: 'mail_thread', id: note!.id } }] } }), { code: 'evidence_retired' });
+		await assert.rejects(c.updateProject(f.actor, f.org, taproom.id, { expectedRevision: await rev('projects', taproom.id), brief: { ...brief, people: [{ text: 'Sam', evidence: { kind: 'mail_thread', id: note.id } }] } }), { code: 'evidence_retired' });
 		const [event] = await f.tx(sql => sql`select action, detail from audit_events where subject_id = ${taproom.id} and action = 'project.brief_updated'`);
 		assert.deepEqual(event!.detail, { stage: 'idea', lines: { what: 1, standing: 1, people: 0, questions: 1 }, revision: saved.revision });
 		assert.equal((await c.overview(f.actor, f.org)).projects.find(p => p.id === taproom.id)!.stage, 'idea');

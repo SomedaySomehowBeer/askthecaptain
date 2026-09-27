@@ -9,6 +9,17 @@ The [plan](../plan.md) decides product scope; the [audit](captain-scope-audit-20
 records why this inventory was corrected. The [original inventory](legacy-assistant-history.md)
 is preserved as history, not an active migration mandate.
 
+## Current cleanup status (27 September 2026)
+
+R1–R5a code retirement is merged and deployed, recorded in the
+[release evidence](../validation/assistant-retirement-release-2026-09-27/README.md).
+The old expiry reader and mailbox connection management are removed; Google identity remains.
+R5b removes the unused database schema descriptions and prepares migration 0045 for the 21 empty
+legacy tables, seven functions and three obsolete columns. Its
+[fresh audit and validation](../validation/assistant-storage-retirement-2026-09-27/README.md)
+are separate from the earlier reset. This branch has not deployed 0045: the tables still exist
+in staging until that reviewed release. The tables below describe the audited starting state.
+
 ## Evidence boundary
 
 This inventory describes schema, services and trigger paths in the repository. The initial

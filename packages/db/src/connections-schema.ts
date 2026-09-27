@@ -27,14 +27,3 @@ export const syncCursors = pgTable('sync_cursors', {
 	cursor: text('cursor').notNull(), updatedAt: at('updated_at').notNull().defaultNow()
 }, (t) => [unique().on(t.organisationId, t.connectionId, t.resource),
 	foreignKey({ columns: [t.organisationId, t.connectionId], foreignColumns: [connections.organisationId, connections.id] }).onDelete('cascade')]);
-export const webhookEvents = pgTable('webhook_events', {
-	id: id(), organisationId: tenant(), connectionId: uuid('connection_id').notNull(), provider: text('provider').notNull(),
-	providerEventId: text('provider_event_id').notNull(), payload: jsonb('payload').notNull(),
-	receivedAt: at('received_at').notNull().defaultNow(), processedAt: at('processed_at')
-}, (t) => [unique().on(t.provider, t.providerEventId), unique().on(t.organisationId, t.connectionId, t.id),
-	foreignKey({ columns: [t.organisationId, t.connectionId], foreignColumns: [connections.organisationId, connections.id] }).onDelete('cascade')]);
-export const webhookAttempts = pgTable('webhook_attempts', {
-	id: id(), organisationId: tenant(), connectionId: uuid('connection_id').notNull(), webhookEventId: uuid('webhook_event_id').notNull(),
-	attemptedAt: at('attempted_at').notNull().defaultNow(), completedAt: at('completed_at'), error: text('error')
-}, (t) => [foreignKey({ columns: [t.organisationId, t.connectionId], foreignColumns: [connections.organisationId, connections.id] }).onDelete('cascade'),
-	foreignKey({ columns: [t.organisationId, t.connectionId, t.webhookEventId], foreignColumns: [webhookEvents.organisationId, webhookEvents.connectionId, webhookEvents.id] }).onDelete('cascade')]);

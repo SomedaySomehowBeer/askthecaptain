@@ -4,9 +4,9 @@ import { withTenant } from '../src/context.ts';
 import { databaseUrl, freshDatabase, type Harness } from './harness.ts';
 const it = databaseUrl ? test : test.skip;
 let db: Harness;
-let a: { org: string; user: string; connection: string; event: string };
+let a: { org: string; user: string; connection: string };
 let b: typeof a;
-const tables = ['connections', 'sync_cursors', 'webhook_events', 'webhook_attempts'];
+const tables = ['connections', 'sync_cursors'];
 before(async () => {
 	if (!databaseUrl) return; db = await freshDatabase();
 	async function seed(name: string) {
@@ -16,15 +16,12 @@ before(async () => {
 		const [connection] = await db.owner`insert into connections (organisation_id, provider, connected_by, account_email, scopes, status)
 			values (${org!.id}, 'google', ${user!.id}, ${`${name}@example.com`}, '{}', 'connected') returning id`;
 		await db.owner`insert into sync_cursors (organisation_id, connection_id, resource, cursor) values (${org!.id}, ${connection!.id}, 'gmail', '1')`;
-		const [event] = await db.owner`insert into webhook_events (organisation_id, connection_id, provider, provider_event_id, payload)
-			values (${org!.id}, ${connection!.id}, 'google', ${name}, '{}') returning id`;
-		await db.owner`insert into webhook_attempts (organisation_id, connection_id, webhook_event_id) values (${org!.id}, ${connection!.id}, ${event!.id})`;
-		return { org: org!.id as string, user: user!.id as string, connection: connection!.id as string, event: event!.id as string };
+		return { org: org!.id as string, user: user!.id as string, connection: connection!.id as string };
 	}
 	a = await seed('A'); b = await seed('B');
 });
 after(async () => { await db?.close(); });
-it('all four tables hide other tenants, including reads without context and updates', async () => {
+it('both tables hide other tenants, including reads without context and updates', async () => {
 	for (const table of tables) {
 		assert.equal((await db.app`select id from ${db.app(table)}`).length, 0);
 		await withTenant(db.app, { organisationId: a.org, userId: a.user }, async (tx) => {
@@ -40,21 +37,9 @@ it('a cursor in tenant A cannot reference tenant B connection: composite FK reje
 	await assert.rejects(withTenant(db.app, { organisationId: a.org, userId: a.user }, (tx) =>
 		tx`insert into sync_cursors (organisation_id, connection_id, resource, cursor) values (${a.org}, ${b.connection}, 'calendar', '1')`), { code: '23503' });
 });
-it('webhook events and attempts cannot link across tenants or mismatched connections', async () => {
-	await assert.rejects(withTenant(db.app, { organisationId: a.org, userId: a.user }, (tx) =>
-		tx`insert into webhook_events (organisation_id, connection_id, provider, provider_event_id, payload) values (${a.org}, ${b.connection}, 'google', 'cross', '{}')`), { code: '23503' });
-	for (const connection of [a.connection, b.connection]) {
-		await assert.rejects(withTenant(db.app, { organisationId: a.org, userId: a.user }, (tx) =>
-			tx`insert into webhook_attempts (organisation_id, connection_id, webhook_event_id) values (${a.org}, ${connection}, ${b.event})`), { code: '23503' });
-	}
-});
 it('system routines can update their tenant connection without a person; physical deletion remains denied', async () => {
 	const rows = await withTenant(db.app, { organisationId: a.org }, (tx) =>
 		tx`update connections set updated_at = now() where id = ${a.connection} returning id`);
 	assert.deepEqual(rows.map((row) => row.id), [a.connection]);
 	await assert.rejects(withTenant(db.app, { organisationId: a.org }, (tx) => tx`delete from connections`), { code: '42501' });
-});
-it('webhook provider event ids are deduplicated', async () => {
-	await assert.rejects(withTenant(db.app, { organisationId: a.org, userId: a.user }, (tx) =>
-		tx`insert into webhook_events (organisation_id, connection_id, provider, provider_event_id, payload) values (${a.org}, ${a.connection}, 'google', 'A', '{}')`), { code: '23505' });
 });

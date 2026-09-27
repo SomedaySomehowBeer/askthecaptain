@@ -26,6 +26,10 @@ async function signIn(identity: { subject: string; email: string; name: string }
 	return (await (await json('POST', '/auth/session/exchange', undefined, { code })).json()) as { token: string; user: { id: string } };
 }
 const body = async <T>(response: Response, status: number): Promise<T> => { assert.equal(response.status, status, await response.clone().text()); return (await response.json()) as T; };
+/** The assistant storage migration 0045 drops. Export and deletion discover tables from the catalogue, so none may appear. */
+const retired = ['mail_threads', 'mail_messages', 'mail_attachments', 'mail_triage', 'mail_senders', 'sent_triage', 'attachment_text', 'outbox',
+	'calendars', 'calendar_events', 'notes', 'note_triage', 'content_vectors', 'project_sources', 'project_candidates', 'project_candidate_sources',
+	'discovery_seeds', 'briefs', 'answers', 'webhook_events', 'webhook_attempts'];
 
 let owner: { token: string; user: { id: string } }; let orgId: string; let otherOrgId: string;
 before(async () => {
@@ -56,6 +60,8 @@ it('the export streams every tenant table as newline-delimited JSON, without sec
 	assert.equal(connection.row.provider, 'google'); assert.ok(!('accessTokenEncrypted' in connection.row) && !('refreshTokenEncrypted' in connection.row) && !Object.keys(connection.row).some((k) => /Encrypted$/.test(k)), 'tokens never leave');
 	assert.ok(rows.every((r) => r.row.organisationId === orgId), 'only this organisation');
 	assert.equal((footer.counts as Record<string, number>).tasks, 1);
+	assert.deepEqual(retired.filter((t) => (header.tables as string[]).includes(t) || t in (footer.counts as Record<string, number>)), [], 'no retired assistant table is exported');
+	assert.ok((header.tables as string[]).includes('contacts') && (header.tables as string[]).includes('workflow_enablements'), 'the tables that lost a legacy column are still exported');
 	const audit = await db.owner`select action from audit_events where organisation_id = ${orgId} and action = 'organisation.exported'`;
 	assert.equal(audit.length, 1);
 	const stranger = await signIn({ subject: 'g-9', email: 'sam@example.com', name: 'Sam' });
@@ -70,6 +76,7 @@ it('deletion needs the owner and the exact name, revokes providers, records the 
 	assert.equal((await json('DELETE', `/v1/organisations/${orgId}`, member.token, { name: 'Harbour Brewing' })).status, 403, 'an admin cannot delete');
 	const result = await body<{ name: string; rowCounts: Record<string, number> }>(await json('DELETE', `/v1/organisations/${orgId}`, owner.token, { name: 'Harbour Brewing' }), 200);
 	assert.equal(result.name, 'Harbour Brewing'); assert.equal(result.rowCounts.tasks, 1); assert.equal(result.rowCounts.memberships, 2);
+	assert.deepEqual(retired.filter((t) => t in result.rowCounts), [], 'no retired assistant table is counted');
 	assert.deepEqual(revoked, [orgId]);
 	assert.equal((await db.owner`select id from organisations where id = ${orgId}`).length, 0);
 	for (const table of ['tasks', 'projects', 'memberships', 'connections', 'audit_events', 'invitations']) assert.equal((await db.owner.unsafe(`select 1 from ${table} where organisation_id = $1`, [orgId])).length, 0, table);
