@@ -6,7 +6,7 @@ reviewed adopting PRs merge. Outcomes: **manage shared work**, **allocate resour
 
 ## Starting point
 
-Default business views (#159), private saved views (#153/#154), equipment scheduling and real
+Default business views (#159), private saved views (#153/#154), equipment scheduling API/web and real
 web Chat (#174) are delivered. Sign-in fixes #175/#176 are also deployed; #177 records release
 evidence. Local/CI two-person Chat acceptance passed. Hosted signed-in acceptance, measured
 multi-user polling capacity and native acceptance remain open in #157 and the delivery plan.
