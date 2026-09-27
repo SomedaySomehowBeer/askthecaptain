@@ -4,8 +4,6 @@
   "type": "module",
   "exports": {
     ".": "./src/google.ts",
-    "./gmail": "./src/gmail.ts",
-    "./calendar": "./src/calendar.ts",
     "./xero": "./src/xero.ts",
     "./shopify": "./src/shopify.ts"
   },
