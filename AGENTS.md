@@ -57,7 +57,7 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 |---|---|
 | `apps/api` | Hono API: auth, routes over services, webhooks, health |
 | `apps/web` | Next.js app, phone-first, server components read the API; Work/Chat/Resources client; remaining legacy routes are cleanup debt |
-| `apps/mobile` | Expo Work/Chat/Resources client; auth/account composition (#197), My work (#199), All tasks (#201), native navigation (#205) and person-scoped session controls (#207) merged; Inventory read is the next reviewed contract; other business reads and all business writes remain; native sign-in off, no installed-app or device evidence |
+| `apps/mobile` | Expo Work/Chat/Resources client; auth/account composition (#197), My work (#199), All tasks (#201), native navigation (#205) and person-scoped session controls (#207) merged; Inventory (#210) merged; the read-only equipment timeline is the next reviewed contract; other business reads and all business writes remain; native sign-in off, no installed-app or device evidence |
 | `apps/e2e` | Playwright deployment smoke suite and isolated browser regression checks |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Xero and Shopify business adapters; Google identity is separate in `apps/api` |

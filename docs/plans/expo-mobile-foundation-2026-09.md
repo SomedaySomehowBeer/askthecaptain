@@ -78,6 +78,13 @@ code are not installed or usable on any device. See the
 [paused.md](../runbooks/paused.md). The repository facts below
 describe the baseline audited for this contract; §§3 and 9 define the additions and remaining work.
 
+The person-scoped session control merged in #207; its API/web release is recorded in
+[the release evidence](../validation/session-control-release-2026-09-27/README.md).
+Read-only [Inventory](expo-mobile-inventory-read-2026-09.md) merged in #210 after review and green CI.
+The next [equipment read contract](expo-mobile-equipment-read-2026-09.md) preserves the cross-equipment
+multi-day timeline with scale buttons, bounded occupancy reads and explicit unknown coverage.
+It adds no dependency; pinch and native device acceptance remain separate gates.
+
 ## 1. What exists today (repository facts)
 
 **Sessions.** `AuthService` (`apps/api/src/auth/service.ts`) issues an opaque token: `sess_` followed
@@ -162,6 +169,7 @@ rate limit (429) or a server failure keeps the session and shows a retry state (
 | By tag and private saved views | `GET …/tags`, `GET …/views` |
 | Conversations (`filter=all\|unread\|starred`, `linked`) and item conversations | `GET …/conversations`, `…/tasks/:taskId/conversations`, `…/projects/:projectId/conversations` |
 | Messages, pins, catch-up | `GET …/conversations/:cid/messages`, `…/pins`, `…/changes` |
+| Organisation timezone | `GET /v1/organisations/:id` (equipment bootstrap; keeps only timezone) |
 | Equipment and occupancy | `GET …/equipment`, `…/equipment/:eid/reservations`, `…/projects/:pid/reservations` |
 | Counted stock | `GET …/stock` |
 
@@ -588,7 +596,7 @@ delivered.
 |---|---|---|
 | M-read | Work: My work, All tasks, By tag and saved-view lists with paging; read-only task, project and series detail. Chat: conversation list with unread and starred. Resources: view list, equipment catalogue, counted stock | Writes, timeline, messages, push |
 | M-work-write | Task create, status and edit with existing revision preconditions; ambiguous responses reconciled by re-reading | Offline queueing |
-| M-equipment | Read-only timeline (unknown or unloaded time never free; continuous Hours/Days/Weeks), then reserve/edit/cancel with existing request-ID reconciliation. Gesture dependencies named here | Offline booking confirmation |
+| M-equipment | [Read-only timeline contract](expo-mobile-equipment-read-2026-09.md): unknown or unloaded time never free; continuous Hours/Days/Weeks with buttons first. Then pinch and reserve/edit/cancel with existing request-ID reconciliation under separate increments. Gesture dependencies must be named before introduction | Offline booking confirmation |
 | M-chat | Conversation, cursor paging, pins, latest six, sends with client request IDs, catch-up via `…/changes`, stars, read position | Native push (separate contract) |
 
 Each row is its own reviewed PR over existing API routes. An API gap needs its own PR with tests.

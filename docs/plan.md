@@ -87,7 +87,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `apps/api` | Hono HTTP API: auth, routes over services, webhooks, health |
 | `apps/web` | Next.js; server components read the API. Work/Chat/Resources web client; legacy navigation still present is cleanup debt, not target scope |
 | `apps/e2e` | Playwright deployment smoke suite (deploy workflow, currently paused) and isolated browser regression in CI |
-| `apps/mobile` | React Native/Expo development-build client for iOS and Android: shell/auth/platform/account composition (#188/#189/#193/#197), My work (#199), All tasks (#201), native navigation (#205) and person-scoped session controls (#207) merged after review and CI. Read-only [Inventory](plans/expo-mobile-inventory-read-2026-09.md) is the next increment, not implemented by adopting its contract. Other business reads and all business writes remain; native sign-in stays off, with no installed-app, simulator or device evidence. Native acceptance precedes device release. |
+| `apps/mobile` | React Native/Expo development-build client for iOS and Android: shell/auth/platform/account composition (#188/#189/#193/#197), My work (#199), All tasks (#201), native navigation (#205) and person-scoped session controls (#207) merged after review and CI. Read-only [Inventory](plans/expo-mobile-inventory-read-2026-09.md) merged in #210. The [equipment timeline contract](plans/expo-mobile-equipment-read-2026-09.md) defines the next increment; adoption is not implementation. Other business reads and all business writes remain; native sign-in stays off, with no installed-app, simulator or device evidence. Native acceptance precedes device release. |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Xero and Shopify business adapters; Google sign-in remains separate |
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
@@ -426,10 +426,8 @@ do not invent an unreviewed dark palette or require a Claude Design round-trip f
 ## 11. Delivery
 
 Follow the [delivery plan](plans/captain-workspace-delivery-2026-09.md) and
-[current assignments](plans/captain-next-batch-2026-09-27.md). The next work corrects the scope debt before
-adding more legacy-backed screens. Assistant navigation/runtime retirement, optional projects and
-Work details and private saved views are delivered; remaining retired storage/code cleanup continues
-alongside the Expo client. Linked-chat API/web is delivered; hosted signed-in and native acceptance remain. Equipment scheduling is
+[current assignments](plans/captain-next-batch-2026-09-27.md). Assistant code and storage retirement is complete (#194/#196); the current priority is the Expo client. Assistant navigation/runtime retirement, optional projects and
+Work details and private saved views are delivered. The Expo client continues against the shared business API. Linked-chat API/web is delivered; hosted signed-in and native acceptance remain. Equipment scheduling is
 mandatory in the first usable workflow. Web and iOS need two-person acceptance; Android smoke
 checks start during mobile development and broader Android release follows.
 
@@ -437,8 +435,7 @@ Implemented: web shell, filtered Work/task creation, tags, counted inventory acc
 API/web, session recovery, and the assistant UI/API/runtime retirement with revised task/stock
 workflows, optional projects/Obligations removal, and revision-aware Work task/project/series
 pages (#138), private saved Work views (#153/#154), default business views (#159), and linked-chat
-API/web (#169/#171/#173/#174). Not complete: remaining retired assistant storage/connector cleanup,
-hosted signed-in Chat acceptance and capacity, files/DAM, native application and device acceptance.
+API/web (#169/#171/#173/#174). Not complete: hosted signed-in Chat acceptance and capacity, files/DAM, native application and device acceptance.
 Do not call the remaining screens implemented because mockups or bundle exports exist.
 
 The old phases 0–5 and six jobs are historical. Their completed issues document earlier work;
@@ -483,7 +480,7 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 | D18 | Inference runs on a Captain-owned Fly Sprite per organisation, with no shared filesystem between organisations. Only the CLI, its login and the minimal runtime/shim needed to invoke it live there; no business-data store or other workloads. Every model tool and MCP server is disabled; credentials stay outside inference data (D2). Provisioning and removal are self-service from Settings (amended 2026-09-19: the API creates and destroys the Sprite through the Sprites HTTP API with a platform token scoped to a dedicated Sprites organisation, and drives the CLI sign-in through the shim; the owner never needs a terminal, and the one-time login code is forwarded once in memory). The Sprite is the only inference runtime today; the API path is a documented seam, not a second runtime. |
 | D19 | Durable workflows use pg-boss with a small Captain runner in the existing process and Postgres, following the D10 spike. Tenant-scoped run/step journals and destination idempotency remain ours; neither engine guarantees exactly-once remote writes. Production execution follows the transaction, continuation and recovery contracts in §4; each workflow waits for its complete handler registry. No Restate service or SDK is retained. |
 | D20 | Retired product decision: deterministic Gmail triage gates and sender priors belong to the legacy assistant. Their implementation history is not a new Captain requirement. |
-| D21 | Legacy mail/note ingestion is retired, its stored index is cleared, and its embedding service is stopped. The unused legacy index schema remains cleanup debt; client code and deployment assets are removed. The stopped embedding app is retained until a separately authorised infrastructure operation. Any new business source needs an explicit access/retention contract; no automatic adoption of old indexes, and no transfer to Pip. |
+| D21 | Legacy mail/note ingestion is retired, its stored index is cleared, and its embedding service is stopped. Legacy index schema, unused client code and deployment assets are removed (#181/#182/#194). The stopped embedding app is retained until a separately authorised infrastructure operation. Any new business source needs an explicit access/retention contract; no automatic adoption of old indexes, and no transfer to Pip. |
 | D22 | Retired product decision: automatic mail/note project discovery is legacy. Projects are managed in Work; any later suggestion over deliberately shared business evidence needs a separate reviewed contract and does not restore mailbox discovery. |
 | D23 | Shared item discussion is D25 chat, not a Notes/comments subsystem. Business evidence retains source identity; handle an actual note reference deliberately when affected, without invented messages or a requirement to retain Notes as a product. Captain is not a document editor. |
 | D24 | Equipment scheduling is core. Continuous interval timelines support hours/days/weeks, resource scrolling and focal zoom. The server atomically prevents overlapping confirmed occupancy, including setup/cleanup/maintenance; unconfirmed, unknown and unloaded periods are explicit. Filters cannot hide competing resource occupancy. |
@@ -519,7 +516,9 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   [Native navigation](plans/expo-mobile-native-navigation-2026-09.md) merged in #205 after review and green CI;
   native device evidence remains open. The [remote session revocation](plans/mobile-session-revocation-2026-09.md)
   API merged in #204, its web control in #206, and its mobile control in #207 after review and green CI.
-  The [Inventory read contract](plans/expo-mobile-inventory-read-2026-09.md) is adopted next; its code is not yet implemented.
+  The [Inventory read](plans/expo-mobile-inventory-read-2026-09.md) merged in #210 after review and green CI.
+  The [equipment timeline contract](plans/expo-mobile-equipment-read-2026-09.md) follows: multi-day, cross-equipment
+  reads with Hours/Days/Weeks buttons; pinch and native device acceptance remain separate gates.
 - Server inference tiers and any future API-key/cost-budget alternative (#32) are business-runtime
   decisions, separate from Pip's hard Apple/Siri requirements.
 - Pip platform proofs remain in #119. No Captain milestone depends on them. No new claim about
