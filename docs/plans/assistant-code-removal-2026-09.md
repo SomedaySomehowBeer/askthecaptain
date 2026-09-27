@@ -182,7 +182,8 @@ the `infra/embed/**` path filter from `deploy.yml` (lines 11, 41–62). Keep
 secret still exist and paused.md records them. Root updates AGENTS.md's `infra` row and plan §4's
 `infra/embed` row in the same PR, saying the app is stopped and its removal is a separate authorised
 infrastructure operation. **Keep** `pgvector/pgvector:pg18` in CI: migration 0030 runs
-`create extension vector` on every fresh test database. This slice is unrelated to code-before-schema:
+`create extension vector` on every fresh test database. Update the CI image comment to name that
+historical migration rather than a live retrieval index. This slice is unrelated to code-before-schema:
 it touches no schema and no running reader.
 
 ### R3 — Legacy step-catalogue metadata
@@ -221,7 +222,7 @@ disconnect it through the existing UI first, or keep R4b waiting.
 Then remove only the Google-specific path: `GoogleConnector` and `packages/connectors/src/google.ts`
 (and the `"."` export), `ConnectionService` and `connections/service.ts`, the list/disconnect routes in
 `connections/routes.ts` (keep the file only for the `/connections/google/{callback,start}` 410s, or
-move those two 410s into `retirement/routes.ts`), the Google revoker at `index.ts:70` and the
+move them with equivalent authentication and membership guards), the Google revoker at `index.ts:70` and the
 construction at `index.ts:43–45`, the `connections` member of `Deps` in `app.ts`, the constructor
 argument in `apps/api/test/workspace-fixture.ts:36`, and the `GoogleConnection` component, its
 `Connection` type/scope labels and `ConnectionActions`/`actions.ts` in
@@ -229,6 +230,12 @@ argument in `apps/api/test/workspace-fixture.ts:36`, and the `GoogleConnection` 
 `connections/service.test.ts` to keep asserting the 410s and the unchanged Google identity sign-in.
 Keep `/webhooks/gmail` 410 until root records the owner's removal of the Gmail Pub/Sub
 subscription/topic. `apps/e2e/scripts/workspace-check.cjs:138` (no Google connect buttons) stays.
+The organisation-scoped Google-start retirement route retains its bearer and `roleOf` membership
+checks; moving it must not expose a tenant route outside those guards. Tests cover unauthenticated
+and foreign-organisation requests as well as authorised 410s. The removal gate requires **zero**
+Google rows in any status other than `disconnected` before removing the organisation-deletion
+revoker. `organisations/lifecycle.test.ts` keeps its synthetic Google row to test export credential
+redaction; that fixture does not indicate a live grant or require a Google product surface.
 Playwright: Settings → Connections still shows the Xero and Shopify cards, with no Google section.
 
 ### R5a — Remove the attachment-expiry reader and deploy it (gate: cache count)
