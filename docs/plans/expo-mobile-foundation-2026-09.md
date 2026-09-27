@@ -30,11 +30,13 @@ The document keeps four kinds of statement apart:
 migration 0044. A2 (#187) is merged and adds the web callback/passkey branches and a synthetic browser proof using the
 real API, disposable Postgres and a virtual authenticator. The proof intercepts the custom-scheme
 destination; it does not establish that an installed app receives it or that a platform authentication
-session closes. The M-shell increment adds `apps/mobile` with Work/Chat/Resources, grouped view lists,
+session closes. M-shell (#188) is merged and adds `apps/mobile` with Work/Chat/Resources, grouped view lists,
 SDK 57 dependencies, boundary checks and signed-out states. Three-platform JavaScript exports,
 a browser approximation at 360/390/430 pixels and generated Android backup configuration are
 verified; there is no signed native build or device evidence, nor mobile authentication or business
-reads yet. The web export opens view lists as visited pages; native stacks place them beneath the open view.
+reads yet. The first [M-auth core increment](expo-mobile-auth-core-2026-09.md) adds pure protocol
+and serialized credential storage with injected adapters; platform integration follows separately.
+The web export opens view lists as visited pages; native stacks place them beneath the open view.
 Browser history cannot prove native back gestures. Keep the flag off on shared
 staging and for real accounts until the verified-link gate passes. These increments have not been
 released to staging and migration 0044 has not been applied there. The repository facts below
@@ -607,6 +609,8 @@ Root owns git, tests and merges, and every PR gets reciprocal review.
    `check`/`test`, and web/iOS/Android bundle exports in CI.
 5. **M-auth.** PKCE and attempt, `openAuthSessionAsync`, callback validation, native exchange,
    SecureStore and its errors, `/v1/me`, organisation chooser, sign-out, failure classification.
+   Begin with the [pure-core partition](expo-mobile-auth-core-2026-09.md), then platform adapters
+   and account state/UI; the pure-core tests do not complete M-auth acceptance.
 6. **Remote revocation API and web/mobile control** (§4). Required before first-customer native
    readiness.
 7. **M-read**, then **M-work-write**, **M-equipment** and **M-chat**.
