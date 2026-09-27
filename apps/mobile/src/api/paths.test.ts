@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { apiPaths, nativeStartPath, organisationPath } from './paths.ts';
+import { apiPaths, maxWorkPages, myWorkPath, nativeStartPath, organisationPath, workPageSize } from './paths.ts';
 
 const id = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
@@ -31,4 +31,32 @@ test('organisation paths refuse a non-canonical ID and empty, dot or overlong se
 		assert.throws(() => organisationPath(id, 'ok', bad), (error: unknown) => error instanceof TypeError && !error.message.includes(String(bad) || '\u0000'), String(bad).slice(0, 20));
 	}
 	assert.equal(organisationPath(id, 'a'.repeat(200)).length, `/v1/organisations/${id}/`.length + 200);
+});
+
+const me = '0190c0de-0000-7000-8000-000000000001';
+
+test('my work path: the web’s My work query, in a fixed order, for each page within the cap', () => {
+	assert.equal(workPageSize, 50); assert.equal(maxWorkPages, 10);
+	assert.equal(myWorkPath({ userId: me, organisationId: id }, 0), `/v1/organisations/${id}/tasks?ownerId=${me}&status=open&offset=0&limit=50`);
+	assert.equal(myWorkPath({ userId: me, organisationId: id }, 450), `/v1/organisations/${id}/tasks?ownerId=${me}&status=open&offset=450&limit=50`);
+	// A read scope with its epoch (and anything else) is accepted; only the two IDs are used.
+	const scope = { epoch: 'e1', userId: me, organisationId: id };
+	assert.equal(myWorkPath(scope, 50), `/v1/organisations/${id}/tasks?ownerId=${me}&status=open&offset=50&limit=50`);
+	for (let page = 0; page < maxWorkPages; page += 1) {
+		const path = myWorkPath(scope, page * workPageSize);
+		assert.equal(encodeURI(path), path, 'nothing in it needs encoding');
+		assert.ok(!path.includes('e1'), 'the epoch is never part of a path');
+	}
+});
+
+test('my work path refuses a bad ID, an off-page or out-of-cap offset, without repeating the value', () => {
+	const secretish = 'sess_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG';
+	for (const bad of ['', 'x', me.toUpperCase(), `${me}&status=done`, `${me} `, secretish, 7 as unknown as string, undefined as unknown as string]) {
+		assert.throws(() => myWorkPath({ userId: bad, organisationId: id }, 0), (error: unknown) => error instanceof TypeError && !error.message.includes(String(bad) || '\u0000'), String(bad));
+		assert.throws(() => myWorkPath({ userId: me, organisationId: bad }, 0), (error: unknown) => error instanceof TypeError && !error.message.includes(String(bad) || '\u0000'), String(bad));
+	}
+	for (const offset of [-50, 1, 49, 25.5, 500, 1_000_000, Number.NaN, Number.POSITIVE_INFINITY, '0' as unknown as number]) {
+		assert.throws(() => myWorkPath({ userId: me, organisationId: id }, offset), (error: unknown) => error instanceof TypeError && !error.message.includes(String(offset)), String(offset));
+	}
+	assert.throws(() => myWorkPath(null as never, 0), TypeError);
 });

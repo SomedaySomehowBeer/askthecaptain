@@ -405,3 +405,36 @@ export function signedInNotices(account: SignedInView): readonly Line[] {
 	if (account.notice?.kind === 'organisation-not-remembered') lines.push({ title: 'Organisation', text: organisationCopy.notRemembered });
 	return lines;
 }
+
+/** My work (docs/plans/expo-mobile-my-work-read-2026-09.md §3.5). No wording claims an access check is under way, and
+ *  a failed read is never described as an empty list. */
+export const workCopy = {
+	heading: 'My work',
+	subtitle: 'Open tasks assigned to you',
+	loading: 'Loading your work…',
+	emptyTitle: 'Nothing open is assigned to you',
+	emptyBody: 'Tasks you own appear here while they are open.',
+	failedFirst: "Couldn't load your work",
+	failedRefresh: "Couldn't refresh. This list may be out of date.",
+	failedMore: "Couldn't load more",
+	access: "Captain couldn't read this organisation's work. If your access has changed, Captain will show it the next time it checks.",
+	list: "Captain couldn't read this list.",
+	open: 'Open',
+	refresh: 'Refresh',
+	more: 'More',
+	tryAgain: 'Try again',
+	busy: 'Loading…',
+	capNotice: 'Some more open tasks may be available on the Captain website.',
+	openWebWork: 'Open My work on the web'
+} as const;
+
+/** "+N more" for a row's tags beyond the ones shown; null when there are none. */
+export const moreTags = (tagCount: number, shown: number): string | null => (tagCount > shown ? `+${tagCount - shown} more` : null);
+
+/** The wording for a failed My work read: the operation decides the line for an unavailable answer; a refusal says
+ *  what kind it was, the same for every operation. */
+export function workProblemText(problem: { readonly op: 'first' | 'refresh' | 'more'; readonly kind: 'unavailable' | 'access' | 'list' }): string {
+	if (problem.kind === 'access') return workCopy.access;
+	if (problem.kind === 'list') return workCopy.list;
+	return problem.op === 'first' ? workCopy.failedFirst : problem.op === 'refresh' ? workCopy.failedRefresh : workCopy.failedMore;
+}

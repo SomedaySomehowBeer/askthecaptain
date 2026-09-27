@@ -5,6 +5,7 @@ import { AccountProvider, useAccount } from '../../src/account/AccountProvider.t
 import { AccountStack } from '../../src/account/AccountStack.tsx';
 import { config, webLink, type WebPath } from '../../src/config.ts';
 import { createScriptedSource, scenarioFrom, transitions, type ScriptedSource } from '../scripted-source.ts';
+import { readControls } from '../work-fixtures.ts';
 
 /** The test-only harness root (docs/plans/expo-mobile-auth-composition-2026-09.md §7.1), bundled only when
  *  CAPTAIN_MOBILE_HARNESS=1 sets the router root to harness/app (web export only). It renders the production
@@ -61,11 +62,39 @@ function HarnessPanel({ source }: { source: ScriptedSource }) {
 					</Pressable>
 				))}
 			</View>
+			{/* Inside the marker panel, so the browser's no-digits check strips it with the rest of the harness text. */}
+			<ReadPanel source={source} />
+		</View>
+	);
+}
+
+/** Reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.7), kept apart from the send-only command log and from the
+ *  account render counter:
+ *  - `work-read-log`: a JSON array of every read sent, `{ id, path, epoch }`, oldest first. Shown as one line, so many
+ *    reads don't crowd the screen; its text content is always complete.
+ *  - `work-read-pending`: a JSON array of the IDs still pending, oldest first.
+ *  - `harness-read-{control}`: resolves the **oldest** pending read (see work-fixtures.ts for each control's answer). A
+ *    read whose scope changed before it is resolved answers `superseded`, as in the runner. */
+function ReadPanel({ source }: { source: ScriptedSource }) {
+	const reads = useSyncExternalStore(source.subscribeReads, source.reads, source.reads);
+	return (
+		<View style={styles.reads}>
+			<Text testID="work-read-log" numberOfLines={1} style={styles.small}>{JSON.stringify(reads.log)}</Text>
+			<Text testID="work-read-pending" numberOfLines={1} style={styles.small}>{JSON.stringify(reads.pending)}</Text>
+			<View style={styles.wrap}>
+				{readControls.map((control) => (
+					<Pressable key={control} testID={`harness-read-${control}`} role="button" onPress={() => source.resolveRead(control)} style={styles.control}>
+						<Text style={styles.small}>{control}</Text>
+					</Pressable>
+				))}
+			</View>
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
+	wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+	reads: { gap: 2 },
 	root: { flex: 1 },
 	app: { flex: 1 },
 	panel: { padding: 4, gap: 2, backgroundColor: '#eeeeee' },

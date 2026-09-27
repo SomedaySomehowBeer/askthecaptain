@@ -17,7 +17,7 @@ export type FixedApiPath = (typeof apiPaths)[keyof typeof apiPaths];
 export const nativeStartPath = '/auth/google/start';
 
 declare const organisationPathBrand: unique symbol;
-/** A path under one organisation. Only organisationPath makes these, so no other code assembles one from strings. */
+/** A path under one organisation. Only organisationPath and the fixed myWorkPath query builder make these. */
 export type OrganisationPath = string & { readonly [organisationPathBrand]: true };
 export type ApiPath = FixedApiPath | OrganisationPath;
 
@@ -38,4 +38,29 @@ export function organisationPath(organisationId: string, ...segments: string[]):
 		return encodeURIComponent(segment);
 	});
 	return ['/v1/organisations', organisationId, ...encoded].join('/') as OrganisationPath;
+}
+
+/** The IDs a business read is scoped to. The account's `ReadScope` (src/account/contracts.ts) adds an opaque `epoch`
+ *  and satisfies this structurally; this module does not import the account layer. */
+export type ScopeIds = { readonly userId: string; readonly organisationId: string };
+
+/** My work's page size, as on the web (apps/web/src/app/work/filters.ts `pageSize`). */
+export const workPageSize = 50;
+/** The most pages one My work screen loads per mount (docs/plans/expo-mobile-my-work-read-2026-09.md §3.5). */
+export const maxWorkPages = 10;
+
+/** `/v1/organisations/{organisationId}/tasks?ownerId={userId}&status=open&offset={offset}&limit=50`: the web's My work
+ *  (docs/plans/expo-mobile-my-work-read-2026-09.md §3.3).
+ *  - Both IDs must be canonical lower-case UUIDs; `offset` an integer multiple of 50 within the page cap.
+ *  - The keys are fixed and in a fixed order, and no value needs percent-encoding, so the transport's exact
+ *    response-URL check stays meaningful.
+ *  Throws a TypeError that never repeats a rejected value. */
+export function myWorkPath(scope: ScopeIds, offset: number): OrganisationPath {
+	if (typeof scope !== 'object' || scope === null) throw new TypeError('my work path: no scope');
+	const userId = scope.userId;
+	if (typeof userId !== 'string' || !canonicalUuid.test(userId)) throw new TypeError('my work path: the user ID is not a canonical UUID');
+	if (!Number.isInteger(offset) || offset < 0 || offset % workPageSize !== 0 || offset > workPageSize * (maxWorkPages - 1))
+		throw new TypeError('my work path: the offset is not a page within the cap');
+	const base = organisationPath(scope.organisationId, 'tasks');
+	return `${base}?ownerId=${userId}&status=open&offset=${offset}&limit=${workPageSize}` as OrganisationPath;
 }

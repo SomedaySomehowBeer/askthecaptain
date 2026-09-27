@@ -103,9 +103,10 @@ test('a single membership is chosen and saved; none leaves no organisation; a st
 test('a 403/404 only asks for a fresh membership list; only that list removes the organisation', () => {
 	const signed = chosenA(orgA, orgB, orgC);
 	const organisation = signed.generations.organisation;
-	const refused = run(signed, { type: 'org-refused', handle: h(1), organisation, now: 0 });
+	// 30 s after the launch check (the refusal spacing, docs/plans/expo-mobile-my-work-read-2026-09.md §3.2).
+	const refused = run(signed, { type: 'org-refused', handle: h(1), organisation, now: 30_000 });
 	assert.deepEqual(refused.effects.map((e) => e.type), ['load-me'], 'nothing removed or forgotten on the refusal itself');
-	assert.deepEqual(run(refused.machine, { type: 'org-refused', handle: h(1), organisation, now: 0 }).effects, [], 'a second refusal joins the refresh');
+	assert.deepEqual(run(refused.machine, { type: 'org-refused', handle: h(1), organisation, now: 90_000 }).effects, [], 'a second refusal joins the refresh');
 	const membership = refused.machine.generations.membership;
 	const kept = run(refused.machine, { type: 'me-finished', handle: h(1), membership, outcome: { kind: 'ok', me: me(orgA, orgB) } });
 	const keptView = view(kept.machine).account;
@@ -279,11 +280,106 @@ test('pacing: a later, shorter server wait never moves the deadline earlier, eve
 	}
 });
 
-test('pacing: a refusal is not subject to the 30 s spacing, but is coalesced with a load in flight', () => {
+test('pacing: a refusal waits 30 s after the latest /v1/me load of any kind (the launch check here), exactly at the boundary, and is coalesced', () => {
 	const signed = chosenA(orgA, orgB);
-	const refused = run(signed, { type: 'org-refused', handle: h(1), organisation: signed.generations.organisation, now: 1 });
-	assert.equal(ofType(refused.effects, 'load-me').length, 1, 'one second after the launch check');
-	assert.deepEqual(run(refused.machine, { type: 'refresh', now: 60_000 }).effects, [], 'a refresh joins the refusal already in flight');
+	const organisation = signed.generations.organisation;
+	for (const now of [0, 1, 29_999]) {
+		const early = run(signed, { type: 'org-refused', handle: h(1), organisation, now });
+		assert.deepEqual(early.effects, [], `${now} ms after the launch check: nothing sent`);
+		assert.equal(early.machine, signed, 'and nothing recorded to retry');
+	}
+	const refused = run(signed, { type: 'org-refused', handle: h(1), organisation, now: 30_000 });
+	assert.equal(ofType(refused.effects, 'load-me').length, 1, 'at exactly 30 s: one load');
+	assert.equal(refused.machine.pacing.lastLoadStarted, 30_000, 'the refusal load starts the spacing again');
+	assert.deepEqual(run(refused.machine, { type: 'refresh', now: 90_000 }).effects, [], 'a refresh joins the refusal already in flight');
+	assert.deepEqual(run(refused.machine, { type: 'org-refused', handle: h(1), organisation, now: 90_000 }).effects, [], 'so does another refusal');
+	// After that load answers, the next refusal is spaced from it, not from the launch.
+	const answered = run(refused.machine, { type: 'me-finished', handle: h(1), membership: refused.machine.generations.membership, outcome: { kind: 'ok', me: me(orgA, orgB) } }).machine;
+	assert.deepEqual(run(answered, { type: 'org-refused', handle: h(1), organisation, now: 59_999 }).effects, []);
+	assert.equal(ofType(run(answered, { type: 'org-refused', handle: h(1), organisation, now: 60_000 }).effects, 'load-me').length, 1);
+});
+
+test('pacing: a refusal within 30 s of a person\'s Try again sends nothing; Try again and the post-sign-in check are still not spaced', () => {
+	// Launch unavailable with no server wait: Try again is allowed at once (not spaced), and it starts the spacing.
+	const read = run(initial(), { type: 'boot' }, { type: 'launch-read', now: 0, result: { kind: 'session', handle: h(1), userId } });
+	const unverified = run(read.machine, { type: 'me-finished', handle: h(1), membership: 1, outcome: { kind: 'unavailable', wait: null } }).machine;
+	const retried = run(unverified, { type: 'retry', now: 1 });
+	assert.equal(ofType(retried.effects, 'load-me').length, 1, 'Try again 1 ms after the launch check is sent: explicit, not spaced');
+	const verified = run(retried.machine, { type: 'me-finished', handle: h(1), membership: retried.machine.generations.membership, outcome: { kind: 'ok', me: me(orgA, orgB) } }).machine;
+	const chosen = run(verified, { type: 'org-read', handle: h(1), organisation: verified.generations.organisation, organisationId: orgA }).machine;
+	const organisation = chosen.generations.organisation;
+	assert.deepEqual(run(chosen, { type: 'org-refused', handle: h(1), organisation, now: 10_001 }).effects, [], '10 s after Try again: nothing');
+	assert.equal(ofType(run(chosen, { type: 'org-refused', handle: h(1), organisation, now: 30_001 }).effects, 'load-me').length, 1);
+	// A sign-in's first check right after another load is not spaced either (only a server wait holds it).
+	const out = run(initial(), { type: 'boot' }, { type: 'launch-read', now: 0, result: { kind: 'none' } });
+	const signing = run(out.machine, { type: 'sign-in' }, { type: 'gate-checked', result: 'settled' },
+		{ type: 'attempt-finished', outcome: { kind: 'signed-in', handle: h(2), userId, returnTo: '/' } });
+	const withRecentLoad: Machine = { ...signing.machine, pacing: { ...signing.machine.pacing, lastLoadStarted: 5 } };
+	const written = run(withRecentLoad, { type: 'install-finished', handle: h(2), result: 'written', now: 6 });
+	assert.equal(ofType(written.effects, 'load-me').length, 1, 'the post-sign-in check 1 ms after another load is sent');
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Read scope (docs/plans/expo-mobile-my-work-read-2026-09.md §3.1).
+
+const scopeOf = (machine: Machine) => { const account = view(machine).account; return account.kind === 'signed-in' ? account.scope : null; };
+
+test('read scope: present exactly when ready, token-free, from the verified user and the chosen organisation', () => {
+	const read = run(initial(), { type: 'boot' }, { type: 'launch-read', now: 0, result: { kind: 'session', handle: h(1), userId } });
+	assert.equal(view(read.machine).account.kind, 'checking', 'checking: no scope in the view at all');
+	const loading = launched(orgA, orgB).machine;
+	assert.equal(scopeOf(loading), null, 'identity verified but no organisation chosen yet');
+	assert.equal(scopeOf(launched().machine), null, 'no memberships: never ready');
+	const chosen = chosenA(orgA, orgB);
+	const scope = scopeOf(chosen)!;
+	assert.equal(scope.userId, userId); assert.equal(scope.organisationId, orgA);
+	assert.equal(typeof scope.epoch, 'string'); assert.ok(scope.epoch.length > 0);
+	assert.deepEqual(Object.keys(scope).sort(), ['epoch', 'organisationId', 'userId'], 'nothing else: no handle, token or storage key');
+	assert.ok(Object.isFrozen(scope));
+	const out = run(chosen, { type: 'sign-out' }).machine;
+	assert.equal(view(out).account.kind, 'releasing', 'releasing: no scope in the view');
+});
+
+test('read scope: the epoch survives a membership refresh that keeps the organisation, and other non-scope changes', () => {
+	const chosen = chosenA(orgA, orgB);
+	const epoch = scopeOf(chosen)!.epoch;
+	const refreshing = run(chosen, { type: 'refresh', now: 30_000 }).machine;
+	assert.equal(scopeOf(refreshing)!.epoch, epoch, 'refreshing: same epoch');
+	const kept = run(refreshing, { type: 'me-finished', handle: h(1), membership: refreshing.generations.membership, outcome: { kind: 'ok', me: me(orgA, orgB, orgC) } }).machine;
+	assert.equal(scopeOf(kept)!.epoch, epoch, 'a new membership list that keeps the organisation: same epoch');
+	assert.notEqual(kept.generations.membership, chosen.generations.membership, 'even though the membership generation moved');
+	const unavailable = run(run(kept, { type: 'refresh', now: 60_000 }).machine, { type: 'me-finished', handle: h(1), membership: kept.generations.membership + 1, outcome: { kind: 'unavailable', wait: null } }).machine;
+	assert.equal(scopeOf(unavailable)!.epoch, epoch, 'an unavailable refresh: same epoch');
+	const refused = run(kept, { type: 'org-refused', handle: h(1), organisation: kept.generations.organisation, now: 90_000 }).machine;
+	assert.equal(scopeOf(refused)!.epoch, epoch, 'a refusal alone changes nothing about the scope');
+});
+
+test('read scope: a switch, a loss that auto-chooses, and a new session each give a new epoch; A → B → A never repeats one', () => {
+	const chosen = chosenA(orgA, orgB);
+	const a1 = scopeOf(chosen)!;
+	const toB = run(chosen, { type: 'choose-organisation', organisationId: orgB }).machine;
+	const b = scopeOf(toB)!;
+	const backToA = run(toB, { type: 'choose-organisation', organisationId: orgA }).machine;
+	const a2 = scopeOf(backToA)!;
+	assert.equal(b.organisationId, orgB); assert.equal(a2.organisationId, orgA);
+	assert.equal(new Set([a1.epoch, b.epoch, a2.epoch]).size, 3, 'three different epochs, so a late answer for A1 is never taken for A2');
+	// Loss of A with B the only membership left: B is chosen at once, ready throughout, under a new epoch.
+	const refreshed = run(chosen, { type: 'refresh', now: 30_000 }).machine;
+	const lostSingle = run(refreshed, { type: 'me-finished', handle: h(1), membership: refreshed.generations.membership, outcome: { kind: 'ok', me: me(orgB) } }).machine;
+	const auto = scopeOf(lostSingle)!;
+	assert.equal(auto.organisationId, orgB);
+	assert.notEqual(auto.epoch, a1.epoch);
+	// Sign-out, then a new sign-in to the same organisation: a new epoch too.
+	const out = run(chosen, { type: 'sign-out' }, { type: 'local-finished', handle: h(1), result: 'deleted' }, { type: 'server-finished', handle: h(1), result: 'ended', wait: null }).machine;
+	assert.equal(kind(out), 'signed-out');
+	const signed = run(out, { type: 'sign-in' }, { type: 'gate-checked', result: 'settled' },
+		{ type: 'attempt-finished', outcome: { kind: 'signed-in', handle: h(2), userId, returnTo: '/' } });
+	const written = run(signed.machine, { type: 'install-finished', handle: h(2), result: 'written', now: 100_000 }).machine;
+	const verified = run(written, { type: 'me-finished', handle: h(2), membership: written.generations.membership, outcome: { kind: 'ok', me: me(orgA, orgB) } }).machine;
+	const again = run(verified, { type: 'org-read', handle: h(2), organisation: verified.generations.organisation, organisationId: orgA }).machine;
+	const a3 = scopeOf(again)!;
+	assert.equal(a3.organisationId, orgA);
+	assert.ok(![a1.epoch, b.epoch, a2.epoch, auto.epoch].includes(a3.epoch), 'the same person and organisation in a new session is a new epoch');
 });
 
 test('organisation loss: the chosen one is named; a person choosing clears it; the only remaining membership keeps it', () => {

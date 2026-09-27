@@ -1,7 +1,7 @@
 import type { AttemptKind, AttemptState, SessionUser } from '../auth/contracts.ts';
 import { linkTarget, refusedLink } from '../lib/links.ts';
 import { laterWait, type Wait } from './clock.ts';
-import type { Generation } from './contracts.ts';
+import type { Generation, ReadScope } from './contracts.ts';
 import type { Me, Membership } from './me.ts';
 
 /** The account state machine (docs/plans/expo-mobile-platform-account-2026-09.md "Account contract"; reviewed plan
@@ -477,9 +477,13 @@ function step(machine: Machine, event: Event, effects: Effect[]): Machine {
 
 		case 'org-refused': {
 			// Only a fresh membership list can remove an organisation: ask for one (refusals already in flight join it).
-			// Never before the server's wait; not subject to the foreground spacing.
+			// An automatic trigger, like a foreground refresh: never before the server's wait, and never within 30 s of
+			// the latest `/v1/me` load of any kind (docs/plans/expo-mobile-my-work-read-2026-09.md §3.2). A refusal
+			// inside either records nothing to retry.
 			if (state.kind !== 'signed-in' || state.handle !== event.handle || state.refreshing) return machine;
 			if (machine.generations.organisation !== event.organisation || blockedByServer(machine, event.now)) return machine;
+			const last = machine.pacing.lastLoadStarted;
+			if (last !== null && event.now < last + refreshSpacingMs) return machine;
 			return { ...loadMe(machine, state.handle, event.now, effects), state: { ...state, refreshing: true } };
 		}
 
@@ -609,6 +613,8 @@ export type AccountView =
 		readonly orgNotice: OrgNotice | null;
 		/** True only with verified identity and a chosen organisation: the only time business reads may start. */
 		readonly ready: boolean;
+		/** Who and where reads are for, exactly when `ready`; otherwise null (readScope below). */
+		readonly scope: ReadScope | null;
 	}
 	| {
 		readonly kind: 'releasing'; readonly reason: ReleaseReason; readonly local: LocalState; readonly server: ServerState;
@@ -618,6 +624,22 @@ export type AccountView =
 		readonly closeAppWarning: boolean;
 		readonly canRetry: boolean;
 	};
+
+/** The read scope (docs/plans/expo-mobile-my-work-read-2026-09.md §3.1), exactly when ready: verified identity and a
+ *  chosen organisation. The one definition both the view and the runner's read check use.
+ *  - `epoch` is made only from the account and organisation generations, never from a handle, token or storage key.
+ *    Both only increase, so an epoch never repeats in a process (A → B → A gives three). The membership generation is
+ *    left out, so a refresh that keeps the organisation keeps the epoch.
+ *  - Every change of person or organisation while staying ready advances the organisation generation (a person's
+ *    choice, and the single-membership auto-choice after a loss both save it); so does every sign-in, sign-out and
+ *    session end. Choosing from the stored hint at launch does not, but that is the first ready scope, with none before
+ *    it. */
+export function readScope(machine: Machine): ReadScope | null {
+	const state = machine.state;
+	if (state.kind !== 'signed-in' || state.org.kind !== 'chosen') return null;
+	const { account, organisation } = machine.generations;
+	return Object.freeze({ epoch: `a${account}.o${organisation}`, userId: state.user.id, organisationId: state.org.membership.organisationId });
+}
 
 /** The reducer's half of the global gate: a state that offers sign-in, and no stray credential still being released. */
 function signInOffered(machine: Machine): boolean {
@@ -652,7 +674,7 @@ function accountView(machine: Machine): AccountView {
 		case 'signed-in': return {
 			kind: 'signed-in', user: state.user, memberships: state.memberships, org: state.org, refreshing: state.refreshing,
 			destination: state.org.kind === 'chosen' ? state.destination : null, notice: state.notice, orgNotice: state.orgNotice,
-			ready: state.org.kind === 'chosen'
+			ready: state.org.kind === 'chosen', scope: readScope(machine)
 		};
 		case 'releasing': {
 			const { reason, local, server, wait } = state.release;

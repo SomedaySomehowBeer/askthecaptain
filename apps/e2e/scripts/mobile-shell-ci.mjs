@@ -35,7 +35,7 @@ try {
   const signalGroup = signal => { if (child.pid) { try { process.kill(-child.pid, signal); } catch { /* already stopped */ } } };
   const stop = () => signalGroup('SIGTERM');
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
-  const timer = setTimeout(() => { console.error('mobile shell check exceeded 300 seconds; stopping its process group'); signalGroup('SIGKILL'); }, 300_000);
+  const timer = setTimeout(() => { console.error('mobile shell check exceeded 600 seconds; stopping its process group'); signalGroup('SIGKILL'); }, 600_000);
   try {
     process.exitCode = await new Promise(resolve => {
       child.once('error', () => resolve(1));

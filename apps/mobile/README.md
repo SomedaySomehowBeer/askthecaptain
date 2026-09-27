@@ -2,15 +2,26 @@
 
 Expo SDK 57, React Native 0.86.3 and React 19.2.3. The existing Next.js app remains
 the web product. The app supplies Work, Chat and Resources navigation and grouped
-view lists. The [composition increment](../../docs/plans/expo-mobile-auth-composition-2026-09.md),
+view lists. The [composition increment](../../docs/plans/expo-mobile-auth-composition-2026-09.md)
 composes sign-in and adds the account screens:
 - a welcome page for every state that is not signed in;
 - the organisation chooser and switcher;
-- Account, which the tabs and Account are guarded behind (verified identity and a chosen organisation).
+- Account, available alongside the tabs only after identity is verified and an organisation is chosen.
 
-It has no business reads, local business cache or write actions yet: the tabs say that
-the app doesn't read that data yet. Nothing is installed or usable on a device, and
-there is no simulator or device evidence.
+The [My work read](../../docs/plans/expo-mobile-my-work-read-2026-09.md) (M-read slice 1) is
+implemented and independently reviewed, with local tests, exports and browser checks passing.
+See the [validation record](../../docs/validation/mobile-my-work-read-2026-09-27/README.md).
+- **What it shows:** Work → My work lists the person's open tasks in the chosen organisation,
+  read-only, under the subtitle "Open tasks assigned to you". Page 0 loads on each mount, with
+  explicit Refresh, More and Try again, up to 10 pages and 500 rows.
+- **How it reads:** every read goes through the account runner's single scoped entry point, bound to
+  a token-free read scope and epoch. A list is bound to the scope it first showed, so a change of
+  person or organisation shows nothing and sends nothing until the tabs reset.
+- **What it doesn't do:** Chat and Resources, other Work views, detail pages and all writes are not
+  implemented. There is no local business cache.
+- **Open limits:** the transport has no response byte budget yet. `expo/fetch` reporting the query
+  URL unchanged, and a real 403/404, are device gates. Nothing is installed or usable on a device,
+  and there is no simulator or device evidence.
 
 The source contract is [the mobile foundation plan](../../docs/plans/expo-mobile-foundation-2026-09.md).
 Tokens cite the reviewed mockups in `src/theme/tokens.ts`; system fonts are used.
@@ -34,13 +45,15 @@ boundary guard, tests, SDK check, four exports, exported-secret checks and harne
 
 Two web exports are built and checked separately:
 - **Production web export** (`dist/web`, `CAPTAIN_MOBILE_HARNESS` unset). It is web-only:
-  no sign-in and no native authentication. It must not contain the harness marker or
-  any `harness/app` path.
+  no sign-in, no native authentication, and no requests (it never becomes ready, so My
+  work never reads). It must not contain the harness marker or any `harness/app` path.
 - **Synthetic account harness** (`dist-harness`). It is a test-only web export selected
   only by `CAPTAIN_MOBILE_HARNESS=1` at build time, and `app.config.ts` refuses it for
   native builds. It renders the production account stack, screens and tabs over
-  scripted, token-free account states, with no API, credentials or account data. It
-  is never deployed, and it must contain the harness marker.
+  scripted, token-free account states, with no API, credentials or account data.
+  My work's reads stay pending until a harness control resolves them with synthetic
+  fixtures through the real parser (`work-read-log`, `work-read-pending`,
+  `harness-read-{control}`). It is never deployed, and it must contain the harness marker.
 
 A browser approximation runs both exports at 360, 390 and 430 pixels. After editing
 anything under `src/auth`, `src/account` or `src/platform`, fully reload the app

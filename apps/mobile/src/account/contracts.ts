@@ -17,6 +17,10 @@
  *    no longer decrypt. Such a value holds no usable token, so it counts as no saved sign-in, and wording says "no
  *    usable saved sign-in", never "nothing was stored". */
 
+import type { OrganisationPath } from '../api/paths.ts';
+import type { Parse } from '../auth/contracts.ts';
+import type { Wait } from './clock.ts';
+
 /** Advanced by the account machine: `account` on sign-in (before the new session is installed), sign-out, session end
  *  and account switch; `organisation` on every organisation change, including loss. */
 export type Generation = { readonly account: number; readonly organisation: number };
@@ -86,3 +90,35 @@ export type CredentialStore = {
 /** How the store is built: over the raw storage, reading the account machine's current generation at the moment each
  *  generation-checked operation actually runs (not when it was queued). */
 export type CreateCredentialStore = (storage: SessionStorage, currentGeneration: () => Generation) => CredentialStore;
+
+// ---------------------------------------------------------------------------------------------------------------
+// Organisation-scoped reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.1). Token-free: nothing here carries a
+// handle, a token or anything derived from one.
+
+/** Who and where a read is for, present on the account view only when ready (verified identity, chosen organisation).
+ *  - `epoch` is opaque: compare it for equality only. It changes whenever the account or the organisation generation
+ *    changes, and never repeats in a process, so A → B → A gives three epochs. A membership refresh that keeps the
+ *    organisation does not change it.
+ *  - `userId` and `organisationId` are canonical lower-case UUIDs, the verified person and the chosen organisation. */
+export type ReadScope = { readonly epoch: string; readonly userId: string; readonly organisationId: string };
+
+/** One organisation-scoped read's result. It never rejects.
+ *  - `ok`: the answer parsed.
+ *  - `unavailable`: no usable answer (network, timeout, redirect, 429/5xx, or a 2xx that didn't parse). `wait` is this
+ *    read's own server wait from `Retry-After`, on the shared clamped clock; it is separate from the account's `/v1/me`
+ *    wait.
+ *  - `refused`: any other 4xx except 401 (403/404 also ask the account for a fresh membership list).
+ *  - `client-bug`: the path could not be built, or something unexpected threw; nothing was sent, or nothing usable came
+ *    back.
+ *  - `superseded`: not ready, a scope other than `expected`, a 401 (the session is ending), or the account or
+ *    organisation changed while it was in flight. The screen applies nothing. */
+export type ReadOutcome<T> =
+	| { readonly kind: 'ok'; readonly value: T }
+	| { readonly kind: 'unavailable'; readonly wait: Wait | null }
+	| { readonly kind: 'refused'; readonly status: number }
+	| { readonly kind: 'client-bug' }
+	| { readonly kind: 'superseded' };
+
+/** The only way screens read organisation data: the scope they expect, a path built from the runner's own current
+ *  scope, and a parser for the body. */
+export type ScopedRead = <T>(expected: ReadScope, path: (scope: ReadScope) => OrganisationPath, parse: Parse<T>) => Promise<ReadOutcome<T>>;

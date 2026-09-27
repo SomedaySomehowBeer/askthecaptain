@@ -1,4 +1,5 @@
 import type { Composition } from './compose.ts';
+import type { ScopedRead } from './contracts.ts';
 import { slowAfterMs, type AccountSnapshot, type AccountView } from './machine.ts';
 import type { Timers, UiCommand } from './runner.ts';
 
@@ -12,7 +13,12 @@ export type AccountSource = {
 	readonly snapshot: () => AccountSnapshot;
 	readonly send: (command: UiCommand) => void;
 	readonly now: () => number;
+	/** Organisation-scoped reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.1): the runner's own, token-free.
+	 *  With no runner (starting, web-only, misconfigured, startup failed) it answers `superseded` and sends nothing. */
+	readonly read: ScopedRead;
 };
+
+const noRead: ScopedRead = () => Promise.resolve(Object.freeze({ kind: 'superseded' as const }));
 
 const frozen = (account: AccountView): AccountSnapshot =>
 	Object.freeze({ account: Object.freeze(account), signInOffered: false, fault: false, strays: Object.freeze([]) });
@@ -87,6 +93,7 @@ export function createAccountSource(composition: () => Promise<Composition>, tim
 		},
 		send(command: UiCommand) { if (phase.kind === 'runner') phase.ready.runner.send(command); },
 		// Before a runner there is no wait to measure; 0 keeps every wait calculation at "nothing left".
-		now: () => (phase.kind === 'runner' ? phase.ready.clock.now() : 0)
+		now: () => (phase.kind === 'runner' ? phase.ready.clock.now() : 0),
+		read: ((expected, path, parse) => phase.kind === 'runner' ? phase.ready.runner.organisationRead(expected, path, parse) : noRead(expected, path, parse)) as ScopedRead
 	});
 }

@@ -4,7 +4,7 @@ import { outsideSnapshots } from './account-source.ts';
 import { captureRequested, consumeRequested, requested, requestedConsumed, resetRequestedForTests } from './requested.ts';
 import {
 	copy, destinationStep, faultLines, findAccountStack, resetToFreshTabs, navigationStep, navMount, navStart, nextWake, releaseWording, requestedDestination, routeFor, routeHolds,
-	signInNotices, snapshotWaits, tabsKey, welcomePage, type NavMemory, type Page
+	signInNotices, snapshotWaits, tabsKey, welcomePage, moreTags, workCopy, workProblemText, type NavMemory, type Page
 } from './copy.ts';
 import type { AccountSnapshot, AccountView, StrayView } from './machine.ts';
 import type { Membership } from './me.ts';
@@ -16,7 +16,8 @@ const snap = (account: AccountView, extra: Partial<AccountSnapshot> = {}): Accou
 const signedIn = (org: Membership | 'choose' | 'none' | 'loading', destination: string | null = null): AccountView => ({
 	kind: 'signed-in', user, memberships: [orgA, orgB], refreshing: false, notice: null, orgNotice: null,
 	org: typeof org === 'string' ? { kind: org } : { kind: 'chosen', membership: org },
-	destination: typeof org === 'string' ? null : destination, ready: typeof org !== 'string'
+	destination: typeof org === 'string' ? null : destination, ready: typeof org !== 'string',
+	scope: typeof org === 'string' ? null : { epoch: `a1.${org.organisationId}`, userId: user.id, organisationId: org.organisationId }
 });
 const wait = (until: number) => ({ until, about: '2030-01-01T12:05:00.000Z' });
 const format = () => '12:05';
@@ -286,4 +287,18 @@ test('wait timer: the remaining time on the monotonic deadline; nothing when no 
 	assert.equal(nextWake(snapshotWaits(s), 3_000), 2_000);
 	assert.equal(nextWake(snapshotWaits(s), 5_000), null);
 	assert.equal(nextWake([], 0), null);
+});
+
+test('My work wording: failures by operation, refusals by kind, no access check claimed, no empty claim', () => {
+	assert.equal(workProblemText({ op: 'first', kind: 'unavailable' }), "Couldn't load your work");
+	assert.equal(workProblemText({ op: 'refresh', kind: 'unavailable' }), "Couldn't refresh. This list may be out of date.");
+	assert.equal(workProblemText({ op: 'more', kind: 'unavailable' }), "Couldn't load more");
+	for (const op of ['first', 'refresh', 'more'] as const) {
+		assert.equal(workProblemText({ op, kind: 'access' }), workCopy.access);
+		assert.equal(workProblemText({ op, kind: 'list' }), "Captain couldn't read this list.");
+	}
+	for (const text of Object.values(workCopy)) assert.ok(!/being checked|checking your access|no longer have access/i.test(text), text);
+	assert.equal(workCopy.subtitle, 'Open tasks assigned to you');
+	assert.ok(!/\d/.test(workCopy.capNotice), 'the cap notice names no number');
+	assert.equal(moreTags(5, 3), '+2 more'); assert.equal(moreTags(3, 3), null); assert.equal(moreTags(0, 0), null);
 });

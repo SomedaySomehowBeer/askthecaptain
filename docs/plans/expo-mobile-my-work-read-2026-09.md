@@ -257,7 +257,8 @@ locale dependence. Nothing is relative ("today" or "overdue" need the organisati
 - Every control is disabled while a read is in flight or this screen's server wait is running, and shows its reason.
 
 **States:** the fixed subtitle "Open tasks assigned to you" is visible in every state, in
-accessibility order immediately after the My work heading. Browser checks assert it.
+accessibility order immediately after the My work heading. Browser checks assert its text; native
+accessibility order remains part of device acceptance.
 
 | State | Shown |
 |---|---|

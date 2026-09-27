@@ -46,7 +46,7 @@ The two existing Claude Opus agents remain in Herdr's Monitor tab. Their histori
 shell working directories do not identify the current checkout. Codex assigns explicit absolute
 paths to isolated checkouts and records them in the coordinator checkpoint.
 
-| Owner | Current mobile composition increment | Files owned |
+| Owner | Completed mobile composition increment (#197) | Files owned |
 |---|---|---|
 | Claude `business-views`, `w2:pR` | Platform composition binding, retry clock adapter, validated configuration, callback mapping and harness boundary; independent account UI review | `src/platform/{account-platform,app-account}.ts`, auth retry clock contracts, configuration, links, boundary checks and `.github/workflows/mobile.yml` |
 | Claude `linked-chat`, `w2:pS` | Account composition/provider, protected navigation, account screens, state pacing and test harness; independent platform review | `src/account/`, account routes/layouts and `harness/app/` |
@@ -66,12 +66,12 @@ merged as #193. The reviewed
 [composition and account-screen contract](expo-mobile-auth-composition-2026-09.md) is the
 assignment above.
 
-**Current status (27 September 2026): implemented.**
+**Composition status (27 September 2026): merged as #197 after reciprocal review and green CI.**
 - The app is now composed: the root layout provides one account source per process over the platform binding, and a
   protected root stack gates welcome, organisation and the tabs/Account on verified identity and a chosen organisation.
 - The account screens (welcome for every state that is not signed in, the organisation chooser/switcher and Account)
   are present, with one `/v1/me` pacing rule and organisation-change tab resets.
-- The tabs still show no business data: there are no business reads or writes yet.
+- At #197 the tabs showed no business data: there were no business reads or writes (historical; see My work below).
 - Native sign-in stays off on shared staging and for real accounts.
 - Nothing is installed or usable on a device, and no simulator or device evidence exists.
 - Two web exports are checked separately:
@@ -83,8 +83,40 @@ assignment above.
 - All 185 mobile tests, four exports, boundary scans and browser checks at 360/390/430 px pass; see
   the [validation record](../validation/mobile-account-composition-2026-09-27/README.md).
 
-Business reads follow separately, with real-account link/device gates still required. Browser exports are not
+The [first My work read contract](expo-mobile-my-work-read-2026-09.md) was adopted in #198 after
+independent review.
+
+| Owner | Current My work assignment |
+|---|---|
+| Claude `business-views`, `w2:pR` | Task-query path and tests; runner/machine regression tests; independent parser/configuration and read/UI review |
+| Claude `linked-chat`, `w2:pS` | Atomic expected account/organisation scope, read facade and pacing, My work list and pending-read harness, tests; independent parser/path review |
+| Codex | Task parser/date/title helpers and fixed website link completed during Claude quota; browser checks, validation, documentation, git and integration |
+
+The list uses the existing API and shows open tasks assigned to the person, with explicit refresh and
+bounded pagination. Real-account link/device gates remain required. Browser exports are not
 installed-app evidence.
+
+**My work status (27 September 2026): implemented and independently reviewed; local validation passed.**
+- **Account side:** reads go through one runner entry point bound to a token-free read scope (the verified user, the
+  chosen organisation and an opaque epoch from the account and organisation generations). The scope is checked before
+  sending and after the answer. A 403/404 membership refresh is now also held to the 30-second spacing.
+- **Screen:** Work → My work shows the person's open tasks read-only, under the fixed subtitle "Open tasks assigned to
+  you":
+  - page 0 on each mount, and explicit Refresh, More and Try again;
+  - at most 10 pages and 500 rows;
+  - each list bound to its first scope, so a scope change before the tabs reset shows nothing and sends nothing.
+- **Harness:** synthetic pending reads (`work-read-log`, `work-read-pending`, `harness-read-{control}`) for the browser
+  proof. The production web export still makes no API requests.
+- **Review:** A reviewed the parser and path code and wrote the runner and machine regression tests. Root owns the
+  parser, the browser checks and integration. All 218 mobile tests pass (zero skipped), all ten workspace checks pass, and all four exports and scans pass.
+  Browser checks at 360/390/430 px and Expo SDK compatibility pass; see the
+  [validation record](../validation/mobile-my-work-read-2026-09-27/README.md).
+- **Remaining:**
+  - other reads, and all writes;
+  - a transport response byte budget before customer readiness;
+  - the device gates: `expo/fetch` reporting the query URL unchanged, and a real 403/404 on an isolated synthetic
+    environment;
+  - native sign-in stays off.
 
 Each Claude reviews the other's implementation. Codex owns git, builds, tests, integration and
 release. All heavy checks remain serial under `flock /tmp/atc-build.lock`.

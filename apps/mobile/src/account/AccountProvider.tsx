@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, ty
 import { AppState } from 'react-native';
 import type { WebPath } from '../config.ts';
 import type { AccountSource } from './account-source.ts';
+import type { ScopedRead } from './contracts.ts';
 import type { AccountSnapshot } from './machine.ts';
 import type { UiCommand } from './runner.ts';
 
@@ -32,6 +33,9 @@ export type Account = {
 	readonly send: (command: UiCommand) => void;
 	readonly now: () => number;
 	readonly webLink: Links;
+	/** Organisation-scoped reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.1): token-free, never rejecting.
+	 *  Call only from effects and handlers, never during render. */
+	readonly read: ScopedRead;
 };
 
 export function useAccount(): Account {
@@ -40,5 +44,5 @@ export function useAccount(): Account {
 	const { source, webLink } = value;
 	// The source's own stable functions, passed directly: `snapshot` returns the same object until the state changes.
 	const snapshot = useSyncExternalStore(source.subscribe, source.snapshot, source.snapshot);
-	return { snapshot, send: source.send, now: source.now, webLink };
+	return { snapshot, send: source.send, now: source.now, webLink, read: source.read };
 }
