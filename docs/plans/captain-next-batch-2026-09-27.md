@@ -1,6 +1,6 @@
 # Captain: code retirement and native foundation
 
-Status: implementation in progress, 27 September 2026. The retirement contract (#180) and native
+Status: retirement complete; mobile reads in progress, 27 September 2026. The retirement contract (#180) and native
 foundation contract (#183) are adopted after reciprocal review. Outcomes: **manage shared work**, **allocate resources**, and
 **discuss work**. The [plan](../plan.md) remains authoritative.
 
@@ -12,10 +12,9 @@ evidence. Local/CI two-person Chat acceptance passed. Hosted signed-in acceptanc
 multi-user polling capacity and native acceptance remain open in #157 and the delivery plan.
 This batch does not repeat the completed business-view/chat assignments.
 
-The next priorities are the unfinished retirement in [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133)
-and the real Expo client already named in delivery slice 2, tracked in
-[#178](https://github.com/SomedaySomehowBeer/askthecaptain/issues/178). Removing obsolete mail/notes/retrieval code reduces maintenance
-confusion; native foundation lets the same work become usable on iOS, with early Android checks.
+Retirement in [#133](https://github.com/SomedaySomehowBeer/askthecaptain/issues/133) is complete.
+The current priority is the real Expo client already named in delivery slice 2, tracked in
+[#178](https://github.com/SomedaySomehowBeer/askthecaptain/issues/178). The completed retirement removed obsolete mail/notes/retrieval code; native foundation lets the same work become usable on iOS, with early Android checks.
 Files/DAM, summaries and broader reporting retain their later slices and separate contracts.
 Pip remains independent in #119.
 
@@ -86,7 +85,7 @@ assignment above.
 The [first My work read contract](expo-mobile-my-work-read-2026-09.md) was adopted in #198 after
 independent review.
 
-| Owner | Current My work assignment |
+| Owner | Completed My work assignment (#199) |
 |---|---|
 | Claude `business-views`, `w2:pR` | Task-query path and tests; runner/machine regression tests; independent parser/configuration and read/UI review |
 | Claude `linked-chat`, `w2:pS` | Atomic expected account/organisation scope, read facade and pacing, My work list and pending-read harness, tests; independent parser/path review |
@@ -96,7 +95,7 @@ The list uses the existing API and shows open tasks assigned to the person, with
 bounded pagination. Real-account link/device gates remain required. Browser exports are not
 installed-app evidence.
 
-**My work status (27 September 2026): implemented and independently reviewed; local validation passed.**
+**My work status (27 September 2026): merged as #199 after independent review and all three CI jobs passed.**
 - **Account side:** reads go through one runner entry point bound to a token-free read scope (the verified user, the
   chosen organisation and an opaque epoch from the account and organisation generations). The scope is checked before
   sending and after the answer. A 403/404 membership refresh is now also held to the 30-second spacing.
@@ -120,6 +119,24 @@ installed-app evidence.
 
 Each Claude reviews the other's implementation. Codex owns git, builds, tests, integration and
 release. All heavy checks remain serial under `flock /tmp/atc-build.lock`.
+
+## Next mobile read increments
+
+The [All tasks contract](expo-mobile-all-tasks-read-2026-09.md) and
+[transport response-budget contract](expo-mobile-response-byte-budget-2026-09.md) define separate
+implementation PRs after adoption. Neither is implemented by this planning amendment.
+
+- Claude A implements the transport budget and its regressions; Claude B independently reviews it.
+- Claude B implements the shared My work/All tasks screen, hook, copy and harness. Codex supplies
+  the paths, parser, links/configuration and browser checks; Claude A independently reviews them.
+- Codex owns serial tests, integration, documentation and git. Combine the latest reviewed main
+  before final checks; no overlapping file ownership or simultaneous heavy tests.
+
+The current native section-stack shape still needs a separate reviewed navigation increment:
+explicit native initial routes and freshly seeded resets to put the view list beneath the open view.
+An empty reset currently starts My work by source inspection; this is not a claim that it lands on
+Views. Native behaviour, gestures and shape require device evidence. Neither read contract changes
+native navigation or enables sign-in.
 
 ## Review and execution sequence
 

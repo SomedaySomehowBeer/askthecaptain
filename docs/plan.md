@@ -515,6 +515,8 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   merged in #197. The read-only [My work read](plans/expo-mobile-my-work-read-2026-09.md) (M-read slice 1) is
   implemented and independently reviewed, with local tests, exports and browser checks passing. Other reads, writes, native
   sign-in, a transport response byte budget and device evidence remain.
+  The next bounded contracts are [All tasks](plans/expo-mobile-all-tasks-read-2026-09.md) and
+  [the transport response budget](plans/expo-mobile-response-byte-budget-2026-09.md); adoption is not implementation.
 - Server inference tiers and any future API-key/cost-budget alternative (#32) are business-runtime
   decisions, separate from Pip's hard Apple/Siri requirements.
 - Pip platform proofs remain in #119. No Captain milestone depends on them. No new claim about
