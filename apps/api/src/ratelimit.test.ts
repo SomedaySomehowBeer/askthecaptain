@@ -16,6 +16,17 @@ test('a fixed window counts hits, refuses past the limit, and resets', () => {
 	assert.ok(limiter.size <= 2, 'expired windows are pruned');
 });
 
+test('the revocation policy keys one person\'s exact POST only, five a minute', () => {
+	const policy = policies().sessionRevocations;
+	assert.equal(policy.limit, 5); assert.equal(policy.windowMs, 60_000);
+	const context = (method: string, path: string, userId?: string) =>
+		({ req: { method, path }, get: (key: string) => (key === 'session' && userId ? { userId } : undefined) }) as unknown as Parameters<typeof policy.key>[0];
+	assert.equal(policy.key(context('POST', '/v1/me/sessions/revoke-others', 'u1')), 'revoke:u1');
+	assert.equal(policy.key(context('POST', '/v1/me/sessions/revoke-others')), null, 'no session, no key');
+	for (const [method, path] of [['GET', '/v1/me/sessions/revoke-others'], ['POST', '/v1/me/sessions/revoke-others/'], ['POST', '/v1/me/sessions'], ['POST', '/auth/sign-out'], ['DELETE', '/v1/me/passkeys/x']] as const)
+		assert.equal(policy.key(context(method, path, 'u1')), null, `${method} ${path}`);
+});
+
 test('policies key by client ip, session user, organisation and expensive triggers', async () => {
 	let now = 0; const limiter = new RateLimiter(() => now); const p = policies();
 	const app = new Hono<{ Variables: { session?: { userId: string } } }>();

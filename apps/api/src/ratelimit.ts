@@ -36,7 +36,7 @@ export const clientIp = (c: Context): string => c.req.header('fly-client-ip')?.t
 export type Policy = { name: string; limit: number; windowMs: number; key: (c: Context) => string | null };
 
 /** The default policies. Limits are per window; a policy whose key is null does not apply. */
-export function policies(): Record<'ip' | 'auth' | 'webhook' | 'user' | 'organisation' | 'trigger' | 'chatWrites', Policy> {
+export function policies(): Record<'ip' | 'auth' | 'webhook' | 'user' | 'organisation' | 'trigger' | 'chatWrites' | 'sessionRevocations', Policy> {
 	const minute = 60_000;
 	const organisationOf = (c: Context) => /^\/v1\/organisations\/([0-9a-f-]{36})(\/|$)/.exec(c.req.path)?.[1] ?? null;
 	const chatWrite = /^\/v1\/organisations\/([0-9a-f-]{36})\/conversations(\/|$)/;
@@ -53,6 +53,12 @@ export function policies(): Record<'ip' | 'auth' | 'webhook' | 'user' | 'organis
 			if (c.req.method !== 'POST' && c.req.method !== 'PATCH' && c.req.method !== 'DELETE') return null;
 			const org = chatWrite.exec(c.req.path)?.[1]; const user = (c.get('session') as { userId?: string } | undefined)?.userId;
 			return org && user ? `chat:${org}:${user}` : null;
+		} },
+		// Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §2): per person, that exact write only.
+		sessionRevocations: { name: 'attempts to sign out everywhere else', limit: 5, windowMs: minute, key: (c) => {
+			if (c.req.method !== 'POST' || c.req.path !== '/v1/me/sessions/revoke-others') return null;
+			const user = (c.get('session') as { userId?: string } | undefined)?.userId;
+			return user ? `revoke:${user}` : null;
 		} }
 	};
 }

@@ -129,10 +129,12 @@ export function createApp(deps: Deps) {
 		const token = bearer(c.req.header('authorization')); if (!token) throw unauthorised();
 		c.set('session', await deps.auth.requireSession(token)); await next();
 	});
-	signedIn.use('*', rateLimit(limiter, limits.user, limits.organisation, limits.trigger, limits.chatWrites));
+	signedIn.use('*', rateLimit(limiter, limits.user, limits.organisation, limits.trigger, limits.chatWrites, limits.sessionRevocations));
 	const actor = (c: { get(key: 'session'): Session; get(key: 'requestId'): string }) => ({ userId: c.get('session').userId, requestId: c.get('requestId') });
 
 	signedIn.post('/auth/sign-out', async (c) => { await deps.auth.signOut(bearer(c.req.header('authorization')), c.get('requestId')); return c.json({ ok: true }); });
+	// Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md): ends the person's other sessions. No input.
+	signedIn.post('/v1/me/sessions/revoke-others', async (c) => c.json(await deps.auth.revokeOtherSessions(c.get('session'), c.get('requestId'))));
 	signedIn.get('/v1/me', async (c) => c.json({ user: c.get('session').user, memberships: await deps.organisations.memberships(c.get('session').userId), passkeyVerified: c.get('session').passkeyVerifiedAt !== null }));
 	// A person's passkeys: registered signed in, presented at every later sign-in.
 	signedIn.get('/v1/me/passkeys', async (c) => { if (!deps.passkeys) return c.json({ available: false, passkeys: [] }); return c.json({ available: true, passkeys: await deps.passkeys.list(c.get('session').userId) }); });
