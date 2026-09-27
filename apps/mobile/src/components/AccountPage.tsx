@@ -2,19 +2,22 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Action, Line } from '../account/copy.ts';
-import { copy, nextWake, snapshotWaits } from '../account/copy.ts';
-import type { Account } from '../account/AccountProvider.tsx';
+import { copy, isSignedIn, nextWake, revocationDisabled, revocationLines, revokeOthersCopy, snapshotWaits } from '../account/copy.ts';
+import { useRevocation, type Account } from '../account/AccountProvider.tsx';
+import type { Wait } from '../account/clock.ts';
+import type { PersonScope } from '../account/revocation.ts';
 import { colors, space, type } from '../theme/tokens.ts';
 import { Notice } from './Notice.tsx';
 
 /** The account pages' shared parts (docs/plans/expo-mobile-auth-composition-2026-09.md §4.2): the plain page language
  *  (26 pt heading, notices, 44 pt targets), actions from the copy table, and the wait re-render timer. */
 
-/** Re-renders when the earliest server wait in the snapshot ends, so a disabled Try again becomes enabled. UI only: it
- *  sends nothing, and the reducer still refuses a press made before the deadline. Measured on the snapshot's clock. */
-export function useWaitWake(account: Account): void {
+/** Re-renders when the earliest server wait in the snapshot (or in `extra`) ends, so a disabled Try again becomes
+ *  enabled. UI only: it sends nothing, and the reducer or runner still refuses a press made before the deadline. Measured
+ *  on the snapshot's clock. */
+export function useWaitWake(account: Account, extra: readonly (Wait | null)[] = []): void {
 	const [, setTick] = useState(0);
-	const delay = nextWake(snapshotWaits(account.snapshot), account.now());
+	const delay = nextWake([...snapshotWaits(account.snapshot), ...extra], account.now());
 	useEffect(() => {
 		if (delay === null) return undefined;
 		const timer = setTimeout(() => setTick((n) => n + 1), delay);
@@ -93,6 +96,43 @@ export function Actions({ actions, account }: { actions: readonly Action[]; acco
 					</View>
 				);
 			})}
+		</View>
+	);
+}
+
+/** Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §4). Everything that must survive leaving
+ *  and re-entering this screen (in flight, slow, the server's wait, the last result) is the runner's, read through
+ *  `useRevocation`; only whether the confirmation is open is local. The person scope is captured when the confirmation
+ *  opens and sent with the press, so a press made for another sign-in (even as the same person) sends nothing. */
+export function RevokeOthers({ account }: { account: Account }) {
+	const view = useRevocation();
+	const [confirming, setConfirming] = useState<PersonScope | null>(null);
+	useWaitWake(account, [view.wait]);
+	const shown = account.snapshot.account;
+	if (!isSignedIn(shown)) return null;
+	const disabled = revocationDisabled(view, account.now());
+	const lines = revocationLines(view);
+	const press = () => {
+		const expected = confirming; setConfirming(null);
+		if (expected !== null) void account.revokeOthers(expected);
+	};
+	return (
+		<View style={styles.stack}>
+			{confirming === null || disabled !== null
+				// While in flight the status line below already says so; the reason is shown only for a wait.
+				? <Button testID="account-action-revoke-others" label={revokeOthersCopy.action} disabled={disabled !== null} reason={view.inFlight ? null : disabled} onPress={() => setConfirming(shown.person)} />
+				: (
+					<View style={styles.confirm}>
+						<Text style={styles.body}>{revokeOthersCopy.confirm}</Text>
+						<Button testID="account-action-revoke-others-confirm" label={revokeOthersCopy.action} primary onPress={press} />
+						<Button testID="account-action-revoke-others-cancel" label={revokeOthersCopy.cancel} onPress={() => setConfirming(null)} />
+					</View>
+				)}
+			{lines.length > 0 ? (
+				<View testID="account-revoke-others-status" aria-live="polite" style={styles.stack}>
+					{lines.map((text) => <Text key={text} style={styles.body}>{text}</Text>)}
+				</View>
+			) : null}
 		</View>
 	);
 }

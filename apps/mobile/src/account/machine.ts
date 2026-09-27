@@ -3,6 +3,7 @@ import { linkTarget, refusedLink } from '../lib/links.ts';
 import { laterWait, type Wait } from './clock.ts';
 import type { Generation, ReadScope } from './contracts.ts';
 import type { Me, Membership } from './me.ts';
+import type { PersonScope } from './revocation.ts';
 
 /** The account state machine (docs/plans/expo-mobile-platform-account-2026-09.md "Account contract"; reviewed plan
  *  /tmp/captain-business-chat/mobile-account-proposal.md, revision 2). Pure: `reduce` takes the machine and one event
@@ -615,6 +616,8 @@ export type AccountView =
 		readonly ready: boolean;
 		/** Who and where reads are for, exactly when `ready`; otherwise null (readScope below). */
 		readonly scope: ReadScope | null;
+		/** Whose sessions "Sign out everywhere else" is for (personScope below): present whenever signed in. */
+		readonly person: PersonScope;
 	}
 	| {
 		readonly kind: 'releasing'; readonly reason: ReleaseReason; readonly local: LocalState; readonly server: ServerState;
@@ -639,6 +642,16 @@ export function readScope(machine: Machine): ReadScope | null {
 	if (state.kind !== 'signed-in' || state.org.kind !== 'chosen') return null;
 	const { account, organisation } = machine.generations;
 	return Object.freeze({ epoch: `a${account}.o${organisation}`, userId: state.user.id, organisationId: state.org.membership.organisationId });
+}
+
+/** The person scope (docs/plans/mobile-session-revocation-2026-09.md §5a.3), whenever signed in: the account generation
+ *  and the verified person, never a handle, token or storage key. It changes with the account generation only (sign-in,
+ *  sign-out, session end, account switch); a membership refresh or an organisation change keeps it, since revocation
+ *  belongs to the person and the session. The one definition both the view and the runner's revocation check use. */
+export function personScope(machine: Machine): PersonScope | null {
+	const state = machine.state;
+	if (state.kind !== 'signed-in') return null;
+	return Object.freeze({ epoch: `a${machine.generations.account}`, userId: state.user.id });
 }
 
 /** The reducer's half of the global gate: a state that offers sign-in, and no stray credential still being released. */
@@ -674,7 +687,7 @@ function accountView(machine: Machine): AccountView {
 		case 'signed-in': return {
 			kind: 'signed-in', user: state.user, memberships: state.memberships, org: state.org, refreshing: state.refreshing,
 			destination: state.org.kind === 'chosen' ? state.destination : null, notice: state.notice, orgNotice: state.orgNotice,
-			ready: state.org.kind === 'chosen', scope: readScope(machine)
+			ready: state.org.kind === 'chosen', scope: readScope(machine), person: personScope(machine)!
 		};
 		case 'releasing': {
 			const { reason, local, server, wait } = state.release;

@@ -6,6 +6,7 @@ import { createClampedClock } from './clock.ts';
 import type { Composition } from './compose.ts';
 import { accountInstance, instanceKey, type Holder } from './instance.ts';
 import type { AccountSnapshot } from './machine.ts';
+import { idleRevocation } from './revocation.ts';
 import type { AccountRunner, Timers, UiCommand } from './runner.ts';
 
 const drain = () => new Promise<void>((resolve) => setImmediate(resolve));
@@ -16,12 +17,15 @@ function fakeTimers() {
 }
 function fakeRunner(first: AccountSnapshot) {
 	let current = first; const listeners = new Set<(s: AccountSnapshot) => void>(); const sent: UiCommand[] = []; const reads: unknown[][] = [];
+	const revocations: unknown[] = []; const revocationView = Object.freeze({ inFlight: true, slow: false, wait: null, last: null });
 	const runner = {
 		start: () => undefined, snapshot: () => current, send: (c: UiCommand) => { sent.push(c); },
 		subscribe: (l: (s: AccountSnapshot) => void) => { listeners.add(l); return () => listeners.delete(l); },
-		organisationRead: async (...args: unknown[]) => { reads.push(args); return { kind: 'ok', value: 'from runner' }; }
+		organisationRead: async (...args: unknown[]) => { reads.push(args); return { kind: 'ok', value: 'from runner' }; },
+		revokeOthers: async (expected: unknown) => { revocations.push(expected); return { kind: 'ok', ended: 1 }; },
+		revocationView: () => revocationView
 	} as unknown as AccountRunner;
-	return { runner, sent, reads, set(next: AccountSnapshot) { current = next; for (const l of listeners) l(next); } };
+	return { runner, sent, reads, revocations, revocationView, set(next: AccountSnapshot) { current = next; for (const l of listeners) l(next); } };
 }
 const snap = (account: AccountSnapshot['account']): AccountSnapshot => ({ account, signInOffered: false, fault: false, strays: [] });
 
@@ -103,6 +107,23 @@ test('read: with no runner it answers superseded and builds nothing; with a runn
 	assert.deepEqual(await source.read(scope, path, parse), { kind: 'ok', value: 'from runner' });
 	assert.equal(fake.reads.length, 1);
 	assert.equal(fake.reads[0]![0], scope); assert.equal(fake.reads[0]![1], path); assert.equal(fake.reads[0]![2], parse);
+});
+
+test('sign out everywhere else: with no runner it answers stale and shows the shared idle view; with a runner it delegates unchanged', async () => {
+	const expected = { epoch: 'a1', userId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301' };
+	for (const composition of [() => new Promise<Composition>(() => undefined), async (): Promise<Composition> => ({ kind: 'web-only' }), async (): Promise<Composition> => ({ kind: 'misconfigured' }), () => Promise.reject(new Error('x'))]) {
+		const source = createAccountSource(composition, fakeTimers().timers);
+		await drain();
+		assert.deepEqual(await source.revokeOthers(expected), { kind: 'stale' });
+		assert.equal(source.revocationView(), idleRevocation);
+	}
+	const fake = fakeRunner(snap({ kind: 'checking' }));
+	let resolve!: (c: Composition) => void;
+	const source = createAccountSource(() => new Promise<Composition>((r) => { resolve = r; }), fakeTimers().timers);
+	resolve({ kind: 'ready', runner: fake.runner, clock: createClampedClock(() => 0) }); await drain();
+	assert.deepEqual(await source.revokeOthers(expected), { kind: 'ok', ended: 1 });
+	assert.deepEqual(fake.revocations, [expected]); assert.equal(fake.revocations[0], expected, 'the same scope object');
+	assert.equal(source.revocationView(), fake.revocationView, "the runner's own object, so identity is stable");
 });
 
 test('instance: one source per holder; a development re-evaluation reuses it; release and development are isolated', () => {

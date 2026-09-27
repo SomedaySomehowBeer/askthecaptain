@@ -5,7 +5,11 @@ import type { ReadOutcome, ReadScope, ScopedRead } from '../src/account/contract
 import type { OrganisationPath } from '../src/api/paths.ts';
 import type { Parse } from '../src/auth/contracts.ts';
 import { fixtureBody, type ReadControl } from './work-fixtures.ts';
-import type { AccountSnapshot, AccountView } from '../src/account/machine.ts';
+import { slowAfterMs, type AccountSnapshot, type AccountView } from '../src/account/machine.ts';
+import {
+	admit, idleRevocation, samePerson, sendingRevocation, settledRevocation, slowRevocation, staleOutcome,
+	type PersonScope, type RevocationView, type RevokeOutcome, type RevokeResult
+} from '../src/account/revocation.ts';
 import type { Membership } from '../src/account/me.ts';
 import type { UiCommand } from '../src/account/runner.ts';
 
@@ -44,10 +48,13 @@ const snap = (account: AccountView, extra: Partial<AccountSnapshot> = {}): Accou
 /** Scripted epochs: every ready snapshot the harness builds is a new account/organisation scope (h1, h2, …), as a real
  *  switch, loss or sign-in would be. Clearing a destination keeps the scope. */
 let epochs = 0;
+/** The person scope is the same across every scripted snapshot of the one harness sign-in: an organisation change keeps
+ *  it, as in the runner. Releasing leaves the signed-in state, so there is then no person. */
+export const harnessPerson: PersonScope = Object.freeze({ epoch: 'p1', userId: harnessUser.id });
 const signedIn = (overrides: Partial<Extract<AccountView, { kind: 'signed-in' }>> = {}): AccountView => {
 	const base = {
 		kind: 'signed-in' as const, user: harnessUser, memberships: [harnessOrgA, harnessOrgB], org: { kind: 'chosen' as const, membership: harnessOrgA },
-		refreshing: false, destination: null, notice: null, orgNotice: null, ready: true, scope: null
+		refreshing: false, destination: null, notice: null, orgNotice: null, ready: true, scope: null, person: harnessPerson
 	};
 	const merged = { ...base, ...overrides };
 	const ready = merged.org.kind === 'chosen';
@@ -111,6 +118,20 @@ export const transitions: readonly Transition[] = ['lost', 'lost-single', 'switc
 export type ReadLogEntry = { readonly id: number; readonly path: string; readonly epoch: string };
 export type ReadsView = { readonly log: readonly ReadLogEntry[]; readonly pending: readonly number[] };
 
+/** Answers the browser check can give the pending "Sign out everywhere else" (docs/plans/mobile-session-revocation-
+ *  2026-09.md §5, increment 3):
+ *  - `ended-2`, `ended-1`, `ended-0`: the API's count;
+ *  - `unknown`: a 503 without a wait; `unknown-wait`: a 503 with a 5 s `Retry-After`;
+ *  - `rate-limited`: a 429 with a 5 s `Retry-After`; `rate-limited-later`: a 429 without one;
+ *  - `refused`: a 403 (as from a proxy);
+ *  - `unauthorised`: a 401, which ends the session (the account shows it released). */
+export const revocationControls = [
+	'ended-2', 'ended-1', 'ended-0', 'unknown', 'unknown-wait', 'rate-limited', 'rate-limited-later', 'refused', 'unauthorised'
+] as const;
+export type RevocationControl = (typeof revocationControls)[number];
+/** Every revocation "sent" (the person epoch it was sent for), and whether one is pending. */
+export type RevocationsSent = { readonly log: readonly string[]; readonly pending: boolean };
+
 export type ScriptedSource = AccountSource & {
 	readonly scenario: ScenarioName;
 	/** The send-only command log (unchanged: reads are never in it). */
@@ -122,6 +143,11 @@ export type ScriptedSource = AccountSource & {
 	readonly subscribeReads: (listener: () => void) => () => void;
 	/** Resolves the oldest pending read with `control`. Nothing happens when none is pending. */
 	readonly resolveRead: (control: ReadControl) => void;
+	/** Every revocation sent, and whether one is pending. */
+	readonly revocations: () => RevocationsSent;
+	readonly subscribeRevocations: (listener: () => void) => () => void;
+	/** Answers the pending revocation with `control`. Nothing happens when none is pending. */
+	readonly resolveRevocation: (control: RevocationControl) => void;
 };
 
 export function createScriptedSource(name: ScenarioName, readClock: () => number = () => performance.now()): ScriptedSource {
@@ -171,7 +197,86 @@ export function createScriptedSource(name: ScenarioName, readClock: () => number
 		try { return { kind: 'ok', value: p.parse(fixtureBody(control, p.entry.path, p.scope.userId)) }; } catch { return { kind: 'unavailable', wait: null }; }
 	}
 
+	// Sign out everywhere else, as the runner does it, with the same pure rules (src/account/revocation.ts): checked
+	// against the current person before "sending", then pending until a harness control answers it. The state lives
+	// here, for the page's life, so leaving and re-entering Account shows it as it is. An answer after the person changed
+	// changes nothing.
+	const currentPerson = (): PersonScope | null => (current.account.kind === 'signed-in' ? current.account.person : null);
+	let revocationFor: PersonScope | null = currentPerson(); let revocation: RevocationView = idleRevocation;
+	let revocationPending: { readonly person: PersonScope; readonly resolve: (outcome: RevokeOutcome) => void } | null = null;
+	let revocationSent: RevocationsSent = Object.freeze({ log: Object.freeze([]), pending: false });
+	let slowTimer: ReturnType<typeof setTimeout> | null = null;
+	const revocationListeners = new Set<() => void>();
+	const sentChanged = (log: readonly string[]) => {
+		revocationSent = Object.freeze({ log: Object.freeze(log), pending: revocationPending !== null });
+		for (const l of [...revocationListeners]) l();
+	};
+	const setRevocation = (view: RevocationView) => {
+		if (view === revocation) return;
+		revocation = view;
+		for (const l of [...listeners]) l();
+	};
+	const revocationView = (): RevocationView => (samePerson(revocationFor, currentPerson()) ? revocation : idleRevocation);
+	/** A person change drops the state, as in the runner (C1). */
+	const alignRevocation = () => {
+		const person = currentPerson();
+		if (samePerson(revocationFor, person) || (revocationFor === null && person === null)) return;
+		if (slowTimer !== null) { clearTimeout(slowTimer); slowTimer = null; }
+		revocationFor = person; revocation = idleRevocation;
+	};
+	const revokeOthers = (expected: PersonScope): Promise<RevokeOutcome> => {
+		alignRevocation();
+		const person = currentPerson();
+		if (!samePerson(person, expected)) return Promise.resolve(staleOutcome);
+		const refusal = admit(revocation, clock.now());
+		if (refusal !== null) return Promise.resolve(refusal);
+		return new Promise<RevokeOutcome>((resolve) => {
+			revocationPending = { person: person!, resolve };
+			setRevocation(sendingRevocation);
+			slowTimer = setTimeout(() => { slowTimer = null; if (revocationPending !== null) setRevocation(slowRevocation(revocation)); }, slowAfterMs);
+			sentChanged([...revocationSent.log, person!.epoch]);
+		});
+	};
+	const waitOf = (seconds: number): Wait => Object.freeze({ until: clock.now() + seconds * 1000, about: new Date(Date.now() + seconds * 1000).toISOString() });
+	function revocationResult(control: RevocationControl): RevokeResult | 'unauthorised' {
+		switch (control) {
+			case 'ended-2': return Object.freeze({ kind: 'ok' as const, ended: 2 });
+			case 'ended-1': return Object.freeze({ kind: 'ok' as const, ended: 1 });
+			case 'ended-0': return Object.freeze({ kind: 'ok' as const, ended: 0 });
+			case 'unknown': return Object.freeze({ kind: 'unknown' as const, status: 503, wait: null, seconds: null });
+			case 'unknown-wait': return Object.freeze({ kind: 'unknown' as const, status: 503, wait: waitOf(timedWaitMs / 1000), seconds: timedWaitMs / 1000 });
+			case 'rate-limited': return Object.freeze({ kind: 'unknown' as const, status: 429, wait: waitOf(timedWaitMs / 1000), seconds: timedWaitMs / 1000 });
+			case 'rate-limited-later': return Object.freeze({ kind: 'unknown' as const, status: 429, wait: null, seconds: null });
+			case 'refused': return Object.freeze({ kind: 'refused' as const, status: 403 });
+			case 'unauthorised': return 'unauthorised';
+		}
+	}
+
 	return Object.freeze({
+		revokeOthers,
+		revocationView,
+		revocations: () => revocationSent,
+		subscribeRevocations(listener: () => void) { revocationListeners.add(listener); return () => { revocationListeners.delete(listener); }; },
+		resolveRevocation(control: RevocationControl) {
+			const pending = revocationPending;
+			if (pending === null) return;
+			revocationPending = null;
+			if (slowTimer !== null) { clearTimeout(slowTimer); slowTimer = null; }
+			sentChanged(revocationSent.log);
+			alignRevocation();
+			if (!samePerson(currentPerson(), pending.person)) { pending.resolve(staleOutcome); return; }
+			const result = revocationResult(control);
+			if (result === 'unauthorised') {
+				// As in the runner: the session ends through the account (here, a scripted release), and the state goes with it.
+				revocation = idleRevocation;
+				set(snap({ kind: 'signed-out', notice: { kind: 'released', reason: 'session-ended', local: 'deleted', server: 'not-needed' }, gate: 'idle' }, { signInOffered: true }));
+				alignRevocation();
+				pending.resolve(staleOutcome);
+				return;
+			}
+			setRevocation(settledRevocation(result));
+			pending.resolve(result);
+		},
 		read,
 		reads: () => readsView,
 		subscribeReads(listener: () => void) { readListeners.add(listener); return () => { readListeners.delete(listener); }; },

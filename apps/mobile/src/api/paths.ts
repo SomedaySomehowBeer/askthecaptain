@@ -9,7 +9,10 @@ export const apiPaths = {
 	/** Spends a native handoff for a session (POST, no bearer). */
 	nativeExchange: '/auth/native/exchange',
 	/** Revokes the presented session (POST, bearer). */
-	signOut: '/auth/sign-out'
+	signOut: '/auth/sign-out',
+	/** Ends the person's other sessions and keeps the presented one (POST, bearer, no input;
+	 *  docs/plans/mobile-session-revocation-2026-09.md §2). */
+	revokeOthers: '/v1/me/sessions/revoke-others'
 } as const;
 export type FixedApiPath = (typeof apiPaths)[keyof typeof apiPaths];
 

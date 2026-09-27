@@ -4,6 +4,7 @@ import { linkableRoutes, refusedLink } from '../lib/links.ts';
 import type { Wait } from './clock.ts';
 import type { AccountSnapshot, AccountView, LocalState, OrgNotice, ReleaseReason, ServerState, SignInFailure } from './machine.ts';
 import type { Membership } from './me.ts';
+import type { RevocationView } from './revocation.ts';
 import type { UiCommand } from './runner.ts';
 
 /** Every account wording and every navigation decision, as pure functions (docs/plans/expo-mobile-auth-composition-
@@ -398,6 +399,47 @@ export const accountCopy = {
 	switch: 'Switch organisation',
 	otherSettings: 'Other settings on the web'
 } as const;
+
+/** Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §3-4, C2). The same results as the web,
+ *  with "this phone". A refusal or an unknown answer never says that nothing changed: the write may have committed. */
+export const revokeOthersCopy = {
+	action: 'Sign out everywhere else',
+	confirm: "Sign out of Captain everywhere else, including web browsers on computers? You'll stay signed in on this phone.",
+	cancel: 'Cancel',
+	sending: 'Signing out everywhere else…',
+	slow: 'Still waiting for Captain…',
+	none: 'No other active sessions were ended.',
+	afterEnded: 'Anything already open on another screen stays visible until that screen next checks with Captain. Sign-ins already in progress, and new sign-ins, can still start new sessions.',
+	refused: "Captain couldn't sign out your other sessions.",
+	unknown: "Captain couldn't confirm whether your other sessions were ended. It's safe to try again.",
+	tooManyLater: 'Too many attempts. Try again later.',
+	waiting: 'You can try again shortly.'
+} as const;
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** The lines for the current person's revocation state: in flight (and slow), or the last result. Plain text only; no
+ *  identifier, token or server message ever appears. */
+export function revocationLines(view: RevocationView): readonly string[] {
+	if (view.inFlight) return view.slow ? [revokeOthersCopy.sending, revokeOthersCopy.slow] : [revokeOthersCopy.sending];
+	const last = view.last;
+	if (last === null) return [];
+	if (last.kind === 'ok') {
+		return last.ended === 0 ? [revokeOthersCopy.none] : [`${plural(last.ended, 'other active session', 'other active sessions')} ended.`, revokeOthersCopy.afterEnded];
+	}
+	if (last.kind === 'refused') return [revokeOthersCopy.refused];
+	if (last.status === 429) {
+		return [last.seconds === null ? revokeOthersCopy.tooManyLater : `Too many attempts. Try again in ${plural(Math.max(1, Math.ceil(last.seconds)), 'second', 'seconds')}.`];
+	}
+	return [revokeOthersCopy.unknown];
+}
+
+/** Why the control is disabled now, or null when it may be pressed. */
+export function revocationDisabled(view: RevocationView, now: number): string | null {
+	if (view.inFlight) return revokeOthersCopy.sending;
+	if (waiting(view.wait, now)) return revokeOthersCopy.waiting;
+	return null;
+}
 
 /** Signed-in notices shared by the organisation and account pages. */
 export function signedInNotices(account: SignedInView): readonly Line[] {

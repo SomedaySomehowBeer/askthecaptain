@@ -4,8 +4,10 @@ import { outsideSnapshots } from './account-source.ts';
 import { captureRequested, consumeRequested, requested, requestedConsumed, resetRequestedForTests } from './requested.ts';
 import {
 	copy, destinationStep, faultLines, findAccountStack, resetToFreshTabs, navigationStep, navMount, navStart, nextWake, releaseWording, requestedDestination, routeFor, routeHolds,
-	signInNotices, snapshotWaits, tabsKey, welcomePage, moreTags, workCopy, workProblemText, type NavMemory, type Page
+	signInNotices, snapshotWaits, tabsKey, welcomePage, moreTags, workCopy, workProblemText, type NavMemory, type Page,
+	revocationDisabled, revocationLines, revokeOthersCopy
 } from './copy.ts';
+import { idleRevocation, sendingRevocation, settledRevocation, slowRevocation, unknownResult } from './revocation.ts';
 import type { AccountSnapshot, AccountView, StrayView } from './machine.ts';
 import type { Membership } from './me.ts';
 
@@ -17,7 +19,8 @@ const signedIn = (org: Membership | 'choose' | 'none' | 'loading', destination: 
 	kind: 'signed-in', user, memberships: [orgA, orgB], refreshing: false, notice: null, orgNotice: null,
 	org: typeof org === 'string' ? { kind: org } : { kind: 'chosen', membership: org },
 	destination: typeof org === 'string' ? null : destination, ready: typeof org !== 'string',
-	scope: typeof org === 'string' ? null : { epoch: `a1.${org.organisationId}`, userId: user.id, organisationId: org.organisationId }
+	scope: typeof org === 'string' ? null : { epoch: `a1.${org.organisationId}`, userId: user.id, organisationId: org.organisationId },
+	person: { epoch: 'a1', userId: user.id }
 });
 const wait = (until: number) => ({ until, about: '2030-01-01T12:05:00.000Z' });
 const format = () => '12:05';
@@ -42,6 +45,40 @@ const everyState: AccountSnapshot[] = [
 				canRetry: (server === 'pending' || server === 'refused') && local !== 'removing'
 			}))))
 ];
+
+test('sign out everywhere else: exact wording with grammatical plurals; a 429 says why, with or without a time; never "nothing changed"', () => {
+	const after = revokeOthersCopy.afterEnded;
+	assert.equal(after, 'Anything already open on another screen stays visible until that screen next checks with Captain. Sign-ins already in progress, and new sign-ins, can still start new sessions.');
+	assert.equal(revokeOthersCopy.confirm, "Sign out of Captain everywhere else, including web browsers on computers? You'll stay signed in on this phone.");
+	assert.equal(revokeOthersCopy.action, 'Sign out everywhere else');
+	const lines = (result: Parameters<typeof settledRevocation>[0]) => revocationLines(settledRevocation(result));
+	assert.deepEqual(revocationLines(idleRevocation), []);
+	assert.deepEqual(revocationLines(sendingRevocation), ['Signing out everywhere else…']);
+	assert.deepEqual(revocationLines(slowRevocation(sendingRevocation)), ['Signing out everywhere else…', 'Still waiting for Captain…']);
+	assert.deepEqual(lines({ kind: 'ok', ended: 1 }), ['1 other active session ended.', after]);
+	assert.deepEqual(lines({ kind: 'ok', ended: 2 }), ['2 other active sessions ended.', after]);
+	assert.deepEqual(lines({ kind: 'ok', ended: 0 }), ['No other active sessions were ended.']);
+	assert.deepEqual(lines({ kind: 'refused', status: 403 }), ["Captain couldn't sign out your other sessions."]);
+	const unknown = "Captain couldn't confirm whether your other sessions were ended. It's safe to try again.";
+	assert.deepEqual(lines(unknownResult), [unknown]);
+	assert.deepEqual(lines({ kind: 'unknown', status: 503, wait: wait(5_000), seconds: 5 }), [unknown], 'a 5xx wait is not "too many attempts"');
+	assert.deepEqual(lines({ kind: 'unknown', status: 429, wait: wait(1_000), seconds: 1 }), ['Too many attempts. Try again in 1 second.']);
+	assert.deepEqual(lines({ kind: 'unknown', status: 429, wait: wait(20_000), seconds: 20 }), ['Too many attempts. Try again in 20 seconds.']);
+	assert.deepEqual(lines({ kind: 'unknown', status: 429, wait: null, seconds: null }), ['Too many attempts. Try again later.'], 'no invented time');
+	for (const result of [{ kind: 'refused', status: 403 } as const, unknownResult, { kind: 'unknown', status: 429, wait: null, seconds: null } as const]) {
+		for (const line of lines(result)) assert.doesNotMatch(line, /nothing|no change/i, line);
+	}
+	assert.doesNotMatch(JSON.stringify(revokeOthersCopy), /\d|sess_/, 'no number or token in the fixed wording');
+});
+
+test('sign out everywhere else: disabled while in flight and until a wait ends (exactly at its end it is enabled)', () => {
+	assert.equal(revocationDisabled(idleRevocation, 0), null);
+	assert.equal(revocationDisabled(sendingRevocation, 0), revokeOthersCopy.sending);
+	const limited = settledRevocation({ kind: 'unknown', status: 429, wait: wait(20_000), seconds: 20 });
+	assert.equal(revocationDisabled(limited, 19_999), revokeOthersCopy.waiting);
+	assert.equal(revocationDisabled(limited, 20_000), null);
+	assert.equal(revocationDisabled(settledRevocation({ kind: 'ok', ended: 2 }), 0), null, 'a repeat is allowed');
+});
 
 test('routeFor: welcome unless signed in; the chooser until an organisation is chosen; Work when ready (also for the index)', () => {
 	for (const s of everyState) assert.equal(routeFor(s.account), '/welcome', s.account.kind);
