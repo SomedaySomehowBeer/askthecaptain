@@ -39,7 +39,6 @@ it('real runner wakes from a member’s HTTP count, reorders only below threshol
   assert.equal((await request(`stock/${a.id}/count`, member, { count: '2.5' })).status, 201);
   await until(() => f.tx(tx => tx`select wait_key from workflow_run_steps where run_id = ${runId} and state = 'waiting'`), rows => rows.some(r => r.waitKey === `stock:${b.id}`));
   await f.stock.count(f.member, f.org, b.id, { count: '8' }); await state(f, runId, 'succeeded');
-  assert.equal((await f.tx(tx => tx`select * from outbox`)).length, 0);
   assert.equal((await f.tx(tx => tx`select * from model_usage`)).length, 0);
   const tasks = await f.tx(tx => tx`select * from tasks`); assert.equal(tasks.length, 1); assert.equal(tasks[0]!.title, 'Reorder A malt (2.5 bags left, reorder at 5)'); assert.equal(tasks[0]!.createdBy, f.userId); assert.equal(tasks[0]!.sourceId, runId);
   const [due] = await f.tx(tx => tx`select (current_timestamp at time zone timezone)::date + 7 as due from organisations where id = ${f.org}`); assert.equal(String(tasks[0]!.due), String(due!.due));

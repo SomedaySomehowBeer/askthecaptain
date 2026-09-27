@@ -33,7 +33,7 @@ it('independent task waits do not block reminders ; owner routing, fresh status 
   const after = await f.workflows.run(f.actor, f.org, run); assert.ok(after.steps.some(s => s.key === 'time.afterDue' && (s.output as any)?.status === 'done'));
   assert.equal(f.payloads.length, 3);
   await f.engine.boss.send('workflow_chase-due', { runId: run }); await new Promise(r => setTimeout(r, 800));
-  assert.equal(f.payloads.length, 3); assert.equal((await f.tx(tx => tx`select * from outbox`)).length, 0);
+  assert.equal(f.payloads.length, 3);
   assert.equal((await f.tx(tx => tx`select * from model_usage`)).length, 0);
  } finally { await f.engine.close(); }
 });

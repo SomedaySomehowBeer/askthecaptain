@@ -20,10 +20,10 @@ passkeys and Google sign-in keep working unchanged.
   `apps/api/test`, `apps/e2e`, `packages/*/test`, Dockerfiles or CI workflows, found by repository search. It is a
   code fact, not a claim about stored rows or running machines.
 - The [operational record](../runbooks/paused.md) records that the owner-authorised reset
-  (25 September) emptied the legacy content tables before 0037/0038 and that staging now runs #176.
+  (25 September) emptied the legacy content tables before 0037/0038 and recorded the then-current #176 release. The newer release is recorded below.
   Nothing here asserts that those tables are **still** empty. Every destructive step below has a
   read-only count gate; root owns those counts and the migration gating.
-- Historical migrations `0001`–`0043`, the reset script's recorded digest, validation records and
+- Historical migrations `0001`–`0044`, the reset script's recorded digest, validation records and
   closed issues are history. They are never edited (AGENTS.md: migrations are never edited after
   merge). Removing live code does not rewrite them.
 
@@ -31,11 +31,17 @@ passkeys and Google sign-in keep working unchanged.
 
 R1 (#181), R2 (#182), R3 (#184) and R4a (#185) are merged. Fresh read-only staging
 counts at 05:22:22.969Z found zero Google connections and zero attachment cache rows;
-see [paused.md](../runbooks/paused.md) for the method and scope. R4b is in implementation.
-R5a removes the expiry reader after that zero-count gate; its code is reviewed and
-207 API tests against disposable Postgres (none skipped) plus API typecheck pass. PR integration
-and staging release remain pending. R5b still requires R5a deployed, then fresh counts
-of every affected table; neither this audit nor code removal drops storage.
+see [paused.md](../runbooks/paused.md) for the method and scope. After that gate, R5a (#190) and
+R4b (#191) were merged and released to staging; migration 0044 applied at 06:02:01Z, and R5a's
+reader-free API image is the rollback baseline for R5b
+([release record](../validation/assistant-retirement-release-2026-09-27/README.md)).
+
+R5b's gate was then checked by a fresh count-only owner audit at 06:13:25Z: every table in §2's
+storage list empty, the three retained columns null, the seven functions present and only the
+expected `contacts` foreign key into them (root records the audit). Its migration 0045 and the
+schema/test changes below are reviewed with local checks passing (see the
+[554-test validation record](../validation/assistant-storage-retirement-2026-09-27/README.md)); nothing is released.
+Until 0045 is applied, no storage has been dropped.
 
 ## 2. Source baseline audited for this contract
 

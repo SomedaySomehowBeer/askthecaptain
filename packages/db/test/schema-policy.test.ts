@@ -109,7 +109,7 @@ it('captain_runtime can execute exactly the security definer functions app can',
 		from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prosecdef order by 1`;
 	assert.ok(functions.length > 0);
 	for (const fn of functions) assert.equal(fn.runtime, fn.app, fn.name);
-	for (const name of ['gmail_sync_organisations()', 'series_organisations()', 'shopify_sync_organisations()'])
+	for (const name of ['xero_sync_organisations()', 'series_organisations()', 'shopify_sync_organisations()'])
 		assert.ok(functions.find((fn) => fn.name === name)?.runtime, name);
 	await db.app`select * from series_organisations()`;
 });
