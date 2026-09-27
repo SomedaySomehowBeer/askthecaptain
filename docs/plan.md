@@ -106,8 +106,10 @@ claim a signed native build from that evidence. Browser and device access use th
 never bundle server credentials, database access or model secrets into a client. New shared
 packages/dependencies are named in the slice that introduces them, not added speculatively. The
 [mobile foundation contract](plans/expo-mobile-foundation-2026-09.md) names `apps/mobile` and its
-proposed Expo/React Native dependencies (§8), with API/web handoff changes gated off until the
-reviewed identity-binding and real-device proofs pass.
+proposed Expo/React Native dependencies (§8). Native sign-in stays off on shared staging and for
+real accounts until verified claimed HTTPS links (or a reviewed equivalent) pass the app-identity
+gate. Isolated synthetic-account proofs may precede that gate; real-device evidence is required
+before mobile authentication is complete.
 
 **Hosting.** Fly.io in Sydney for the API and web; Neon Postgres; Cloudflare DNS; GitHub Actions
 for CI and deploy. The checked-in DNS records are not proxied through Cloudflare; they do not
