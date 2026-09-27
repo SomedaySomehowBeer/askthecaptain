@@ -1,18 +1,18 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { apiOrigin, createApiClient, createTransport, type Fetch } from './client.ts';
+import { apiOrigin, createApiClient, createTransport, type Send } from './client.ts';
 import { apiOutcome, errorCode, exchangeOutcome } from './failure.ts';
 import { apiPaths, organisationPath } from './paths.ts';
 
 const origin = 'https://api.example.test';
 const token = `sess_${'t'.repeat(43)}`;
 
-type Call = { url: string; init: Parameters<Fetch>[1] };
+type Call = { url: string; init: Parameters<Send>[1] };
 type Reply = { status?: number; body?: string; redirected?: boolean; url?: string; headers?: Record<string, string>; throws?: boolean; hang?: boolean; bodyThrows?: boolean };
-/** A fetch that records every call and answers as told. `read` counts body reads. */
-function fakeFetch(reply: Reply | ((call: Call) => Reply)) {
+/** A `send` that records every call and answers as told. `read` counts body reads. */
+function fakeSend(reply: Reply | ((call: Call) => Reply)) {
 	const calls: Call[] = []; const counts = { read: 0 };
-	const fetch: Fetch = async (url, init) => {
+	const send: Send = async (url, init) => {
 		calls.push({ url, init });
 		const r = typeof reply === 'function' ? reply({ url, init }) : reply;
 		if (r.throws) throw new TypeError('Network request failed');
@@ -23,7 +23,7 @@ function fakeFetch(reply: Reply | ((call: Call) => Reply)) {
 			text: async () => { counts.read += 1; if (r.bodyThrows) throw new Error('body lost'); return r.body ?? ''; }
 		};
 	};
-	return { fetch, calls, counts };
+	return { send, calls, counts };
 }
 const json = (value: unknown) => JSON.stringify(value);
 const identity = <T>(value: unknown) => value as T;
@@ -44,8 +44,8 @@ test('the API origin: https, or loopback http in development only; canonical, wi
 });
 
 test('every request goes to origin plus path, with redirect: error, the bearer only when given, and JSON only when there is a body', async () => {
-	const { fetch, calls } = fakeFetch({ body: json({ ok: true }) });
-	const transport = createTransport({ origin, fetch });
+	const { send, calls } = fakeSend({ body: json({ ok: true }) });
+	const transport = createTransport({ origin, send });
 	await transport.request('GET', apiPaths.me, token);
 	await transport.request('POST', apiPaths.nativeExchange, null, { a: 1 });
 	await transport.request('POST', apiPaths.signOut, token);
@@ -60,9 +60,9 @@ test('every request goes to origin plus path, with redirect: error, the bearer o
 	assert.equal(calls[2]!.init.body, undefined);
 });
 
-test('a malformed token is never sent: the transport throws before fetch, the client answers unauthorised', async () => {
-	const { fetch, calls } = fakeFetch({ body: json({}) });
-	const transport = createTransport({ origin, fetch }); const client = createApiClient(transport);
+test('a malformed token is never sent: the transport throws before sending, the client answers unauthorised', async () => {
+	const { send, calls } = fakeSend({ body: json({}) });
+	const transport = createTransport({ origin, send }); const client = createApiClient(transport);
 	for (const bad of ['', 'sess_', `Bearer ${token}`, `${token}\r\nx-evil: 1`, `pks_${'t'.repeat(43)}`, `sess_${'t'.repeat(10)}`]) {
 		await assert.rejects(transport.request('GET', apiPaths.me, bad), (error: unknown) => error instanceof TypeError && !error.message.includes(bad || '\u0000'));
 		assert.deepEqual(await client.get(apiPaths.me, bad, identity), { ok: false, kind: 'unauthorised' });
@@ -74,20 +74,20 @@ test('a malformed token is never sent: the transport throws before fetch, the cl
 
 test('a redirected, 3xx or foreign-URL response is no answer, and its body is never read', async () => {
 	for (const reply of [{ redirected: true }, { url: 'https://evil.test/v1/me' }, { url: `${origin}/v1/me/` }, { url: '' }, { status: 302 }, { status: 307, headers: { location: 'https://evil.test' } }] as Reply[]) {
-		const { fetch, counts } = fakeFetch({ body: json({ user: 'x' }), ...reply });
-		assert.deepEqual(await createTransport({ origin, fetch }).request('GET', apiPaths.me, token), { kind: 'no-answer', reason: 'redirect' }, JSON.stringify(reply));
+		const { send, counts } = fakeSend({ body: json({ user: 'x' }), ...reply });
+		assert.deepEqual(await createTransport({ origin, send }).request('GET', apiPaths.me, token), { kind: 'no-answer', reason: 'redirect' }, JSON.stringify(reply));
 		assert.equal(counts.read, 0, JSON.stringify(reply));
 	}
 });
 
 test('network failure and timeout are no answer; the timeout aborts the request, including a hung body read', async () => {
-	assert.deepEqual(await createTransport({ origin, fetch: fakeFetch({ throws: true }).fetch }).request('GET', apiPaths.me, token), { kind: 'no-answer', reason: 'network' });
-	const hung = fakeFetch({ hang: true });
-	assert.deepEqual(await createTransport({ origin, fetch: hung.fetch, timeoutMs: 20 }).request('GET', apiPaths.me, token), { kind: 'no-answer', reason: 'timeout' });
+	assert.deepEqual(await createTransport({ origin, send:fakeSend({ throws: true }).send }).request('GET', apiPaths.me, token), { kind: 'no-answer', reason: 'network' });
+	const hung = fakeSend({ hang: true });
+	assert.deepEqual(await createTransport({ origin, send:hung.send, timeoutMs: 20 }).request('GET', apiPaths.me, token), { kind: 'no-answer', reason: 'timeout' });
 	assert.equal(hung.calls[0]!.init.signal.aborted, true);
-	const slowBody: Fetch = async (url) => ({ status: 200, redirected: false, url, headers: { get: () => null }, text: () => new Promise<string>(() => undefined) });
-	assert.deepEqual(await createTransport({ origin, fetch: slowBody, timeoutMs: 20 }).request('GET', apiPaths.me, token), { kind: 'answered', status: 200, body: { readable: false } });
-	assert.deepEqual(await createTransport({ origin, fetch: fakeFetch({ bodyThrows: true }).fetch }).request('GET', apiPaths.me, token), { kind: 'answered', status: 200, body: { readable: false } });
+	const slowBody: Send =async (url) => ({ status: 200, redirected: false, url, headers: { get: () => null }, text: () => new Promise<string>(() => undefined) });
+	assert.deepEqual(await createTransport({ origin, send:slowBody, timeoutMs: 20 }).request('GET', apiPaths.me, token), { kind: 'answered', status: 200, body: { readable: false } });
+	assert.deepEqual(await createTransport({ origin, send:fakeSend({ bodyThrows: true }).send }).request('GET', apiPaths.me, token), { kind: 'answered', status: 200, body: { readable: false } });
 });
 
 test('ApiOutcome: ok only for a 2xx that parses; confirmed 401; 429/5xx/no answer unavailable; other 4xx refused by code', () => {
@@ -109,7 +109,7 @@ test('ApiOutcome: ok only for a 2xx that parses; confirmed 401; 429/5xx/no answe
 });
 
 test('the client wires the transport to the mapping, and retry-after is read only as whole seconds', async () => {
-	const client = createApiClient(createTransport({ origin, fetch: fakeFetch(({ url }) => url.endsWith('/v1/me') ? { status: 429, headers: { 'retry-after': ' 7 ' }, body: json({ code: 'rate_limited' }) } : { status: 503, headers: { 'retry-after': 'Wed, 21 Oct 2030 07:28:00 GMT' } }).fetch }));
+	const client = createApiClient(createTransport({ origin, send:fakeSend(({ url }) => url.endsWith('/v1/me') ? { status: 429, headers: { 'retry-after': ' 7 ' }, body: json({ code: 'rate_limited' }) } : { status: 503, headers: { 'retry-after': 'Wed, 21 Oct 2030 07:28:00 GMT' } }).send }));
 	assert.deepEqual(await client.get(apiPaths.me, token, identity), { ok: false, kind: 'unavailable', status: 429, retryAfter: 7 });
 	assert.deepEqual(await client.post(apiPaths.signOut, token, undefined, identity), { ok: false, kind: 'unavailable', status: 503 });
 });

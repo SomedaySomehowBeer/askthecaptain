@@ -34,12 +34,21 @@ session closes. M-shell (#188) is merged and adds `apps/mobile` with Work/Chat/R
 SDK 57 dependencies, boundary checks and signed-out states. Three-platform JavaScript exports,
 a browser approximation at 360/390/430 pixels and generated Android backup configuration are
 verified; there is no signed native build or device evidence, nor mobile authentication or business
-reads yet. The first [M-auth core increment](expo-mobile-auth-core-2026-09.md) adds pure protocol
-and serialized credential storage with injected adapters; platform integration follows separately.
+reads yet. The first [M-auth core increment](expo-mobile-auth-core-2026-09.md) (#189, merged) adds
+pure protocol and serialized credential storage with injected adapters. The
+[platform and account increment](expo-mobile-platform-account-2026-09.md) is implemented and
+reviewed, with integration pending: installed-SDK adapters (crypto, authentication browser,
+`expo/fetch` transport, SecureStore) and the account reducer and credential-owning runner. No
+provider, screen or business read is wired to them, and no simulator or device evidence exists.
 The web export opens view lists as visited pages; native stacks place them beneath the open view.
 Browser history cannot prove native back gestures. Keep the flag off on shared
-staging and for real accounts until the verified-link gate passes. These increments have not been
-released to staging and migration 0044 has not been applied there. The repository facts below
+staging and for real accounts until the verified-link gate passes. The server and web increments
+through #191, including A1 and A2, are deployed to the single staging API and web machines, and
+migration 0044 was applied there on 27 September 2026 at 06:02:01Z. Native sign-in stays off: a
+native start is answered as unavailable. The Expo shell, authentication core and platform/account
+code are not installed or usable on any device. See the
+[release validation record](../validation/assistant-retirement-release-2026-09-27/README.md) and
+[paused.md](../runbooks/paused.md). The repository facts below
 describe the baseline audited for this contract; §§3 and 9 define the additions and remaining work.
 
 ## 1. What exists today (repository facts)
@@ -609,8 +618,10 @@ Root owns git, tests and merges, and every PR gets reciprocal review.
    `check`/`test`, and web/iOS/Android bundle exports in CI.
 5. **M-auth.** PKCE and attempt, `openAuthSessionAsync`, callback validation, native exchange,
    SecureStore and its errors, `/v1/me`, organisation chooser, sign-out, failure classification.
-   Begin with the [pure-core partition](expo-mobile-auth-core-2026-09.md), then platform adapters
-   and account state/UI; the pure-core tests do not complete M-auth acceptance.
+   The [pure-core partition](expo-mobile-auth-core-2026-09.md) is merged (#189). The
+   [platform adapters and account state](expo-mobile-platform-account-2026-09.md) are implemented,
+   with integration pending. The provider, account screens and the device evidence remain; neither
+   increment's pure tests completes M-auth acceptance.
 6. **Remote revocation API and web/mobile control** (§4). Required before first-customer native
    readiness.
 7. **M-read**, then **M-work-write**, **M-equipment** and **M-chat**.

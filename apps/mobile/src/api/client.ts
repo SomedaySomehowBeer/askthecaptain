@@ -1,12 +1,16 @@
-/** The only fetch path (mobile foundation contract §4 "Transport"; docs/plans/expo-mobile-auth-core-2026-09.md). Pure: `fetch`
- *  is injected, and URLs are handled as text, not with URL, whose React Native implementation is partial.
+/** The only request path (mobile foundation contract §4 "Transport"; docs/plans/expo-mobile-auth-core-2026-09.md and
+ *  docs/plans/expo-mobile-platform-account-2026-09.md). Pure: the function that sends is injected as `send`, and URLs
+ *  are handled as text, not with URL, whose React Native implementation is partial.
  *
  *  - Every URL is the configured API origin plus an ApiPath. Nothing a server sends is ever used as a URL, and a bearer
  *    is attached only to such a URL.
- *  - Every request is sent with `redirect: 'error'`. On native this is not claimed to protect the bearer until the
- *    device check (§7) shows the platform stacks honour it. The API test apps/api/src/auth/no-redirect.test.ts is
- *    representative evidence that the routes the app calls answer no 3xx; it is not a guarantee for every route, a
- *    proxy in front of the API, or native behaviour.
+ *  - Every request asks for `redirect: 'error'`. React Native's global `fetch` ignores that option (it is `whatwg-fetch`
+ *    over XMLHttpRequest), so the app never uses it: on device `send` is `nativeSend` from src/platform/fetch.ts, which
+ *    is `expo/fetch` with `redirect: 'error'` and `credentials: 'omit'` forced. Source reading shows expo/fetch refuses
+ *    the redirect natively on iOS and Android; that is not claimed as proven until the device redirect check (including
+ *    an encoded organisation path) passes. The API test apps/api/src/auth/no-redirect.test.ts is representative
+ *    evidence that the routes the app calls answer no 3xx; it is not a guarantee for every route, a proxy in front of
+ *    the API, or native behaviour.
  *  - Second line only: a response that says it was redirected, has a 3xx status, or whose final URL is not exactly the
  *    requested URL is treated as no answer, and its body is never read.
  *  - Nothing is retried here, and no error or thrown message carries a token, code, verifier or attempt. */
@@ -14,8 +18,9 @@ import type { ApiClient, ApiOutcome, Parse } from '../auth/contracts.ts';
 import { apiOutcome } from './failure.ts';
 import { apiPaths, type ApiPath } from './paths.ts';
 
-/** What the transport needs from `fetch`. The global `fetch` satisfies it. */
-export type Fetch = (url: string, init: {
+/** What the transport needs from the function that sends a request: a fetch-shaped call. In the app it is `nativeSend`
+ *  (src/platform/fetch.ts); tests pass fakes. */
+export type Send = (url: string, init: {
 	method: 'GET' | 'POST'; headers: Record<string, string>; body?: string; redirect: 'error'; signal: AbortSignal
 }) => Promise<{
 	status: number; redirected: boolean; url: string; headers: { get(name: string): string | null }; text(): Promise<string>
@@ -65,10 +70,10 @@ const retryAfterSeconds = (value: string | null): number | undefined => {
 	return trimmed !== undefined && /^\d{1,6}$/.test(trimmed) ? Number(trimmed) : undefined;
 };
 
-/** The transport over an injected fetch. `origin` must come from apiOrigin. One timer covers the whole request,
+/** The transport over an injected `send`. `origin` must come from apiOrigin. One timer covers the whole request,
  *  including reading the body. */
-export function createTransport(options: { origin: string; fetch: Fetch; timeoutMs?: number }): Transport {
-	const { origin, fetch } = options; const timeoutMs = options.timeoutMs ?? 30_000;
+export function createTransport(options: { origin: string; send: Send; timeoutMs?: number }): Transport {
+	const { origin, send } = options; const timeoutMs = options.timeoutMs ?? 30_000;
 	return {
 		origin,
 		async request(method, path, token, body) {
@@ -81,7 +86,7 @@ export function createTransport(options: { origin: string; fetch: Fetch; timeout
 			let timer: ReturnType<typeof setTimeout> | undefined;
 			const timedOut = new Promise<{ timeout: true }>((resolve) => { timer = setTimeout(() => { controller.abort(); resolve({ timeout: true }); }, timeoutMs); });
 			try {
-				const sent = fetch(url, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'error', signal: controller.signal });
+				const sent = send(url, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'error', signal: controller.signal });
 				sent.catch(() => undefined);
 				const response = await Promise.race([sent, timedOut]);
 				if ('timeout' in response) return { kind: 'no-answer', reason: 'timeout' };

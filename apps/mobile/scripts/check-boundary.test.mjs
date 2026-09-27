@@ -148,6 +148,65 @@ test('generated directories are skipped only at the mobile root; the same names 
 	assert.equal(findings.length, 4, JSON.stringify(findings));
 });
 
+/** The two network files as the app has them: the binding and the forced options. */
+const networkFiles = {
+	'src/platform/fetch.ts': "import { fetch as expoFetch } from 'expo/fetch';\nimport { createNativeSend } from './native-send.ts';\nexport const nativeSend = createNativeSend(expoFetch);\n",
+	'src/platform/native-send.ts': "export function createNativeSend(underlying) {\n\treturn (url, init) => underlying(url, { ...init, redirect: 'error', credentials: 'omit' });\n}\n",
+	'src/api/client.ts': "// React Native's global fetch ignores redirect: 'error'; see src/platform/fetch.ts.\nexport function createTransport({ send }) { return (url) => send(url, { redirect: 'error' }); }\n"
+};
+
+test('network: the transport, its injected send and the one expo/fetch binding pass', async () => {
+	assert.deepEqual(await findingsFor(networkFiles), []);
+});
+
+test('network: expo/fetch may be imported only by src/platform/fetch.ts, and that file must import it', async () => {
+	const findings = await findingsFor({
+		...networkFiles,
+		'src/api/other.ts': "import { fetch } from 'expo/fetch';\n", 'src/lazy.ts': "const f = require('expo/fetch');\n",
+		'src/deep.ts': "import { fetch } from 'expo/src/winter/fetch';\n", 'src/built.ts': "export * from 'expo/build/winter/fetch/index';\n",
+		'src/platform/fetch.test.ts': "import { fetch } from 'expo/fetch';\n"
+	});
+	for (const file of ['src/api/other.ts', 'src/lazy.ts', 'src/deep.ts', 'src/built.ts']) has(findings, new RegExp(`${file.replace(/[./]/g, '\\$&')}: expo/\\S+ may be imported only by src/platform/fetch\\.ts`));
+	assert.ok(!findings.some((f) => f.includes('fetch.test.ts')), 'tests are not app code');
+	has(await findingsFor({ ...networkFiles, 'src/platform/fetch.ts': "export const nativeSend = globalThis.fetch;\n" }), /src\/platform\/fetch\.ts: must import expo\/fetch/);
+});
+
+test('network: the forced options are a tripwire in src/platform/native-send.ts', async () => {
+	for (const text of ["export const s = (u, i) => f(u, { ...i, credentials: 'omit' });\n", "export const s = (u, i) => f(u, { ...i, redirect: 'error' });\n", '// redirect: \'error\', credentials: \'omit\' (only a comment)\nexport const s = f;\n'])
+		has(await findingsFor({ ...networkFiles, 'src/platform/native-send.ts': text }), /native-send\.ts: must force redirect: 'error' and credentials: 'omit'/);
+	assert.deepEqual(await findingsFor({ ...networkFiles, 'src/platform/native-send.ts': 'export const s = (u, i) => f(u, { ...i, redirect: "error", credentials: "omit" });\n' }), []);
+});
+
+test('network: no global fetch, other network entry point or synchronous random bytes anywhere in app source', async () => {
+	const cases = {
+		'src/a.ts': 'const r = await fetch("https://api.example.test/v1/me");\n',
+		'src/b.ts': 'const r = await globalThis.fetch(url);\n', 'src/c.ts': 'const r = window.fetch(url);\n', 'src/d.ts': 'const f = global?.fetch;\n',
+		'src/e.ts': "const r = self['fetch'](url);\n", 'src/f.ts': 'const r = globalThis["fetch"](url);\n',
+		'src/g.ts': 'const x = new XMLHttpRequest();\n', 'src/h.ts': 'const s = new WebSocket(url);\n', 'src/i.ts': 'const e = new EventSource(url);\n',
+		'src/j.ts': 'navigator.sendBeacon(url, body);\n', "src/k.ts": "import { Networking } from 'react-native';\n",
+		'src/l.ts': "import { getRandomBytes } from 'expo-crypto';\nconst b = getRandomBytes(32);\n",
+		'app/screen.tsx': 'export default function S() { void fetch(url); return null; }\n'
+	};
+	const findings = await findingsFor({ ...networkFiles, ...cases });
+	for (const file of Object.keys(cases)) assert.ok(findings.some((f) => f.startsWith(`${file}: `)), `${file} is refused: ${JSON.stringify(findings)}`);
+	has(findings, /src\/a\.ts: a call of fetch is not allowed/);
+	has(findings, /src\/e\.ts: the global fetch is not allowed/);
+	has(findings, /src\/l\.ts: expo-crypto's synchronous getRandomBytes is not allowed/);
+});
+
+test('network: names in comments and strings, methods of other objects and getRandomBytesAsync are not findings; tests may fake fetch', async () => {
+	const findings = await findingsFor({
+		...networkFiles,
+		'src/fine.ts': [
+			'// globalThis.fetch and XMLHttpRequest are never used here; WebSocket too.', '/* await fetch(url) */',
+			'const label = "fetch(data) over WebSocket";', "const other = 'Networking';", 'const r = cache.fetch(key);', 'const b = await getRandomBytesAsync(32);',
+			'const refetch = () => undefined; refetch();', 'const prefetch = true;'
+		].join('\n'),
+		'src/fake.test.ts': 'const fetch = async () => ({}); await fetch(url); globalThis.fetch = fetch;\n'
+	});
+	assert.deepEqual(findings, []);
+});
+
 test('comments are removed without disturbing strings', () => {
 	assert.equal(stripComments("const u = 'http://x'; // note\nconst v = \"/* keep */\"; /* gone */"), "const u = 'http://x'; \nconst v = \"/* keep */\";  ");
 	// An apostrophe in JSX text opens no string beyond its own line; a template literal may still span lines.
