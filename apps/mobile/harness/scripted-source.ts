@@ -1,6 +1,10 @@
 import type { AccountSource } from '../src/account/account-source.ts';
 import { outsideSnapshots } from '../src/account/account-source.ts';
 import { createClampedClock, type Wait } from '../src/account/clock.ts';
+import type { ReadOutcome, ReadScope, ScopedRead } from '../src/account/contracts.ts';
+import type { OrganisationPath } from '../src/api/paths.ts';
+import type { Parse } from '../src/auth/contracts.ts';
+import { fixtureBody, type ReadControl } from './work-fixtures.ts';
 import type { AccountSnapshot, AccountView } from '../src/account/machine.ts';
 import type { Membership } from '../src/account/me.ts';
 import type { UiCommand } from '../src/account/runner.ts';
@@ -37,13 +41,20 @@ export const scenarioFrom = (search: string): ScenarioName => {
 const snap = (account: AccountView, extra: Partial<AccountSnapshot> = {}): AccountSnapshot =>
 	Object.freeze({ account: Object.freeze(account), signInOffered: false, fault: false, strays: Object.freeze([]), ...extra });
 
+/** Scripted epochs: every ready snapshot the harness builds is a new account/organisation scope (h1, h2, …), as a real
+ *  switch, loss or sign-in would be. Clearing a destination keeps the scope. */
+let epochs = 0;
 const signedIn = (overrides: Partial<Extract<AccountView, { kind: 'signed-in' }>> = {}): AccountView => {
 	const base = {
 		kind: 'signed-in' as const, user: harnessUser, memberships: [harnessOrgA, harnessOrgB], org: { kind: 'chosen' as const, membership: harnessOrgA },
-		refreshing: false, destination: null, notice: null, orgNotice: null, ready: true
+		refreshing: false, destination: null, notice: null, orgNotice: null, ready: true, scope: null
 	};
 	const merged = { ...base, ...overrides };
-	return { ...merged, ready: merged.org.kind === 'chosen', destination: merged.org.kind === 'chosen' ? merged.destination : null };
+	const ready = merged.org.kind === 'chosen';
+	const scope: ReadScope | null = merged.org.kind === 'chosen'
+		? Object.freeze({ epoch: `h${++epochs}`, userId: merged.user.id, organisationId: merged.org.membership.organisationId })
+		: null;
+	return { ...merged, ready, scope, destination: ready ? merged.destination : null };
 };
 
 function scenario(name: ScenarioName, wait: Wait): AccountSnapshot {
@@ -96,22 +107,81 @@ function scenario(name: ScenarioName, wait: Wait): AccountSnapshot {
 export type Transition = 'lost' | 'lost-single' | 'switch' | 'release' | 'verify';
 export const transitions: readonly Transition[] = ['lost', 'lost-single', 'switch', 'release', 'verify'];
 
+/** One read the harness has "sent": its identity, exact path and the epoch it was sent under. */
+export type ReadLogEntry = { readonly id: number; readonly path: string; readonly epoch: string };
+export type ReadsView = { readonly log: readonly ReadLogEntry[]; readonly pending: readonly number[] };
+
 export type ScriptedSource = AccountSource & {
 	readonly scenario: ScenarioName;
+	/** The send-only command log (unchanged: reads are never in it). */
 	readonly log: () => readonly UiCommand[];
 	readonly subscribeLog: (listener: () => void) => () => void;
 	readonly transition: (to: Transition) => void;
+	/** Every read sent, and the IDs still pending, oldest first. */
+	readonly reads: () => ReadsView;
+	readonly subscribeReads: (listener: () => void) => () => void;
+	/** Resolves the oldest pending read with `control`. Nothing happens when none is pending. */
+	readonly resolveRead: (control: ReadControl) => void;
 };
 
-export function createScriptedSource(name: ScenarioName, read: () => number = () => performance.now()): ScriptedSource {
-	const clock = createClampedClock(read);
+export function createScriptedSource(name: ScenarioName, readClock: () => number = () => performance.now()): ScriptedSource {
+	const clock = createClampedClock(readClock);
 	const until = clock.now() + timedWaitMs;
 	const wait: Wait = Object.freeze({ until, about: new Date(Date.now() + timedWaitMs).toISOString() });
 	let current = scenario(name, wait);
 	let log: readonly UiCommand[] = Object.freeze([]);
-	const listeners = new Set<() => void>(); const logListeners = new Set<() => void>();
+	const listeners = new Set<() => void>(); const logListeners = new Set<() => void>(); const readListeners = new Set<() => void>();
 	const set = (next: AccountSnapshot) => { current = next; for (const l of [...listeners]) l(); };
+
+	// Reads, as the runner would send them: checked against the current scope before "sending", then pending until a
+	// harness control resolves the oldest one. Its answer goes through the screen's own parser, and is `superseded` if
+	// the scope changed meanwhile, exactly as in the runner.
+	type Pending = { readonly entry: ReadLogEntry; readonly offset: number; readonly scope: ReadScope; readonly parse: Parse<unknown>; readonly resolve: (outcome: ReadOutcome<unknown>) => void };
+	let readLog: readonly ReadLogEntry[] = Object.freeze([]); let pending: readonly Pending[] = Object.freeze([]);
+	let readsView: ReadsView = Object.freeze({ log: readLog, pending: Object.freeze([]) });
+	const readsChanged = () => {
+		readsView = Object.freeze({ log: readLog, pending: Object.freeze(pending.map((p) => p.entry.id)) });
+		for (const l of [...readListeners]) l();
+	};
+	const currentScope = (): ReadScope | null => (current.account.kind === 'signed-in' ? current.account.scope : null);
+	const same = (a: ReadScope | null, b: ReadScope) => a !== null && a.epoch === b.epoch && a.userId === b.userId && a.organisationId === b.organisationId;
+	const superseded = Object.freeze({ kind: 'superseded' as const });
+
+	const read: ScopedRead = <T>(expected: ReadScope, path: (scope: ReadScope) => OrganisationPath, parse: Parse<T>): Promise<ReadOutcome<T>> => {
+		const scope = currentScope();
+		if (!same(scope, expected)) return Promise.resolve(superseded);
+		let target: string;
+		try { target = path(scope!); } catch { return Promise.resolve(Object.freeze({ kind: 'client-bug' as const })); }
+		const offset = Number(/[?&]offset=(\d+)/.exec(target)?.[1] ?? '0');
+		return new Promise<ReadOutcome<T>>((resolve) => {
+			const entry: ReadLogEntry = Object.freeze({ id: readLog.length + 1, path: target, epoch: scope!.epoch });
+			readLog = Object.freeze([...readLog, entry]);
+			pending = Object.freeze([...pending, { entry, offset, scope: scope!, parse, resolve: resolve as (o: ReadOutcome<unknown>) => void }]);
+			readsChanged();
+		});
+	};
+
+	function outcomeFor(control: ReadControl, p: Pending): ReadOutcome<unknown> {
+		if (control === 'unavailable') return { kind: 'unavailable', wait: null };
+		if (control === 'unavailable-wait') return { kind: 'unavailable', wait: Object.freeze({ until: clock.now() + timedWaitMs, about: new Date(Date.now() + timedWaitMs).toISOString() }) };
+		if (control === 'refused-404') return { kind: 'refused', status: 404 };
+		if (control === 'refused-400') return { kind: 'refused', status: 400 };
+		if (control === 'unauthorised') return superseded; // as a 401 does in production: the screen applies nothing
+		if (control === 'client-bug') return { kind: 'client-bug' };
+		try { return { kind: 'ok', value: p.parse(fixtureBody(control, p.offset, p.scope.userId)) }; } catch { return { kind: 'unavailable', wait: null }; }
+	}
+
 	return Object.freeze({
+		read,
+		reads: () => readsView,
+		subscribeReads(listener: () => void) { readListeners.add(listener); return () => { readListeners.delete(listener); }; },
+		resolveRead(control: ReadControl) {
+			const [oldest, ...rest] = pending;
+			if (oldest === undefined) return;
+			pending = Object.freeze(rest);
+			readsChanged();
+			oldest.resolve(same(currentScope(), oldest.scope) ? outcomeFor(control, oldest) : superseded);
+		},
 		scenario: name,
 		subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
 		snapshot: () => current,

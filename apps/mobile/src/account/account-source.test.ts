@@ -15,13 +15,13 @@ function fakeTimers() {
 	return { timers, delays, fireAll: () => { for (const [id, run] of [...pending]) { pending.delete(id); run(); } }, count: () => pending.size };
 }
 function fakeRunner(first: AccountSnapshot) {
-	let current = first; const listeners = new Set<(s: AccountSnapshot) => void>(); const sent: UiCommand[] = [];
+	let current = first; const listeners = new Set<(s: AccountSnapshot) => void>(); const sent: UiCommand[] = []; const reads: unknown[][] = [];
 	const runner = {
 		start: () => undefined, snapshot: () => current, send: (c: UiCommand) => { sent.push(c); },
 		subscribe: (l: (s: AccountSnapshot) => void) => { listeners.add(l); return () => listeners.delete(l); },
-		organisationRead: async () => ({}) as never
+		organisationRead: async (...args: unknown[]) => { reads.push(args); return { kind: 'ok', value: 'from runner' }; }
 	} as unknown as AccountRunner;
-	return { runner, sent, set(next: AccountSnapshot) { current = next; for (const l of listeners) l(next); } };
+	return { runner, sent, reads, set(next: AccountSnapshot) { current = next; for (const l of listeners) l(next); } };
 }
 const snap = (account: AccountSnapshot['account']): AccountSnapshot => ({ account, signInOffered: false, fault: false, strays: [] });
 
@@ -83,6 +83,26 @@ test('with a runner: its snapshot and commands pass through; a slow notice alrea
 	source.send({ type: 'retry' });
 	assert.deepEqual(fake.sent, [{ type: 'retry' }]);
 	assert.equal(source.now(), 42);
+});
+
+test('read: with no runner it answers superseded and builds nothing; with a runner it delegates unchanged', async () => {
+	const scope = { epoch: 'a1.o1', userId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301', organisationId: 'c0ffee00-1234-4abc-9def-0123456789ab' };
+	let built = 0;
+	const path = () => { built += 1; return '/v1/organisations/x' as never; };
+	const parse = (value: unknown) => value;
+	for (const composition of [() => new Promise<Composition>(() => undefined), async (): Promise<Composition> => ({ kind: 'web-only' }), async (): Promise<Composition> => ({ kind: 'misconfigured' }), () => Promise.reject(new Error('x'))]) {
+		const source = createAccountSource(composition, fakeTimers().timers);
+		await drain();
+		assert.deepEqual(await source.read(scope, path, parse), { kind: 'superseded' });
+	}
+	assert.equal(built, 0, 'no path is built, so nothing can be sent');
+	const fake = fakeRunner(snap({ kind: 'checking' }));
+	let resolve!: (c: Composition) => void;
+	const source = createAccountSource(() => new Promise<Composition>((r) => { resolve = r; }), fakeTimers().timers);
+	resolve({ kind: 'ready', runner: fake.runner, clock: createClampedClock(() => 0) }); await drain();
+	assert.deepEqual(await source.read(scope, path, parse), { kind: 'ok', value: 'from runner' });
+	assert.equal(fake.reads.length, 1);
+	assert.equal(fake.reads[0]![0], scope); assert.equal(fake.reads[0]![1], path); assert.equal(fake.reads[0]![2], parse);
 });
 
 test('instance: one source per holder; a development re-evaluation reuses it; release and development are isolated', () => {

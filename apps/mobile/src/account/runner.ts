@@ -2,9 +2,9 @@ import { apiPaths, type OrganisationPath } from '../api/paths.ts';
 import type { Cleanup } from '../auth/cleanup.ts';
 import type { ApiClient, ApiOutcome, Attempts, AttemptOutcome, Parse } from '../auth/contracts.ts';
 import { createClampedClock, waitFor, type Clock } from './clock.ts';
-import type { CredentialStore, Generation } from './contracts.ts';
+import type { CredentialStore, Generation, ReadOutcome, ReadScope, ScopedRead } from './contracts.ts';
 import {
-	holds, initial, reduce, slowAfterMs, storeGeneration, view as viewOf,
+	holds, initial, readScope, reduce, slowAfterMs, storeGeneration, view as viewOf,
 	type AccountSnapshot, type Command, type CredentialHandle, type Effect, type Event, type LocalResult, type Machine
 } from './machine.ts';
 import { parseMe } from './me.ts';
@@ -42,23 +42,24 @@ export type AccountRunnerDeps = {
 /** Commands from screens. Try again and a foreground refresh carry no time; the runner adds its clock. */
 export type UiCommand = Exclude<Command, { type: 'retry' } | { type: 'refresh' }> | { readonly type: 'retry' } | { readonly type: 'refresh' };
 
-/** An organisation-scoped read's result. `not-ready`: no verified identity with a chosen organisation, so nothing was
- *  sent. `superseded`: the account or organisation changed while it was in flight, so its answer must not be shown. */
-export type OrganisationRead<T> = ApiOutcome<T> | { readonly ok: false; readonly kind: 'not-ready' } | { readonly ok: false; readonly kind: 'superseded' };
-
 export type AccountRunner = {
 	/** Reads the saved sign-in once. */
 	start(): void;
 	snapshot(): AccountSnapshot;
 	send(command: UiCommand): void;
 	subscribe(listener: (snapshot: AccountSnapshot) => void): () => void;
-	/** The single entry point for organisation-scoped reads (none exist in this increment; the next one's business
-	 *  reads use only this). It sends only when identity is verified and an organisation is chosen, with the current
-	 *  credential, to `path(chosenOrganisationId)`. The token never leaves the runner. A 401 ends the session; a 403 or
-	 *  404 only asks for a fresh membership list (only that list can remove the organisation). Both are tied to the
-	 *  handle and organisation generation the read was sent under, so a late answer can never act on a newer session or
-	 *  choice. */
-	organisationRead<T>(path: (organisationId: string) => OrganisationPath, parse: Parse<T>): Promise<OrganisationRead<T>>;
+	/** The single entry point for organisation-scoped reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.1).
+	 *  - Before sending, in one synchronous step (no `await` before the send): if not ready, or the current read scope
+	 *    differs from `expected` in epoch, user or organisation, it answers `superseded` and sends nothing. Otherwise it
+	 *    builds the path from its own current scope and sends with the current credential. A path that throws is
+	 *    `client-bug`, and nothing is sent.
+	 *  - After the answer: a 401 ends the session and a 403/404 asks for a fresh membership list (paced by the reducer),
+	 *    both tied to the handle and organisation generation it was sent under. Then, if the handle or epoch changed, it
+	 *    answers `superseded` (so a 401 always does).
+	 *  - A 429/5xx `Retry-After` becomes this read's own `wait` on the shared clamped clock; it never touches the
+	 *    account's `/v1/me` wait.
+	 *  - It never rejects, and the token never leaves the runner. */
+	organisationRead: ScopedRead;
 };
 
 type Credential = { readonly token: string; readonly expiresAt: string; readonly userId: string };
@@ -280,20 +281,48 @@ export function createAccountRunner(deps: AccountRunnerDeps): AccountRunner {
 		}
 	}
 
-	async function organisationRead<T>(path: (organisationId: string) => OrganisationPath, parse: Parse<T>): Promise<OrganisationRead<T>> {
-		const state = machine.state;
-		if (state.kind !== 'signed-in' || state.org.kind !== 'chosen') return { ok: false, kind: 'not-ready' };
-		const handle = state.handle; const credential = credentials.get(handle);
-		if (!credential) return { ok: false, kind: 'not-ready' };
-		const organisation = machine.generations.organisation;
-		const target = path(state.org.membership.organisationId);
-		let answer: ApiOutcome<T>;
-		try { answer = await client.get(target, credential.token, parse); } catch { answer = { ok: false, kind: 'unavailable', status: 0 }; }
+	const superseded = Object.freeze({ kind: 'superseded' as const });
+	const clientBug = Object.freeze({ kind: 'client-bug' as const });
+	const sameScope = (a: ReadScope | null, b: ReadScope) =>
+		a !== null && a.epoch === b.epoch && a.userId === b.userId && a.organisationId === b.organisationId;
+
+	/** Not `async`: everything up to and including the send runs synchronously in this call, so no event can come
+	 *  between the scope check, the path build and the request (the client and transport call `send` before their first
+	 *  `await`). */
+	function organisationRead<T>(expected: ReadScope, path: (scope: ReadScope) => OrganisationPath, parse: Parse<T>): Promise<ReadOutcome<T>> {
+		try {
+			const scope = readScope(machine); const state = machine.state;
+			if (!sameScope(scope, expected) || state.kind !== 'signed-in') return Promise.resolve(superseded);
+			const handle = state.handle; const credential = credentials.get(handle);
+			if (!credential) return Promise.resolve(superseded);
+			const organisation = machine.generations.organisation;
+			let target: OrganisationPath;
+			try { target = path(scope!); } catch { return Promise.resolve(clientBug); }
+			const sent: Promise<ApiOutcome<T>> = client.get(target, credential.token, parse);
+			return sent.then(
+				(answer): ReadOutcome<T> => settleRead(answer, handle, organisation, scope!),
+				// The client resolves every network failure as `unavailable`; a rejection is a bug in this app, not the
+				// network. No account effect: `client-bug` if the scope still holds, else `superseded`.
+				(): ReadOutcome<T> => (stillSent(handle, scope!) ? clientBug : superseded)
+			).catch((): ReadOutcome<T> => clientBug);
+		} catch { return Promise.resolve(clientBug); }
+	}
+
+	/** Whether the handle and scope a read was sent under are still current. */
+	function stillSent(handle: CredentialHandle, sentScope: ReadScope): boolean {
+		const after = machine.state;
+		return after.kind === 'signed-in' && after.handle === handle && sameScope(readScope(machine), sentScope);
+	}
+
+	/** After the answer: account effects first (tied to what it was sent under), then the scope check. */
+	function settleRead<T>(answer: ApiOutcome<T>, handle: CredentialHandle, organisation: number, sentScope: ReadScope): ReadOutcome<T> {
 		if (!answer.ok && answer.kind === 'unauthorised') dispatch({ type: 'unauthorised', handle });
 		else if (!answer.ok && answer.kind === 'refused' && (answer.status === 403 || answer.status === 404)) dispatch({ type: 'org-refused', handle, organisation, now: now() });
-		const after = machine.state;
-		if (after.kind !== 'signed-in' || after.handle !== handle || machine.generations.organisation !== organisation) return { ok: false, kind: 'superseded' };
-		return answer;
+		if (!stillSent(handle, sentScope)) return superseded;
+		if (answer.ok) return { kind: 'ok', value: answer.value };
+		if (answer.kind === 'unauthorised') return superseded; // unreachable: the dispatch above ended the session
+		if (answer.kind === 'refused') return { kind: 'refused', status: answer.status };
+		return { kind: 'unavailable', wait: answer.retryAfter === undefined ? null : waitFor(answer.retryAfter * 1000, clock, wallNow) };
 	}
 
 	return {

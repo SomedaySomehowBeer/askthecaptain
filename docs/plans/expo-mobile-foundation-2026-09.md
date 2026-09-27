@@ -33,19 +33,30 @@ destination; it does not establish that an installed app receives it or that a p
 session closes. M-shell (#188) is merged and adds `apps/mobile` with Work/Chat/Resources, grouped view lists,
 SDK 57 dependencies, boundary checks and signed-out states. Three-platform JavaScript exports,
 a browser approximation at 360/390/430 pixels and generated Android backup configuration are
-verified; there is no signed native build or device evidence, nor mobile authentication or business
-reads yet. The first [M-auth core increment](expo-mobile-auth-core-2026-09.md) (#189, merged) adds
+verified. At #188 there was no mobile authentication or business read. There is still no signed
+native build or device evidence. The first [M-auth core increment](expo-mobile-auth-core-2026-09.md) (#189, merged) adds
 pure protocol and serialized credential storage with injected adapters. The
 [platform and account increment](expo-mobile-platform-account-2026-09.md) (#193, merged) adds
 installed-SDK adapters (crypto, authentication browser, `expo/fetch` transport, SecureStore) and the
 account reducer and credential-owning runner.
 
-The [composition and account-screen increment](expo-mobile-auth-composition-2026-09.md) is implemented:
+The [composition and account-screen increment](expo-mobile-auth-composition-2026-09.md) merged as #197:
 - It wires those parts into one account source, a provider and a protected root stack, with welcome, organisation and
   Account screens.
 - The production web export stays web-only; a separate synthetic harness export exercises the account screens in a
   browser.
-- No business read is wired yet, and no simulator or device evidence exists.
+- At #197 no business read was wired (historical).
+
+The first business read, [My work](expo-mobile-my-work-read-2026-09.md) (M-read slice 1, adopted in #198), is
+implemented and independently reviewed, with local tests, exports and browser checks passing. It adds:
+- a read-only Work → My work list (the person's open tasks, 50 per page, at most 10 pages) through one runner entry
+  point, bound to a token-free read scope and epoch;
+- the 30-second spacing for membership refreshes after a 403/404;
+- synthetic harness reads for the browser proof.
+
+The production web export still makes no API requests. Other reads and all writes remain. So do a transport response byte
+budget and the device gates: `expo/fetch` reporting the query URL unchanged, and a real 403/404 on an isolated
+synthetic environment. No simulator or device evidence exists.
 The web export opens view lists as visited pages; native stacks place them beneath the open view.
 Browser history cannot prove native back gestures. Keep the flag off on shared
 staging and for real accounts until the verified-link gate passes. The server and web increments

@@ -28,7 +28,7 @@ export function readConfig(values: { api: unknown; app: unknown }, development: 
 }
 
 /** The only website paths the app links to. Anything else is not linkable. */
-export const webPaths = ['/', '/settings'] as const;
+export const webPaths = ['/', '/settings', '/work'] as const;
 export type WebPath = (typeof webPaths)[number];
 
 /** The website link for an allow-listed path, built as text from the validated origin and a fixed path; never from

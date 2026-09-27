@@ -9,7 +9,7 @@
  *  - each tab keeps its own view and history; its header opens its grouped view list;
  *  - Inventory opens from the Resources view list, and browser back returns to that list;
  *  - Settings opens from the avatar, outside the tab bar, and goes back;
- *  - search and not-yet-built views are disabled; there are no business records, counts or dates;
+ *  - search and not-yet-built views are disabled; unbuilt views contain no invented records; My work uses explicit synthetic read fixtures;
  *  - an unknown or sign-in-callback link is refused without echoing it;
  *  - the approved tab bar geometry and selected pill, and 26 px headings;
  *  - no page errors, no horizontal overflow, and no request to any origin but the export.
@@ -96,7 +96,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				await expect(heading('My work')).toBeVisible();
 				check(at(page) === '/work', `${width}px: the app opens at /work`);
 				await tabs('Work');
-				await expect(page.getByText("Tasks aren't shown in the app yet", { exact: true })).toBeVisible();
+				await expect(page.getByTestId('work-loading')).toBeVisible();
 				await expect(button('Search')).toHaveAttribute('aria-disabled', 'true');
 				await noRecords('My work'); await noOverflow('My work');
 
@@ -374,6 +374,8 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				check(JSON.stringify(await page.evaluate(() => window.__opened)) === JSON.stringify(['https://app.example.invalid/settings']), 'settings link uses the fixed configured path');
 				await expectTypes([]);
 				console.log(`PASS ${width}px: account states, guarded navigation, command wiring, organisation loss, destination-once and stable subscriptions`);
+
+				await require('./mobile-shell-work-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
 
 				check(errors.length === 0, `${width}px: no page errors (${errors.length})`);
 				check(consoleErrors.length === 0, `${width}px: no console errors (${consoleErrors.length})`);
