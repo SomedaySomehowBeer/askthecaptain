@@ -194,7 +194,7 @@ it('0043 backfills every existing participantâ€™s baseline to the conversationâ€
 		const busy = await create(org, alice, [bob, carol], old.app), quiet = await create(org, bob, [], old.app);
 		for (let i = 0; i < 4; i++) await send(org, alice, busy, 'before 0043', old.app);
 		await as(org, carol, (tx) => leaveIn(tx, org, carol, busy), old.app);
-		assert.deepEqual(await applyMigrations(old.owner), ['0043_chat_personal_pins.sql']);
+		assert.deepEqual(await applyMigrations(old.owner, undefined, '0043_chat_personal_pins.sql'), ['0043_chat_personal_pins.sql']);
 		const rows = await old.owner<{ conversationId: string; userId: string; state: string; readStartSeq: number }[]>`
 			select conversation_id, user_id, state, read_start_seq from conversation_participants where conversation_id in ${old.owner([busy, quiet])}`;
 		const at = (conversation: string, user: string) => rows.find((r) => r.conversationId === conversation && r.userId === user)?.readStartSeq;

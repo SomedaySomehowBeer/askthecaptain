@@ -24,3 +24,10 @@ test('required settings and the retained checks still refuse an incomplete or in
 	assert.throws(() => readEnv({ ...required, WORKFLOWS_DISABLED: 'yes' }), /WORKFLOWS_DISABLED/);
 	assert.throws(() => readEnv({ ...required, APP_URL: 'not a url' }), /APP_URL/);
 });
+
+test('mobile sign-in is off unless NATIVE_SIGN_IN is exactly 1', () => {
+	assert.equal(readEnv(required).NATIVE_SIGN_IN, '0');
+	assert.equal(readEnv({ ...required, NATIVE_SIGN_IN: '0' }).NATIVE_SIGN_IN, '0');
+	assert.equal(readEnv({ ...required, NATIVE_SIGN_IN: '1' }).NATIVE_SIGN_IN, '1');
+	for (const value of ['yes', 'true', 'on', '']) assert.throws(() => readEnv({ ...required, NATIVE_SIGN_IN: value }), /NATIVE_SIGN_IN/, value);
+});

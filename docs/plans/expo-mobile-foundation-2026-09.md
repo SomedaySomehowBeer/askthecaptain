@@ -1,14 +1,13 @@
 # Expo mobile foundation: native sign-in, secure session and first authenticated reads
 
-Status: **proposed for adoption after reciprocal review**, 27 September 2026. Author: Claude agent B (`linked-chat`).
+Status: **adopted in #183 after reciprocal review**, 27 September 2026.
 Assignment: [next batch, 27 September](captain-next-batch-2026-09-27.md). Tracking:
 [#178](https://github.com/SomedaySomehowBeer/askthecaptain/issues/178). Delivery slice 2 of the
 [delivery plan](captain-workspace-delivery-2026-09.md). Outcomes: **manage shared work**, **allocate
 resources** and **discuss work**, on iPhone first with early Android checks.
 
 The [plan](../plan.md) is authoritative. It names `apps/mobile` (§4), passkeys as a required second
-factor (§9) and secure sessions/links as an open mobile question (§14). This contract **proposes**
-three things:
+factor (§9) and secure sessions/links as an open mobile question (§14). This contract authorises three kinds of change:
 
 - an extension to authentication: a native handoff kind, a new route, a default-off enablement flag
   and one migration;
@@ -16,8 +15,8 @@ three things:
 - a new application package.
 
 No existing decision D1–D26 changes. Under AGENTS.md, a package, dependency or migration the plan does
-not name needs a plan amendment in the same PR. The adopting PR therefore adds a pointer to this
-contract in plan §4 and §14, and names the dependencies.
+not name needs a plan amendment in the same PR. The adopting PR added a pointer to this
+contract in plan §4 and §14, and named the dependencies.
 
 The document keeps four kinds of statement apart:
 
@@ -26,6 +25,13 @@ The document keeps four kinds of statement apart:
 - **Platform question:** behaviour that root verifies against current official documentation (§11).
 - **Device/build evidence:** exports, simulator builds, real-device runs and signed builds, recorded
   separately (§10). This contract claims none of them.
+
+**Implementation status.** A1 adds the API handoff, default-off `NATIVE_SIGN_IN` flag and migration
+0044. It does not add the web callback handling, a mobile application or device evidence. The web
+still expects its existing session response; keep the flag off until A2 handles the native response
+and the later verified-link gate passes for shared staging and real accounts. Migration 0044 applies only at a later reviewed staging
+release; this implementation PR changes no flag, live schema or deployment. The repository facts below describe the
+baseline audited for this contract; §§3 and 12 define the additions and remaining work.
 
 ## 1. What exists today (repository facts)
 

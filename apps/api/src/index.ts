@@ -72,7 +72,7 @@ const lifecycle = new OrganisationLifecycle(db, [
 	async (actor, organisationId) => { await inference.remove(actor, organisationId).catch(() => undefined); }
 ]);
 const passkeys = new PasskeyService(db, simpleWebAuthn(env.APP_URL));
-const app = createApp({ stock, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, connections, auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys }), organisations: new OrganisationService(db), commitments });
+const app = createApp({ stock, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, connections, auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys, nativeSignIn: env.NATIVE_SIGN_IN === '1' }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
