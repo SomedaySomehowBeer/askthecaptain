@@ -554,11 +554,25 @@ tags nor the proof's versions are assumed.
 | `expo-secure-store` | Session and organisation choice: the **only** storage mechanism |
 | `expo-crypto` | Random bytes and SHA-256 (Q10) |
 
-**Development dependencies:** `typescript`, `@types/react`, and `tsx` if it is not hoisted. Pure logic
+**Development dependencies:** `typescript`, `@types/react`, `@types/react-dom` for SDK-matched web-export types, `@types/node` for Node-run pure tests, and `tsx` if it is not hoisted. Pure logic
 lives in React Native-free modules tested with the existing `node --import tsx --test`: return path,
 link allow list, callback validation, PKCE/attempt encoding and failure classification.
 
-**Excluded:** AsyncStorage or any file/cache storage; gesture and animation libraries (M-equipment);
+**M-shell SDK selection (27 September 2026).** Expo 57.0.25 uses React/React DOM 19.2.3,
+React Native 0.86.3 and TypeScript ~6.0.3. Router peers also include `expo-status-bar`,
+`@expo/metro-runtime` and the transitively resolved `@expo/log-box`; web export uses `react-native-web` ~0.21.0.
+The isolated pnpm workspace preserves Next.js's existing React version. The Router package includes
+upstream drawer support whose peers pnpm installs transitively: Reanimated 4.5.1, Worklets 0.10.1
+and Gesture Handler ~2.32.0. Workspace overrides match the SDK's bundled-module manifest and
+pin React Native's Metro config to 0.86.3; these packages are not direct app dependencies or
+permission to implement equipment gestures in M-shell. Mobile's DOM types are pinned separately
+from the web app. Development identifiers `app.askthecaptain.dev` are unsigned placeholders;
+no signing identity, association, registration or release identifier is selected by this shell.
+Before the first development build, record the autolinked native modules; transitive native peers
+may be included even though app code does not import them. Verify normal cold launch, per-tab
+history, swipe-back and enlarged text on devices; bundle exports cannot establish these behaviours.
+
+**Excluded:** AsyncStorage or any file/cache storage; gesture and animation libraries as direct app dependencies (M-equipment; SDK-pinned transitive peers above are allowed);
 `expo-notifications`; telemetry and Sentry; `@simplewebauthn/*`; and every server package
 (`@captain/db`, `model`, `connectors`, `engine`, `steps`, `retrieval`, the API).
 
