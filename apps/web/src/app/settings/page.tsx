@@ -5,6 +5,7 @@ import { Page, requireCurrent } from '../../components/Page.tsx';
 import { api, load, type Organisation } from '../../lib/api.ts';
 import { OrganisationForm } from './OrganisationForm.tsx';
 import { switchOrganisation } from './actions.ts';
+import { SignOutEverywhereElse } from './SignOutEverywhereElse.tsx';
 import { SignOutForm } from './SignOutForm.tsx';
 
 export const metadata: Metadata = { title: 'Settings' };
@@ -20,6 +21,7 @@ export default async function SettingsPage() {
 				<div className="line"><span>{me.me.user.name || me.me.user.email}</span><span className="chip">{me.organisation.role}</span></div>
 				<p className="muted">{me.me.user.email}</p>
 				<div className="row"><Link className="button button--secondary" href="/settings/passkeys">Passkeys</Link><SignOutForm userId={me.me.user.id} /></div>
+				<SignOutEverywhereElse />
 			</section>
 			<section className="card">
 				<h2>Organisation</h2>

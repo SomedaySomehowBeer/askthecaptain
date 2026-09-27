@@ -32,7 +32,8 @@ try {
     const google: IdentityProvider & {
         next: Identity;
     } = { next: { subject: 'workspace-owner', email: 'olive@example.test', name: 'Olive Owner' }, authorizationUrl: ({ state }) => `https://google.test/?state=${state}`, async exchange() { return this.next; } };
-    const app = createApp({ workflows: new WorkflowService(db.app), db: db.app, auth: new AuthService(db.app, google, { appUrl: 'http://127.0.0.1:3034', sessionTtlDays: 1 }), organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), ...(fastRateWindows ? { rateLimiter: new RateLimiter(() => (rateClock += 61_000)) } : {}) });
+    const auth = new AuthService(db.app, google, { appUrl: 'http://127.0.0.1:3034', sessionTtlDays: 1 });
+    const app = createApp({ workflows: new WorkflowService(db.app), db: db.app, auth, organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), ...(fastRateWindows ? { rateLimiter: new RateLimiter(() => (rateClock += 61_000)) } : {}) });
     async function request<T>(method: string, path: string, token: string | null, body?: unknown): Promise<T> {
         const response = await app.request(path, {
             method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
@@ -103,15 +104,35 @@ try {
         values (${newerViewId}, ${org.id}, ${owner.user.id}, 'Future view', 2, '{"mode":"board"}')`;
     await db.owner`insert into saved_views (id, organisation_id, owner_id, name, filter_version, filter)
         values (${unreadableViewId}, ${org.id}, ${owner.user.id}, 'Unreadable view', 1, '{"owner":"me"}')`;
-    await writeFile(`${directory}/data.json`, JSON.stringify({ fastRateWindows, unreadableViewId, memberToken: pat.token, memberUserId: pat.user.id, newerViewId, fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id, retiredRun: oldRun!.id }), { mode: 0o600, flag: 'wx' });
+    // Separate real sessions for the account-control browser suite; synthetic identities only.
+    const ownerOther = await auth.issueSessionFor(owner.user.id);
+    const memberOther = await auth.issueSessionFor(pat.user.id);
+    await writeFile(`${directory}/data.json`, JSON.stringify({ ownerOtherToken: ownerOther.token, memberOtherToken: memberOther.token, fastRateWindows, unreadableViewId, memberToken: pat.token, memberUserId: pat.user.id, newerViewId, fixture: 'captain-workspace-local', token: owner.token, userId: owner.user.id, orgId: org.id, base, projectId: project.id, productionId: production.id, salesId: sales.id, tasks, equipment, bookingId: booking.id, retiredRun: oldRun!.id }), { mode: 0o600, flag: 'wx' });
     let mutationRequests = 0, reservationReadCount = 0;
-    let chatRequestCount = 0;
+    let chatRequestCount = 0, revocationRequests = 0;
     const chatRequests: { sequence: number; method: string; path: string; query: string }[] = [];
     const reservationReads: { sequence: number; equipmentId: string; from: string | null; to: string | null }[] = [];
     const server = serve({ hostname: '127.0.0.1', port: 8084, fetch: async (req, bindings) => {
         const mode = await readFile(`${directory}/mode`, 'utf8').catch(() => '');
         const url = new URL(req.url);
-        if (url.pathname === '/__fixture/stats') return Response.json({ mutationRequests, reservationReadCount, reservationReads, chatRequestCount, chatRequests });
+        if (url.pathname === '/__fixture/stats') return Response.json({ mutationRequests, reservationReadCount, reservationReads, chatRequestCount, chatRequests, revocationRequests });
+        // Test-only faults: this process refuses non-loopback databases and is never deployed.
+        if (url.pathname === '/v1/me/sessions/revoke-others' && req.method === 'POST') {
+            revocationRequests++;
+            if (mode === 'revoke-expire-before-send') {
+                const token = req.headers.get('authorization')?.replace(/^Bearer /, '') ?? null;
+                await auth.signOut(token, 'fixture-revoke-expiry');
+                return app.fetch(req); // Real 401 after the web preflight, and subsequent /me is signed out too.
+            }
+            if (mode === 'revoke-rate-limited') return Response.json({ code: 'rate_limited' }, { status: 429, headers: { 'retry-after': '2' } });
+            if (mode === 'revoke-refused') return Response.json({ code: 'fixture_refused' }, { status: 403 });
+            if (mode === 'revoke-delayed') await new Promise(resolve => setTimeout(resolve, 1200));
+            if (mode === 'revoke-uncertain') {
+                const result = await app.fetch(req);
+                if (!result.ok) return result;
+                return Response.json({ code: 'fixture_lost_reply' }, { status: 503 });
+            }
+        }
         const equipmentRead = /\/equipment\/([^/]+)\/reservations$/.exec(url.pathname);
         if (equipmentRead && req.method === 'GET') {
             reservationReads.push({ sequence: ++reservationReadCount, equipmentId: equipmentRead[1]!, from: url.searchParams.get('from'), to: url.searchParams.get('to') });

@@ -67,7 +67,7 @@ jobs:
   # fixture (loopback only, synthetic data, no hosted credentials). Separate from `check` for its own time budget.
   chat-browser:
     runs-on: ubuntu-latest
-    # Two suites of at most 12 minutes each (chat-ci.mjs), the native sign-in proof of at most 8 minutes (native-ci.mjs),
+    # Two chat suites of at most 12 minutes each, one session-control suite of at most 3 minutes (chat-ci.mjs), the native sign-in proof of at most 8 minutes (native-ci.mjs),
     # plus install, build, fixture setup/cleanup and upload.
     timeout-minutes: 50
     services:

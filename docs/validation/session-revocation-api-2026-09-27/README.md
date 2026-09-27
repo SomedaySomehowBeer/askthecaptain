@@ -18,7 +18,7 @@ changing runtime behaviour. Both agents reviewed that repair.
 
 - Workspace typecheck: 10 tasks passed, 9 unchanged cached.
 - API suite on disposable real Postgres databases as `captain_runtime`: 219 tests passed, zero skipped.
-- CI: pending.
+- CI: both workspace/database and Chat browser jobs passed on source `41555d6`; merged as #204.
 
 The new tests cover cross-person isolation, unchanged current session, expired/revoked rows,
 ignored spoofed body, audit detail, token/hash absence, repeated calls, expiry while queued,

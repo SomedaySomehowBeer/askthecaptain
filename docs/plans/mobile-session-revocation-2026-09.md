@@ -1,8 +1,8 @@
 # Remote session revocation contract
 
-Status: API increment implemented and independently reviewed, 27 September 2026; release checks in progress. Outcome: **manage shared work** through secure account access.
-Independently reviewed by both existing Claude Opus agents and root. Increment 1 implements the API only;
-web and mobile controls remain pending. See [implementation evidence](../validation/session-revocation-api-2026-09-27/README.md).
+Status: API increment merged in #204 after review and CI, 27 September 2026; web controls implemented with final review and checks in progress. Outcome: **manage shared work** through secure account access.
+Independently reviewed by both existing Claude Opus agents and root. Increment 1 implements the API; increment 2 adds the web control, with
+[web evidence](../validation/session-revocation-web-2026-09-27/README.md). Mobile controls are in progress separately. See [implementation evidence](../validation/session-revocation-api-2026-09-27/README.md).
 
 It implements foundation §4 "Remote revocation" and §9 step 6 (#178) at the foundation's small scope: **end the
 person's existing sessions, other than the current one.** It is a per-person control, required before
@@ -158,7 +158,7 @@ policies, and uses the existing 429 shape.
 ## 3. Web: the Settings "You" card
 
 **Control**
-- A secondary button, **"Sign out everywhere else"**, placed beside Passkeys and Sign out.
+- A secondary button, **"Sign out everywhere else"**, placed directly below the Passkeys and Sign out row in the same card; confirmation and results expand beneath it.
 - It has one in-page confirmation step, which is UI and not an approval: "Sign out of Captain in every other browser
   and app where you're signed in, including on phones? This browser stays signed in." The choices are "Sign out
   everywhere else" and "Cancel".
@@ -178,12 +178,21 @@ policies, and uses the existing 429 shape.
   sessions."
 - **0:** "No other active sessions were ended."
 - **401:** the normal signed-out path.
-- **429:** "Too many attempts. Try again in {n} seconds."
+- **429:** "Too many attempts. Try again in {n} seconds." Use grammatical singulars; absent or invalid `Retry-After` says "Too many attempts. Try again later."
 - **Refused (any other 4xx):** "Captain couldn't sign out your other sessions." There is no claim about what changed.
 - **Unknown** (5xx, network, timeout, or an unparseable or out-of-range body): "Captain couldn't confirm whether your
   other sessions were ended. It's safe to try again."
   - Neither this wording nor the refused wording ever says nothing changed.
 - There is no automatic retry, and this browser's cookies are unchanged.
+- The client wraps the action promise: Next router errors are rethrown through `unstable_rethrow`
+  so redirects work; other browser-to-server failures show the same unknown wording. Only the
+  server action imports the API client and session configuration; client copy and result parsing
+  remain pure. The result accepts only the named fields, never an API error object.
+- On confirmation, the confirmation panel closes and a disabled "Signing out everywhere else…"
+  button replaces it until settlement. Previous result text is hidden while pending. A failed
+  signed-out preflight offers a **Sign in again** link.
+- Browser coverage distinguishes a real revocation before confirmation (preflight says not sent)
+  from test-fixture expiry at the POST (normal 401 and Next redirect). No production race hook is added.
 
 ## 4. Mobile: runner-owned revocation, Account screen control
 
