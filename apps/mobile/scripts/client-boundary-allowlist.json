@@ -1,0 +1,30 @@
+{
+  "about": "Every direct dependency apps/mobile may declare (mobile foundation contract §8 and its CI guard). Names only: versions come from the Expo SDK's compatibility check and the lockfile. Adding a package, and above all any @captain/* package, needs a reviewed amendment. The guard refuses @captain/* here regardless.",
+  "sdk": "Expo SDK 57",
+  "dependencies": {
+    "expo": "SDK, config and build tooling (§8)",
+    "react": "SDK-matched React (§8, Q9)",
+    "react-native": "SDK-matched React Native (§8, Q9)",
+    "expo-router": "file routes, per-tab stacks, links, back navigation (§8)",
+    "expo-linking": "expo-router peer listed by the SDK router installation docs (§8)",
+    "expo-constants": "expo-router peer listed by the SDK router installation docs (§8)",
+    "react-native-screens": "expo-router peer listed by the SDK router installation docs (§8)",
+    "react-native-safe-area-context": "expo-router peer listed by the SDK router installation docs (§8)",
+    "expo-status-bar": "status bar component installed with the SDK router setup",
+    "@expo/metro-runtime": "Metro runtime the SDK router setup installs for web export",
+    "@expo/log-box": "expo-router peer the SDK resolves; allowed only if the root install requires it",
+    "react-dom": "SDK-matched peer of react-native-web for the web bundle export",
+    "react-native-web": "SDK-matched web renderer for the web bundle export",
+    "expo-dev-client": "development builds (§8)",
+    "expo-web-browser": "openAuthSessionAsync (§8)",
+    "expo-secure-store": "session and organisation choice: the only storage mechanism (§8)",
+    "expo-crypto": "random bytes and SHA-256 for PKCE and attempts (§8, Q10)"
+  },
+  "devDependencies": {
+    "typescript": "typecheck (§8)",
+    "@types/react": "React types (§8)",
+    "@types/react-dom": "SDK-matched React DOM types for the web export, kept separate from the web app's React types",
+    "@types/node": "types for node:test pure-logic tests, which run in Node, never in the app bundle",
+    "tsx": "runs the TypeScript pure-logic tests with node --test (§8)"
+  }
+}

@@ -26,11 +26,16 @@ The document keeps four kinds of statement apart:
 - **Device/build evidence:** exports, simulator builds, real-device runs and signed builds, recorded
   separately (§10). This contract claims none of them.
 
-**Implementation status.** A1 (#186) adds the API handoff, default-off `NATIVE_SIGN_IN` flag and
-migration 0044. A2 adds the web callback/passkey branches and a synthetic browser proof using the
+**Implementation status.** A1 (#186) is merged and adds the API handoff, default-off `NATIVE_SIGN_IN` flag and
+migration 0044. A2 (#187) is merged and adds the web callback/passkey branches and a synthetic browser proof using the
 real API, disposable Postgres and a virtual authenticator. The proof intercepts the custom-scheme
 destination; it does not establish that an installed app receives it or that a platform authentication
-session closes. There is no mobile application or device evidence yet. Keep the flag off on shared
+session closes. The M-shell increment adds `apps/mobile` with Work/Chat/Resources, grouped view lists,
+SDK 57 dependencies, boundary checks and signed-out states. Three-platform JavaScript exports,
+a browser approximation at 360/390/430 pixels and generated Android backup configuration are
+verified; there is no signed native build or device evidence, nor mobile authentication or business
+reads yet. The web export opens view lists as visited pages; native stacks place them beneath the open view.
+Browser history cannot prove native back gestures. Keep the flag off on shared
 staging and for real accounts until the verified-link gate passes. These increments have not been
 released to staging and migration 0044 has not been applied there. The repository facts below
 describe the baseline audited for this contract; §§3 and 9 define the additions and remaining work.
@@ -554,11 +559,25 @@ tags nor the proof's versions are assumed.
 | `expo-secure-store` | Session and organisation choice: the **only** storage mechanism |
 | `expo-crypto` | Random bytes and SHA-256 (Q10) |
 
-**Development dependencies:** `typescript`, `@types/react`, and `tsx` if it is not hoisted. Pure logic
+**Development dependencies:** `typescript`, `@types/react`, `@types/react-dom` for SDK-matched web-export types, `@types/node` for Node-run pure tests, and `tsx` if it is not hoisted. Pure logic
 lives in React Native-free modules tested with the existing `node --import tsx --test`: return path,
 link allow list, callback validation, PKCE/attempt encoding and failure classification.
 
-**Excluded:** AsyncStorage or any file/cache storage; gesture and animation libraries (M-equipment);
+**M-shell SDK selection (27 September 2026).** Expo 57.0.25 uses React/React DOM 19.2.3,
+React Native 0.86.3 and TypeScript ~6.0.3. Router peers also include `expo-status-bar`,
+`@expo/metro-runtime` and the transitively resolved `@expo/log-box`; web export uses `react-native-web` ~0.21.0.
+The isolated pnpm workspace preserves Next.js's existing React version. The Router package includes
+upstream drawer support whose peers pnpm installs transitively: Reanimated 4.5.1, Worklets 0.10.1
+and Gesture Handler ~2.32.0. Workspace overrides match the SDK's bundled-module manifest and
+pin React Native's Metro config to 0.86.3; these packages are not direct app dependencies or
+permission to implement equipment gestures in M-shell. Mobile's DOM types are pinned separately
+from the web app. Development identifiers `app.askthecaptain.dev` are unsigned placeholders;
+no signing identity, association, registration or release identifier is selected by this shell.
+Before the first development build, record the autolinked native modules; transitive native peers
+may be included even though app code does not import them. Verify normal cold launch, per-tab
+history, swipe-back and enlarged text on devices; bundle exports cannot establish these behaviours.
+
+**Excluded:** AsyncStorage or any file/cache storage; gesture and animation libraries as direct app dependencies (M-equipment; SDK-pinned transitive peers above are allowed);
 `expo-notifications`; telemetry and Sentry; `@simplewebauthn/*`; and every server package
 (`@captain/db`, `model`, `connectors`, `engine`, `steps`, `retrieval`, the API).
 

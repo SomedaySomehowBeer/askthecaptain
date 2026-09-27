@@ -4,3 +4,12 @@ packages:
 
 patchedDependencies:
   next@15.5.25: patches/next@15.5.25.patch
+
+# Expo SDK 57's transitive native peers. Drawer support is upstream in expo-router;
+# these are not app imports. Keep its auto-installed peers on the SDK's versions;
+# revisit all four pins on each SDK upgrade.
+overrides:
+  react-native-reanimated: 4.5.1
+  react-native-worklets: 0.10.1
+  react-native-gesture-handler: ~2.32.0
+  '@react-native/metro-config': 0.86.3

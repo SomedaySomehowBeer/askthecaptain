@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Captain (development)",
+    "slug": "captain-mobile",
+    "version": "0.0.1",
+    "scheme": "app.askthecaptain.dev",
+    "platforms": ["ios", "android", "web"],
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "bundleIdentifier": "app.askthecaptain.dev",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "app.askthecaptain.dev",
+      "allowBackup": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      ["expo-secure-store", { "configureAndroidBackup": true }]
+    ]
+  }
+}
