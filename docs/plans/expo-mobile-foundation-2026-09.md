@@ -47,8 +47,8 @@ The [composition and account-screen increment](expo-mobile-auth-composition-2026
   browser.
 - At #197 no business read was wired (historical).
 
-The first business read, [My work](expo-mobile-my-work-read-2026-09.md) (M-read slice 1, adopted in #198), is
-implemented and independently reviewed, with local tests, exports and browser checks passing. It adds:
+The first business read, [My work](expo-mobile-my-work-read-2026-09.md) (M-read slice 1), merged as #199
+after independent review and all three CI jobs passed. Local tests, exports and browser checks passed. It adds:
 - a read-only Work → My work list (the person's open tasks, 50 per page, at most 10 pages) through one runner entry
   point, bound to a token-free read scope and epoch;
 - the 30-second spacing for membership refreshes after a 403/404;
@@ -57,7 +57,10 @@ implemented and independently reviewed, with local tests, exports and browser ch
 The production web export still makes no API requests. Other reads and all writes remain. So do a transport response byte
 budget and the device gates: `expo/fetch` reporting the query URL unchanged, and a real 403/404 on an isolated
 synthetic environment. No simulator or device evidence exists.
-The web export opens view lists as visited pages; native stacks place them beneath the open view.
+The web export opens view lists as visited pages. Native link-built stacks use the view-list anchor;
+empty resets and first tab visits currently start at the index without that underlying route, by
+installed-source inspection. Explicit native initial routes and seeded resets need a separate reviewed
+navigation increment and device evidence.
 Browser history cannot prove native back gestures. Keep the flag off on shared
 staging and for real accounts until the verified-link gate passes. The server and web increments
 through #191, including A1 and A2, are deployed to the single staging API and web machines, and
@@ -478,6 +481,12 @@ readiness**. It is not a foundation blocker.
 drafts need a separate reviewed amendment covering encryption, purging on sign-out and revocation,
 staleness labels and organisation separation.
 
+The [response-budget increment](expo-mobile-response-byte-budget-2026-09.md) specifies a 1 MiB
+limit on decompressed bytes accepted for decoding and parsing, with guarded cancellation and the
+existing shared timeout. It remains unimplemented until its own reviewed code PR. Native buffering,
+a single delivered chunk and process-memory overhead are not bounded by that JavaScript limit;
+streaming/cancellation, compression and decoder behaviour remain device gates.
+
 ## 5. Native links
 
 **Scheme.** A fixed reverse-domain private-use scheme for development builds:
@@ -511,7 +520,10 @@ safe-return rule, then matched against an allow list:
 - `/chat`, `/chat/views`, `/chat/:uuid`
 - `/resources`, `/resources/views`, `/resources/equipment`, `/resources/inventory`
 
-These mirror the web paths. Unknown links show "This link can't be opened in Captain".
+These mirror the web paths. The [All tasks increment](expo-mobile-all-tasks-read-2026-09.md) adds
+`/work/all` as an exact app-only route. Incoming `/work?owner=all` still maps to `/work` because incoming
+queries are dropped; the All tasks website button uses the separate fixed `/work?owner=all` constant.
+Record-detail routes above remain later targets, not implemented links. Unknown links show "This link can't be opened in Captain".
 
 - A link carries no token and never writes. Reads are re-authorised by the API.
 - A 404 shows as "Not found or no longer shared with you".
