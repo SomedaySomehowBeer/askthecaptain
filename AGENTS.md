@@ -64,7 +64,7 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 | `packages/engine` | pg-boss workflow runner in the API process (D19) |
 | `packages/model` | inference client, structured output, budgets, usage |
 | `packages/ui` | tokens/components follow reviewed repository workspace designs (D14); `packages/ui/design/` is an unedited legacy Claude Design mirror, so author new work outside it |
-| `infra` | OpenTofu (`infra/tofu`), the embedding service (`infra/embed`, D21) and the inference Sprite's bootstrap files (`infra/sprites`, D18) |
+| `infra` | OpenTofu (`infra/tofu`) and the inference Sprite's bootstrap files (`infra/sprites`, D18); the retired embedding app remains stopped with repository assets removed (D21) |
 
 There is no `apps/mobile` yet; the plan names it for a later slice. The Expo client proof under
 `docs/proposals/assets/captain-client-proof-2026-09-23` is a standalone, fictional harness outside the
