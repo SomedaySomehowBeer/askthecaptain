@@ -60,7 +60,7 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 | `apps/mobile` | Expo Work/Chat/Resources shell; authentication core in progress under the adopted mobile contract; device acceptance open |
 | `apps/e2e` | Playwright deployment smoke suite and isolated browser regression checks |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
-| `packages/connectors` | Xero, Shopify and the remaining legacy Google grant/revocation helper; Google identity is in `apps/api` |
+| `packages/connectors` | Xero and Shopify business adapters; Google identity is separate in `apps/api` |
 | `packages/steps` | the step catalog and workflow definitions |
 | `packages/engine` | pg-boss workflow runner in the API process (D19) |
 | `packages/model` | inference client, structured output, budgets, usage |

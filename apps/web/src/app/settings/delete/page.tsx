@@ -13,7 +13,7 @@ export default async function DeletePage() {
 		<Page title="Delete this organisation" lede={me.organisation.organisationName}>
 			<section className="card">
 				<h2>What happens</h2>
-				<p className="secondary">Everything Captain holds for {me.organisation.organisationName} is deleted: mail and calendar copies, contacts, projects, tasks and duties, connections, workflow journals, usage records and the audit log. Connected Google, Xero and inference sign-ins are revoked where the provider allows. People keep their own accounts. A one-line record of the deletion, with the name, who did it and how many rows went, stays on the platform.</p>
+				<p className="secondary">Everything Captain holds for {me.organisation.organisationName} is deleted: mail and calendar copies, contacts, projects, tasks and duties, connections, workflow journals, usage records and the audit log. Connected Xero, Shopify and inference access is revoked where the provider allows. People keep their own accounts. A one-line record of the deletion, with the name, who did it and how many rows went, stays on the platform.</p>
 				<p className="secondary">Export first if you want a copy: <Link href="/settings/export">download everything</Link> as newline-delimited JSON.</p>
 			</section>
 			<section className="card">

@@ -4,13 +4,15 @@ import { legacyRetired } from '../retirement/routes.ts';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AuthService, Session } from '../auth/service.ts';
-import { badRequest, unauthorised } from '../errors.ts';
-import type { ConnectionService } from './service.ts';
+import { unauthorised } from '../errors.ts';
 
+/** The retired Google mail/calendar connection routes (#133). Captain keeps no Google mailbox grant path: these
+ *  answer 410 so an old link or client is told plainly. The organisation-scoped start keeps its bearer and
+ *  membership checks, so it never tells a stranger whether an organisation exists. Google sign-in is separate
+ *  (`/auth/google/*`) and unaffected. */
 type Vars = { Variables: { requestId: string; session: Session } };
-export function connectionRoutes(deps: { db: Sql; auth: AuthService; connections?: ConnectionService }) {
+export function connectionRoutes(deps: { db: Sql; auth: AuthService }) {
 	const routes = new Hono<Vars>(); const uuid = z.string().uuid();
-	const service = () => { if (!deps.connections) throw badRequest('google_unavailable', 'Google connections are not configured.'); return deps.connections; };
 	routes.get('/connections/google/callback', () => { throw legacyRetired(); });
 
 	routes.use('/v1/organisations/:id/connections/*', async (c, next) => {
@@ -18,11 +20,6 @@ export function connectionRoutes(deps: { db: Sql; auth: AuthService; connections
 		if (!token) throw unauthorised();
 		c.set('session', await deps.auth.requireSession(token)); await next();
 	});
-	const actor = (c: { get(key: 'session'): Session; get(key: 'requestId'): string }) => ({ userId: c.get('session').userId, requestId: c.get('requestId') });
-	routes.get('/v1/organisations/:id/connections', async (c) => c.json({ ...await service().list(actor(c), uuid.parse(c.req.param('id'))), googleAvailable: false }));
-	routes.post('/v1/organisations/:id/connections/google/start', async c => { await roleOf(deps.db, actor(c).userId, uuid.parse(c.req.param('id'))); throw legacyRetired(); });
-	routes.delete('/v1/organisations/:id/connections/:connectionId', async (c) => {
-		await service().disconnect(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('connectionId'))); return c.json({ ok: true });
-	});
+	routes.post('/v1/organisations/:id/connections/google/start', async c => { await roleOf(deps.db, c.get('session').userId, uuid.parse(c.req.param('id'))); throw legacyRetired(); });
 	return routes;
 }

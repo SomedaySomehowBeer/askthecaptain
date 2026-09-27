@@ -1,7 +1,6 @@
 import { writeFile, readFile, unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { freshDatabase } from '../../../packages/db/test/harness.ts';
-import { ConnectionService } from '../src/connections/service.ts';
 import { WorkflowService } from '../src/workflows/service.ts';
 import { createApp } from '../src/app.ts';
 import type { IdentityProvider } from '../src/auth/google.ts';
@@ -33,7 +32,7 @@ try {
     const google: IdentityProvider & {
         next: Identity;
     } = { next: { subject: 'workspace-owner', email: 'olive@example.test', name: 'Olive Owner' }, authorizationUrl: ({ state }) => `https://google.test/?state=${state}`, async exchange() { return this.next; } };
-    const app = createApp({ connections: new ConnectionService(db.app, null, null), workflows: new WorkflowService(db.app), db: db.app, auth: new AuthService(db.app, google, { appUrl: 'http://127.0.0.1:3034', sessionTtlDays: 1 }), organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), ...(fastRateWindows ? { rateLimiter: new RateLimiter(() => (rateClock += 61_000)) } : {}) });
+    const app = createApp({ workflows: new WorkflowService(db.app), db: db.app, auth: new AuthService(db.app, google, { appUrl: 'http://127.0.0.1:3034', sessionTtlDays: 1 }), organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), ...(fastRateWindows ? { rateLimiter: new RateLimiter(() => (rateClock += 61_000)) } : {}) });
     async function request<T>(method: string, path: string, token: string | null, body?: unknown): Promise<T> {
         const response = await app.request(path, {
             method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },

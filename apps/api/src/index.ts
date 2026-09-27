@@ -12,8 +12,6 @@ import { BossEngine, Registry } from '@captain/engine';
 import { definitions, retiredWorkflowVersions } from '@captain/steps';
 import { InferenceService } from './inference/service.ts';
 import { SpritesClient } from './inference/sprites.ts';
-import { GoogleConnector } from '@captain/connectors';
-import { ConnectionService } from './connections/service.ts';
 import { masterKey } from './connections/encryption.ts';
 import { serve } from '@hono/node-server';
 import { connect } from '@captain/db';
@@ -39,9 +37,6 @@ const google = env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
 	? new GoogleIdentityProvider(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/auth/google/callback', env.API_URL).toString())
 	: null;
 if (!google) console.warn('[api] Google sign-in is not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)');
-const connections = new ConnectionService(db, env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
-	? new GoogleConnector(env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET, new URL('/connections/google/callback', env.API_URL).toString()) : null,
-	env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null);
 const inference = new InferenceService(db, env.MASTER_KEY ? masterKey(env.MASTER_KEY) : null, undefined, env.SPRITES_API_TOKEN ? new SpritesClient(env.SPRITES_API_TOKEN) : null);
 if (!env.SPRITES_API_TOKEN) console.warn('[api] Sprites is not configured (SPRITES_API_TOKEN); inference runtimes cannot be created');
 const pushKeys = env.WEB_PUSH_PUBLIC_KEY && env.WEB_PUSH_PRIVATE_KEY && env.WEB_PUSH_SUBJECT ? { publicKey: env.WEB_PUSH_PUBLIC_KEY, privateKey: env.WEB_PUSH_PRIVATE_KEY, subject: env.WEB_PUSH_SUBJECT } : null;
@@ -65,12 +60,11 @@ await workflows.sync().catch((error) => console.error('[api] workflow catalogue 
 // Deletion revokes what it can at providers first, best effort, then the row and its tenant data go.
 const lifecycle = new OrganisationLifecycle(db, [
  async (actor, organisationId) => { await shopifyConnections.disconnect(actor, organisationId).catch(() => undefined); },
-	async (actor, organisationId) => { const list = await connections.list(actor, organisationId); for (const c of list.connections) if (c.provider === 'google' && c.status !== 'disconnected') await connections.disconnect(actor, organisationId, c.id).catch(() => undefined); },
 	async (actor, organisationId) => { await xeroConnections.disconnect(actor, organisationId).catch(() => undefined); },
 	async (actor, organisationId) => { await inference.remove(actor, organisationId).catch(() => undefined); }
 ]);
 const passkeys = new PasskeyService(db, simpleWebAuthn(env.APP_URL));
-const app = createApp({ stock, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, connections, auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys, nativeSignIn: env.NATIVE_SIGN_IN === '1' }), organisations: new OrganisationService(db), commitments });
+const app = createApp({ stock, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys, nativeSignIn: env.NATIVE_SIGN_IN === '1' }), organisations: new OrganisationService(db), commitments });
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));
