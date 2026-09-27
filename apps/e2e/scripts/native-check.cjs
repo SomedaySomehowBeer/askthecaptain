@@ -239,7 +239,8 @@ const b64url = (buffer) => buffer.toString('base64url');
 			console.log('PASS native with a required passkey: no handoff and no skip while the passkey is not presented, despite another web session');
 
 			await tab.cdp.send('WebAuthn.setAutomaticPresenceSimulation', { authenticatorId, enabled: true });
-			await tab.page.reload();
+			// The app handoff may interrupt document load; wait for the document commit, then the handoff itself.
+			await tab.page.reload({ waitUntil: 'commit' });
 			await until('the passkey handoff', async () => { await tab.anchors(); return tab.handoffs.length > 0; });
 			const code = handoffOf(tab, a);
 			check((await tab.session()) === f.users.olive.token, 'the native step-up issued no web session and replaced no cookie');
