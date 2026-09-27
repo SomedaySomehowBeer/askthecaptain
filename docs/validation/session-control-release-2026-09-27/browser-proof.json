@@ -1,0 +1,18 @@
+[
+  {
+    "width": 390,
+    "status": 200,
+    "path": "/sign-in",
+    "returnTo": "/settings",
+    "noOverflow": true,
+    "pageErrors": []
+  },
+  {
+    "width": 1440,
+    "status": 200,
+    "path": "/sign-in",
+    "returnTo": "/settings",
+    "noOverflow": true,
+    "pageErrors": []
+  }
+]

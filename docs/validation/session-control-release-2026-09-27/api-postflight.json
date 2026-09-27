@@ -1,0 +1,24 @@
+{
+  "readiness": {
+    "status": 200,
+    "body": "{\"ok\":true}"
+  },
+  "native": {
+    "status": 400,
+    "body": "{\"ok\":false,\"code\":\"native_sign_in_unavailable\",\"error\":\"Mobile sign-in is not available on this Captain.\"}"
+  },
+  "revocationAnonymous": {
+    "status": 401,
+    "body": "{\"ok\":false,\"code\":\"unauthorised\",\"error\":\"sign in to continue\"}"
+  },
+  "runtime": {
+    "safe": true,
+    "current_role": "captain_runtime",
+    "session_role": "captain_runtime",
+    "read_only": "on",
+    "nativeEnabled": false,
+    "routeSourcePresent": true
+  },
+  "passed": true,
+  "image": "registry.fly.io/askthecaptain-api-staging:git-b484e30@sha256:573eda740bf59c527aece247090542c8178548f9ba106e1d0d2a545d7431f9cd"
+}

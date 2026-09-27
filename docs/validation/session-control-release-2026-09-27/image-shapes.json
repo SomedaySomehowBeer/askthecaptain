@@ -1,0 +1,4 @@
+{
+  "api": "single manifest (index alias and platform equal); Depot build-only/push",
+  "web": "single manifest (index alias and platform equal); Depot build-only/push"
+}

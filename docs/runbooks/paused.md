@@ -1,5 +1,19 @@
 # Staging resumed; production paused (2026-09-27)
 
+## Session controls released (27 September 2026, approximately 11:02 UTC)
+
+Reviewed API #204 and web #206 are deployed from clean merge source `b484e30` after green CI.
+Settings now offers **Sign out everywhere else**. Only the images of existing API `80e39ea6416e18`
+and web `9185776e7cd3d8` changed, both tagged `git-b484e30`; all other configuration is preserved.
+The API runtime guard, compiled route check and readiness passed. Anonymous hosted Chrome passed
+at 390/1440 px. No real person's sessions were revoked for testing.
+
+Two local registry push attempts timed out; Depot build-only/push succeeded before either machine
+changed. No migration or queue setup was needed; schema 0045 remains. Exactly one machine per
+staging app; production/embedding stopped, workflows disabled, native sign-in off. See the
+[release evidence and rollback digests](../validation/session-control-release-2026-09-27/README.md).
+Mobile session controls #207 are merged source, with no installed-app or device claim.
+
 ## Legacy storage retired (27 September 2026, 06:42 UTC)
 
 Reviewed #194 is merged; [CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36300326550)
@@ -36,8 +50,8 @@ for images, checks and rollback limits. R5a's reader-free image is now deployed;
 audit and completed guarded migration release are recorded above. Mobile adapters,
 account screens, signed builds and device acceptance are separate increments.
 
-**Staging runs on the restricted `captain_runtime` database login**, with API `git-02733f2` and web `git-17089ce`
-images released on 27 September (#194/#191; retaining the #162 role guard, #173 chat API and #174 Chat screens). The workspace is at https://app.askthecaptain.app/work. One existing
+**Staging runs on the restricted `captain_runtime` database login**, with API and web `git-b484e30`
+images released on 27 September (#204/#206; retaining the #162 role guard, #173 chat API and #174 Chat screens). The workspace is at https://app.askthecaptain.app/work. One existing
 machine per staging app is retained, with normal autostart and idle stop. Production and the
 embedding service remain paused; automatic deploy and backup workflows remain disabled.
 Any API rollback must retain `captain_runtime` and the #162 role guard. Before any future production
