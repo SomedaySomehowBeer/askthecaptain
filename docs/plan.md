@@ -87,7 +87,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `apps/api` | Hono HTTP API: auth, routes over services, webhooks, health |
 | `apps/web` | Next.js; server components read the API. Work/Chat/Resources web client; legacy navigation still present is cleanup debt, not target scope |
 | `apps/e2e` | Playwright deployment smoke suite (deploy workflow, currently paused) and isolated browser regression in CI |
-| `apps/mobile` | React Native/Expo development-build client for iOS and Android: shell (#188), authentication core (#189) and platform adapters/account state (#193) merged; sign-in composition and account screens merged in #197 ([composition plan](plans/expo-mobile-auth-composition-2026-09.md)); a read-only Work → My work list ([M-read slice 1](plans/expo-mobile-my-work-read-2026-09.md)) implemented and independently reviewed, with local tests, exports and browser checks passing; no other business reads or any writes; native sign-in stays off; not usable on a device and no simulator or device evidence; native-device acceptance precedes release |
+| `apps/mobile` | React Native/Expo development-build client for iOS and Android: shell (#188), authentication core (#189) and platform adapters/account state (#193) merged; sign-in composition and account screens merged in #197 ([composition plan](plans/expo-mobile-auth-composition-2026-09.md)); a read-only Work → My work list ([M-read slice 1](plans/expo-mobile-my-work-read-2026-09.md)) implemented and independently reviewed, with local tests, exports and browser checks passing; read-only [All tasks](plans/expo-mobile-all-tasks-read-2026-09.md) also implemented and locally validated; no other business reads or any writes; native sign-in stays off; not usable on a device and no simulator or device evidence; native-device acceptance precedes release |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
 | `packages/connectors` | Xero and Shopify business adapters; Google sign-in remains separate |
 | `packages/steps` | the step catalog (§6) and the workflow definitions that compose it |
@@ -515,8 +515,9 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   merged in #197. The read-only [My work read](plans/expo-mobile-my-work-read-2026-09.md) (M-read slice 1) is
   implemented and independently reviewed, with local tests, exports and browser checks passing. Other reads, writes, native
   sign-in, a transport response byte budget and device evidence remain.
-  The next bounded contracts are [All tasks](plans/expo-mobile-all-tasks-read-2026-09.md) and
-  [the transport response budget](plans/expo-mobile-response-byte-budget-2026-09.md); adoption is not implementation.
+  [All tasks](plans/expo-mobile-all-tasks-read-2026-09.md) is also implemented and locally validated.
+  [The transport response budget](plans/expo-mobile-response-byte-budget-2026-09.md) is a separate implementation;
+  its contract and validation record track its evidence.
 - Server inference tiers and any future API-key/cost-budget alternative (#32) are business-runtime
   decisions, separate from Pip's hard Apple/Siri requirements.
 - Pip platform proofs remain in #119. No Captain milestone depends on them. No new claim about

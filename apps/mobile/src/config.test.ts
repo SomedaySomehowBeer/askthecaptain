@@ -26,12 +26,14 @@ test('a refused value is never repeated: the result holds only null, and nothing
 });
 
 test('website links: the validated origin plus an allow-listed path only; hidden when the origin was refused', () => {
-	assert.deepEqual([...webPaths], ['/', '/settings', '/work']);
+	assert.deepEqual([...webPaths], ['/', '/settings', '/work', '/work?owner=all']);
 	assert.equal(webLink('https://app.askthecaptain.app', '/'), 'https://app.askthecaptain.app/');
 	assert.equal(webLink('https://app.askthecaptain.app', '/settings'), 'https://app.askthecaptain.app/settings');
 	assert.equal(webLink(null, '/settings'), null);
 	assert.equal(webLink('https://app.askthecaptain.app', '/work'), 'https://app.askthecaptain.app/work');
 	assert.equal(webLink(null, '/work'), null);
+	assert.equal(webLink('https://app.askthecaptain.app', '/work?owner=all'), 'https://app.askthecaptain.app/work?owner=all');
+	assert.equal(webLink('https://app.askthecaptain.app', '/work?owner=other' as never), null);
 	for (const path of ['/settings/passkeys', '//evil.test', 'https://evil.test', '/settings?x=1', '', '/auth/callback'])
 		assert.equal(webLink('https://app.askthecaptain.app', path as never), null, path);
 });

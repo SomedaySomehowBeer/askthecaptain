@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { displayTitle, formatDue, parseMyWorkPage } from './my-work.ts';
+import { displayTitle, formatDue, parseMyWorkPage, parseWorkPage } from './my-work.ts';
 
 const scope = { userId: '0190c0de-0000-7000-8000-000000000001', organisationId: '0190c0de-0000-7000-8000-000000000002' };
 const request = { scope, offset: 0 };
@@ -13,7 +13,7 @@ const refuses = (value: unknown) => assert.throws(() => parse(value), { name: 'T
 
 test('a work page retains only new frozen display objects and ignores unknown fields', () => {
 	const input = task(); const result = parse(page([input])); const row = result.rows[0]!;
-	assert.deepEqual(result, { rows: [{ id: input.id, displayTitle: 'Synthetic sample task', status: 'open', due: { year: 2026, month: 10, day: 3 }, tags: [{ id: id(1), name: 'Tag 1' }], tagCount: 1 }], nextOffset: null });
+	assert.deepEqual(result, { rows: [{ id: input.id, displayTitle: 'Synthetic sample task', owner: 'you', status: 'open', due: { year: 2026, month: 10, day: 3 }, tags: [{ id: id(1), name: 'Tag 1' }], tagCount: 1 }], nextOffset: null });
 	for (const value of [result, result.rows, row, row.due, row.tags, row.tags[0]]) assert.ok(Object.isFrozen(value));
 	input.title = 'Changed'; input.tags[0]!.name = 'Changed';
 	assert.equal(row.displayTitle, 'Synthetic sample task'); assert.equal(row.tags[0]!.name, 'Tag 1');
@@ -85,4 +85,26 @@ test('titles are capped only for display, including generated long titles and su
 	const row = parse(page([{ ...task(), title: 'x'.repeat(10_000) }])).rows[0]!;
 	assert.equal(row.displayTitle.length, 300); assert.ok(!('title' in row));
 	assert.equal(parse(page([{ ...task(), title: '' }])).rows[0]!.displayTitle, 'Untitled task');
+});
+
+test('All tasks maps every owner kind without retaining owner identifiers; My work remains restricted', () => {
+ const input = [task(10), { ...task(11), ownerId: id(99) }, { ...task(12), ownerId: null }];
+ const result = parseWorkPage(page(input), { ...request, view: 'all' });
+ assert.deepEqual(result.rows.map(row => row.owner), ['you', 'someone-else', 'none']);
+ for (const row of result.rows) assert.ok(!('ownerId' in row));
+ assert.ok(!JSON.stringify(result).includes(id(99)));
+ assert.throws(() => parseMyWorkPage(page(input), request), TypeError);
+ assert.deepEqual(parseWorkPage(page([task()]), { ...request, view: 'mine' }), parse(page([task()])));
+});
+
+test('All tasks refuses missing or malformed owners, non-open statuses and malformed shared fields', () => {
+ const parseAll = (value: unknown) => parseWorkPage(value, { ...request, view: 'all' });
+ for (const ownerId of [undefined, '', id(99).toUpperCase(), 1, {}, 'secret-canary'])
+  assert.throws(() => parseAll(page([{ ...task(), ownerId }])), TypeError);
+ const { ownerId: _owner, ...withoutOwner } = task();
+ assert.throws(() => parseAll(page([withoutOwner])), TypeError);
+ for (const patch of [{ status: 'in_progress' }, { status: 'done' }, { due: '2026-02-29' }, { tags: null }])
+  assert.throws(() => parseAll(page([{ ...task(), ...patch }])), TypeError);
+ assert.throws(() => parseAll(page([task(), task()])), TypeError);
+ assert.throws(() => parseWorkPage(page([]), { ...request, view: 'unknown' as never }), TypeError);
 });

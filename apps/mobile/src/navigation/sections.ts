@@ -1,8 +1,7 @@
 /** The three workspace sections and their grouped view lists (plan D11; contract §6; mockup README "Three sections
  *  and their view lists"). Pure data: no React Native import, so the node tests read it directly.
  *
- *  Only views this build can show have a route. The rest are listed, marked unavailable and cannot be opened: this
- *  shell has no sign-in, network or data yet (M-auth and M-read follow), and it shows no fictional records. */
+ *  Only views this build can show have a route. The rest are listed, marked unavailable and cannot be opened: only implemented reads are available, and no fictional records appear. */
 export type SectionKey = 'work' | 'chat' | 'resources';
 export type ViewRow = { label: string; detail: string; href: string | null };
 export type ViewGroup = { title: string; rows: ViewRow[] };
@@ -20,7 +19,7 @@ export const sections: readonly Section[] = [
 		groups: [
 			{ title: 'For you', rows: [
 				{ label: 'My work', detail: 'Assigned to you, across all tags', href: '/work' },
-				{ label: 'All tasks', detail: soon, href: null }
+				{ label: 'All tasks', detail: 'Open tasks assigned to anyone', href: '/work/all' }
 			] },
 			{ title: 'Across the business', rows: [{ label: 'By tag', detail: soon, href: null }] },
 			{ title: 'Saved views', rows: [{ label: 'Your saved views', detail: `${soon}. Save views on the web.`, href: null }] }

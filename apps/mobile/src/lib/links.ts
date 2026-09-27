@@ -16,7 +16,7 @@ export const refusedLink = '/link-not-allowed';
 
 /** The paths a link may open, and the route each opens. `/resources/equipment` is the web path of the Resources default view. */
 const routes = new Map<string, string>([
-	['/', '/work'], ['/work', '/work'], ['/work/views', '/work/views'],
+	['/', '/work'], ['/work', '/work'], ['/work/views', '/work/views'], ['/work/all', '/work/all'],
 	['/chat', '/chat'], ['/chat/views', '/chat/views'],
 	['/resources', '/resources'], ['/resources/views', '/resources/views'], ['/resources/equipment', '/resources'], ['/resources/inventory', '/resources/inventory']
 ]);
