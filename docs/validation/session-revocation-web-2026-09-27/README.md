@@ -19,7 +19,7 @@ suite; A approved it and the three-minute CI suite cap. Claude B independently a
   committed-call lost reply, aborted action request, preflight expiry, and post-preflight expiry
   preserving the Next redirect. No page errors or token/hash exposure in checked HTML/action replies.
 - Layout checks passed at 360, 390, 430 and 1440 pixels. The fixture and database were cleaned up.
-- Final recovery-link production rebuild and full browser rerun passed, including actual sign-in navigation. CI: pending.
+- Final recovery-link production rebuild and full browser rerun passed, including actual sign-in navigation. Both final [CI jobs passed](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36313202687) before merge.
 
 The delayed/failed replies and expiry at POST are explicit loopback-only fixture modes, not
 production hooks. The lost-reply case commits a call ending zero sessions; it is not evidence of
@@ -31,4 +31,6 @@ separately; any eventual release remains staging-only on one existing machine pe
 
 [Settings after revocation, 390 pixels](390-settings.png).
 
-CI exposed an older Chat browser selector that matched both sign-out buttons. The regression now names the plain Sign out button exactly; Claude A independently approved this test-only repair. The new session-control suite itself passed on CI. The affected full Chat suite and final CI are rerun before merge.
+CI exposed an older Chat browser selector that matched both sign-out buttons. The regression now names the plain Sign out button exactly; Claude A independently approved this test-only repair. The new session-control suite itself passed on CI.
+
+The exact-selector repair passed the full affected Chat suite locally with fixture cleanup confirmed. Final CI passed both workspace and browser jobs before #206 merged.

@@ -242,9 +242,22 @@ section navigation merged in #205 after all three CI jobs passed. The API passed
 tests locally; navigation passed 254 mobile tests, four exports/scans and Chromium at all three
 phone widths. Neither merge deployed or enabled native sign-in.
 
-Claude A has implemented the web **Sign out everywhere else** control, independently approved
-by Claude B. Root's real two-session browser check passes, including preflight failure, lost
-responses and Next redirect handling; [web evidence](../validation/session-revocation-web-2026-09-27/README.md)
-records final validation and pending CI. Claude B's separate mobile control is in review with A;
-root integrated #205 and owns combined checks, exports and the synthetic browser proof. Native
-build/device gates stay open. A later server release remains staging-only on the existing machines.
+The web control merged in #206 and the mobile control in #207 after independent review and green CI.
+Web validation includes 141 tests and real two-session browser acceptance. Mobile validation includes
+276 tests, four exports/scans and the complete synthetic browser suite at 360/390/430 px.
+[Web evidence](../validation/session-revocation-web-2026-09-27/README.md) and
+[mobile evidence](../validation/session-revocation-mobile-2026-09-27/README.md) distinguish these
+checks from native acceptance. Any staging release is recorded separately in the runbook.
+
+### Next increment: read-only Inventory
+
+The [Inventory contract](expo-mobile-inventory-read-2026-09.md) extends the existing Resources route.
+It shows counted stock grouped by location, preserves exact decimal strings and business-defined
+units, and links to the website for changes. It adds no schema, dependency, server endpoint or
+business write. The stock API is unpaginated; the response budget and list virtualisation bound
+this initial client. Adopting the contract does not implement it.
+
+- Codex owns the pure parser and fixed API path, tests, fixture bodies, browser checks and integration.
+- Claude B owns list state, hook, screen, copy, website-link configuration and harness controls.
+- Claude A independently reviews both implementations. B also reviews root’s parser and browser proof.
+- All checks remain serial under the shared build lock; native sign-in and device gates are unchanged.

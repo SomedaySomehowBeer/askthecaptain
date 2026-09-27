@@ -20,7 +20,7 @@ clears progress after unexpected client/timer errors; Claude A independently app
 - Production web/iOS/Android and synthetic web harness exports passed, including secret/canary and harness-exclusion scans.
 - Synthetic Chromium checks passed at 360/390/430 px, including confirmation/cancel, remount-persistent progress and results, slow responses, counts, retry waits and session expiry. The full existing navigation/account/task-read suite also passed with no overflow or page errors.
 - [390 px synthetic Account screenshot](390-account.png). Harness controls visible beneath the app are test-only.
-- CI: pending.
+- Merged after independent review and [green CI](https://github.com/SomedaySomehowBeer/askthecaptain/actions/runs/36313167661).
 
 The browser harness is a scripted account source and provides UI proof only. Real API concurrency,
 expiry and isolation evidence is in #204; real web session revocation is covered separately.

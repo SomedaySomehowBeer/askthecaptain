@@ -1,8 +1,10 @@
 # Remote session revocation contract
 
-Status: API increment merged in #204 after review and CI, 27 September 2026; web controls implemented with final review and checks in progress. Outcome: **manage shared work** through secure account access.
-Independently reviewed by both existing Claude Opus agents and root. Increment 1 implements the API; increment 2 adds the web control, with
-[web evidence](../validation/session-revocation-web-2026-09-27/README.md). Mobile controls are in progress separately. See [implementation evidence](../validation/session-revocation-api-2026-09-27/README.md).
+Status: all three increments merged after independent review and green CI, 27 September 2026.
+Outcome: **manage shared work** through secure account access. Both Claude Opus agents and root
+reviewed the work. Separate evidence covers the [API #204](../validation/session-revocation-api-2026-09-27/README.md),
+[web #206](../validation/session-revocation-web-2026-09-27/README.md), and
+[mobile #207](../validation/session-revocation-mobile-2026-09-27/README.md).
 
 It implements foundation §4 "Remote revocation" and §9 step 6 (#178) at the foundation's small scope: **end the
 person's existing sessions, other than the current one.** It is a per-person control, required before
@@ -439,3 +441,7 @@ is claimed.
 - No client is recorded or guessed.
 - A single confirmation step is acceptable.
 - Pending codes are left alone.
+
+## Implementation status — 27 September 2026
+
+All three increments are merged after independent review and green CI: API #204, web #206, mobile #207. See the separate [web](../validation/session-revocation-web-2026-09-27/README.md) and [mobile](../validation/session-revocation-mobile-2026-09-27/README.md) evidence. Any staging release is recorded in [the runbook](../runbooks/paused.md); these source merges do not establish native enablement or device acceptance.
