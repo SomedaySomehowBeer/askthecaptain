@@ -5,7 +5,8 @@ This is the source of truth for Captain. Decisions in §13 change through review
 The [delivery plan](plans/captain-workspace-delivery-2026-09.md) separates implemented capabilities
 from targets. The [audit](plans/captain-scope-audit-2026-09-25.md) records the correction and issue
 coverage; the [implementation inventory](plans/captain-workspace-migration-inventory-2026-09.md)
-records legacy dependencies still to remove. Neither is evidence of useful live customer data.
+records legacy dependencies still to remove. The [code-removal contract](plans/assistant-code-removal-2026-09.md)
+orders the remaining deletions and schema gates. None of these is evidence of useful live customer data.
 Staging is authorised with at most one machine per app; production remains paused. Actual releases
 are recorded in [paused.md](runbooks/paused.md).
 
