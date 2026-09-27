@@ -30,3 +30,5 @@ No mobile control, native enablement or deployment is claimed in this record. Th
 separately; any eventual release remains staging-only on one existing machine per app.
 
 [Settings after revocation, 390 pixels](390-settings.png).
+
+CI exposed an older Chat browser selector that matched both sign-out buttons. The regression now names the plain Sign out button exactly; Claude A independently approved this test-only repair. The new session-control suite itself passed on CI. The affected full Chat suite and final CI are rerun before merge.

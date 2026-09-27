@@ -713,7 +713,7 @@ const POLL = 15000, TICK = { timeout: POLL * 2 + 5000 }, TOTAL = 120;
   await expect.poll(() => stored(sendKey(fixture.memberUserId, other.id))).toBeNull();
   assert.ok(await stored(mainKey), 'the record kept across the expired session is still here before sign-out');
   await goto('/settings');
-  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).not.toHaveURL(/\/settings/);
   assert.deepEqual(await chatKeys(), []);
   console.log('PASS Settings sign-out purges this person\'s chat records; entry purges other people\'s');
