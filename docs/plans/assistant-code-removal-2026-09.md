@@ -39,9 +39,11 @@ reader-free API image is the rollback baseline for R5b
 R5b's gate was then checked by a fresh count-only owner audit at 06:13:25Z: every table in §2's
 storage list empty, the three retained columns null, the seven functions present and only the
 expected `contacts` foreign key into them (root records the audit). Its migration 0045 and the
-schema/test changes below are reviewed with local checks passing (see the
-[554-test validation record](../validation/assistant-storage-retirement-2026-09-27/README.md)); nothing is released.
-Until 0045 is applied, no storage has been dropped.
+schema/test changes merged as #194 with local checks and final CI passing. A fresh 06:40 preflight
+reconfirmed the gate; 0045 applied to the sole staging API at 06:42:39Z. Postflight verified retired
+schema absence, safe runtime privileges and unchanged counts for all 27 retained tables checked.
+See the [validation and release record](../validation/assistant-storage-retirement-2026-09-27/README.md).
+R1–R5b are complete on staging; production remains paused.
 
 ## 2. Source baseline audited for this contract
 

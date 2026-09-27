@@ -1,0 +1,12 @@
+{
+  "checkedAt": "2026-09-27T06:46:42.635Z",
+  "host": "askthecaptain-web-staging.fly.dev",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "status": 200,
+  "path": "/sign-in",
+  "signInVisible": true,
+  "pageErrors": []
+}

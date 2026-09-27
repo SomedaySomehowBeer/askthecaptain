@@ -27,8 +27,9 @@ assets, legacy catalogue entries and unused Google mailbox connector methods. Af
 read-only staging count (zero Google connections, empty attachment cache; see
 [paused.md](../runbooks/paused.md)), R5a (#190) removed the attachment-expiry reader and R4b
 (#191) removed the Google mailbox grant path; Google sign-in remains. R5b, the legacy storage
-drop, keeps its own gates: R5a deployed, fresh counts and one migration. No storage removal is
-implied by these code changes. The stopped embedding resource is unchanged.
+drop, completed in #194 after reader-free deployment, fresh empty counts and guarded migration
+0045. Staging postflight confirmed removed schema and unchanged retained counts; see the
+[storage release record](../validation/assistant-storage-retirement-2026-09-27/README.md). The stopped embedding resource is unchanged.
 
 Native A1 (#186) is merged: the API handoff, default-off flag and migration 0044. A2 (#187) is merged and adds the web
 native branches and a disposable, synthetic browser proof. Neither increment enables native

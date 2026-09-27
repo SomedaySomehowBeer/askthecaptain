@@ -1,0 +1,50 @@
+{
+  "only_api_image_changed": true,
+  "apps": {
+    "askthecaptain-api-staging": [
+      {
+        "id": "80e39ea6416e18",
+        "state": "started",
+        "image": "registry.fly.io/askthecaptain-api-staging:git-02733f2@sha256:1e2cdf9407cda83b3363d5fa763812cedc72114955b255c8a5b15d55057be3aa"
+      }
+    ],
+    "askthecaptain-web-staging": [
+      {
+        "id": "9185776e7cd3d8",
+        "state": "started",
+        "image": "registry.fly.io/askthecaptain-web-staging:git-17089ce@sha256:830e0192fbaf93f3b9c439eeb9f8d9522cd2b460f9d78ba8abd7465479df231e"
+      }
+    ],
+    "askthecaptain-api": [
+      {
+        "id": "28744717c04598",
+        "state": "stopped",
+        "image": "registry.fly.io/askthecaptain-api:git-12a853b8bbea67a71cac8645b2e76e271c4e203a"
+      },
+      {
+        "id": "68303d3f3562e8",
+        "state": "stopped",
+        "image": "registry.fly.io/askthecaptain-api:git-12a853b8bbea67a71cac8645b2e76e271c4e203a"
+      }
+    ],
+    "askthecaptain-web": [
+      {
+        "id": "7817206bd65778",
+        "state": "stopped",
+        "image": "registry.fly.io/askthecaptain-web:git-12a853b8bbea67a71cac8645b2e76e271c4e203a"
+      },
+      {
+        "id": "82d17ddb771d38",
+        "state": "stopped",
+        "image": "registry.fly.io/askthecaptain-web:git-12a853b8bbea67a71cac8645b2e76e271c4e203a"
+      }
+    ],
+    "askthecaptain-embed": [
+      {
+        "id": "82d1dd0b021908",
+        "state": "stopped",
+        "image": "registry.fly.io/askthecaptain-embed:git-ad43f401f97fd2f2327e327af2a6c0f2afdebab6"
+      }
+    ]
+  }
+}

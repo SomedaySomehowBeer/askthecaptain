@@ -1,0 +1,23 @@
+{
+  "checked_at": "2026-09-27T06:48:12.823457+00:00",
+  "/readyz": {
+    "status": 200,
+    "body": {
+      "ok": true
+    }
+  },
+  "/auth/providers": {
+    "status": 200,
+    "body": {
+      "google": true
+    }
+  },
+  "/auth/google/start?client=native": {
+    "status": 400,
+    "body": {
+      "ok": false,
+      "code": "native_sign_in_unavailable",
+      "error": "Mobile sign-in is not available on this Captain."
+    }
+  }
+}
