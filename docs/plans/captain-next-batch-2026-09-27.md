@@ -1,7 +1,7 @@
 # Captain: code retirement and native foundation
 
-Status: active assignments, 27 September 2026. Detailed contracts remain proposals until their
-reviewed adopting PRs merge. Outcomes: **manage shared work**, **allocate resources**, and
+Status: implementation in progress, 27 September 2026. The retirement contract (#180) and native
+foundation contract (#183) are adopted after reciprocal review. Outcomes: **manage shared work**, **allocate resources**, and
 **discuss work**. The [plan](../plan.md) remains authoritative.
 
 ## Starting point
@@ -19,21 +19,35 @@ confusion; native foundation lets the same work become usable on iOS, with early
 Files/DAM, summaries and broader reporting retain their later slices and separate contracts.
 Pip remains independent in #119.
 
-## Assigned work
+## Implementation progress and current assignments
 
-The two existing Claude Opus agents are running in Herdr's Monitor tab. Their historical agent
-names are retained; their old saved-view working directories are not the source for this batch.
-Both read the current `/home/nanoclaw/atc-next` checkout using absolute paths.
+The planning assignments are complete. Cleanup R1 (#181), R2 (#182), R3 (#184) and R4a (#185)
+are merged after review and green CI. They remove unused assistant code, embedding repository
+assets, legacy catalogue entries and unused Google mailbox connector methods. R4b and R5 retain
+their fresh read-only live-count and deployment/migration gates; no count or storage removal is
+implied by these code changes. The stopped embedding resource is unchanged.
 
-| Owner | Deliverable | Files owned in this planning stage |
+Native A1 (#186) is merged: the API handoff, default-off flag and migration 0044. A2 adds the web
+native branches and a disposable, synthetic browser proof. Neither increment enables native
+sign-in on shared staging or real accounts; the verified claimed-link and device gates remain.
+No native application or device acceptance is claimed. These cleanup and native increments have
+not been released to staging, and migration 0044 has not been applied there. Operational releases
+remain recorded in [paused.md](../runbooks/paused.md).
+
+The two existing Claude Opus agents remain in Herdr's Monitor tab. Their historical names and
+shell working directories do not identify the current checkout. Codex assigns explicit absolute
+paths to isolated checkouts and records them in the coordinator checkpoint.
+
+| Owner | Current A2 deliverable | Files owned |
 |---|---|---|
-| Claude `business-views`, `w2:pR` | Source-grounded retirement contract: callers, exports, schema dependencies, retained business capabilities, and a first independently removable code slice | `docs/plans/assistant-code-removal-2026-09.md` |
-| Claude `linked-chat`, `w2:pS` | Expo foundation contract: native session handoff, secure storage, links, three-tab navigation, authenticated reads, named dependencies and device/build acceptance | `docs/plans/expo-mobile-foundation-2026-09.md` |
-| Codex | Scope/status reconciliation, current platform-document verification, review, tracking issues, small adopting PRs and implementation sequencing | This assignment record, authoritative plan/status links and issue/PR records |
+| Claude `linked-chat`, `w2:pS` | Web native callback/passkey branches and unit coverage | `apps/web/src/app/auth/`, sign-in error wording and `apps/web/src/lib/native-handoff*` |
+| Claude `business-views`, `w2:pR` | Independent synthetic browser proof and CI integration | `apps/api/test/native-fixture.ts`, `apps/e2e/scripts/native-*`, bounded CI wiring |
+| Codex | Review, execution, plan/status reconciliation and integration | Documentation, actual check evidence, git and issue/PR records |
 
-Agents do not edit each other's files, application code or merged migrations during this stage.
-Codex owns git, builds, tests, integration and release. All heavy checks remain serial under
-`flock /tmp/atc-build.lock`.
+Each Claude reviews the other's implementation without editing those owned files. Codex owns git,
+builds, tests, integration and release. All heavy checks remain serial under
+`flock /tmp/atc-build.lock`. After A2, the adopted contract orders the Expo shell, secure device
+session handling and authenticated reads; it does not treat this browser proof as an installed app.
 
 ## Review and execution sequence
 

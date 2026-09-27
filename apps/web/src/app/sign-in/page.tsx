@@ -13,7 +13,8 @@ const said: Record<string, string> = {
 	request_invalid: 'That sign-in link had expired. Start again.',
 	google_failed: 'Google did not complete the sign-in. Try again.',
 	exchange_failed: 'The sign-in could not be finished. Try again.',
-	passkey_failed: 'The passkey could not be checked. Try again.'
+	passkey_failed: 'The passkey could not be checked. Try again.',
+	native_sign_in_disabled: 'Signing in from the Captain app is not available on this Captain. Close this window to return to the app.'
 };
 
 export default async function SignInPage({ searchParams }: { searchParams: Promise<{ return_to?: string | string[]; error?: string | string[] }> }) {

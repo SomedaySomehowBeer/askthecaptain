@@ -26,12 +26,14 @@ The document keeps four kinds of statement apart:
 - **Device/build evidence:** exports, simulator builds, real-device runs and signed builds, recorded
   separately (§10). This contract claims none of them.
 
-**Implementation status.** A1 adds the API handoff, default-off `NATIVE_SIGN_IN` flag and migration
-0044. It does not add the web callback handling, a mobile application or device evidence. The web
-still expects its existing session response; keep the flag off until A2 handles the native response
-and the later verified-link gate passes for shared staging and real accounts. Migration 0044 applies only at a later reviewed staging
-release; this implementation PR changes no flag, live schema or deployment. The repository facts below describe the
-baseline audited for this contract; §§3 and 12 define the additions and remaining work.
+**Implementation status.** A1 (#186) adds the API handoff, default-off `NATIVE_SIGN_IN` flag and
+migration 0044. A2 adds the web callback/passkey branches and a synthetic browser proof using the
+real API, disposable Postgres and a virtual authenticator. The proof intercepts the custom-scheme
+destination; it does not establish that an installed app receives it or that a platform authentication
+session closes. There is no mobile application or device evidence yet. Keep the flag off on shared
+staging and for real accounts until the verified-link gate passes. These increments have not been
+released to staging and migration 0044 has not been applied there. The repository facts below
+describe the baseline audited for this contract; §§3 and 9 define the additions and remaining work.
 
 ## 1. What exists today (repository facts)
 
