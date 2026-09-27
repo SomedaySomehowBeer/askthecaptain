@@ -115,7 +115,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				await expect(page.getByRole('heading', { name: /^for you$/i })).toBeVisible();
 				check(at(page) === '/work/views', `${width}px: the Work view list is at /work/views`);
 				for (const group of [/^across the business$/i, /^saved views$/i]) await expect(page.getByRole('heading', { name: group })).toBeVisible();
-				await unavailable('All tasks. Not available in this build yet');
+				await expect(page.getByRole('link', { name: 'All tasks. Open tasks assigned to anyone', exact: true })).toBeVisible();
 				await unavailable('By tag. Not available in this build yet');
 				await unavailable('Your saved views. Not available in this build yet. Save views on the web.');
 				await noRecords('Work views'); await noOverflow('Work views'); await shot('work-views');
@@ -187,7 +187,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				await expect(heading('My work')).toBeVisible();
 
 				// The production export always stays web-only; the harness uses the exact same screens and stack.
-				for (const route of ['/?scenario=ready', '/work', '/work/views?scenario=ready']) {
+				for (const route of ['/?scenario=ready', '/work', '/work/views?scenario=ready', '/work/all']) {
 				await goto(new URL(route, production).href);
 				await expect(page.getByText("Signing in isn't available in this preview. Use Captain on the web.", { exact: true })).toBeVisible();
 				await expect(button('Sign in with Google')).toHaveCount(0);
@@ -376,6 +376,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				console.log(`PASS ${width}px: account states, guarded navigation, command wiring, organisation loss, destination-once and stable subscriptions`);
 
 				await require('./mobile-shell-work-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
+				await require('./mobile-shell-all-work-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
 
 				check(errors.length === 0, `${width}px: no page errors (${errors.length})`);
 				check(consoleErrors.length === 0, `${width}px: no console errors (${consoleErrors.length})`);

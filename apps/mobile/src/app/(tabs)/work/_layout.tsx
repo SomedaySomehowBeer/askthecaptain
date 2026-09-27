@@ -1,5 +1,6 @@
 import { SectionStack, sectionStackSettings } from '../../../components/SectionStack.tsx';
 
-/** On iOS and Android, opening a Work view places the Work view list beneath it (see sectionStackSettings). */
+/** Native stacks built from links use the Work view list as their anchor; an empty stack starts at My work.
+ * Device navigation proof remains a separate gate (see sectionStackSettings). */
 export const unstable_settings = sectionStackSettings;
 export default SectionStack;

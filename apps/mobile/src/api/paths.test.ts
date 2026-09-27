@@ -60,3 +60,17 @@ test('my work path refuses a bad ID, an off-page or out-of-cap offset, without r
 	}
 	assert.throws(() => myWorkPath(null as never, 0), TypeError);
 });
+
+test('All tasks explicitly requests open status for all owners using the same bounded paging rules', async () => {
+ const { workListPath } = await import('./paths.ts');
+ const scope = { userId: me, organisationId: id };
+ for (let offset = 0; offset <= 450; offset += 50) {
+  assert.equal(workListPath(scope, 'all', offset), `/v1/organisations/${id}/tasks?status=open&offset=${offset}&limit=50`);
+  assert.equal(workListPath(scope, 'mine', offset), myWorkPath(scope, offset));
+ }
+ for (const view of ['', 'all&status=done', null, undefined])
+  assert.throws(() => workListPath(scope, view as never, 0), TypeError);
+ for (const offset of [-50, 49, 500, Infinity]) assert.throws(() => workListPath(scope, 'all', offset), TypeError);
+ assert.throws(() => workListPath({ ...scope, userId: 'invalid' }, 'all', 0), TypeError);
+ assert.throws(() => workListPath({ ...scope, organisationId: 'invalid' }, 'all', 0), TypeError);
+});

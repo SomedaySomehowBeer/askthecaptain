@@ -1,10 +1,16 @@
 # Mobile All tasks read contract (M-read slice 2)
 
-Status: adopted by this planning amendment, 27 September 2026. Outcome: **manage shared work**.
+Status: adopted in #200 (a82e293), 27 September 2026. Outcome: **manage shared work**.
 My work (#199) is merged. This contract extends [My work](expo-mobile-my-work-read-2026-09.md)
-and the [foundation](expo-mobile-foundation-2026-09.md) link allow list. Implementation follows adoption.
+and the [foundation](expo-mobile-foundation-2026-09.md) link allow list.
 
-**Outcome.** From Work → Views, **All tasks** (today listed as unavailable) opens, read-only, the open tasks the
+**Implementation status (27 September 2026): implemented and independently reviewed; local validation passed.**
+- Codex's paths, parser, links, sections and configuration, and Claude B's shared screen, hook, copy and harness,
+  are written, with peer review done.
+- Local checks, exports and browser validation passed; see the [validation record](../validation/mobile-all-tasks-read-2026-09-27/README.md).
+  Native sign-in remains off, with **no native, simulator or device evidence**.
+
+**Outcome.** From Work → Views, **All tasks** (previously unavailable) opens, read-only, the open tasks the
 existing Work API lists for the chosen organisation, whoever they are assigned to. Those are the **top-level** tasks
 (no checklist steps) whose status is **Open**, excluding tasks of **archived or proposed projects**
 (`service.ts:104-109`), exactly as on the web's All filter.

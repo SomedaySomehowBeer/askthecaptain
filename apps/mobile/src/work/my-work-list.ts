@@ -4,7 +4,7 @@ import type { ReadOutcome, ReadScope } from '../account/contracts.ts';
 import type { WorkPage, WorkRow } from './my-work.ts';
 
 /** The My work list's state and rules (docs/plans/expo-mobile-my-work-read-2026-09.md §3.5). Pure, so node tests cover
- *  every rule; `useMyWork` only holds it and performs the reads it asks for.
+ *  every rule; `useWorkList` (My work and All tasks alike) only holds it and performs the reads it asks for.
  *
  *  - One read in flight per screen. Every read has a sequence number, and only the latest one's answer is applied.
  *  - `first` reads page 0 on mount; `refresh` reads page 0 again; `more` reads `nextOffset`. None retries by itself:

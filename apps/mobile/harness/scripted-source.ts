@@ -136,7 +136,7 @@ export function createScriptedSource(name: ScenarioName, readClock: () => number
 	// Reads, as the runner would send them: checked against the current scope before "sending", then pending until a
 	// harness control resolves the oldest one. Its answer goes through the screen's own parser, and is `superseded` if
 	// the scope changed meanwhile, exactly as in the runner.
-	type Pending = { readonly entry: ReadLogEntry; readonly offset: number; readonly scope: ReadScope; readonly parse: Parse<unknown>; readonly resolve: (outcome: ReadOutcome<unknown>) => void };
+	type Pending = { readonly entry: ReadLogEntry; readonly scope: ReadScope; readonly parse: Parse<unknown>; readonly resolve: (outcome: ReadOutcome<unknown>) => void };
 	let readLog: readonly ReadLogEntry[] = Object.freeze([]); let pending: readonly Pending[] = Object.freeze([]);
 	let readsView: ReadsView = Object.freeze({ log: readLog, pending: Object.freeze([]) });
 	const readsChanged = () => {
@@ -152,11 +152,10 @@ export function createScriptedSource(name: ScenarioName, readClock: () => number
 		if (!same(scope, expected)) return Promise.resolve(superseded);
 		let target: string;
 		try { target = path(scope!); } catch { return Promise.resolve(Object.freeze({ kind: 'client-bug' as const })); }
-		const offset = Number(/[?&]offset=(\d+)/.exec(target)?.[1] ?? '0');
 		return new Promise<ReadOutcome<T>>((resolve) => {
 			const entry: ReadLogEntry = Object.freeze({ id: readLog.length + 1, path: target, epoch: scope!.epoch });
 			readLog = Object.freeze([...readLog, entry]);
-			pending = Object.freeze([...pending, { entry, offset, scope: scope!, parse, resolve: resolve as (o: ReadOutcome<unknown>) => void }]);
+			pending = Object.freeze([...pending, { entry, scope: scope!, parse, resolve: resolve as (o: ReadOutcome<unknown>) => void }]);
 			readsChanged();
 		});
 	};
@@ -168,7 +167,8 @@ export function createScriptedSource(name: ScenarioName, readClock: () => number
 		if (control === 'refused-400') return { kind: 'refused', status: 400 };
 		if (control === 'unauthorised') return superseded; // as a 401 does in production: the screen applies nothing
 		if (control === 'client-bug') return { kind: 'client-bug' };
-		try { return { kind: 'ok', value: p.parse(fixtureBody(control, p.offset, p.scope.userId)) }; } catch { return { kind: 'unavailable', wait: null }; }
+		// The fixture's offset and view (owners) come from the exact path this read asked for.
+		try { return { kind: 'ok', value: p.parse(fixtureBody(control, p.entry.path, p.scope.userId)) }; } catch { return { kind: 'unavailable', wait: null }; }
 	}
 
 	return Object.freeze({
