@@ -147,6 +147,17 @@ function labelFormat(zone: string, hours: boolean): Intl.DateTimeFormat {
 	}
 	return value;
 }
+/** Whether both axis label formatters build afresh and format in `zone` on this engine. The screen calls it once, right
+ *  after the zone gate passes, so rendering only ever uses formatters already proven (E-2 review N3). */
+export function labelFormatsOk(zone: string): boolean {
+	try {
+		labelFormats.delete(zone + ' h');
+		labelFormats.delete(zone + ' d');
+		return typeof labelFormat(zone, true).format(0) === 'string' && typeof labelFormat(zone, false).format(0) === 'string';
+	} catch {
+		return false;
+	}
+}
 /** Axis ticks inside [low, high) only: hourly from the range start, or daily/weekly civil starts counted from the
  *  anchor. A skipped civil date has no start and no tick. */
 export function ticks(scale: Scale, range: Pick<ScheduleRange, 'anchor' | 'anchorAt' | 'start' | 'end'>, zone: string, low: number, high: number): { at: number; label: string }[] {

@@ -6,7 +6,9 @@ import {
 	copy, destinationStep, faultLines, findAccountStack, firstVisitParams, resetToFreshTabs, navigationStep, navMount, navStart, nextWake, releaseWording, requestedDestination, routeFor, routeHolds,
 	signInNotices, snapshotWaits, tabEntryAction, tabsKey, welcomePage, moreTags, workCopy, workProblemText, type NavMemory, type Page,
 	revocationDisabled, revocationLines, revokeOthersCopy,
-	stockCopy, stockCountText, stockProblemText, stockReorderText, stockRowLabel
+	stockCopy, stockCountText, stockProblemText, stockReorderText, stockRowLabel,
+	equipmentCellText, equipmentColumnSummary, equipmentCopy, equipmentTimesIn, equipmentWaitText, reservationBuffersText, reservationLabel,
+	reservationOccupiedText, reservationSpanText
 } from './copy.ts';
 import { idleRevocation, sendingRevocation, settledRevocation, slowRevocation, unknownResult } from './revocation.ts';
 import type { AccountSnapshot, AccountView, StrayView } from './machine.ts';
@@ -78,6 +80,47 @@ test('inventory: exact fixed wording with no digits; counts, reorder points and 
 	}
 	for (const text of [stockCopy.failedFirst, stockCopy.failedRefresh, stockCopy.access, stockCopy.list, stockCopy.loading])
 		assert.doesNotMatch(text, /no stock|nothing (is )?in stock|empty/i, 'no failed or pending state claims there is no stock');
+});
+
+test('equipment schedule: fixed wording has no digits and never calls time free or available', () => {
+	for (const [key, text] of Object.entries(equipmentCopy)) {
+		assert.doesNotMatch(text, /\d/, key);
+		assert.doesNotMatch(text.replace('not confirmed free', ''), /\bfree\b|\bavailable\b|\bopen slot/i, key);
+	}
+	assert.equal(equipmentCopy.loading, 'Loading the schedule…');
+	assert.equal(equipmentCopy.partial, 'Not every reservation is shown for these dates. Gaps are not confirmed free.');
+	assert.equal(equipmentCopy.conflict, 'Captain received conflicting details for a reservation. Refresh to read it again.');
+	assert.equal(equipmentCopy.zoneUnsupported, "Times can't be shown in the business time zone on this device. Open the schedule on the website.");
+	assert.equal(equipmentTimesIn('Australia/Sydney'), 'Times in Australia/Sydney');
+	assert.equal(equipmentWaitText(wait(5_000), format), 'Try again after about 12:05');
+	// Every state has its line; failures pick access or "couldn't read"; a stale cell names its re-read failure.
+	assert.equal(equipmentCellText('unread', null), 'Not loaded yet');
+	assert.equal(equipmentCellText('loading', null), 'Loading…');
+	assert.equal(equipmentCellText('failed', 'unavailable'), "Captain couldn't read these dates.");
+	assert.equal(equipmentCellText('failed', 'unreadable'), "Captain couldn't read these dates.");
+	assert.equal(equipmentCellText('failed', 'access'), equipmentCopy.access);
+	assert.equal(equipmentCellText('partial', null), equipmentCopy.partial);
+	assert.equal(equipmentCellText('conflict', null), equipmentCopy.conflict);
+	assert.equal(equipmentCellText('complete', null), equipmentCopy.complete);
+	assert.equal(equipmentCellText('stale', null), 'May be out of date');
+	assert.equal(equipmentCellText('stale', 'unavailable'), "May be out of date. Captain couldn't read these dates again.");
+	assert.match(equipmentCellText('stale', 'access'), /^May be out of date\. Captain couldn't read this organisation's equipment/);
+	for (const state of ['unread', 'loading', 'failed', 'partial', 'conflict', 'stale'] as const)
+		assert.doesNotMatch(equipmentCellText(state, null), /no (confirmed )?reservations|nothing booked/i, `${state} never claims an empty period`);
+	assert.equal(equipmentColumnSummary('Kettle', equipmentCopy.unread), 'Kettle: Not loaded yet');
+});
+
+test('equipment schedule: a bar label always starts with the equipment name, then title, kind, actual time and buffers', () => {
+	const time = (instant: string) => `<${instant}>`;
+	const r = { title: 'Brew day', kind: 'booking' as const, startsAt: 'S', endsAt: 'E', occupiedStartsAt: 'OS', occupiedEndsAt: 'OE', setupMinutes: 0, cleanupMinutes: 0 };
+	assert.equal(reservationLabel('Kettle', r, time), 'Kettle · Brew day · Booking · <S>–<E>');
+	assert.equal(reservationBuffersText(r), null);
+	const buffered = { ...r, kind: 'maintenance' as const, setupMinutes: 30, cleanupMinutes: 15 };
+	assert.equal(reservationLabel('Fermenter  2 ', buffered, time), 'Fermenter  2  · Brew day · Maintenance · <S>–<E> · includes setup 30 min, cleanup 15 min');
+	assert.equal(reservationBuffersText({ ...r, cleanupMinutes: 5 }), 'includes cleanup 5 min');
+	assert.equal(reservationBuffersText({ ...r, setupMinutes: 10080 }), 'includes setup 10080 min');
+	assert.equal(reservationSpanText(r, time), '<S>–<E>');
+	assert.equal(reservationOccupiedText(r, time), 'Occupied <OS>–<OE>');
 });
 
 test('sign out everywhere else: exact wording with grammatical plurals; a 429 says why, with or without a time; never "nothing changed"', () => {
