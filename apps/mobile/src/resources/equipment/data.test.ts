@@ -181,7 +181,7 @@ test('one bad reservation refuses the whole answer', () => {
 	] as [Record<string, unknown>, string][]) refuses(() => parseOccupancy(answer([row(2), row(1, extra)]), request), label);
 	refuses(() => parseOccupancy(answer([row(1), row(1)]), request), 'duplicate id within the answer');
 	refuses(() => parseOccupancy(answer([row(1), 'row']), request), 'a non-object row');
-	assert.equal((parseOccupancy(answer([row(1, { title: 't'.repeat(200) })]), request) as { reservations: { title: string }[] }).reservations[0]!.title.length, 200);
+	assert.equal((parseOccupancy(answer([row(1, { title: 't'.repeat(200) })]), request) as unknown as { reservations: { title: string }[] }).reservations[0]!.title.length, 200);
 });
 
 test('a well-formed answer in another zone is zone-changed, carries no rows, and is distinguishable from invalid', () => {

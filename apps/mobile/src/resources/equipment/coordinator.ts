@@ -24,39 +24,50 @@ const recent = (state: ScheduleCoordinator, now: number) => state.starts.filter(
 const validNow = (now: number) => {
 	if (!Number.isFinite(now) || now < 0) throw new TypeError('schedule clock: invalid reading');
 };
+/** A conflict or zone change stops only occupancy (§4.1, §4.4); the catalogue does not depend on either. A retry
+ * stop admits only an explicit Try again; access and superseded admit nothing. */
+const stopsRead = (stop: ScheduleStop | null, kind: ScheduleReadKind, retry: boolean): boolean =>
+	stop === null ? false
+	: stop === 'retry' ? !retry
+	: stop === 'conflict' || stop === 'zone' ? kind === 'occupancy'
+	: true;
 
 export function createScheduleCoordinator(scope: ReadScope): ScheduleCoordinator {
 	return { scope: Object.freeze({ ...scope }), generation: 1, sequence: 0, inFlight: null,
 		starts: [], wait: null, stop: null };
 }
 
-/** Exactly at a server deadline or the oldest start's 60-second boundary, that limit no longer holds.
- * A stopped queue accepts only an explicit retry of a soft failure; access/conflict/zone require Refresh. */
-export function scheduleReadBlock(state: ScheduleCoordinator, scope: ReadScope, now: number, retry = false): ScheduleBlock | null {
+/** Exactly at a server deadline or the oldest start's 60-second boundary, that limit no longer holds. */
+export function scheduleReadBlock(state: ScheduleCoordinator, scope: ReadScope, kind: ScheduleReadKind, now: number,
+	retry = false): ScheduleBlock | null {
 	validNow(now);
 	if (!sameScope(state.scope, scope)) return 'scope';
 	if (state.inFlight !== null) return 'busy';
 	if (state.wait !== null && now < state.wait.until) return 'wait';
 	if (recent(state, now).length >= scheduleReadLimit) return 'budget';
-	if (state.stop !== null && !(state.stop === 'retry' && retry)) return 'stopped';
+	if (stopsRead(state.stop, kind, retry)) return 'stopped';
 	return null;
 }
 
 export function beginScheduleRead(state: ScheduleCoordinator, scope: ReadScope, kind: ScheduleReadKind,
 	key: string, now: number, retry = false): { readonly state: ScheduleCoordinator; readonly ticket: ScheduleTicket } | null {
-	if (scheduleReadBlock(state, scope, now, retry) !== null) return null;
+	if (scheduleReadBlock(state, scope, kind, now, retry) !== null) return null;
 	const ticket = Object.freeze({ sequence: state.sequence + 1, generation: state.generation, kind, key, retry });
 	return { ticket, state: { ...state, sequence: ticket.sequence, inFlight: ticket,
 		starts: [...recent(state, now), now] } };
 }
 
-/** Finishes only the exact outstanding ticket. `apply` means the caller may apply this outcome to its matching
- * catalogue/cell state; it does not mean success. A superseded answer applies no business data and stops all reads. */
+/** Finishes only the exact outstanding ticket and releases the flight. `apply` means the caller may apply this
+ * outcome to its matching catalogue/cell state; it does not mean success. An answer from a previous generation
+ * (Refresh or re-anchor happened while it was in flight) is dropped: nothing is applied, though a server wait it
+ * carried is still honoured. A superseded answer applies no business data and stops all reads. */
 export function finishScheduleRead<T>(state: ScheduleCoordinator, ticket: ScheduleTicket, outcome: ReadOutcome<T>):
 	{ readonly state: ScheduleCoordinator; readonly apply: boolean } {
-	if (state.inFlight !== ticket || ticket.generation !== state.generation) return { state, apply: false };
+	if (state.inFlight !== ticket) return { state, apply: false };
 	const settled = { ...state, inFlight: null };
 	if (outcome.kind === 'superseded') return { state: { ...settled, stop: 'superseded' }, apply: false };
+	if (ticket.generation !== state.generation) return { apply: false, state: outcome.kind === 'unavailable'
+		? { ...settled, wait: laterWait(state.wait, outcome.wait) } : settled };
 	if (outcome.kind === 'ok') return { state: { ...settled,
 		stop: state.stop === 'retry' && ticket.retry ? null : state.stop }, apply: true };
 	const hardStop = state.stop !== null && state.stop !== 'retry' ? state.stop : null;
@@ -73,13 +84,16 @@ export function stopSchedule(state: ScheduleCoordinator, reason: 'zone' | 'confl
 	return { ...state, stop: reason };
 }
 
-/** Refresh changes data identity; re-anchoring changes date identity. Neither bypasses an outstanding request,
- * wait, or rate budget. Re-anchoring preserves stops. An access stop needs the hook's completed membership check.
- * Superseded scopes cannot resume; the account reset must create a fresh screen. Sequence numbers never reset. */
+/** Refresh changes data identity; re-anchoring changes date identity. Both bump the generation, so an answer still
+ * in flight is dropped when it lands; it keeps the single flight occupied until then, so no second request starts.
+ * Neither bypasses a wait or the rate budget (the hook says why the control is unavailable rather than leaving it
+ * dead). Re-anchoring preserves stops; a retry stop can then outlive the failed cell whose Try again would lift it,
+ * so the hook must still offer Refresh while stop === 'retry'. An access stop needs the hook's completed membership
+ * check. Superseded scopes cannot resume; the account reset must create a fresh screen. Sequence numbers never reset. */
 export function restartSchedule(state: ScheduleCoordinator, scope: ReadScope, now: number,
 	mode: 'refresh' | 'reanchor', membershipChecked = false): ScheduleCoordinator | null {
 	if (state.stop === 'superseded') return null;
 	if (mode === 'refresh' && state.stop === 'access' && !membershipChecked) return null;
-	if (scheduleReadBlock({ ...state, stop: null }, scope, now) !== null) return null;
+	if (scheduleReadBlock({ ...state, inFlight: null, stop: null }, scope, 'organisation', now) !== null) return null;
 	return { ...state, generation: state.generation + 1, stop: mode === 'refresh' ? null : state.stop };
 }
