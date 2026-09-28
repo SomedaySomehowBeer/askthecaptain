@@ -11,7 +11,10 @@ import type { Equipment, Reservation } from './data.ts';
 import { clampScroll, pixelsAt, scales, zoomScroll, type Scale } from './geometry.ts';
 import { chunksBetween, renderWindow, ticks, type ScheduleRange, type TimeWindow } from './range.ts';
 import { zoneTime } from './ReservationPanel.tsx';
-import { columnWidthFor, offsetFor, settledFrom, type Control, type Intent, type ScheduleScreen, type ScheduleState, type SettledView } from './schedule.ts';
+import {
+	columnWidthFor, focusMissed, focusReady, layoutMeasured, offsetFor, settledFrom, type Control, type Intent, type Measured, type ScheduleScreen,
+	type ScheduleState, type SettledView
+} from './schedule.ts';
 
 const axisWidth = 56;
 /** The idle settle (design revision 2): planning happens this long after the last scroll event, on every platform. */
@@ -43,7 +46,7 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 	const [columnsWidth, setColumnsWidth] = useState(0);
 	const columnWidth = columnWidthFor(columnsWidth || 300);
 	const contentWidth = columns.length * columnWidth + columnWidth;
-	const layout = useRef({ x: 0, y: 0, viewportHeight: 0, bodyTop: 0, stickyHeight: 0, tail: 0 });
+	const layout = useRef({ x: 0, y: 0, viewportHeight: 0, bodyTop: 0, stickyHeight: 0, contentHeight: 0 });
 	// The latest values for callbacks and timers.
 	const latest = useRef({ range, scale, columnWidth, columnsWidth, contentWidth, bodyHeight, onSettle });
 	latest.current = { range, scale, columnWidth, columnsWidth, contentWidth, bodyHeight, onSettle };
@@ -55,12 +58,16 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 	const pendingFocus = useRef<Focus | null>(centreNow);
 	const pendingY = useRef<number | null>(null);
 	const lastRange = useRef<ScheduleRange | null>(null);
+	/** The last focus scroll issued and not yet confirmed by the ScrollView; re-issued at most once. */
+	const issued = useRef<{ target: number; retried: boolean } | null>(null);
 
 	const viewSpan = () => {
 		const l = layout.current, { range: r, scale: s } = latest.current;
 		return settledFrom({ x: l.x, y: l.y, columnsWidth: latest.current.columnsWidth, columnWidth: latest.current.columnWidth, viewportHeight: l.viewportHeight, bodyTop: l.bodyTop, stickyHeight: l.stickyHeight }, r, s);
 	};
-	const measured = () => layout.current.viewportHeight > 0 && latest.current.columnsWidth > 0;
+	const sizes = (): Measured => ({ viewportHeight: layout.current.viewportHeight, columnsWidth: latest.current.columnsWidth, bodyTop: layout.current.bodyTop, contentHeight: layout.current.contentHeight });
+	// A settle needs the body row placed too (A's note 4): an early settle with bodyTop 0 would plan the wrong dates.
+	const measured = () => layoutMeasured(sizes());
 	const updateWindows = () => {
 		if (!measured()) return;
 		const v = viewSpan(), r = latest.current.range;
@@ -92,20 +99,42 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 		body.current?.scrollTo({ x, animated: false });
 		names.current?.scrollTo({ x, animated: false });
 	};
-	/** Applies a pending zoom offset or focus once the layout is measured, then settles explicitly. */
+	const focusPending = () => pendingY.current !== null || pendingFocus.current !== null;
+	/** Applies a pending zoom offset or focus, but only once the scroll can take effect (`focusReady`: measured, and the
+	 *  content laid out taller than the viewport). Until then the focus stays pending; it is consumed only by a scroll
+	 *  that can land. Then it settles explicitly. Safe to call from any layout event, in any order. */
 	const applyFocus = () => {
-		if (!measured()) return;
-		const l = layout.current, { range: r, scale: s, bodyHeight: h } = latest.current;
-		const frameSize = { bodyTop: l.bodyTop, stickyHeight: l.stickyHeight, viewportHeight: l.viewportHeight, contentHeight: l.bodyTop + h + l.tail };
-		if (pendingY.current !== null) {
-			scrollY(clampScroll(pendingY.current, frameSize.contentHeight, l.viewportHeight));
-			pendingY.current = null;
-		} else if (pendingFocus.current !== null) {
-			const focus = pendingFocus.current(r);
-			scrollY(offsetFor(focus.at, focus.where, r, s, frameSize));
-			pendingFocus.current = null;
-		} else return;
+		if (!focusPending() || !focusReady(sizes())) return;
+		const l = layout.current, { range: r, scale: s } = latest.current;
+		const frameSize = { bodyTop: l.bodyTop, stickyHeight: l.stickyHeight, viewportHeight: l.viewportHeight, contentHeight: l.contentHeight };
+		let target: number;
+		if (pendingY.current !== null) target = clampScroll(pendingY.current, l.contentHeight, l.viewportHeight);
+		else {
+			const focus = pendingFocus.current!(r);
+			target = offsetFor(focus.at, focus.where, r, s, frameSize);
+		}
+		pendingY.current = null;
+		pendingFocus.current = null;
+		issued.current = { target, retried: false };
+		scrollY(target);
 		setTimeout(settleNow, 0);
+	};
+	/** The ScrollView's next report after a focus: confirmed if it landed; otherwise the focus is issued once more. */
+	const checkFocus = (reported: number | null) => {
+		const last = issued.current;
+		if (last === null) return;
+		if (reported !== null && !focusMissed(last.target, reported)) { issued.current = null; return; }
+		if (last.retried) { issued.current = null; return; }
+		issued.current = { target: last.target, retried: true };
+		scrollY(last.target);
+		setTimeout(settleNow, 0);
+	};
+	/** After any measurement: apply a pending focus, re-check the last one, or, with nothing pending, settle soon. The
+	 *  first settle therefore happens whichever layout event arrives last. */
+	const measuredAgain = () => {
+		if (focusPending()) { applyFocus(); return; }
+		checkFocus(null);
+		settleSoon();
 	};
 
 	// A new range (mount, re-anchor, or a zone change on Refresh) is focused; with no explicit focus, on now.
@@ -114,7 +143,8 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 			if (lastRange.current !== null && pendingFocus.current === null) pendingFocus.current = centreNow;
 			lastRange.current = range;
 		}
-		applyFocus();
+		// The columns' width reaches `latest` only on this render, so a width measurement lands here.
+		measuredAgain();
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [range, scale, columnsWidth]);
 	// A replaced or longer list: keep x inside the content (design E1), then settle so new columns can be planned.
@@ -126,7 +156,12 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 	}, [columns]);
 
 	const onVerticalScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-		layout.current.y = event.nativeEvent.contentOffset.y;
+		const y = event.nativeEvent.contentOffset.y;
+		if (issued.current !== null) {
+			checkFocus(y);
+			if (issued.current !== null) return; // re-issued: the reported offset was not the focus
+		}
+		layout.current.y = y;
 		updateWindows();
 		settleSoon();
 	};
@@ -137,9 +172,9 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 		updateWindows();
 		settleSoon();
 	};
-	const measure = (key: 'viewportHeight' | 'stickyHeight' | 'tail') => (event: LayoutChangeEvent) => {
+	const measure = (key: 'viewportHeight' | 'stickyHeight') => (event: LayoutChangeEvent) => {
 		layout.current[key] = event.nativeEvent.layout.height;
-		applyFocus();
+		measuredAgain();
 	};
 
 	const zoom = (next: Scale) => {
@@ -167,6 +202,11 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 	const shownWindow = rendered ?? { low: start, high: Math.min(end, start + 3 * 86_400_000) };
 	const chunkIndexes = chunksBetween(range.chunks, shownWindow.low, shownWindow.high);
 	const time = zoneTime(zone);
+	// Each column's summary covers the settled visible dates (§5), not the wider render window (A's note 2). Before a
+	// view has settled it claims no state at all: the name only.
+	const settled = state.settled;
+	const columnLabel = (equipment: Equipment) => settled === null ? equipment.name
+		: equipmentColumnSummary(equipment.name, equipmentCellText(stateBetween(state.occupancy, equipment.id, range.chunks, settled.low, settled.high), null));
 	let axis: { at: number; label: string }[] = [];
 	// The formatters were proven when the zone was accepted (review N3); a failure here renders no labels, never throws.
 	try { axis = ticks(scale, range, zone, shownWindow.low, shownWindow.high); } catch { axis = []; }
@@ -175,6 +215,7 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 		<ScrollView
 			ref={vertical} stickyHeaderIndices={[1]} contentContainerStyle={frame.contentContainerStyle}
 			onScroll={onVerticalScroll} scrollEventThrottle={32} onMomentumScrollEnd={settleNow} onLayout={measure('viewportHeight')}
+			onContentSizeChange={(_width, height) => { layout.current.contentHeight = height; measuredAgain(); }}
 		>
 			<View style={styles.header}>
 				{frame.heading}
@@ -203,7 +244,7 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 					<View style={[styles.namesRow, { width: contentWidth }]}>
 						{columns.map((equipment) => (
 							<View key={equipment.id} accessible role="columnheader" style={[styles.name, { width: columnWidth }]}
-								aria-label={equipmentColumnSummary(equipment.name, equipmentCellText(stateBetween(state.occupancy, equipment.id, range.chunks, shownWindow.low, shownWindow.high), null))}>
+								aria-label={columnLabel(equipment)}>
 								<Text numberOfLines={2} style={styles.nameText}>{equipment.name}</Text>
 							</View>
 						))}
@@ -216,14 +257,14 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 				{screen.earlier ? <EdgeButton testID="equipment-earlier" label={equipmentCopy.earlier} control={screen.earlier} onPress={() => edge('earlier')} /> : null}
 			</View>
 
-			<View style={[styles.bodyRow, { height: bodyHeight }]} onLayout={(event) => { layout.current.bodyTop = event.nativeEvent.layout.y; applyFocus(); }}>
+			<View style={[styles.bodyRow, { height: bodyHeight }]} onLayout={(event) => { layout.current.bodyTop = event.nativeEvent.layout.y; measuredAgain(); }}>
 				<View style={[styles.axis, { height: bodyHeight }]}>
 					{axis.map((tick) => (
 						<Text key={tick.at} style={[styles.tick, { top: pixelsAt(tick.at, start, ppd) }]} numberOfLines={1}>{tick.label}</Text>
 					))}
 				</View>
 				<ScrollView ref={body} horizontal onScroll={onColumnsScroll} scrollEventThrottle={32} onMomentumScrollEnd={settleNow}
-					onLayout={(event) => { setColumnsWidth(event.nativeEvent.layout.width); applyFocus(); }} style={styles.fill}>
+					onLayout={(event) => { setColumnsWidth(event.nativeEvent.layout.width); }} style={styles.fill}>
 					<View style={{ width: contentWidth, height: bodyHeight }}>
 						{columns.map((equipment, index) => (
 							<View key={equipment.id} style={[styles.column, { left: index * columnWidth, width: columnWidth, height: bodyHeight }]}>
@@ -237,7 +278,7 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 				</ScrollView>
 			</View>
 
-			<View style={styles.edge} onLayout={measure('tail')}>
+			<View style={styles.edge}>
 				{screen.later ? <EdgeButton testID="equipment-later" label={equipmentCopy.later} control={screen.later} onPress={() => edge('later')} /> : null}
 				{footer}
 			</View>

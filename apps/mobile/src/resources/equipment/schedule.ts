@@ -127,6 +127,16 @@ export function settledFrom(layout: Layout, range: Pick<ScheduleRange, 'start' |
 	return { x: layout.x, width: layout.columnsWidth, columnWidth: layout.columnWidth, low, high };
 }
 
+/** What the timeline has measured so far. The first focus and settle must not depend on the order these arrive in. */
+export type Measured = { readonly viewportHeight: number; readonly columnsWidth: number; readonly bodyTop: number; readonly contentHeight: number };
+/** Enough is measured to settle: a viewport, the columns' width, and the body row placed below the header. */
+export const layoutMeasured = (m: Measured): boolean => m.viewportHeight > 0 && m.columnsWidth > 0 && m.bodyTop > 0;
+/** A focus scroll can take effect: measured, and the content is laid out taller than the viewport. Until then a pending
+ *  focus is kept, never consumed by a scroll the ScrollView would clamp to zero. */
+export const focusReady = (m: Measured): boolean => layoutMeasured(m) && m.contentHeight > m.viewportHeight;
+/** The offset the ScrollView reports after a focus scroll to `target` shows it didn't take (re-issue it once). */
+export const focusMissed = (target: number, reported: number): boolean => Math.abs(reported - target) > 1;
+
 /** The vertical offset that puts `at` at the centre, just below the sticky row (`top`), or at the bottom. */
 export function offsetFor(at: number, where: 'centre' | 'top' | 'bottom', range: Pick<ScheduleRange, 'start'>, scale: Scale,
 	frame: { readonly bodyTop: number; readonly stickyHeight: number; readonly viewportHeight: number; readonly contentHeight: number }): number {

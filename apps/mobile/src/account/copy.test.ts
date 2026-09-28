@@ -101,7 +101,8 @@ test('equipment schedule: fixed wording has no digits and never calls time free 
 	assert.equal(equipmentCellText('failed', 'access'), equipmentCopy.access);
 	assert.equal(equipmentCellText('partial', null), equipmentCopy.partial);
 	assert.equal(equipmentCellText('conflict', null), equipmentCopy.conflict);
-	assert.equal(equipmentCellText('complete', null), equipmentCopy.complete);
+	assert.equal(equipmentCellText('complete', null), 'Every confirmed reservation for these dates is shown, as of when it was last read.');
+	assert.match(equipmentCopy.complete, /when it was last read\.$/, 'a claim about the time of the read, like the legend');
 	assert.equal(equipmentCellText('stale', null), 'May be out of date');
 	assert.equal(equipmentCellText('stale', 'unavailable'), "May be out of date. Captain couldn't read these dates again.");
 	assert.match(equipmentCellText('stale', 'access'), /^May be out of date\. Captain couldn't read this organisation's equipment/);

@@ -48,7 +48,7 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  expect((await log()).slice(partialReads).map(e => e.path)).not.toContain(partialPath);
  expect((await log()).filter(e => e.path === partialPath)).toHaveLength(1);
  await bar('Sample overnight brew').click();
- await expect(eq('panel')).toContainText('Sample overnight brew'); await expect(eq('panel')).toContainText('Sample fermenter');
+ await expect(eq('panel')).toContainText('Sample overnight brew'); await expect(eq('panel')).toContainText(/Sample (fermenter|bright tank|equipment name)/); // the centre column is read first
  await eq('panel-close').click(); await expect(eq('panel')).toHaveCount(0);
  await eq('scale-hours').click(); await expect(eq('hatch').first()).toBeVisible(); await noOverflow('equipment at Hours');
  await eq('scale-days').click();

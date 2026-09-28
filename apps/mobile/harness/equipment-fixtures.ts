@@ -100,8 +100,9 @@ function occupancyBody(control: EquipmentControl, equipment: string, from: strin
 			return body('partial', Array.from({ length: 200 }, (_, i) =>
 				reservation(rowId(equipment, Math.floor((low + i * step) / minute)), equipment, `Sample slot ${i + 1}`, 'booking', low + i * step, low + i * step + Math.max(minute, step / 2), 0, 0, 1)), 200);
 		}
-		case 'equipment-conflict-a': return body('complete', [reservation(reservationId(900), equipment, 'Sample booking Alpha', 'booking', at(0.4), at(0.4) + 3 * hour, 0, 0, 1)]);
-		case 'equipment-conflict-b': return body('complete', [reservation(reservationId(900), equipment, 'Sample booking Beta', 'booking', at(0.4), at(0.4) + 3 * hour, 0, 0, 1)]);
+		// Near the window's start, so the anchor chunk's copy is inside the render window when the view is on today.
+		case 'equipment-conflict-a': return body('complete', [reservation(reservationId(900), equipment, 'Sample booking Alpha', 'booking', low + 6 * hour, low + 9 * hour, 0, 0, 1)]);
+		case 'equipment-conflict-b': return body('complete', [reservation(reservationId(900), equipment, 'Sample booking Beta', 'booking', low + 6 * hour, low + 9 * hour, 0, 0, 1)]);
 		default: return body('complete', [
 			boundary(low), boundary(high),
 			// Keys from each row's own start hour, so a row inside one window never shares an ID with another window's row.

@@ -648,7 +648,7 @@ export const equipmentCopy = {
 	partial: 'Not every reservation is shown for these dates. Gaps are not confirmed free.',
 	conflict: 'Captain received conflicting details for a reservation. Refresh to read it again.',
 	staleFailed: "May be out of date. Captain couldn't read these dates again.",
-	complete: 'Every confirmed reservation for these dates was read.',
+	complete: 'Every confirmed reservation for these dates is shown, as of when it was last read.',
 	hours: 'Hours',
 	days: 'Days',
 	weeks: 'Weeks',

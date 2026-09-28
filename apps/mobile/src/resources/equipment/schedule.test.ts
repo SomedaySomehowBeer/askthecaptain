@@ -6,7 +6,7 @@ import { catalogueView } from './catalogue.ts';
 import { cellOf, slotOf, stateOf } from './cells.ts';
 import { DAY, labelFormatsOk, scheduleRange } from './range.ts';
 import {
-	beginRead, columnsAt, createSchedule, panelRow, press, pressEdge, pressRefresh, readRequest, receive, retryableSlots, scheduleScreen, settle, settledFrom,
+	beginRead, columnsAt, createSchedule, focusMissed, focusReady, layoutMeasured, offsetFor, panelRow, press, pressEdge, pressRefresh, readRequest, receive, retryableSlots, scheduleScreen, settle, settledFrom,
 	wakeDelay, wayOutAll, type InFlight, type ScheduleState, type SettledView
 } from './schedule.ts';
 
@@ -121,6 +121,39 @@ test('settle maths: the body top excludes the body itself, and the sticky row hi
 	assert.deepEqual(columnsAt({ x: 0, width: 300, columnWidth: 125, low: 0, high: 1 }, [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }]),
 		{ visible: ['a', 'b', 'c'], next: 'd', centre: 1 });
 	assert.deepEqual(columnsAt({ x: 250, width: 300, columnWidth: 125, low: 0, high: 1 }, [{ id: 'a' }]), { visible: [], next: null, centre: 0 });
+});
+
+test('first focus is order-independent: nothing settles before the body is placed, and a focus waits for laid-out content', () => {
+	const full = { viewportHeight: 700, columnsWidth: 300, bodyTop: 240, contentHeight: 9_000 };
+	assert.equal(layoutMeasured(full), true);
+	assert.equal(focusReady(full), true);
+	// Each measurement missing, in any arrival order, keeps both false (A's note 4: bodyTop 0 is not measured).
+	for (const key of ['viewportHeight', 'columnsWidth', 'bodyTop'] as const) {
+		assert.equal(layoutMeasured({ ...full, [key]: 0 }), false, key);
+		assert.equal(focusReady({ ...full, [key]: 0 }), false, key);
+	}
+	// Measured, but the content isn't laid out taller than the viewport yet: a scroll would clamp to zero, so the
+	// focus is kept pending rather than consumed.
+	assert.equal(layoutMeasured({ ...full, contentHeight: 0 }), true, 'a settle may still happen');
+	assert.equal(focusReady({ ...full, contentHeight: 0 }), false);
+	assert.equal(focusReady({ ...full, contentHeight: 700 }), false);
+	assert.equal(focusReady({ ...full, contentHeight: 701 }), true);
+	// The ScrollView's report after a focus: within a pixel is landed; anything else is re-issued once.
+	assert.equal(focusMissed(4_321, 4_321), false);
+	assert.equal(focusMissed(4_321, 4_320.5), false);
+	assert.equal(focusMissed(4_321, 0), true, 'clamped to the top: the focus did not take');
+	assert.equal(focusMissed(4_321, 4_300), true);
+});
+
+test('focus offsets: now centred below the sticky row, an edge date at the top or bottom, clamped to the content', () => {
+	const range = scheduleRange('2026-09-28', sydney), start = Date.parse(range.start);
+	const frame = { bodyTop: 240, stickyHeight: 40, viewportHeight: 700, contentHeight: 240 + 214 * 84 + 100 };
+	const at = anchorAt + 12 * hour, y = 240 + (at - start) / DAY * 84;
+	assert.equal(offsetFor(at, 'centre', range, 'days', frame), y - (700 + 40) / 2);
+	assert.equal(offsetFor(at, 'top', range, 'days', frame), y - 40);
+	assert.equal(offsetFor(at, 'bottom', range, 'days', frame), y - 700);
+	assert.equal(offsetFor(start, 'centre', range, 'days', frame), 0, 'never above the content');
+	assert.equal(offsetFor(Date.parse(range.end), 'top', range, 'days', frame), frame.contentHeight - 700, 'never past the end');
 });
 
 test('one flight across every kind; a press made while busy is queued and sent before occupancy', () => {
