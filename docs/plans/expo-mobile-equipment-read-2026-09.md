@@ -1,8 +1,7 @@
 # Mobile equipment schedule, read-only (M-equipment slice 1)
 
-Status: **adopted by the reviewed amendment #211, 27 September 2026. Slice E-1 (pure data modules) is implemented
-and cross-reviewed on 28 September 2026 in #212; slice E-2 (hooks, screen, harness, browser checks) is
-not started.** Claude B authored the contract from Claude A's API/web audit. Root and A independently reviewed it;
+Status: **adopted by the reviewed amendment #211, 27 September 2026. Slice E-1 (pure data modules) merged in #212 and
+slice E-2 (hooks, screen, harness fixtures, browser checks) in E2_PR, both on 28 September 2026.** Claude B authored the contract from Claude A's API/web audit. Root and A independently reviewed it;
 B reviewed root's corrections and status updates. Outcome: **allocate resources**, by seeing, on the phone, when shared equipment is booked
 across equipment and days.
 

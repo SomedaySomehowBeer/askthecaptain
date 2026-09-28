@@ -15,7 +15,11 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  const orgPath = /^\/v1\/organisations\/[0-9a-f-]+$/, pagePath = /^\/v1\/organisations\/[0-9a-f-]+\/equipment$/, occPath = /^\/v1\/organisations\/[0-9a-f-]+\/equipment\/[0-9a-f-]+\/reservations$/;
  const start = async (freeze = false) => {
   await freshPage();
-  if (freeze) { await page().clock.install(); await page().clock.pauseAt(Date.now() + 1_000); } // a moment ahead: pausing exactly at now can land in the fake clock's past
+  // The Playwright clock is per browser context and an earlier suite may have left it installed and paused, which would
+  // stop this screen's settle timers; make sure it runs, and pause it a moment ahead only for the wait section (pausing
+  // exactly at now can land in the fake clock's past).
+  try { await page().clock.install(); } catch { /* already installed by an earlier suite */ }
+  if (freeze) await page().clock.pauseAt(Date.now() + 1_000); else await page().clock.resume();
   await scenario('ready', '/resources');
   await expect(page().getByRole('heading', { name: 'Equipment schedule', exact: true })).toBeVisible();
   await expect(eq('loading')).toHaveText('Loading the schedule…'); await count(1);
