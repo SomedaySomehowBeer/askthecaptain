@@ -4,6 +4,7 @@ import { createClampedClock, type Wait } from '../src/account/clock.ts';
 import type { ReadOutcome, ReadScope, ScopedRead } from '../src/account/contracts.ts';
 import type { OrganisationPath } from '../src/api/paths.ts';
 import type { Parse } from '../src/auth/contracts.ts';
+import { equipmentFixture, isEquipmentControl, isEquipmentPath } from './equipment-fixtures.ts';
 import { stockFixture } from './stock-fixtures.ts';
 import { fixtureBody, isWorkBodyControl, type ReadControl } from './work-fixtures.ts';
 
@@ -197,10 +198,14 @@ export function createScriptedSource(name: ScenarioName, readClock: () => number
 		if (control === 'refused-400') return { kind: 'refused', status: 400 };
 		if (control === 'unauthorised') return superseded; // as a 401 does in production: the screen applies nothing
 		if (control === 'client-bug') return { kind: 'client-bug' };
-		// The read's own path decides the fixture: Inventory's stock list, or a Work list (whose offset and view, and so
+		// The read's own path decides the fixture: Inventory's stock list, the equipment schedule's reads, or a Work list (whose offset and view, and so
 		// owners, come from the exact path). A body control with no fixture for that list answers as an unreadable body.
 		try {
 			if (stockPathPattern.test(p.entry.path)) return { kind: 'ok', value: p.parse(stockFixture(control)) };
+			if (isEquipmentPath(p.entry.path)) {
+				if (!isEquipmentControl(control)) return { kind: 'unavailable', wait: null };
+				return { kind: 'ok', value: p.parse(equipmentFixture(control, p.entry.path)) };
+			}
 			if (!isWorkBodyControl(control)) return { kind: 'unavailable', wait: null };
 			return { kind: 'ok', value: p.parse(fixtureBody(control, p.entry.path, p.scope.userId)) };
 		} catch { return { kind: 'unavailable', wait: null }; }

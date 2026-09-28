@@ -53,10 +53,13 @@ function task(n: number, ownerId: string | null) {
 }
 
 /** The resolutions a pending read can be given (harness controls `harness-read-{name}`). The `stock-…` controls answer
- *  only Inventory's read (harness/stock-fixtures.ts); given to a Work list read, they answer as an unreadable body. */
+ *  only Inventory's read (harness/stock-fixtures.ts) and the `equipment-…` controls only the schedule's three reads
+ *  (harness/equipment-fixtures.ts); given to another read, they answer as an unreadable body. */
 export const readControls = [
 	'ok-page', 'ok-last', 'ok-overlap', 'empty', 'unavailable', 'unavailable-wait', 'refused-404', 'refused-400', 'unauthorised', 'client-bug',
-	'stock-uncounted', 'stock-unusual', 'stock-malformed'
+	'stock-uncounted', 'stock-unusual', 'stock-malformed',
+	'equipment-ok', 'equipment-empty', 'equipment-more', 'equipment-partial', 'equipment-conflict-a', 'equipment-conflict-b',
+	'equipment-zone-perth', 'equipment-zone-bogus', 'equipment-malformed'
 ] as const;
 export type ReadControl = (typeof readControls)[number];
 
