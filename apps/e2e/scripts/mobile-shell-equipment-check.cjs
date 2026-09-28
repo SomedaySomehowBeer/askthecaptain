@@ -40,11 +40,13 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  await answer('equipment-ok');
  await expect(bar('Sample overnight brew')).toBeVisible({ timeout: 15_000 }); await expect(bar('Sample clean in place')).toBeVisible();
  await noOverflow('equipment timeline'); await shot('equipment-loaded');
- await atLeast(4); await occupancy(); await answer('equipment-partial');
+ await atLeast(4); const partialPath = (await occupancy()).pathname + (await last()).search; await answer('equipment-partial');
  await expect(page().getByText('Not every reservation is shown for these dates. Gaps are not confirmed free.').first()).toBeVisible({ timeout: 15_000 });
  const partialReads = (await log()).length;
- // A partial cell is never re-read automatically; the next read, if any, is another cell.
- await expect.poll(async () => (await log()).length).toBeGreaterThanOrEqual(partialReads);
+ // A partial cell is never re-read automatically: its exact path never appears again in the log, whatever else is read.
+ await page().waitForTimeout(600);
+ expect((await log()).slice(partialReads).map(e => e.path)).not.toContain(partialPath);
+ expect((await log()).filter(e => e.path === partialPath)).toHaveLength(1);
  await bar('Sample overnight brew').click();
  await expect(eq('panel')).toContainText('Sample overnight brew'); await expect(eq('panel')).toContainText('Sample fermenter');
  await eq('panel-close').click(); await expect(eq('panel')).toHaveCount(0);
