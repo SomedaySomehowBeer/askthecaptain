@@ -1,8 +1,7 @@
 # Mobile equipment schedule, read-only (M-equipment slice 1)
 
-Status: **adopted by the reviewed amendment #211, 27 September 2026. Slice E-1 (pure data modules) is implemented
-and cross-reviewed on 28 September 2026 in #212; slice E-2 (hooks, screen, harness, browser checks) is
-not started.** Claude B authored the contract from Claude A's API/web audit. Root and A independently reviewed it;
+Status: **adopted by the reviewed amendment #211, 27 September 2026. Slice E-1 (pure data modules) merged in #212 and
+slice E-2 (hooks, screen, harness fixtures, browser checks) in #213, both on 28 September 2026.** Claude B authored the contract from Claude A's API/web audit. Root and A independently reviewed it;
 B reviewed root's corrections and status updates. Outcome: **allocate resources**, by seeing, on the phone, when shared equipment is booked
 across equipment and days.
 
@@ -307,7 +306,7 @@ reservations when read".
 - These waits never touch the `/v1/me` wait.
 - A 401 ends the session, as elsewhere.
 - Scope binding and inert rules are exactly as for Inventory and Work.
-- **Resuming a stopped queue.** Try again on a failed cell (or "Try again for the cells shown") is enabled only once
+- **Resuming a stopped queue.** Try again on a failed cell (or "Try again for the dates shown") is enabled only once
   any screen-wide wait has ended. It re-reads only that cell or those cells. The queue resumes planning unread cells only after one of them succeeds. A conflict stop is lifted only by Refresh;
   a 403/404 stop also requires Refresh after the runner's membership check.
 
@@ -444,6 +443,8 @@ Root's ruling: pages are loaded **explicitly**, not all fetched on mount, and th
 | Cell stale(previous, failure) | Last bars, "May be out of date. Captain couldn't read these dates again.", gaps hatched, Try again as for failed. |
 | Terminal marker (payload evicted) | Hatched over the whole span with the state's wording. No bars, no blank time. |
 | Scope changed (inert) | "Loading the schedule…". Nothing from the old scope is shown or sent. |
+| Later catalogue page failed | Columns already loaded stay, labelled "Couldn't load more equipment. The columns shown aren't the whole list." with that page's own Try again. (Status edit, E-2.) |
+| Archived equipment | Legend line: "Archived equipment isn't shown, including its bookings from the last month." (Status edit, E-2; wording for §4.3's "the legend or a notice says so".) |
 
 ## 6. Proof, kept separate
 

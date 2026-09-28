@@ -607,3 +607,112 @@ export function stockRowLabel(row: StockRowView): string {
 	const reorder = stockReorderText(row);
 	return [row.name, stockCountText(row), ...(reorder === null ? [] : [reorder]), ...(row.below ? [stockCopy.below] : [])].join(', ');
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Equipment schedule.
+
+/** The read-only equipment schedule (docs/plans/expo-mobile-equipment-read-2026-09.md §5). Only a fully read period may
+ *  leave time blank, and only as "no confirmed reservations when it was read"; every other state is hatched and named
+ *  here. Nothing says a time is free or available. No fixed wording contains a digit: numbers come only from the data
+ *  (times, setup and cleanup minutes). */
+export const equipmentCopy = {
+	heading: 'Equipment schedule',
+	subtitle: 'Bookings for shared equipment',
+	loading: 'Loading the schedule…',
+	zoneUnsupported: "Times can't be shown in the business time zone on this device. Open the schedule on the website.",
+	zoneChanged: 'The business time zone changed. Refresh to see the schedule.',
+	emptyTitle: 'No equipment is listed yet.',
+	emptyBody: 'Equipment is added on the Captain website.',
+	access: "Captain couldn't read this organisation's equipment. If your access has changed, Captain will show it the next time it checks.",
+	failedFirst: "Couldn't load the schedule.",
+	failedRefresh: "Couldn't refresh. The schedule may be out of date.",
+	refresh: 'Refresh',
+	tryAgain: 'Try again',
+	tryAgainShown: 'Try again for the dates shown',
+	busy: 'Loading…',
+	moreLoading: 'Loading more equipment…',
+	pacing: 'Captain is pacing its reads. Try again in a moment.',
+	checkingAccess: 'Captain is checking your access.',
+	stoppedRefresh: 'Captain stopped reading after a problem. Refresh to read the schedule again.',
+	tryAgainFirst: 'Try again first, or Refresh.',
+	more: 'More equipment',
+	moreNotLoaded: 'More equipment not loaded yet',
+	onWebsite: 'More equipment is listed on the website',
+	listChanged: 'The equipment list changed while loading. Refresh for the current list.',
+	incomplete: "Couldn't load more equipment. The columns shown aren't the whole list.",
+	stale: 'May be out of date',
+	archived: "Archived equipment isn't shown, including its bookings from the last month.",
+	unread: 'Not loaded yet',
+	cellLoading: 'Loading…',
+	cellFailed: "Captain couldn't read these dates.",
+	partial: 'Not every reservation is shown for these dates. Gaps are not confirmed free.',
+	conflict: 'Captain received conflicting details for a reservation. Refresh to read it again.',
+	staleFailed: "May be out of date. Captain couldn't read these dates again.",
+	complete: 'Every confirmed reservation for these dates is shown, as of when it was last read.',
+	hours: 'Hours',
+	days: 'Days',
+	weeks: 'Weeks',
+	scale: 'Time scale',
+	today: 'Today',
+	earlier: 'Earlier dates',
+	later: 'Later dates',
+	previousColumn: 'Previous equipment',
+	nextColumn: 'Next equipment',
+	legend: 'Hatched: not known. Blank time in a fully read period had no confirmed reservations when it was read; availability can change before a reservation is saved.',
+	booking: 'Booking',
+	maintenance: 'Maintenance',
+	panelNote: 'As of the last read. Availability can change before a reservation is saved.',
+	close: 'Close',
+	openWeb: 'Open the schedule on the website',
+	webMissing: "The website's address isn't set in this build."
+} as const;
+
+/** "Times in {zone}", the zone exactly as the organisation stores it. */
+export const equipmentTimesIn = (zone: string): string => `Times in ${zone}`;
+
+/** "Try again after about {time}" for a screen-wide server wait, as on the other lists. */
+export const equipmentWaitText = (wait: Wait, format: FormatAbout = formatAbout): string => `Try again after about ${format(wait.about)}`;
+
+/** The cell states the wording distinguishes (a marker passes the state it stands for). */
+export type EquipmentCellState = 'unread' | 'loading' | 'failed' | 'partial' | 'complete' | 'conflict' | 'stale';
+/** The §5 line for a cell. A failed or stale cell's own failure picks the access wording or "couldn't read"; a stale
+ *  cell without a failure is only "May be out of date". A marker uses its state's line; none of these lines claim bars
+ *  are shown (cells review note 4). */
+export function equipmentCellText(state: EquipmentCellState, failure: 'unavailable' | 'access' | 'unreadable' | null): string {
+	switch (state) {
+	case 'unread': return equipmentCopy.unread;
+	case 'loading': return equipmentCopy.cellLoading;
+	case 'failed': return failure === 'access' ? equipmentCopy.access : equipmentCopy.cellFailed;
+	case 'partial': return equipmentCopy.partial;
+	case 'complete': return equipmentCopy.complete;
+	case 'conflict': return equipmentCopy.conflict;
+	case 'stale': return failure === null ? equipmentCopy.stale : failure === 'access' ? `${equipmentCopy.stale}. ${equipmentCopy.access}` : equipmentCopy.staleFailed;
+	}
+}
+
+type ReservationText = {
+	readonly title: string; readonly kind: 'booking' | 'maintenance';
+	readonly startsAt: string; readonly endsAt: string; readonly occupiedStartsAt: string; readonly occupiedEndsAt: string;
+	readonly setupMinutes: number; readonly cleanupMinutes: number;
+};
+/** A reservation time for people, in the organisation zone with its UTC offset (the screen passes `displayTime`). */
+export type FormatInstant = (instant: string) => string;
+
+export const reservationKindText = (kind: 'booking' | 'maintenance'): string => (kind === 'booking' ? equipmentCopy.booking : equipmentCopy.maintenance);
+/** The actual start–end. */
+export const reservationSpanText = (r: ReservationText, time: FormatInstant): string => `${time(r.startsAt)}–${time(r.endsAt)}`;
+/** "Occupied {start}–{end}": the actual time widened by setup and cleanup. */
+export const reservationOccupiedText = (r: ReservationText, time: FormatInstant): string => `Occupied ${time(r.occupiedStartsAt)}–${time(r.occupiedEndsAt)}`;
+/** "includes setup N min, cleanup M min", naming only the buffers that are set; null when neither is. */
+export function reservationBuffersText(r: ReservationText): string | null {
+	const parts = [...(r.setupMinutes > 0 ? [`setup ${r.setupMinutes} min`] : []), ...(r.cleanupMinutes > 0 ? [`cleanup ${r.cleanupMinutes} min`] : [])];
+	return parts.length ? `includes ${parts.join(', ')}` : null;
+}
+/** A bar's accessibility label (§5 "Labels"): always led by the equipment name, so a bar is never attributed to the
+ *  wrong column; then the title, the kind, the actual time with its offset, and the buffers when present. */
+export function reservationLabel(equipmentName: string, r: ReservationText, time: FormatInstant): string {
+	const buffers = reservationBuffersText(r);
+	return [equipmentName, r.title, reservationKindText(r.kind), reservationSpanText(r, time), ...(buffers === null ? [] : [buffers])].join(' · ');
+}
+/** One column's accessibility summary for the dates shown: its name, then the state's line. */
+export const equipmentColumnSummary = (equipmentName: string, text: string): string => `${equipmentName}: ${text}`;

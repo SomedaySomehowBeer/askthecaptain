@@ -28,8 +28,9 @@ export function readConfig(values: { api: unknown; app: unknown }, development: 
 }
 
 /** The only website paths the app links to. Anything else is not linkable. `/resources/inventory` is where stock is
- *  counted and edited (docs/plans/expo-mobile-inventory-read-2026-09.md, decision D1). */
-export const webPaths = ['/', '/settings', '/work', '/work?owner=all', '/resources/inventory'] as const;
+ *  counted and edited (docs/plans/expo-mobile-inventory-read-2026-09.md, decision D1). `/resources/equipment` is the
+ *  schedule, where reservations are made (docs/plans/expo-mobile-equipment-read-2026-09.md §1 decision 7). */
+export const webPaths = ['/', '/settings', '/work', '/work?owner=all', '/resources/inventory', '/resources/equipment'] as const;
 export type WebPath = (typeof webPaths)[number];
 
 /** The website link for an allow-listed path, built as text from the validated origin and a fixed path; never from
