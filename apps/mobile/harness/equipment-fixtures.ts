@@ -22,6 +22,7 @@ export const isEquipmentPath = (path: string): boolean =>
 	organisationPathPattern.test(path) || equipmentPagePathPattern.test(path) || occupancyPathPattern.test(path);
 
 export const equipmentId = (n: number) => `00000000-0000-4000-c000-${String(n).padStart(12, '0')}`;
+/** Fixed IDs: the conflict pair (900) and the malformed row (999). Ordinary rows use `rowId`. */
 export const reservationId = (n: number) => `00000000-0000-4000-b000-${String(n).padStart(12, '0')}`;
 /** 88 UTF-16 units, inside the API's 100. */
 export const longEquipmentName = 'Sample equipment name '.repeat(4).trimEnd();
@@ -54,42 +55,57 @@ function equipmentPageBody(control: EquipmentControl, offset: number): unknown {
 
 type Row = Record<string, unknown>;
 const iso = (ms: number) => new Date(ms).toISOString();
+/** The synthetic equipment's index (`equipmentId(n)`), or a hash of a real UUID, so IDs differ per equipment. */
+const equipmentIndex = (equipment: string): number => {
+	const own = /^00000000-0000-4000-c000-(\d{12})$/.exec(equipment);
+	if (own) return Number(own[1]);
+	let hash = 7;
+	for (const ch of equipment) hash = (hash * 31 + ch.charCodeAt(0)) % 1_000_000;
+	return 500_000 + hash;
+};
+/** A reservation ID for (equipment, key). The same key from adjacent windows gives the same ID, so a booking spanning a
+ *  chunk boundary is returned identically by both cells and deduplicated, never contradicted (A's review S5). */
+const rowId = (equipment: string, key: number) => `00000000-0000-4000-b${String(equipmentIndex(equipment) % 1000).padStart(3, '0')}-${String(key % 1_000_000_000_000).padStart(12, '0')}`;
 /** One confirmed reservation whose actual time is [start, end) and whose occupied time is widened by its buffers. */
-function reservation(n: number, equipment: string, title: string, kind: 'booking' | 'maintenance', start: number, end: number,
+function reservation(id: string, equipment: string, title: string, kind: 'booking' | 'maintenance', start: number, end: number,
 	setupMinutes: number, cleanupMinutes: number, revision: number): Row {
 	return {
-		id: reservationId(n), equipmentId: equipment, status: 'confirmed', title, kind,
+		id, equipmentId: equipment, status: 'confirmed', title, kind,
 		startsAt: iso(start), endsAt: iso(end), occupiedStartsAt: iso(start - setupMinutes * minute), occupiedEndsAt: iso(end + cleanupMinutes * minute),
 		setupMinutes, cleanupMinutes, revision,
 		projectId: '00000000-0000-4000-d000-000000000001', ownerId: '00000000-0000-4000-d000-000000000002', createdBy: 'Synthetic person', notes: 'Synthetic note must not enter state'
 	};
 }
-/** Occupancy for one equipment and window, echoing the request. Variants:
- *  - `equipment-ok`: complete, with a booking crossing a day boundary (20:00 to 06:00 UTC), a booking crossing the window's
- *    end, and a maintenance with setup and cleanup buffers;
- *  - `equipment-empty`: complete with no rows;
- *  - `equipment-partial`: exactly 200 one-hour rows and `nextOffset: 200`;
- *  - `equipment-conflict-a` / `-b`: the same reservation ID at the same revision with different titles, so the second
- *    read of it (from another cell) contradicts the first;
- *  - `equipment-zone-perth`: a complete answer whose `timezone` differs from the organisation's (zone changed);
- *  - `equipment-more`: complete, empty;
+/** Occupancy for one equipment and window, echoing the request. Every row is placed relative to the window's own length,
+ *  so a short first or last chunk is still a valid answer (A's review S6). Variants:
+ *  - `equipment-ok`: complete, with a booking across the window's end and one across its start (each identical from the
+ *    neighbouring window, so deduplication is exercised), an overnight booking, and a maintenance with buffers;
+ *  - `equipment-empty` / `equipment-more`: complete with no rows;
+ *  - `equipment-partial`: exactly 200 rows spaced over the window and `nextOffset: 200`;
+ *  - `equipment-conflict-a` / `-b`: one fixed reservation ID at the same revision with different titles, so its second
+ *    read (from another cell) contradicts the first;
+ *  - `equipment-zone-perth`: a complete empty answer whose `timezone` differs from the organisation's (zone changed);
  *  - `equipment-malformed`: a row missing its fields. */
 function occupancyBody(control: EquipmentControl, equipment: string, from: string, to: string): unknown {
-	const low = Date.parse(from), high = Date.parse(to);
-	const day = (n: number) => low + n * 24 * hour;
+	const low = Date.parse(from), high = Date.parse(to), length = high - low;
+	const at = (fraction: number) => low + Math.floor(length * fraction / hour) * hour;
 	const body = (coverage: 'complete' | 'partial', reservations: Row[], nextOffset: number | null = null) =>
 		({ from, to, timezone: zoneFor(control), coverage, nextOffset, reservations, requestedBy: 'Synthetic person' });
+	const boundary = (edge: number) => reservation(rowId(equipment, Math.floor(edge / hour)), equipment, 'Sample long conditioning', 'booking', edge - 6 * hour, edge + 6 * hour, 0, 0, 2);
 	switch (control) {
 		case 'equipment-malformed': return body('complete', [{ id: reservationId(999) }]);
-		case 'equipment-empty': case 'equipment-more': return body('complete', []);
-		case 'equipment-partial': return body('partial', Array.from({ length: 200 }, (_, i) =>
-			reservation(200 + i, equipment, `Sample slot ${i + 1}`, 'booking', low + i * 2 * hour, low + (i * 2 + 1) * hour, 0, 0, 1)), 200);
-		case 'equipment-conflict-a': return body('complete', [reservation(900, equipment, 'Sample booking Alpha', 'booking', day(2) + 9 * hour, day(2) + 12 * hour, 0, 0, 1)]);
-		case 'equipment-conflict-b': return body('complete', [reservation(900, equipment, 'Sample booking Beta', 'booking', day(2) + 9 * hour, day(2) + 12 * hour, 0, 0, 1)]);
+		case 'equipment-empty': case 'equipment-more': case 'equipment-zone-perth': case 'equipment-zone-bogus': return body('complete', []);
+		case 'equipment-partial': {
+			const step = Math.max(minute, Math.floor(length / 200 / minute) * minute);
+			return body('partial', Array.from({ length: 200 }, (_, i) =>
+				reservation(rowId(equipment, 200 + i), equipment, `Sample slot ${i + 1}`, 'booking', low + i * step, low + i * step + Math.max(minute, step / 2), 0, 0, 1)), 200);
+		}
+		case 'equipment-conflict-a': return body('complete', [reservation(reservationId(900), equipment, 'Sample booking Alpha', 'booking', at(0.4), at(0.4) + 3 * hour, 0, 0, 1)]);
+		case 'equipment-conflict-b': return body('complete', [reservation(reservationId(900), equipment, 'Sample booking Beta', 'booking', at(0.4), at(0.4) + 3 * hour, 0, 0, 1)]);
 		default: return body('complete', [
-			reservation(1, equipment, 'Sample overnight brew', 'booking', day(1) + 20 * hour, day(2) + 6 * hour, 0, 0, 1),
-			reservation(2, equipment, 'Sample long conditioning', 'booking', high - 6 * hour, high + 30 * hour, 0, 0, 2),
-			reservation(3, equipment, 'Sample clean in place', 'maintenance', day(3) + 8 * hour, day(3) + 10 * hour, 30, 60, 1)
+			boundary(low), boundary(high),
+			reservation(rowId(equipment, 1), equipment, 'Sample overnight brew', 'booking', at(0.3), Math.min(at(0.3) + 10 * hour, high - hour), 0, 0, 1),
+			reservation(rowId(equipment, 3), equipment, 'Sample clean in place', 'maintenance', at(0.6), Math.min(at(0.6) + 2 * hour, high - hour), 30, 60, 1)
 		]);
 	}
 }
