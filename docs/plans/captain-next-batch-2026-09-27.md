@@ -297,6 +297,6 @@ flag changes; nothing reads equipment on a device or in a browser yet.
 Codex exhausted its usage allowance on 27 September and is unavailable until 4 October; Claude Fable acts as root
 (git, serial validation, integration, PRs, CI, docs) in the meantime and reassigned the two state modules Codex had
 owned. Validation is recorded in [the E-1 evidence](../validation/mobile-equipment-data-2026-09-28/README.md). E-2
-(hooks, `/resources` screen, copy, `webPaths`, harness fixtures and browser checks) followed in E2_PR after two design
+(hooks, `/resources` screen, copy, `webPaths`, harness fixtures and browser checks) followed in #213 after two design
 reviews, an independent code review and browser evidence; see [the E-2 evidence](../validation/mobile-equipment-ui-2026-09-28/README.md).
 Native sign-in stays off; no device, simulator or signed-build evidence exists.

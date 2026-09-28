@@ -33,7 +33,7 @@ focuses and settles whichever measurement arrives last and re-issues an unconfir
   disables Try again until exactly its deadline, More with the list-changed notice, the detail panel, the scales, the
   fixed website destination and stale-scope suppression, with no page errors, console errors, outside-origin requests
   or horizontal overflow. A [390 px screenshot](390-equipment-loaded.png) records the loaded synthetic screen.
-- CI: PR_PLACEHOLDER.
+- CI: #213; the mobile job (typecheck, tests, four exports, boundary scans, Chromium shell suite) is recorded on the PR.
 
 No server source, dependency, schema or API changes, so no real-Postgres run is claimed. Native sign-in stays off, so
 real accounts cannot reach the screen on a device. Node's and Chromium's `Intl` are not Hermes; the device zone
