@@ -103,7 +103,9 @@ function readable(cell: Cell | undefined): boolean {
 	return !cell || (cell.state === 'stale' && cell.request === null && cell.failure === null);
 }
 /** The single next read, in the wanted order, or null. The hook calls it only when the view settles, and only sends
- *  what the coordinator admits (`scheduleReadBlock`): planning never bypasses a flight, wait, budget or stop. */
+ *  what the coordinator admits (`scheduleReadBlock`): planning never bypasses a flight, wait, budget or stop. It
+ *  doesn't check stops itself; after a zone change or a conflict it may still propose a cell, and the coordinator's
+ *  `zone` or `conflict` stop is what refuses it. */
 export function plan(occupancy: Occupancy, want: readonly Slot[]): Slot | null {
 	for (const slot of want) if (readable(occupancy.cells[cellKey(slot)])) return bare(slot);
 	return null;
@@ -144,7 +146,8 @@ function failure(outcome: ReadOutcome<OccupancyAnswer>): Failure {
 }
 /** Applies one answer to the cell still waiting on exactly `request`; any other answer is dropped unchanged. Call it
  *  only when the coordinator's `finishScheduleRead` returned `apply: true`.
- *  - A read becomes complete or partial, unless it contradicts a retained row (`conflict`).
+ *  - A read becomes complete or partial, unless it contradicts a retained row or carries an already contradicted ID
+ *    (`conflict`, and so does every other cell holding a contradicted ID).
  *  - A zone change applies nothing: every retained payload becomes stale, and the queue must stop (`zone`).
  *  - A failure fails the cell, or keeps a stale cell's rows with the failure.
  *  - Superseded applies nothing; the cell returns to its state before the read (the tabs reset follows). */
@@ -162,36 +165,46 @@ export function finish(occupancy: Occupancy, slot: Slot, request: RequestId, out
 	return { occupancy: put(occupancy, key, failed), applied: true, stop: null };
 }
 
-/** The kept fields that must agree for one reservation ID at one revision, plus the equipment it was read under. */
-function agrees(a: Reservation, aEquipment: string, b: Reservation, bEquipment: string): boolean {
-	return aEquipment === bEquipment && a.title === b.title && a.kind === b.kind && a.startsAt === b.startsAt && a.endsAt === b.endsAt &&
+/** Whether two copies of one reservation ID contradict each other:
+ *  - read under different equipment, at any revision (the API never moves a reservation between equipment:
+ *    `apps/api/src/equipment/service.ts` updates `where id = … and equipment_id = …`);
+ *  - or at the same revision with any kept field different. */
+function contradicts(a: Reservation, aEquipment: string, b: Reservation, bEquipment: string): boolean {
+	if (aEquipment !== bEquipment) return true;
+	return a.revision === b.revision && !(a.title === b.title && a.kind === b.kind && a.startsAt === b.startsAt && a.endsAt === b.endsAt &&
 		a.occupiedStartsAt === b.occupiedStartsAt && a.occupiedEndsAt === b.occupiedEndsAt &&
-		a.setupMinutes === b.setupMinutes && a.cleanupMinutes === b.cleanupMinutes;
+		a.setupMinutes === b.setupMinutes && a.cleanupMinutes === b.cleanupMinutes);
 }
-/** A read, checked against every retained payload (markers hold no rows). The same ID at the same revision with any
- *  kept field different is never resolved silently: every cell holding a disagreeing copy becomes `conflict`, and the
- *  ID is drawn from no cell until Refresh. Different revisions are not a conflict: the highest is drawn. */
+/** A read, checked against every retained payload (markers hold no rows). A contradiction is never resolved silently:
+ *  its ID joins `conflicted` and is drawn from no cell until Refresh. Then **every** cell whose rows hold any
+ *  contradicted ID becomes `conflict`, including this read and cells holding it at another revision, so no cell can
+ *  show free time under a reservation that isn't drawn. Different revisions under one equipment are not a
+ *  contradiction: the highest is drawn. */
 function applyRead(occupancy: Occupancy, key: string, slot: Slot, read: OccupancyRead): Finished {
 	const incoming = new Map(read.reservations.map((r) => [r.id, r]));
-	const hits = new Set<string>(), conflicted = new Set(occupancy.conflicted);
+	const conflicted = new Set(occupancy.conflicted);
 	for (const [other, cell] of Object.entries(occupancy.cells)) {
 		if (other === key) continue;
 		for (const row of rowsOf(cell) ?? []) {
 			const mine = incoming.get(row.id);
-			if (mine && mine.revision === row.revision && !agrees(mine, slot.equipmentId, row, cell.equipmentId)) {
-				hits.add(other);
-				conflicted.add(row.id);
-			}
+			if (mine && contradicts(mine, slot.equipmentId, row, cell.equipmentId)) conflicted.add(row.id);
 		}
 	}
-	if (!hits.size) return { occupancy: put(occupancy, key, { ...slot, state: read.coverage, reservations: read.reservations }), applied: true, stop: null };
-	const cells = { ...occupancy.cells, [key]: { ...slot, state: 'conflict', reservations: read.reservations } as Cell };
-	for (const other of hits) cells[other] = { ...bare(cells[other]!), state: 'conflict', reservations: rowsOf(cells[other]) ?? [] };
-	return { occupancy: { cells, conflicted: [...conflicted] }, applied: true, stop: 'conflict' };
+	const cells: Record<string, Cell> = { ...occupancy.cells, [key]: { ...slot, state: read.coverage, reservations: read.reservations } };
+	let stop: 'conflict' | null = null;
+	for (const [other, cell] of Object.entries(cells)) {
+		const rows = rowsOf(cell);
+		if (!rows || cell.state === 'conflict' || !rows.some((r) => conflicted.has(r.id))) continue;
+		cells[other] = { ...bare(cell), state: 'conflict', reservations: rows };
+		stop = 'conflict';
+	}
+	return { occupancy: { cells, conflicted: [...conflicted] }, applied: true, stop };
 }
 
 /** Every retained payload becomes stale (rows from a conflict cell lose their contradicted reservations), and any
- *  outstanding request is forgotten. `clear` also drops failed cells and markers (Refresh); a zone change keeps them. */
+ *  outstanding request is forgotten. `clear` also drops failed cells and markers (Refresh); a zone change keeps them.
+ *  After a zone change these stale cells are plannable again in the same generation. Only the coordinator's `zone`
+ *  stop (from `finish`'s `stop`) keeps them from being sent until Refresh; the hook must never send past a stop. */
 function staleAll(occupancy: Occupancy, clear: boolean): Occupancy {
 	const contradicted = new Set(occupancy.conflicted), cells: Record<string, Cell> = {};
 	for (const [key, cell] of Object.entries(occupancy.cells)) {

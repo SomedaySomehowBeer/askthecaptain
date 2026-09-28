@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-	catalogueAnswer, catalogueView, createCatalogue, finishCatalogueRead, planCatalogueRead, refreshCatalogue, startCatalogueRead,
+	abandonCatalogueRead, catalogueAnswer, catalogueReplaced, catalogueView, createCatalogue, finishCatalogueRead, planCatalogueRead,
+	refreshCatalogue, startCatalogueRead,
 	type CatalogueAnswer, type CatalogueIntent, type CatalogueRequest, type CatalogueState
 } from './catalogue.ts';
 import { parseEquipmentPage, type EquipmentPage } from './data.ts';
@@ -275,7 +276,101 @@ test('transitions never mutate the state they are given', () => {
 	const { state: loading, request } = begin(pages, 'more');
 	finishCatalogueRead(loading, request, ok(page(200, [1, 900])));
 	refreshCatalogue(loading);
+	abandonCatalogueRead(loading, request);
 	catalogueView(loading);
 	assert.equal(JSON.stringify(pages), snapshot);
 	assert.equal(pages.pending, null);
+	assert.equal(loading.pending, request);
+});
+
+test('an answer the gate drops (a re-anchor while it was in flight) is abandoned, and the same read is planned again (K1)', () => {
+	const pages = twoPages();
+	const { state: loading, request } = begin(pages, 'more');
+	const abandoned = abandonCatalogueRead(loading, request);
+	assert.equal(abandoned.pending, null);
+	assert.equal(abandoned.failure, null, 'abandoning is not a failure');
+	assert.deepEqual(ids(abandoned), ids(pages), 'the loaded pages are kept, as §4.2 re-anchoring requires');
+	assert.equal(catalogueView(abandoned).more, 'offered');
+	const again = planCatalogueRead(abandoned, 'more')!;
+	assert.equal(again.offset, 200, 'the same page');
+	assert.ok(again.id > request.id, 'under a new identity');
+	assert.equal(finishCatalogueRead(abandoned, request, ok(page(200, [900]))), abandoned, 'the abandoned answer never applies');
+	assert.equal(abandonCatalogueRead(abandoned, request), abandoned, 'abandoning twice changes nothing');
+	assert.equal(abandonCatalogueRead(loading, { ...request, id: 99 }), loading, 'only the exact outstanding request is abandoned');
+	assert.equal(read(abandoned, 'more', ok(page(200, [900]))).columns.length, 201);
+
+	// The mount's page 0 is owed again, so the screen never stays on "Loading the schedule…".
+	const { state: first, request: firstRequest } = begin(createCatalogue(), 'first');
+	const owed = abandonCatalogueRead(first, firstRequest);
+	assert.equal(owed.owed, 'first');
+	assert.equal(catalogueView(owed).status, 'loading');
+	assert.equal(planCatalogueRead(owed, 'first')?.offset, 0);
+
+	// Try again keeps its failure, and a Refresh keeps owing page 0.
+	const failed = read(pages, 'more', down);
+	const { state: retrying, request: retry } = begin(failed, 'retry');
+	const retryAgain = abandonCatalogueRead(retrying, retry);
+	assert.deepEqual(retryAgain.failure, failed.failure);
+	assert.equal(catalogueView(retryAgain).tryAgain, 'more');
+	assert.equal(planCatalogueRead(retryAgain, 'retry')?.offset, 200);
+	const { state: refreshing, request: page0 } = begin(refreshCatalogue(pages), 'refresh');
+	const stillOwed = abandonCatalogueRead(refreshing, page0);
+	assert.equal(stillOwed.owed, 'refresh');
+	assert.equal(catalogueView(stillOwed).stale, true);
+	assert.equal(planCatalogueRead(stillOwed, 'refresh')?.offset, 0);
+});
+
+test('Try again of a failed Refresh replaces the list exactly as the Refresh would have', () => {
+	const first = read(createCatalogue(), 'first', ok(page(0, range(1, 100), true)));
+	const changed = read(first, 'more', ok(page(100, [100, ...range(101, 99)], true)));
+	assert.equal(changed.changed, true);
+	const failed = read(refreshCatalogue(changed), 'refresh', down);
+	const { state: retrying, request } = begin(failed, 'retry');
+	assert.equal(request.offset, 0);
+	const replaced = finishCatalogueRead(retrying, request, ok(page(0, range(500, 100), true)));
+	assert.equal(replaced.list, 'current');
+	assert.deepEqual(ids(replaced), range(500, 100).map(uuid), 'only the new page 0');
+	assert.equal(replaced.nextOffset, 100, 'from the new page 0, not the old list');
+	assert.equal(replaced.changed, false);
+	assert.equal(replaced.failure, null);
+	assert.equal(replaced.owed, null);
+	assert.deepEqual(catalogueView(replaced), {
+		status: 'listed', columns: replaced.columns, stale: false, more: 'offered', notices: ['more-not-loaded'], tryAgain: null, access: false,
+	});
+	assert.equal(catalogueReplaced(retrying, replaced), true, 'the cells hand-off sees a retry replacement too');
+});
+
+test('catalogueReplaced is true only when a page-0 answer replaced the list', () => {
+	const { state: mounting, request } = begin(createCatalogue(), 'first');
+	const mounted = finishCatalogueRead(mounting, request, ok(page(0, range(1, 100), true)));
+	assert.equal(catalogueReplaced(mounting, mounted), true);
+	const { state: paging, request: more } = begin(mounted, 'more');
+	assert.equal(catalogueReplaced(paging, finishCatalogueRead(paging, more, ok(page(100, [900])))), false, 'More only appends');
+	const { state: refreshing, request: page0 } = begin(refreshCatalogue(mounted), 'refresh');
+	assert.equal(catalogueReplaced(refreshing, finishCatalogueRead(refreshing, page0, down)), false, 'a failed Refresh keeps the columns');
+	assert.equal(catalogueReplaced(refreshing, finishCatalogueRead(refreshing, more, ok(page(0, [1])))), false, 'a dropped answer replaces nothing');
+	assert.equal(catalogueReplaced(refreshing, finishCatalogueRead(refreshing, page0, ok(page(0, [1])))), true);
+});
+
+test('a refused later page is cleared by Refresh, which reads and replaces the list', () => {
+	const denied = read(twoPages(), 'more', refused);
+	assert.equal(denied.failure?.reason, 'access');
+	const refreshed = refreshCatalogue(denied);
+	assert.equal(refreshed.failure, null);
+	assert.equal(refreshed.owed, 'refresh');
+	noneBut(refreshed, 'refresh');
+	const replaced = read(refreshed, 'refresh', ok(page(0, [7, 8])));
+	assert.deepEqual(ids(replaced), [7, 8].map(uuid));
+	assert.equal(replaced.list, 'current');
+	assert.equal(catalogueView(replaced).access, false);
+	assert.equal(catalogueView(replaced).stale, false);
+});
+
+test('a 429 with a server wait is only unavailable to the catalogue; the wait belongs to the gate', () => {
+	const answer = catalogueAnswer({ kind: 'unavailable', wait: { until: 30_000, about: 'later' } });
+	assert.ok(answer);
+	const failed = read(twoPages(), 'more', answer);
+	assert.deepEqual(failed.failure, { offset: 200, reason: 'unavailable' });
+	assert.equal(catalogueView(failed).tryAgain, 'more', 'the gate, not the catalogue, disables it until the wait ends');
+	assert.equal(planCatalogueRead(failed, 'retry')?.offset, 200);
 });

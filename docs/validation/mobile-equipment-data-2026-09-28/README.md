@@ -12,15 +12,17 @@ API, schema, flag or export changes. Nothing reads equipment on a device or in a
 Claude A wrote the paths, parsers and catalogue state; Claude B wrote the zone, range, geometry and cell/queue modules;
 root wrote the read gate. Every module was independently reviewed by the other Claude; root's gate was reviewed by
 both. Review corrected the gate twice (Refresh and re-anchor while a read is in flight; conflict and zone stops
-limited to occupancy reads) and added the test gaps the reviewers listed. Root's other edits to the agents' files were
+limited to occupancy reads), the catalogue once (an in-flight page dropped by a re-anchor is planned again instead of
+leaving More dead until Refresh) and the cells once (every cell holding a contradicted reservation is `conflict`, so no
+time under an undrawn reservation can render as free), and added the test gaps the reviewers listed. Root's other edits to the agents' files were
 two TypeScript repairs with no behaviour change (a cast in a parser test, a narrowing in `cells.finish`).
 
 - Frozen install passed (`/tmp/captain-business-chat/mobile-equipment-install-r1.log`, 27 September).
 - Mobile typecheck and client-boundary scan passed on the final tree.
-- Final tests passed: 376 total, 356 pure/source plus 20 boundary, zero skipped
-  (`/tmp/captain-business-chat/mobile-equipment-check-tests-r2.log`).
-  Coordinator 14, catalogue 16, cells 14, parsers/paths and the three ports account for the rest of the 67 new tests
-  over the 289 at #210 (plus the byte-budget scripts).
+- Final tests passed after the review fixes: 382 total, 362 pure/source plus 20 boundary, zero skipped
+  (`/tmp/captain-business-chat/mobile-equipment-check-tests-r3.log`; r1 and r2 were the pre-review runs at 320 and 356).
+  Coordinator 14, catalogue 21 and cells 15 tests; the parsers, paths and the three ports account for the rest of the
+  73 new tests over the 289 at #210.
 - Exports and the browser suite were not rerun locally for this UI-free slice on the shared, memory-tight machine;
   the mobile CI job runs the exports and browser suite on the PR head and is the export evidence for this slice.
 - CI: pending until the PR is opened; recorded below when known.

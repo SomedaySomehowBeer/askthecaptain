@@ -111,6 +111,23 @@ export function finishCatalogueRead(state: CatalogueState, request: CatalogueReq
 		changed: state.changed || fresh.length < page.equipment.length };
 }
 
+/** The read gate dropped the answer to the exact outstanding request without applying it (`apply: false` for a
+ *  previous gate generation, for example a re-anchor while it was in flight). The request is forgotten with no failure
+ *  and `owed` as it was, so the same read (More, page 0, Try again or Refresh's page 0) is planned again. Any other
+ *  request returns `state` itself. Not for `superseded`: the screen is recreated then. */
+export function abandonCatalogueRead(state: CatalogueState, request: CatalogueRequest): CatalogueState {
+	const pending = state.pending;
+	if (pending === null || pending.id !== request.id || pending.generation !== request.generation) return state;
+	return { ...state, pending: null };
+}
+
+/** Whether `after = finishCatalogueRead(before, …)` replaced the list from page 0 (on mount, Refresh, or Try again of a
+ *  failed first page or Refresh). The caller then drops cells for equipment no longer listed (`cells.keepEquipment`). */
+export function catalogueReplaced(before: CatalogueState, after: CatalogueState): boolean {
+	return after !== before && before.pending !== null && before.pending.offset === 0 && after.list === 'current'
+		&& after.columns !== before.columns;
+}
+
 /** Refresh: a new generation that owes page 0. Columns already shown stay, labelled stale, until page 0 succeeds; the
  *  outstanding request and any failure are forgotten, so an answer still in flight applies nothing. */
 export function refreshCatalogue(state: CatalogueState): CatalogueState {

@@ -156,15 +156,53 @@ test('the same reservation at the same revision with different details is never 
 	const elsewhere = load(occupancy, slotOf(b, c0), ok([{ ...x }]));
 	assert.equal(elsewhere.stop, 'conflict', 'one reservation reported under two equipment is contradictory');
 	assert.deepEqual(ids(elsewhere.occupancy, b), []);
+	assert.equal(stateOf(cellOf(elsewhere.occupancy, s0)), 'conflict');
+	const moved = load(occupancy, slotOf(b, c0), ok([{ ...x, revision: 2 }]));
+	assert.equal(moved.stop, 'conflict', 'under two equipment, a different revision is contradictory too');
+	assert.deepEqual([ids(moved.occupancy, a), ids(moved.occupancy, b)], [[[r2, r2, 1]], []], 'and it is drawn in neither column');
+	assert.deepEqual([s0, slotOf(b, c0)].map((s) => stateOf(cellOf(moved.occupancy, s))), ['conflict', 'conflict']);
 
 	const later = load(conflict.occupancy, slotOf(a, c2), ok([{ ...x, revision: 3, title: 'Newest' }]));
 	assert.deepEqual(ids(later.occupancy, a), [[r2, r2, 1]], 'a contradicted ID stays undrawn until Refresh');
+	assert.equal(later.stop, 'conflict', 'a read carrying a contradicted ID stops the queue too');
 
 	const refreshed = refresh(conflict.occupancy);
 	assert.deepEqual(refreshed.conflicted, [], 'only Refresh clears the conflict');
 	assert.equal(stateOf(cellOf(refreshed, s0)), 'stale');
 	assert.deepEqual(ids(refreshed, a), [[r2, r2, 1]], 'stale rows never include a contradicted copy');
 	assert.deepEqual(plan(refreshed, [s0, s1]), s0, 'and Refresh re-reads them');
+});
+
+test('no cell holding a contradicted reservation can show free time under it (A\'s B1)', () => {
+	const s0 = slotOf(a, c0), s1 = slotOf(a, c1), s2 = slotOf(a, c2);
+	// Path 1: s0 and s1 contradict r1 at revision 1; s2 then reads r1 at a new revision, inside s2's own time.
+	const x = booking(r1, '2026-10-25T20:00:00.000Z', '2026-10-26T04:00:00.000Z');
+	let occupancy = load(emptyOccupancy, s0, ok([x])).occupancy;
+	occupancy = load(occupancy, s1, ok([{ ...x, title: 'Changed' }])).occupancy;
+	assert.deepEqual(occupancy.conflicted, [r1]);
+	const newer = booking(r1, '2026-12-01T00:00:00.000Z', '2026-12-02T00:00:00.000Z', 3);
+	const later = load(occupancy, s2, ok([newer, booking(r2, '2026-11-25T00:00:00.000Z', '2026-11-25T01:00:00.000Z')]));
+	assert.equal(later.stop, 'conflict');
+	assert.equal(stateOf(cellOf(later.occupancy, s2)), 'conflict');
+	assert.notEqual(stateBetween(later.occupancy, a, chunks, Date.parse(newer.occupiedStartsAt), Date.parse(newer.occupiedEndsAt)), 'complete');
+	assert.deepEqual(ids(later.occupancy, a), [[r2, r2, 1]], 'its other reservations are still drawn');
+
+	// Path 2: s0 has r1 at revision 1, s1 has it at revision 2; s2 contradicts s0's revision 1. s1 must not stay complete.
+	const spanning = booking(r1, '2026-10-20T00:00:00.000Z', '2026-11-30T00:00:00.000Z');
+	occupancy = load(emptyOccupancy, s0, ok([spanning])).occupancy;
+	occupancy = load(occupancy, s1, ok([{ ...spanning, revision: 2 }])).occupancy;
+	assert.equal(stateOf(cellOf(occupancy, s1)), 'complete', 'different revisions alone are not a conflict');
+	const contradicted = load(occupancy, s2, ok([{ ...spanning, title: 'Other' }]));
+	assert.equal(contradicted.stop, 'conflict');
+	assert.deepEqual([s0, s1, s2].map((s) => stateOf(cellOf(contradicted.occupancy, s))), ['conflict', 'conflict', 'conflict']);
+	assert.notEqual(stateBetween(contradicted.occupancy, a, chunks, Date.parse(spanning.occupiedStartsAt), Date.parse(spanning.occupiedEndsAt)), 'complete');
+	assert.deepEqual(ids(contradicted.occupancy, a), []);
+
+	// A stale cell holding a contradicted ID becomes conflict too, and Refresh still clears it.
+	const staled = refresh(occupancy);
+	const onStale = load(staled, s2, ok([{ ...spanning, title: 'Other' }]));
+	assert.equal(stateOf(cellOf(onStale.occupancy, s0)), 'conflict');
+	assert.deepEqual(refresh(onStale.occupancy).conflicted, []);
 });
 
 test('a zone change applies nothing: every payload becomes stale and the queue must stop', () => {
