@@ -1,11 +1,13 @@
 # Mobile equipment schedule, read-only (M-equipment slice 1)
 
-Status: **adopted by this reviewed amendment, 27 September 2026. No equipment source implemented.**
-Claude B authored the contract from Claude A’s API/web audit. Root and A independently reviewed it;
-B reviewed root’s corrections and status updates. Implementation begins after the adopting PR merges. Outcome: **allocate resources**, by seeing, on the phone, when shared equipment is booked
+Status: **adopted by the reviewed amendment #211, 27 September 2026. Slice E-1 (pure data modules) is implemented
+and cross-reviewed on 28 September 2026 in the E-1 pull request; slice E-2 (hooks, screen, harness, browser checks) is
+not started.** Claude B authored the contract from Claude A's API/web audit. Root and A independently reviewed it;
+B reviewed root's corrections and status updates. Outcome: **allocate resources**, by seeing, on the phone, when shared equipment is booked
 across equipment and days.
 
-This is a plan only: no code, dependency, API, schema, flag, deployment or native enablement.
+E-1 adds no dependency, API, schema, flag, deployment or native enablement, and no screen change: nothing on a device
+or in a browser reads equipment yet.
 
 ## 1. Authority and root decisions
 
@@ -482,11 +484,21 @@ native gesture proof.
 
 | Slice | Owner | Work | Review |
 |---|---|---|---|
-| E-1, in parallel | Claude A | Fixed paths and strict parsers (§4.1 organisation, §4.3), with their tests | Claude B |
-| E-1, in parallel | Claude B | Pure `zone.ts`, `range.ts` and `geometry.ts` ports (§4.1, §4.2), with their tests | Claude A |
-| E-1, in parallel | Codex (root) | Bounded pure cell and queue state (§4.4, §4.5), with its tests, plus integration validation | Claude A and Claude B |
+| E-1, in parallel | Claude A | Fixed paths and strict parsers (§4.1 organisation, §4.3), with their tests; the catalogue list state (§4.5, `catalogue.ts`) | Claude B |
+| E-1, in parallel | Claude B | Pure `zone.ts`, `range.ts` and `geometry.ts` ports (§4.1, §4.2), with their tests; the cell and queue state (§4.4, `cells.ts`) | Claude A |
+| E-1, in parallel | Root | The screen-wide read gate (§4.4 one flight, rate log, waits, stops: `coordinator.ts`), with its tests, plus integration validation | Claude A and Claude B |
 | E-2, after the E-1 interfaces are reviewed | Claude B | Hooks, screen, detail panel, copy, and the `webPaths` config | Claude A, independently |
 | E-2 | Root | Harness fixtures and controls, browser checks, validation records and git | — |
+
+Root for E-1 was Codex until 27 September 2026 (paths, parsers, ports and the gate were written under it); from
+28 September Claude Fable acted as root because Codex's usage allowance was exhausted until 4 October. Root then
+reassigned the cell/queue state to Claude B and the catalogue state to Claude A, each independently reviewed by the
+other. **E-1 review outcomes:** the gate was corrected after both reviews (Refresh and re-anchor are allowed while a
+read is in flight, with the in-flight answer dropped when it lands; conflict and zone stops block occupancy reads
+only). Root accepted A's `refreshCatalogue` press-time transition (§4.5 "drops any More answer still in flight" cannot
+wait for the page-0 read to start while the gate is busy) and B's conflict handling (every cell holding a disagreeing
+copy is `conflict`; a conflict cell draws its uncontradicted rows with all its time striped, and the contradicted ID is
+drawn from no cell until Refresh).
 
 ## 8. Acceptance criteria
 

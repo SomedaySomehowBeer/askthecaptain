@@ -1,6 +1,6 @@
 # Captain: code retirement and native foundation
 
-Status: retirement complete; mobile reads in progress, 27 September 2026. The retirement contract (#180) and native
+Status: retirement complete; mobile reads in progress, 28 September 2026. The retirement contract (#180) and native
 foundation contract (#183) are adopted after reciprocal review. Outcomes: **manage shared work**, **allocate resources**, and
 **discuss work**. The [plan](../plan.md) remains authoritative.
 
@@ -285,3 +285,17 @@ the approved mockups; both Claude agents reviewed the final corrections and stat
 Adoption does not implement equipment reads. Pinch, native performance/accessibility and signed-device
 acceptance remain open, and native sign-in stays off. No API, schema, dependency or infrastructure change
 is part of this read-only increment.
+
+### Equipment timeline, slice E-1 (28 September 2026)
+
+The adopted [equipment contract](expo-mobile-equipment-read-2026-09.md) (#211) is being implemented in two PRs. E-1 is
+the pure data layer only: fixed paths and strict parsers (Claude A), the zone gate, range and geometry ports (Claude B),
+the cell/queue state (Claude B), the catalogue list state (Claude A) and the screen-wide read gate (root), each with
+Node tests and each cross-reviewed by the other Claude. No screen, hook, harness fixture, dependency, API, schema or
+flag changes; nothing reads equipment on a device or in a browser yet.
+
+Codex exhausted its usage allowance on 27 September and is unavailable until 4 October; Claude Fable acts as root
+(git, serial validation, integration, PRs, CI, docs) in the meantime and reassigned the two state modules Codex had
+owned. Validation is recorded in [the E-1 evidence](../validation/mobile-equipment-data-2026-09-28/README.md). E-2
+(hooks, `/resources` screen, copy, `webPaths`, harness fixtures and browser checks) follows in its own reviewed PR.
+Native sign-in stays off; no device, simulator or signed-build evidence exists.
