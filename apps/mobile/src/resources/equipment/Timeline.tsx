@@ -304,9 +304,11 @@ function EdgeButton({ testID, label, control, onPress }: { testID: string; label
 /** The end of the names row (§4.5): More, its own Try again, "Loading more equipment…", or the website notice. */
 function MoreSlot({ more, web, onPress }: { more: ScheduleScreen['more']; web: string | null; onPress: (intent: Intent) => void }) {
 	if (more === null) return null;
-	if (more.kind === 'loading') return <Text style={styles.nameText}>{equipmentCopy.moreLoading}</Text>;
-	// The API ceiling: the words and the link together, never the words alone (review S3).
-	if (more.kind === 'website') return <View style={styles.ceiling}><Text style={styles.nameText}>{equipmentCopy.onWebsite}</Text><WebLink href={web} testID="equipment-web-more" /></View>;
+	if (more.kind !== 'offered' && more.kind !== 'try-again') {
+		if (more.kind === 'loading') return <Text style={styles.nameText}>{equipmentCopy.moreLoading}</Text>;
+		// The API ceiling: the words and the link together, never the words alone (review S3).
+		return <View style={styles.ceiling}><Text style={styles.nameText}>{equipmentCopy.onWebsite}</Text><WebLink href={web} testID="equipment-web-more" /></View>;
+	}
 	const { control, intent } = more;
 	return (
 		<Pressable testID={`equipment-more-${more.kind}`} role="button" aria-disabled={control.disabled} disabled={control.disabled}

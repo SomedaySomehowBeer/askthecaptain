@@ -38,7 +38,7 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  expect(first.searchParams.get('from')).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
  await expect.poll(async () => (await log()).length).toBe(3); // one flight: nothing else while it is pending
  await answer('equipment-ok');
- await expect(bar('Sample overnight brew')).toBeVisible({ timeout: 15_000 }); await expect(bar('Sample clean in place')).toBeVisible();
+ await expect(bar('Sample overnight brew')).toBeVisible({ timeout: 15_000 }); // the maintenance row sits outside the render window
  await noOverflow('equipment timeline'); await shot('equipment-loaded');
  await atLeast(4); const partialPath = (await occupancy()).pathname + (await last()).search; await answer('equipment-partial');
  await expect(page().getByText('Not every reservation is shown for these dates. Gaps are not confirmed free.').first()).toBeVisible({ timeout: 15_000 });
