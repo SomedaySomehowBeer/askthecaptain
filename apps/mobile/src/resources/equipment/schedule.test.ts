@@ -6,7 +6,7 @@ import { catalogueView } from './catalogue.ts';
 import { cellOf, slotOf, stateOf } from './cells.ts';
 import { DAY, labelFormatsOk, scheduleRange } from './range.ts';
 import {
-	beginRead, columnsAt, createSchedule, press, pressEdge, pressRefresh, readRequest, receive, retryableSlots, scheduleScreen, settle, settledFrom,
+	beginRead, columnsAt, createSchedule, panelRow, press, pressEdge, pressRefresh, readRequest, receive, retryableSlots, scheduleScreen, settle, settledFrom,
 	wakeDelay, wayOutAll, type InFlight, type ScheduleState, type SettledView
 } from './schedule.ts';
 
@@ -277,6 +277,28 @@ test('contradictory details for one reservation stop occupancy with the conflict
 	assert.equal(run.state.gate.stop, 'conflict');
 	assert.equal(scheduleScreen(run.state, run.now, true).problem, equipmentCopy.conflict);
 	assert.equal(wayOutAll(run.state), 'refresh');
+});
+
+test('the detail panel shows only a reservation still drawn for its equipment, and closes once it is contradicted (review S2)', () => {
+	const rid = '00000000-0000-4000-8000-00000000beef';
+	const fx: Fixture = {
+		zone: sydney, pages: { 0: { ids: [1, 2], more: false } },
+		rows: (read) => read.slot.equipmentId !== eq(1) ? [] : [{
+			id: rid, equipmentId: eq(1), title: read.slot.from === iso(anchorAt) ? 'Brew day' : 'Clean down', kind: 'booking', status: 'confirmed',
+			startsAt: iso(anchorAt - 2 * hour), endsAt: iso(anchorAt + 2 * hour), setupMinutes: 0, cleanupMinutes: 0,
+			occupiedStartsAt: iso(anchorAt - 2 * hour), occupiedEndsAt: iso(anchorAt + 2 * hour),
+			projectId: null, taskId: null, ownerId: null, createdBy: userId, revision: 1, createdAt: stamp, updatedAt: stamp
+		}]
+	};
+	// One column shown (and the next partly): the chunk before the anchor is read first, then the anchor's chunk.
+	let s = settle(mount(fx), view({ width: 125, low: anchorAt - 3 * hour, high: anchorAt + 3 * hour }));
+	s = send(s, 0, served(fx)).state;
+	assert.equal(panelRow(s, eq(1), rid)?.title, 'Clean down', 'shown while drawn');
+	assert.equal(panelRow(s, eq(2), rid), null, 'never under another equipment');
+	assert.equal(panelRow(s, eq(1), '00000000-0000-4000-8000-000000000404'), null);
+	s = drain(s, fx, 3_000).state;
+	assert.equal(s.gate.stop, 'conflict');
+	assert.equal(panelRow(s, eq(1), rid), null, 'a contradicted reservation closes the panel');
 });
 
 test('a re-anchor abandons an in-flight catalogue answer, so More is offered again (K1)', () => {

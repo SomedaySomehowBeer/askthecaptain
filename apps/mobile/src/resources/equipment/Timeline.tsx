@@ -28,8 +28,8 @@ const centreNow: Focus = () => ({ at: Date.now(), where: 'centre' });
  *  Occupancy is planned only at a settle: the idle timer after scrolling stops, the native end events, and an explicit
  *  settle after every programmatic scroll (arrows, Today, zoom, re-anchor, the first scroll to now, and the clamp after
  *  a list replacement). The geometry sent holds no equipment IDs. */
-export function Timeline({ state, screen, zone, frame, header, footer, onSettle, onScale, onEdge, onToday, onPress, onOpen }: {
-	state: ScheduleState; screen: ScheduleScreen; zone: string; frame: ScreenListFrame; header: ReactNode; footer: ReactNode;
+export function Timeline({ state, screen, zone, web, frame, header, footer, onSettle, onScale, onEdge, onToday, onPress, onOpen }: {
+	state: ScheduleState; screen: ScheduleScreen; zone: string; web: string | null; frame: ScreenListFrame; header: ReactNode; footer: ReactNode;
 	onSettle: (view: SettledView) => void; onScale: (scale: Scale) => void;
 	onEdge: (direction: 'earlier' | 'later') => ScheduleRange | null; onToday: () => boolean;
 	onPress: (intent: Intent) => void; onOpen: (equipment: Equipment, reservation: Reservation) => void;
@@ -207,7 +207,7 @@ export function Timeline({ state, screen, zone, frame, header, footer, onSettle,
 								<Text numberOfLines={2} style={styles.nameText}>{equipment.name}</Text>
 							</View>
 						))}
-						<View style={[styles.name, { width: columnWidth }]}><MoreSlot more={screen.more} onPress={onPress} /></View>
+						<View style={[styles.name, { width: columnWidth }]}><MoreSlot more={screen.more} web={web} onPress={onPress} /></View>
 					</View>
 				</ScrollView>
 			</View>
@@ -245,7 +245,10 @@ export function Timeline({ state, screen, zone, frame, header, footer, onSettle,
 	);
 }
 
-/** One rendered column: hatching over every chunk that isn't fully read, and its bars, inside the render window. */
+/** One rendered column, inside the render window. The column's own base is the "not known" tint (review S1), so time
+ *  not rendered yet (render lag, a fast fling, a column outside the rendered span) can only look hatched. A fully read
+ *  chunk is painted over with an opaque page-colour block, the only place blank time appears; every other chunk gets
+ *  stripes and its words. Bars are drawn last, over both. */
 function Column({ state, equipment, chunkIndexes, window, start, ppd, width, bodyHeight, time, onOpen }: {
 	state: ScheduleState; equipment: Equipment; chunkIndexes: readonly number[]; window: TimeWindow; start: number; ppd: number;
 	width: number; bodyHeight: number; time: (instant: string) => string; onOpen: (equipment: Equipment, reservation: Reservation) => void;
@@ -256,10 +259,10 @@ function Column({ state, equipment, chunkIndexes, window, start, ppd, width, bod
 		<>
 			{chunkIndexes.map((i) => {
 				const chunk = range.chunks[i]!, cell = cellOf(state.occupancy, slotOf(equipment.id, chunk)), cellState = stateOf(cell);
-				if (cellState === 'complete') return null;
 				const low = Math.max(Date.parse(chunk.from), window.low), high = Math.min(Date.parse(chunk.to), window.high);
 				if (!(high > low)) return null;
 				const top = pixelsAt(low, start, ppd), height = pixelsAt(high, start, ppd) - top;
+				if (cellState === 'complete') return <View key={chunk.from} testID="equipment-read" style={[styles.read, { top, height }]} pointerEvents="none" />;
 				const text = equipmentCellText(cellState, failureOf(cell)?.reason ?? null);
 				return <Hatch key={chunk.from} top={top} height={height} width={width} text={text} marker={cell?.state === 'marker'} />;
 			})}
@@ -299,10 +302,11 @@ function EdgeButton({ testID, label, control, onPress }: { testID: string; label
 }
 
 /** The end of the names row (§4.5): More, its own Try again, "Loading more equipment…", or the website notice. */
-function MoreSlot({ more, onPress }: { more: ScheduleScreen['more']; onPress: (intent: Intent) => void }) {
+function MoreSlot({ more, web, onPress }: { more: ScheduleScreen['more']; web: string | null; onPress: (intent: Intent) => void }) {
 	if (more === null) return null;
-	if (more.kind !== 'offered' && more.kind !== 'try-again')
-		return <Text style={styles.nameText}>{more.kind === 'loading' ? equipmentCopy.moreLoading : equipmentCopy.onWebsite}</Text>;
+	if (more.kind === 'loading') return <Text style={styles.nameText}>{equipmentCopy.moreLoading}</Text>;
+	// The API ceiling: the words and the link together, never the words alone (review S3).
+	if (more.kind === 'website') return <View style={styles.ceiling}><Text style={styles.nameText}>{equipmentCopy.onWebsite}</Text><WebLink href={web} testID="equipment-web-more" /></View>;
 	const { control, intent } = more;
 	return (
 		<Pressable testID={`equipment-more-${more.kind}`} role="button" aria-disabled={control.disabled} disabled={control.disabled}
@@ -314,9 +318,9 @@ function MoreSlot({ more, onPress }: { more: ScheduleScreen['more']; onPress: (i
 }
 
 /** Opens the website schedule (`/resources/equipment`), when this build has its address. */
-export function WebLink({ href }: { href: string | null }) {
+export function WebLink({ href, testID = 'equipment-web' }: { href: string | null; testID?: string }) {
 	if (href === null) return <Text style={styles.reason}>{equipmentCopy.webMissing}</Text>;
-	return <Button testID="equipment-web" label={equipmentCopy.openWeb} onPress={() => { void Linking.openURL(href); }} />;
+	return <Button testID={testID} label={equipmentCopy.openWeb} onPress={() => { void Linking.openURL(href); }} />;
 }
 
 const hatchTint = 'rgba(95, 107, 98, 0.10)', stripeTint = 'rgba(95, 107, 98, 0.22)';
@@ -340,8 +344,10 @@ const styles = StyleSheet.create({
 	bodyRow: { flexDirection: 'row' },
 	axis: { width: axisWidth, position: 'relative' },
 	tick: { position: 'absolute', left: 0, width: axisWidth - 4, fontSize: 10, color: colors.muted },
-	column: { position: 'absolute', top: 0, borderLeftWidth: 1, borderColor: colors.rowLine, overflow: 'hidden' },
-	hatch: { position: 'absolute', left: 0, right: 0, overflow: 'hidden', backgroundColor: hatchTint },
+	// The base of every column is "not known"; only a painted, fully read block is page colour (review S1).
+	column: { position: 'absolute', top: 0, borderLeftWidth: 1, borderColor: colors.rowLine, overflow: 'hidden', backgroundColor: hatchTint },
+	read: { position: 'absolute', left: 0, right: 0, backgroundColor: colors.page },
+	hatch: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
 	stripe: { position: 'absolute', height: 2, backgroundColor: stripeTint, transform: [{ rotate: '-30deg' }] },
 	hatchText: { margin: 4, fontSize: 11, lineHeight: 14, color: colors.muted },
 	bar: { position: 'absolute', left: 3, right: 3, borderRadius: 6, borderWidth: 1, paddingHorizontal: 4, overflow: 'hidden' },
@@ -350,5 +356,6 @@ const styles = StyleSheet.create({
 	barText: { fontSize: 12, lineHeight: 16, color: colors.heading },
 	more: { minHeight: 44, justifyContent: 'center' },
 	moreText: { fontSize: 13, fontWeight: '600', color: colors.sea },
-	reason: { fontSize: 12, lineHeight: 16, color: colors.muted }
+	reason: { fontSize: 12, lineHeight: 16, color: colors.muted },
+	ceiling: { gap: 6 }
 });

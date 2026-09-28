@@ -20,14 +20,15 @@ import {
 } from './catalogue.ts';
 import {
 	bound, canTryAgain, cellKey, cellOf, emptyOccupancy, finish, keepEquipment, plan, reanchor as reanchorCells, refresh as refreshCells,
-	slotOf, start, tryAgain, wanted, wayOut, type Centre, type Occupancy, type Slot
+	reservationsBetween, slotOf, start, tryAgain, wanted, wayOut, type Centre, type Occupancy, type Slot
 } from './cells.ts';
 import {
 	beginScheduleRead, createScheduleCoordinator, finishScheduleRead, restartSchedule, scheduleReadBlock, scheduleReadLimit, stopSchedule,
 	type ScheduleCoordinator, type ScheduleReadKind, type ScheduleTicket
 } from './coordinator.ts';
 import {
-	equipmentPageParser, occupancyParser, organisationZoneParser, type EquipmentPage, type OccupancyAnswer, type OrganisationZone
+	equipmentPageParser, occupancyParser, organisationZoneParser, type EquipmentPage, type OccupancyAnswer, type OrganisationZone,
+	type Reservation
 } from './data.ts';
 import { clampScroll, defaultScale, instantAt, pixelsAt, scales, type Scale } from './geometry.ts';
 import { chunksBetween, edgeAnchor, inRange, labelFormatsOk, scheduleRange, type ScheduleRange } from './range.ts';
@@ -398,6 +399,14 @@ export function pressToday(state: ScheduleState, now: number, wall: Date): { sta
 }
 
 // ---- What the screen shows ---------------------------------------------------------------------------------------
+
+/** The row a detail panel may show for a tapped reservation: the copy still drawn for that equipment (at its highest
+ *  retained revision), or null once it is no longer returned or has been contradicted. The panel closes on null, so
+ *  it never keeps showing a reservation Captain has refused to choose (review S2). */
+export function panelRow(state: ScheduleState, equipmentId: string, reservationId: string): Reservation | null {
+	if (state.occupancy.conflicted.includes(reservationId)) return null;
+	return reservationsBetween(state.occupancy, equipmentId, -8.64e15, 8.64e15).find((r) => r.id === reservationId) ?? null;
+}
 
 /** Milliseconds until a screen-wide wait or the rolling budget stops blocking, for a timer that only wakes the pump
  *  and re-renders; null when neither blocks. Exactly at the deadline the gate admits the read. */
