@@ -147,7 +147,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				await tab('Resources').click();
 				await expect(heading('Equipment schedule')).toBeVisible();
 				check(at(page) === '/resources', `${width}px: Resources opens at /resources`);
-				await expect(page.getByText("The equipment schedule isn't shown in the app yet", { exact: true })).toBeVisible();
+				await expect(page.getByTestId('equipment-loading')).toHaveText('Loading the schedule…');
 				await button('Resources views').click();
 				await expect(page.getByRole('heading', { name: /^libraries$/i })).toBeVisible();
 				await unavailable('Files & assets. Not available yet');
@@ -379,6 +379,7 @@ const fictional = ['Summer lager', 'Packaging', 'Can artwork', 'Trade pack', 'Br
 				await require('./mobile-shell-all-work-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
 				await require('./mobile-shell-stock-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
 				await require('./mobile-shell-revocation-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
+				await require('./mobile-shell-equipment-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
 
 				check(errors.length === 0, `${width}px: no page errors (${errors.length})`);
 				check(consoleErrors.length === 0, `${width}px: no console errors (${consoleErrors.length})`);
