@@ -98,14 +98,15 @@ function occupancyBody(control: EquipmentControl, equipment: string, from: strin
 		case 'equipment-partial': {
 			const step = Math.max(minute, Math.floor(length / 200 / minute) * minute);
 			return body('partial', Array.from({ length: 200 }, (_, i) =>
-				reservation(rowId(equipment, 200 + i), equipment, `Sample slot ${i + 1}`, 'booking', low + i * step, low + i * step + Math.max(minute, step / 2), 0, 0, 1)), 200);
+				reservation(rowId(equipment, Math.floor((low + i * step) / minute)), equipment, `Sample slot ${i + 1}`, 'booking', low + i * step, low + i * step + Math.max(minute, step / 2), 0, 0, 1)), 200);
 		}
 		case 'equipment-conflict-a': return body('complete', [reservation(reservationId(900), equipment, 'Sample booking Alpha', 'booking', at(0.4), at(0.4) + 3 * hour, 0, 0, 1)]);
 		case 'equipment-conflict-b': return body('complete', [reservation(reservationId(900), equipment, 'Sample booking Beta', 'booking', at(0.4), at(0.4) + 3 * hour, 0, 0, 1)]);
 		default: return body('complete', [
 			boundary(low), boundary(high),
-			reservation(rowId(equipment, 1), equipment, 'Sample overnight brew', 'booking', at(0.3), Math.min(at(0.3) + 10 * hour, high - hour), 0, 0, 1),
-			reservation(rowId(equipment, 3), equipment, 'Sample clean in place', 'maintenance', at(0.6), Math.min(at(0.6) + 2 * hour, high - hour), 30, 60, 1)
+			// Keys from each row's own start hour, so a row inside one window never shares an ID with another window's row.
+			reservation(rowId(equipment, Math.floor(at(0.3) / hour)), equipment, 'Sample overnight brew', 'booking', at(0.3), Math.min(at(0.3) + 10 * hour, high - hour), 0, 0, 1),
+			reservation(rowId(equipment, Math.floor(at(0.6) / hour)), equipment, 'Sample clean in place', 'maintenance', at(0.6), Math.min(at(0.6) + 2 * hour, high - hour), 30, 60, 1)
 		]);
 	}
 }

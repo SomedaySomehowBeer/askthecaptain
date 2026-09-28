@@ -5,6 +5,8 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  const page = () => getPage();
  const id = name => page().locator(`[data-testid="${name}"]:visible`);
  const eq = name => id(`equipment-${name}`);
+ const bars = () => page().locator('[data-testid^="equipment-bar-"]:visible');
+ const bar = title => bars().filter({ hasText: title }).first();
  const log = async () => JSON.parse(await page().getByTestId('work-read-log').textContent());
  const count = async n => expect.poll(async () => (await log()).length, { timeout: 15_000 }).toBe(n);
  const atLeast = async n => expect.poll(async () => (await log()).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(n);
@@ -36,14 +38,14 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  expect(first.searchParams.get('from')).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
  await expect.poll(async () => (await log()).length).toBe(3); // one flight: nothing else while it is pending
  await answer('equipment-ok');
- await expect(eq('bar-00000000-0000-4000-b000-000000000001').first()).toBeVisible({ timeout: 15_000 });
+ await expect(bar('Sample overnight brew')).toBeVisible({ timeout: 15_000 }); await expect(bar('Sample clean in place')).toBeVisible();
  await noOverflow('equipment timeline'); await shot('equipment-loaded');
  await atLeast(4); await occupancy(); await answer('equipment-partial');
  await expect(page().getByText('Not every reservation is shown for these dates. Gaps are not confirmed free.').first()).toBeVisible({ timeout: 15_000 });
  const partialReads = (await log()).length;
  // A partial cell is never re-read automatically; the next read, if any, is another cell.
  await expect.poll(async () => (await log()).length).toBeGreaterThanOrEqual(partialReads);
- await eq('bar-00000000-0000-4000-b000-000000000001').first().click();
+ await bar('Sample overnight brew').click();
  await expect(eq('panel')).toContainText('Sample overnight brew'); await expect(eq('panel')).toContainText('Sample fermenter');
  await eq('panel-close').click(); await expect(eq('panel')).toHaveCount(0);
  await eq('scale-hours').click(); await expect(eq('hatch').first()).toBeVisible(); await noOverflow('equipment at Hours');
@@ -69,7 +71,7 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  await expect(page().getByText("Captain couldn't read these dates.").first()).toBeVisible();
  const failedReads = (await log()).length; await page().waitForTimeout(600); expect((await log()).length).toBe(failedReads);
  await eq('cells-try-again').click(); await count(failedReads + 1); await occupancy(); await answer('equipment-ok');
- await expect(eq('bar-00000000-0000-4000-b000-000000000001').first()).toBeVisible({ timeout: 15_000 });
+ await expect(bar('Sample overnight brew')).toBeVisible({ timeout: 15_000 });
 
  // No-timeline states: empty, an unsupported zone, access refused, a failed bootstrap with Try again, and a wait.
  await start(); await bootstrap('equipment-ok', 'equipment-empty');
