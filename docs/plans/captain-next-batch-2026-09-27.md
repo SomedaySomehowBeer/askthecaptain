@@ -288,7 +288,7 @@ is part of this read-only increment.
 
 ### Equipment timeline, slice E-1 (28 September 2026)
 
-The adopted [equipment contract](expo-mobile-equipment-read-2026-09.md) (#211) is being implemented in two PRs. E-1 is
+The adopted [equipment contract](expo-mobile-equipment-read-2026-09.md) (#211) is being implemented in two PRs. E-1 (#212) is
 the pure data layer only: fixed paths and strict parsers (Claude A), the zone gate, range and geometry ports (Claude B),
 the cell/queue state (Claude B), the catalogue list state (Claude A) and the screen-wide read gate (root), each with
 Node tests and each cross-reviewed by the other Claude. No screen, hook, harness fixture, dependency, API, schema or

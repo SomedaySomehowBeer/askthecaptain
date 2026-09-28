@@ -25,7 +25,7 @@ two TypeScript repairs with no behaviour change (a cast in a parser test, a narr
   73 new tests over the 289 at #210.
 - Exports and the browser suite were not rerun locally for this UI-free slice on the shared, memory-tight machine;
   the mobile CI job runs the exports and browser suite on the PR head and is the export evidence for this slice.
-- CI: pending until the PR is opened; recorded below when known.
+- CI: #212; the mobile job (typecheck, tests, four exports, boundary scans, Chromium shell suite) is recorded on the PR.
 
 No server source, dependency, schema or API changes, so no real-Postgres run is claimed. Native sign-in stays off.
 All `Intl` behaviour proven here is Node's; the Hermes device gate in contract §6 remains open, as do the pinch,
