@@ -15,7 +15,7 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  const orgPath = /^\/v1\/organisations\/[0-9a-f-]+$/, pagePath = /^\/v1\/organisations\/[0-9a-f-]+\/equipment$/, occPath = /^\/v1\/organisations\/[0-9a-f-]+\/equipment\/[0-9a-f-]+\/reservations$/;
  const start = async (freeze = false) => {
   await freshPage();
-  if (freeze) { await page().clock.install(); await page().clock.pauseAt(await page().evaluate(() => Date.now())); }
+  if (freeze) { await page().clock.install(); await page().clock.pauseAt(Date.now() + 1_000); } // a moment ahead: pausing exactly at now can land in the fake clock's past
   await scenario('ready', '/resources');
   await expect(page().getByRole('heading', { name: 'Equipment schedule', exact: true })).toBeVisible();
   await expect(eq('loading')).toHaveText('Loading the schedule…'); await count(1);
@@ -72,8 +72,9 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  await expect(eq('cells-try-again')).toBeVisible({ timeout: 15_000 });
  await expect(page().getByText("Captain couldn't read these dates.").first()).toBeVisible();
  const failedReads = (await log()).length; await page().waitForTimeout(600); expect((await log()).length).toBe(failedReads);
+ // Pressing a header control scrolls the timeline to its top (the header is above the sticky row), so Today brings the retried dates back.
  await eq('cells-try-again').click(); await count(failedReads + 1); await occupancy(); await answer('equipment-ok');
- await expect(bar('Sample overnight brew')).toBeVisible({ timeout: 15_000 });
+ await eq('today').click(); await expect(bar('Sample overnight brew')).toBeVisible({ timeout: 15_000 });
 
  // No-timeline states: empty, an unsupported zone, access refused, a failed bootstrap with Try again, and a wait.
  await start(); await bootstrap('equipment-ok', 'equipment-empty');
@@ -94,7 +95,10 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  // More equipment: a full page 0 offers More; page 1 repeats two IDs, so the list-changed notice appears.
  await start(); await bootstrap('equipment-ok', 'equipment-more');
  await expect(eq('notice').filter({ hasText: 'More equipment not loaded yet' })).toBeVisible();
- await eq('more-offered').click(); await expect.poll(async () => (await log()).at(-1).path).toMatch(/offset=100$/);
+ // More is a queued press: it waits for the one read in flight (an occupancy read planned at settle) and then goes first.
+ await eq('more-offered').click();
+ for (let i = 0; i < 4 && !/offset=100$/.test((await log()).at(-1).path); i++) { await occupancy(); await answer('equipment-empty'); await page().waitForTimeout(300); }
+ await expect.poll(async () => (await log()).at(-1).path).toMatch(/offset=100$/);
  const moreReads = (await log()).length; await answer('equipment-more');
  await expect(eq('notice').filter({ hasText: 'The equipment list changed while loading.' })).toBeVisible({ timeout: 15_000 });
  expect((await log()).length).toBeGreaterThanOrEqual(moreReads);
