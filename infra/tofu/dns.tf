@@ -25,7 +25,7 @@ resource "cloudflare_dns_record" "app" {
   zone_id = var.cloudflare_zone_id
   name    = "app"
   type    = "CNAME"
-  content = "askthecaptain-web-staging.fly.dev"
+  content = "askthecaptain-api-staging.fly.dev"
   proxied = false
   ttl     = 300
 }
@@ -34,7 +34,7 @@ resource "cloudflare_dns_record" "apex" {
   zone_id = var.cloudflare_zone_id
   name    = "@"
   type    = "CNAME"
-  content = "askthecaptain-web-staging.fly.dev"
+  content = "askthecaptain-api-staging.fly.dev"
   proxied = false
   ttl     = 300
 }
@@ -43,7 +43,7 @@ resource "cloudflare_dns_record" "www" {
   zone_id = var.cloudflare_zone_id
   name    = "www"
   type    = "CNAME"
-  content = "askthecaptain-web-staging.fly.dev"
+  content = "askthecaptain-api-staging.fly.dev"
   proxied = false
   ttl     = 300
 }
