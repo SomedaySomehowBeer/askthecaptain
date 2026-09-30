@@ -3,7 +3,7 @@
 Status: root contract, 30 September 2026, for increment R2 of the
 [chat-first rebuild](chat-first-rebuild-2026-09.md). Outcome: **discuss work** — every record has one
 thread, the app is one list of threads, and a person can start a topic by writing its first message.
-Implements D27, D28, the schema half of D7 (projects are tags) and the migration half of D25 (decision 3 of the rebuild plan). It does not
+Implements D27, D28, D7 (projects are tags) and the migration half of D25 (decision 3 of the rebuild plan). It does not
 implement versions (R3), the classifier or agents (R4), pending or approval cards (R5), files (R7)
 or worksheets (R8); it leaves room for them without carrying anything for them.
 
@@ -14,13 +14,14 @@ silent, the earlier rule does not carry over.
 
 ## 1. Settled by the plan
 
-- Every record — task, project, booking, stock item — has one thread (D27). A conversation with no
+- Every record — task, booking, stock item — has one thread (D27). A conversation with no
   record is a topic. Private threads between people stay participant-only (D25).
-- **A project is a tag** with an owner, dates, a thread and a planning task (D7). Tasks and bookings
-  have no project parent; a thread carries any number of tags, and the thread is the unit that is
-  grouped (proposal, "Projects are tags"). R2 makes this true in the schema, because the list is
-  grouped by tag and keeping a `projects` table for one more increment would mean a second
-  migration over the thread tables.
+- **A project is a tag** (D7, amended in this PR): a name, and optionally an owner and dates.
+  Nothing else is declared; a tag has no kind, no thread of its own and no planning task. Tasks
+  and bookings have no project parent; a thread carries any number of tags, and the thread is the
+  unit that is grouped. R2 makes this true in the schema, because the list is grouped by tag and
+  keeping a `projects` table for one more increment would mean a second migration over the
+  thread tables.
 - A record thread is visible to whoever can see the record. Today every active member sees every
   record, because the record policies are member-wide; the thread policy reads the record's
   visibility through one function, so narrowing a record later narrows its thread with no thread
@@ -42,11 +43,11 @@ silent, the earlier rule does not carry over.
 In R2:
 
 - Migration `0046_threads.sql`: projects become tags; tags move onto threads; the thread tables,
-  their policies and guards; backfilled record threads for existing tasks, project tags, bookings
-  and stock items; the private conversations copied across; and the 0042/0043 tables, `projects`,
+  their policies and guards; backfilled record threads for existing tasks, bookings and stock
+  items; the private conversations copied across; and the 0042/0043 tables, `projects`,
   `task_tags` and every `project_id` column dropped in the same transaction.
-- API: `/v1/organisations/:id/threads…` replacing `…/conversations…`; `/tags` gaining project
-  tags and losing nothing; task, series and booking payloads losing `projectId`; the list with
+- API: `/v1/organisations/:id/threads…` replacing `…/conversations…`; `/tags` gaining owner and
+  dates; task, series and booking payloads losing `projectId`; the list with
   filters and tag groups; thread detail with its card; messages, sends, edits, deletes, pins, stars, read
   positions and the change feed, as before; topic creation from a first message; private creation
   and membership, as before.
@@ -61,8 +62,6 @@ Not in R2, and nothing here pre-builds it:
 - Files and People as populated filters (R7; companies and contacts get threads then). The two
   filter chips are listed and disabled with an honest hint.
 - Summaries, notifications, Web Push for messages, native transport. Polling as before.
-- The planning task's step template and the weekly project summary (R6). R2 creates the planning
-  task as a plain task with no steps.
 - Moving a message between threads, thread archive, search.
 
 ## 3. Tables
@@ -73,17 +72,18 @@ Grants are select/insert/update only where a row is mutable; nothing is deletabl
 except stars and reads. The two migration preconditions of 0042 (owner bypasses RLS; the runtime
 role is safe) are repeated.
 
-**`tags`** (amended). A tag is either an area (`kind = 'area'`: Production, Marketing, …) or a
-project (`kind = 'project'`). Columns added: `kind`, `owner_id` (membership), `starts_on date`,
-`ends_on date`, `archived_at`, `revision` with the `work_revision_bump` trigger, and
-`created_by`. Dates and owner are allowed only on a project tag (a check constraint). The unique
-name per organisation stays. The `projects` table is dropped; its `description` moves to the tag
-as `body text not null default ''`; `stages`, the brief and proposal columns and `system_kind` go
-(0038 already removed the last system project).
+**`tags`** (amended). Columns added: `owner_id` (membership, nullable), `starts_on date` and
+`ends_on date` (nullable, `ends_on >= starts_on`), `archived_at`, `revision` with the
+`work_revision_bump` trigger, and `created_by`. That is the whole difference between Production
+and Summer lager launch: the second has an owner and dates. The unique name per organisation
+stays. The `projects` table is dropped; its `description`, `stages`, brief and proposal columns
+and `system_kind` are not carried (0038 already removed the last system project; the release gate
+in §8 reports how many projects hold a description, so the owner can copy any that matter into
+a thread first).
 
 **`thread_tags`** — `(thread_id, tag_id, attached_by, attached_at)` on **every** thread. This is
 the one place a tag is attached to anything: a task's tags are its thread's tags, a booking's
-project is a project tag on its thread, a topic's tags are its own. `task_tags` is dropped after
+project is a tag on its thread, a topic's tags are its own. `task_tags` is dropped after
 its rows move. Deleting a tag removes its attachments; archiving keeps them.
 
 **`task_series_tags`** — `(series_id, tag_id)`: a series has no thread, and each occurrence it
@@ -97,7 +97,7 @@ thread). Replaces `task_series.project_id`.
 |---|---|
 | `id uuid pk` | Client UUID for topic and private threads (create retry, as before); server uuidv7 for record threads |
 | `kind text` | `record`, `topic`, `private` |
-| `task_id`, `tag_id`, `reservation_id`, `stock_item_id` | Exactly one non-null when `kind = 'record'`, all null otherwise; composite foreign keys with `on delete cascade`; a unique index per column, so a record has at most one thread. `tag_id` is a project tag's thread; an area tag has none (the guard checks `kind = 'project'`) |
+| `task_id`, `reservation_id`, `stock_item_id` | Exactly one non-null when `kind = 'record'`, all null otherwise; composite foreign keys with `on delete cascade`; a unique index per column, so a record has at most one thread |
 | `title text` | Topic and private threads only, 1–80 trimmed characters; null for record threads, whose title is the record's at read time |
 | `create_fingerprint bytea` | Topic and private threads; as before, over `{ title, participantIds, firstMessageId }` |
 | `created_by uuid` | Attribution only |
@@ -105,8 +105,8 @@ thread). Replaces `task_series.project_id`.
 | `created_at` | |
 
 A task step (a task with `parent_id`) has no thread of its own; it is part of its task's thread.
-An `after insert` trigger on `tasks` (top-level only), `tags` (`kind = 'project'` only),
-`equipment_reservations` and `stock_items` inserts the record thread in the same transaction, so the invariant "every record has
+An `after insert` trigger on `tasks` (top-level only), `equipment_reservations` and
+`stock_items` inserts the record thread in the same transaction, so the invariant "every record has
 one thread" holds in the database and no service can forget it. The trigger is security invoker;
 the thread insert policy allows a member to insert a record thread whose record is visible.
 
@@ -114,7 +114,7 @@ the thread insert policy allows a member to insert a record thread whose record 
 transitions as `conversation_participants` in 0042/0043, including `read_start_seq`.
 
 **`thread_links`** — a private or topic thread may point at one or more records (`task_id`,
-`tag_id`, `reservation_id`, `stock_item_id`, exactly one per row). It is shown as a chip on the
+`reservation_id`, `stock_item_id`, exactly one per row). It is shown as a chip on the
 thread's row and card and never makes the thread visible from the record. Record threads have no
 rows here. Existing `conversation_links` are copied across.
 
@@ -167,11 +167,8 @@ constraint name, and the change feed. Two differences:
 - **Tags** are added and removed with `POST/DELETE …/threads/:threadId/tags/:tagId`, each with
   `expectedRevision`, on any thread. The task and booking write routes lose `projectId` and gain
   nothing: tagging is a thread write. A task's `tags` in its payload are read through its thread.
-- **Project tags.** `POST …/tags { name, kind: 'project', ownerId?, startsOn?, endsOn?, body? }`
-  creates the tag, its thread (by trigger) and its planning task in one transaction: a task
-  titled "Plan <name>", owned by the project's owner, due on `startsOn` when given, tagged with
-  the project. `PATCH …/tags/:tagId` edits name, owner, dates, body and archives, with
-  `expectedRevision`. Creating an area tag is unchanged. `/v1/organisations/:id/projects…` and
+- **Tags.** `POST …/tags { name, ownerId?, startsOn?, endsOn? }` and `PATCH …/tags/:tagId`
+  (name, owner, dates, archive) with `expectedRevision`. `/v1/organisations/:id/projects…` and
   `…/projects/:projectId/reservations` are retired; the latter becomes
   `…/tags/:tagId/reservations` with the same query and shape.
 - **Bookings.** A reservation's create and update inputs replace `projectId` with `tagIds`
@@ -199,7 +196,7 @@ constraint name, and the change feed. Two differences:
 - `groups` is the heading summary over the **whole** filtered set, not the page: one entry per
   tag that any visible thread carries, plus `{ key: 'none', label: 'Other' }` for untagged
   threads, at most 100 entries by thread count, each with its thread count, its `needsYou` count
-  and, for a project tag, `owner` and `startsOn`/`endsOn` for the heading. The client groups the loaded rows under these headings; a thread with several
+  and the tag's `owner` and `startsOn`/`endsOn` when it has them, for the heading. The client groups the loaded rows under these headings; a thread with several
   tags appears under each. Headings' counts are exact because they come from the same snapshot.
 - `unread` is capped at 51, as before. A person's read position on a record or topic thread with
   no read row is 0: the whole thread is unread until they open it, which is the correct state for a
@@ -214,13 +211,12 @@ readPosition, unread, starred, createdAt }, card, tags, links, participants, pin
 | Record | Title | Status | The two facts |
 |---|---|---|---|
 | task | title | `status` | owner name, due date |
-| project tag | name | active / archived | owner name, dates when set, otherwise open task count |
 | booking | reservation title | `status` (`kind` maintenance shows as status) | equipment name, start |
 | stock item | name | counted / not counted | count with unit, counted date |
 | topic, private | title | — | created by, participant count (private) |
 
-The fold-out holds the rest: the record's body or notes, all tags, links, pins, a project's
-planning task, and "Open the record" for the record's own screen where one exists (equipment for
+The fold-out holds the rest: the record's body or notes, all tags, links, pins, and "Open the
+record" for the record's own screen where one exists (equipment for
 bookings; the Work screens are retired, so a task's fold-out shows its fields read-only until R3's
 card editing).
 
@@ -268,10 +264,10 @@ longer available.
    lock timeout, and the four record tables in share row exclusive mode.
 2. Create the tables, functions, triggers, policies and grants above.
 3. Projects become tags. For each project: if a tag with the same name (case-insensitive)
-   exists, that tag becomes the project tag and keeps its id; otherwise a project tag is created
-   with the project's id. Owner, `created_by`, `created_at`, `archived_at` and description carry
-   over. Counts: projects in equals project tags out.
-4. Backfill record threads: one per top-level task, project tag, reservation and stock item,
+   exists, it takes the project's owner, dates and `archived_at` and keeps its id; otherwise a
+   tag is created with the project's id, name, owner, `created_by`, `created_at` and
+   `archived_at`. Counts: projects in equals tags written or updated.
+4. Backfill record threads: one per top-level task, reservation and stock item,
    with `last_message_at` null. Then move tags onto threads: every `task_tags` row becomes a
    `thread_tags` row on the task's thread; every `tasks.project_id` and
    `equipment_reservations.project_id` becomes a `thread_tags` row on that record's thread;
@@ -282,16 +278,15 @@ longer available.
    and `chat_audit_events` rows (re-pointed). Counts before and after must match per table, or the
    migration raises and nothing is dropped.
 6. Drop the 0042/0043 tables and functions, `task_tags`, the three `project_id` columns with
-   their constraints and indexes, and `projects`. No cascade. A planning task is **not** created
-   for existing projects: the migration invents no records.
+   their constraints and indexes, and `projects`. No cascade. The migration invents no records.
 
 Rollback is an image at or before the current main plus a restore of the 0042 data from the
 pre-migration snapshot; the release record names the Neon branch or dump taken first. The release
 runs with HTTP stopped, as 0045 did.
 
 **Gate before release (rebuild plan decision 7):** a read-only count of the five 0042/0043 tables,
-`projects`, `task_tags` and the rows holding a `project_id` in tasks, series and reservations,
-on the staging machine, printed as status only (no bodies, no titles), recorded in the validation
+`projects` (and how many have a non-empty description), `task_tags` and the rows holding a
+`project_id` in tasks, series and reservations, on the staging machine, printed as status only (no bodies, no titles), recorded in the validation
 folder. Ryan or root runs it; the increment is not released until it is recorded.
 
 The rate-limit policy `chat changes` keys on the new path prefix; its limit and window do not
@@ -309,16 +304,15 @@ Real Postgres, no skipped database test:
   task, with pins, stars, reads and audit) survive 0046 with the same ids, seqs, audience and
   read baselines; a non-participant still cannot see them; counts match; a deliberate count
   mismatch aborts with nothing dropped.
-- Record threads: inserting a task, project tag, reservation and stock item creates exactly one
-  thread each; an area tag and a step create none; deleting the record deletes the thread.
+- Record threads: inserting a task, reservation and stock item creates exactly one thread each; a
+  tag and a step create none; deleting the record deletes the thread.
 - Projects to tags: fixture projects (one sharing a name with an existing tag, one archived),
   tasks with and without a project, a task tagged with its own project's namesake tag, a series
   and a reservation with a project, all migrate with the expected `thread_tags` and
   `task_series_tags` rows and no duplicate; counts match; the equipment overlap rule is
   untouched.
-- Project tags: create makes the tag, thread and planning task atomically; the planning task's
-  thread carries the project tag; archive keeps attachments; a series occurrence receives the
-  series' tags.
+- Tags: owner and dates are optional and independent; `ends_on` before `starts_on` is refused;
+  archive keeps attachments; a series occurrence receives the series' tags.
 - Topic creation: one transaction, seq 1, title derivation, retry 200, mismatch 409.
 - List: filters, cursor stability across a new message, `groups` counts versus rows, the
   100-heading cap, `needsYou` rules, unread cap, excerpt exclusion for a private thread.
@@ -338,7 +332,7 @@ second scripted person. A validation record under `docs/validation/threads-2026-
 
 | PR | Delivers | Retires |
 |---|---|---|
-| T-A `feat(threads): projects as tags, thread model, migration and API` | 0046, `apps/api/src/threads/`, project tags in `apps/api/src/tags/`, list/detail/messages/topic/private routes, rate policy, tests; reviewed as two commits (projects → tags; threads) | `apps/api/src/chat/`, `/conversations` and `/projects` routes, `projectId` on tasks/series/bookings, the task/project "conversations" reads |
+| T-A `feat(threads): projects as tags, thread model, migration and API` | 0046, `apps/api/src/threads/`, owner and dates on tags in `apps/api/src/tags/`, list/detail/messages/topic/private routes, rate policy, tests; reviewed as two commits (projects → tags; threads) | `apps/api/src/chat/`, `/conversations` and `/projects` routes, `projectId` on tasks/series/bookings, the task/project "conversations" reads |
 | T-B `feat(client): thread list and thread screen` | `/`, `/threads/[id]`, card, composer, polling, checks | the empty list state |
 | T-C `feat(client): new thread and private threads` | `/threads/new`, private creation, tags on topic and private threads, checks | — |
 | T-D `docs(threads): record the staging release` | validation record, `paused.md`, the linked-chat contracts marked historical | — |
