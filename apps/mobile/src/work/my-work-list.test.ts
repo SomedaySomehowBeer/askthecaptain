@@ -102,7 +102,7 @@ test('a list is bound to its first ready scope: any other scope makes it inert, 
 	const a: ReadScope = { epoch: 'a1.o1', userId: 'u', organisationId: 'org-a' };
 	assert.equal(listInert(a, a), false);
 	assert.equal(listInert(a, { ...a }), false, 'an equal scope object is the same scope');
-	// The render after a switch, before AccountStack's effect resets the tabs: a new epoch and organisation.
+	// The render after a switch, before RootStack's effect returns to the thread list: a new epoch and organisation.
 	assert.equal(listInert(a, { epoch: 'a1.o2', userId: 'u', organisationId: 'org-b' }), true);
 	// A → B → A: the same organisation again is a new epoch, so still inert.
 	assert.equal(listInert(a, { epoch: 'a1.o3', userId: 'u', organisationId: 'org-a' }), true);

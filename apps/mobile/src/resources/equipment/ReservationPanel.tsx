@@ -3,7 +3,7 @@ import {
 	equipmentCopy, reservationBuffersText, reservationKindText, reservationOccupiedText, reservationSpanText, type FormatInstant
 } from '../../account/copy.ts';
 import { Button } from '../../components/AccountPage.tsx';
-import { colors, space, tabBar, type } from '../../theme/tokens.ts';
+import { colors, space, type } from '../../theme/tokens.ts';
 import type { Reservation } from './data.ts';
 import { displayTime } from './zone.ts';
 
@@ -36,9 +36,9 @@ export function ReservationPanel({ equipmentName, reservation, zone, onClose }: 
 
 const styles = StyleSheet.create({
 	panel: {
-		position: 'absolute', left: space.page, right: space.page, bottom: tabBar.contentClearance, gap: 6, padding: 16,
+		position: 'absolute', left: space.page, right: space.page, bottom: 24, gap: 6, padding: 16,
 		backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.line,
-		shadowColor: colors.barShadow, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6
+		shadowColor: colors.heading, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6
 	},
 	equipment: { fontSize: 13, fontWeight: '600', color: colors.muted },
 	title: { fontSize: 18, fontWeight: '600', color: colors.heading },

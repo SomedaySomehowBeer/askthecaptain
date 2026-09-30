@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-	Linking, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent
+	Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent
 } from 'react-native';
 import { equipmentCellText, equipmentColumnSummary, equipmentCopy, reservationLabel } from '../../account/copy.ts';
 import { Button } from '../../components/AccountPage.tsx';
@@ -31,8 +31,8 @@ const centreNow: Focus = () => ({ at: Date.now(), where: 'centre' });
  *  Occupancy is planned only at a settle: the idle timer after scrolling stops, the native end events, and an explicit
  *  settle after every programmatic scroll (arrows, Today, zoom, re-anchor, the first scroll to now, and the clamp after
  *  a list replacement). The geometry sent holds no equipment IDs. */
-export function Timeline({ state, screen, zone, web, frame, header, footer, onSettle, onScale, onEdge, onToday, onPress, onOpen }: {
-	state: ScheduleState; screen: ScheduleScreen; zone: string; web: string | null; frame: ScreenListFrame; header: ReactNode; footer: ReactNode;
+export function Timeline({ state, screen, zone, frame, header, footer, onSettle, onScale, onEdge, onToday, onPress, onOpen }: {
+	state: ScheduleState; screen: ScheduleScreen; zone: string; frame: ScreenListFrame; header: ReactNode; footer: ReactNode;
 	onSettle: (view: SettledView) => void; onScale: (scale: Scale) => void;
 	onEdge: (direction: 'earlier' | 'later') => ScheduleRange | null; onToday: () => boolean;
 	onPress: (intent: Intent) => void; onOpen: (equipment: Equipment, reservation: Reservation) => void;
@@ -248,7 +248,7 @@ export function Timeline({ state, screen, zone, web, frame, header, footer, onSe
 								<Text numberOfLines={2} style={styles.nameText}>{equipment.name}</Text>
 							</View>
 						))}
-						<View style={[styles.name, { width: columnWidth }]}><MoreSlot more={screen.more} web={web} onPress={onPress} /></View>
+						<View style={[styles.name, { width: columnWidth }]}><MoreSlot more={screen.more} onPress={onPress} /></View>
 					</View>
 				</ScrollView>
 			</View>
@@ -342,13 +342,12 @@ function EdgeButton({ testID, label, control, onPress }: { testID: string; label
 	return <Button testID={testID} label={label} disabled={control.disabled} reason={control.reason} onPress={onPress} />;
 }
 
-/** The end of the names row (§4.5): More, its own Try again, "Loading more equipment…", or the website notice. */
-function MoreSlot({ more, web, onPress }: { more: ScheduleScreen['more']; web: string | null; onPress: (intent: Intent) => void }) {
+/** The end of the names row (§4.5): More, its own Try again, "Loading more equipment…", or the ceiling notice. */
+function MoreSlot({ more, onPress }: { more: ScheduleScreen['more']; onPress: (intent: Intent) => void }) {
 	if (more === null) return null;
 	if (more.kind !== 'offered' && more.kind !== 'try-again') {
 		if (more.kind === 'loading') return <Text style={styles.nameText}>{equipmentCopy.moreLoading}</Text>;
-		// The API ceiling: the words and the link together, never the words alone (review S3).
-		return <View style={styles.ceiling}><Text style={styles.nameText}>{equipmentCopy.onWebsite}</Text><WebLink href={web} testID="equipment-web-more" /></View>;
+		return <Text testID="equipment-ceiling" style={styles.nameText}>{equipmentCopy.ceiling}</Text>;
 	}
 	const { control, intent } = more;
 	return (
@@ -360,21 +359,15 @@ function MoreSlot({ more, web, onPress }: { more: ScheduleScreen['more']; web: s
 	);
 }
 
-/** Opens the website schedule (`/resources/equipment`), when this build has its address. */
-export function WebLink({ href, testID = 'equipment-web' }: { href: string | null; testID?: string }) {
-	if (href === null) return <Text style={styles.reason}>{equipmentCopy.webMissing}</Text>;
-	return <Button testID={testID} label={equipmentCopy.openWeb} onPress={() => { void Linking.openURL(href); }} />;
-}
-
-const hatchTint = 'rgba(95, 107, 98, 0.10)', stripeTint = 'rgba(95, 107, 98, 0.22)';
+const hatchTint = 'rgba(84, 101, 90, 0.10)', stripeTint = 'rgba(84, 101, 90, 0.22)';
 const styles = StyleSheet.create({
 	fill: { flex: 1 },
 	header: { gap: 12, marginBottom: 12 },
 	scales: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
 	scale: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, borderRadius: 22, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
-	scaleOn: { backgroundColor: colors.selectedPill, borderColor: colors.check },
+	scaleOn: { backgroundColor: colors.sage, borderColor: colors.sage },
 	scaleText: { fontSize: 14, color: colors.body },
-	scaleTextOn: { fontWeight: '600', color: colors.selectedText },
+	scaleTextOn: { fontWeight: '600', color: colors.sageText },
 	sticky: { flexDirection: 'row', backgroundColor: colors.page, borderBottomWidth: 1, borderColor: colors.line },
 	corner: { width: axisWidth, flexDirection: 'row', alignItems: 'center' },
 	arrow: { width: 28, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
@@ -394,11 +387,10 @@ const styles = StyleSheet.create({
 	stripe: { position: 'absolute', height: 2, backgroundColor: stripeTint, transform: [{ rotate: '-30deg' }] },
 	hatchText: { margin: 4, fontSize: 11, lineHeight: 14, color: colors.muted },
 	bar: { position: 'absolute', left: 3, right: 3, borderRadius: 6, borderWidth: 1, paddingHorizontal: 4, overflow: 'hidden' },
-	booking: { backgroundColor: colors.sage, borderColor: colors.sea },
+	booking: { backgroundColor: colors.sage, borderColor: colors.action },
 	maintenance: { backgroundColor: colors.card, borderColor: colors.body, borderWidth: 2, borderStyle: 'dashed' },
 	barText: { fontSize: 12, lineHeight: 16, color: colors.heading },
 	more: { minHeight: 44, justifyContent: 'center' },
-	moreText: { fontSize: 13, fontWeight: '600', color: colors.sea },
-	reason: { fontSize: 12, lineHeight: 16, color: colors.muted },
-	ceiling: { gap: 6 }
+	moreText: { fontSize: 13, fontWeight: '600', color: colors.action },
+	reason: { fontSize: 12, lineHeight: 16, color: colors.muted }
 });

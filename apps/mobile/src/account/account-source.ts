@@ -3,6 +3,7 @@ import type { ScopedRead } from './contracts.ts';
 import { slowAfterMs, type AccountSnapshot, type AccountView } from './machine.ts';
 import { idleRevocation, staleOutcome, type PersonScope, type RevocationView, type RevokeOutcome } from './revocation.ts';
 import type { Timers, UiCommand } from './runner.ts';
+import type { WebCalls } from './web-calls.ts';
 
 /** The token-free surface screens read (docs/plans/expo-mobile-auth-composition-2026-09.md §3). Production builds it
  *  over the composition (below); the test harness passes a scripted one. Never a runner, handle or token.
@@ -23,6 +24,9 @@ export type AccountSource = {
 	/** The current person's revocation state, for `useSyncExternalStore` with `subscribe`: the same object until it
 	 *  changes; the shared idle object with no runner. */
 	readonly revocationView: () => RevocationView;
+	/** The web-only calls (docs/plans/expo-web-session-2026-09.md §B.2): the sign-in link, the passkey step-up, the
+	 *  passkeys list and accepting an invitation. Null on iOS and Android, whose screens say so. */
+	readonly web: WebCalls | null;
 };
 
 const noRead: ScopedRead = () => Promise.resolve(Object.freeze({ kind: 'superseded' as const }));
@@ -38,6 +42,21 @@ export const outsideSnapshots = Object.freeze({
 	misconfigured: frozen({ kind: 'misconfigured' }),
 	startupFailed: frozen({ kind: 'startup-failed' })
 });
+
+/** A source that never changes: one fixed snapshot, no runner, no commands. The web binding uses it when the page's
+ *  own origin is not usable (`misconfigured`). */
+export function fixedAccountSource(snapshot: AccountSnapshot): AccountSource {
+	return Object.freeze({
+		subscribe: () => () => undefined,
+		snapshot: () => snapshot,
+		send: () => undefined,
+		now: () => 0,
+		read: noRead,
+		revokeOthers: () => Promise.resolve(staleOutcome),
+		revocationView: () => idleRevocation,
+		web: null
+	});
+}
 
 const defaultTimers: Timers = {
 	set: (ms, run) => setTimeout(run, ms),
@@ -103,6 +122,7 @@ export function createAccountSource(composition: () => Promise<Composition>, tim
 		now: () => (phase.kind === 'runner' ? phase.ready.clock.now() : 0),
 		read: ((expected, path, parse) => phase.kind === 'runner' ? phase.ready.runner.organisationRead(expected, path, parse) : noRead(expected, path, parse)) as ScopedRead,
 		revokeOthers: (expected: PersonScope): Promise<RevokeOutcome> => (phase.kind === 'runner' ? phase.ready.runner.revokeOthers(expected) : Promise.resolve(staleOutcome)),
-		revocationView: (): RevocationView => (phase.kind === 'runner' ? phase.ready.runner.revocationView() : idleRevocation)
+		revocationView: (): RevocationView => (phase.kind === 'runner' ? phase.ready.runner.revocationView() : idleRevocation),
+		web: null
 	});
 }

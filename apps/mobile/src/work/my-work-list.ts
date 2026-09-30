@@ -85,7 +85,7 @@ export function finishRead(state: WorkListState, seq: number, outcome: ReadOutco
 }
 
 /** Whether a list bound to `bound` (the ready scope its screen first rendered with) is inert under `current`, the scope
- *  rendered now. `AccountStack` resets the tabs in an effect, after the new account has rendered once, so for that
+ *  rendered now. `RootStack` returns to the thread list in an effect, after the new account has rendered once, so for that
  *  render the old screen sees a new scope while still holding the old rows. An inert list shows no rows or controls,
  *  starts no read, and applies no answer, until its screen remounts under the new scope. It never becomes live again:
  *  epochs never repeat. */

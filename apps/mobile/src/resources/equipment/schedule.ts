@@ -489,7 +489,7 @@ export type ScheduleScreen = {
 	readonly tryAgain: (Control & { readonly intent: Intent }) | null;
 	readonly more:
 		| { readonly kind: 'offered' | 'try-again'; readonly control: Control; readonly intent: Intent }
-		| { readonly kind: 'loading' | 'website' }
+		| { readonly kind: 'loading' | 'ceiling' }
 		| null;
 	/** Try again for the shown failed cells: one ("Try again") or several ("Try again for the dates shown"). */
 	readonly cellRetry: (Control & { readonly label: string; readonly intent: Intent }) | null;
@@ -498,7 +498,7 @@ export type ScheduleScreen = {
 };
 
 const noticeText = {
-	stale: equipmentCopy.stale, 'more-not-loaded': equipmentCopy.moreNotLoaded, 'listed-on-website': equipmentCopy.onWebsite,
+	stale: equipmentCopy.stale, 'more-not-loaded': equipmentCopy.moreNotLoaded, ceiling: equipmentCopy.ceiling,
 	incomplete: equipmentCopy.incomplete, 'list-changed': equipmentCopy.listChanged
 } as const;
 
@@ -542,7 +542,7 @@ export function scheduleScreen(state: ScheduleState, now: number, membershipChec
 		if (view.more === 'offered') more = { kind: 'offered', control: control(blockReason(state, 'catalogue', now), queued('more')), intent: { kind: 'more' } };
 		else if (view.more === 'try-again')
 			more = { kind: 'try-again', control: control(blockReason(state, 'catalogue', now, true), queued('catalogue-retry')), intent: { kind: 'catalogue-retry' } };
-		else if (view.more === 'loading' || view.more === 'website') more = { kind: view.more };
+		else if (view.more === 'loading' || view.more === 'ceiling') more = { kind: view.more };
 	}
 
 	let cellRetry: ScheduleScreen['cellRetry'] = null;

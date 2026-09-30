@@ -12,12 +12,23 @@ export const apiPaths = {
 	signOut: '/auth/sign-out',
 	/** Ends the person's other sessions and keeps the presented one (POST, bearer, no input;
 	 *  docs/plans/mobile-session-revocation-2026-09.md §2). */
-	revokeOthers: '/v1/me/sessions/revoke-others'
+	revokeOthers: '/v1/me/sessions/revoke-others',
+	/** The passkey step-up's assertion options (POST). On the web the step-up token travels in the `captain_stepup`
+	 *  cookie, so the body is empty (docs/plans/expo-web-session-2026-09.md §A.2). */
+	passkeyOptions: '/auth/passkey/options',
+	/** The browser's assertion (POST `{ response }`); a verified passkey sets the session cookie. */
+	passkeyVerify: '/auth/passkey/verify',
+	/** The person's registered passkeys (GET, signed in). */
+	passkeys: '/v1/me/passkeys',
+	/** Accepts an invitation the signed-in person was sent (POST `{ token }`, signed in). */
+	acceptInvitation: '/v1/invitations/accept'
 } as const;
 export type FixedApiPath = (typeof apiPaths)[keyof typeof apiPaths];
 
-/** The sign-in start, opened in the platform authentication browser, never requested by the client (§3.2 step 1). */
-export const nativeStartPath = '/auth/google/start';
+/** The sign-in start: opened in the platform authentication browser on iOS and Android (§3.2 step 1), and the web
+ *  welcome page's one link (docs/plans/expo-web-session-2026-09.md §B.2). Never requested by the client. */
+export const googleStartPath = '/auth/google/start';
+export const nativeStartPath = googleStartPath;
 
 declare const organisationPathBrand: unique symbol;
 /** A path under one organisation. Only organisationPath and the fixed work-list query builders make these. */

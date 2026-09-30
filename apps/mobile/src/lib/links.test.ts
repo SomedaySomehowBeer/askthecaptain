@@ -27,10 +27,9 @@ test('the return-path rule is the API and web rule: same-origin paths kept exact
 
 test('app routes open from a bare path or this build’s scheme with no host; queries and fragments are dropped', () => {
 	const cases: [string, string][] = [
-		['/work', '/work'], ['/', '/work'], ['/work/', '/work'], ['/work/views', '/work/views'], ['/chat', '/chat'], ['/chat/views', '/chat/views'],
-		['/resources', '/resources'], ['/resources/equipment', '/resources'], ['/resources/inventory', '/resources/inventory'], ['/resources/views', '/resources/views'],
-		['/work?owner=all#top', '/work'], [`${appScheme}:/work`, '/work'], [`${appScheme}:///chat`, '/chat'], [`${appScheme}://`, '/work'],
-		[`APP.ASKTHECAPTAIN.DEV:/resources`, '/resources']
+		['/', '/'], ['/equipment', '/equipment'], ['/equipment/', '/equipment'], ['/resources/equipment', '/equipment'],
+		['/equipment?date=1#top', '/equipment'], [`${appScheme}:/equipment`, '/equipment'], [`${appScheme}:///equipment`, '/equipment'], [`${appScheme}://`, '/'],
+		[`APP.ASKTHECAPTAIN.DEV:/equipment`, '/equipment']
 	];
 	for (const [incoming, route] of cases) assert.equal(linkTarget(incoming), route, incoming);
 });
@@ -66,27 +65,19 @@ test('a system link that is exactly this build’s sign-in callback causes no na
 	for (const incoming of [undefined, null, 7, ['/work']]) assert.equal(systemLinkTarget(incoming), refusedLink);
 	// Every app route is unchanged by the callback rule.
 	for (const route of linkableRoutes) assert.equal(systemLinkTarget(route), route, route);
-	assert.equal(systemLinkTarget(`${appScheme}:/work?x=1`), '/work');
+	assert.equal(systemLinkTarget(`${appScheme}:/equipment?x=1`), '/equipment');
 });
 
 test('other schemes, hosts, unknown or not-yet-built routes and malformed links are refused', () => {
 	for (const incoming of [
-		'https://app.askthecaptain.app/work', 'http://localhost/work', 'exp+captain-mobile://expo-development-client/?url=x', 'captain:/work', 'app.askthecaptain:/work',
-		`${appScheme}://evil.test/work`, `${appScheme}://work`, `${appScheme}:work`, `${appScheme}:/\\evil.test`, `${appScheme}://%2Fevil.test/work`,
-		'/work/tasks/0190c0de-0000-7000-8000-000000000000', '/settings', '/sign-in', '/link-not-allowed', '/Work', '/chat%2Fviews', '/work%2Fviews',
-		'', `/${'w'.repeat(2048)}`, undefined, null, 7
+		'https://app.askthecaptain.app/equipment', 'http://localhost/equipment', 'exp+captain-mobile://expo-development-client/?url=x', 'captain:/equipment', 'app.askthecaptain:/equipment',
+		`${appScheme}://evil.test/equipment`, `${appScheme}://equipment`, `${appScheme}:equipment`, `${appScheme}:/\\evil.test`, `${appScheme}://%2Fevil.test/equipment`,
+		'/work', '/work/tasks/0190c0de-0000-7000-8000-000000000000', '/settings', '/organisation', '/welcome', '/sign-in', '/link-not-allowed', '/Equipment', '/resources', '/resources/inventory',
+		'/invitations/accept?token=x', '', `/${'w'.repeat(2048)}`, undefined, null, 7
 	]) assert.equal(linkTarget(incoming), refusedLink, String(incoming));
 });
 
 test('every linkable route is one the link rule itself accepts', () => {
 	for (const route of linkableRoutes) assert.equal(linkTarget(route), route, route);
 	assert.ok(!linkableRoutes.has(refusedLink));
-});
-
-test('All tasks is an exact app route; incoming queries do not select a Work filter', () => {
- for (const incoming of ['/work/all', '/work/all/', '/work/all?x=1']) assert.equal(linkTarget(incoming), '/work/all');
- assert.equal(linkTarget('/work?owner=all'), '/work');
- assert.equal(linkTarget('/work/all/../views'), '/work/views');
- for (const incoming of ['/work/ALL', '/work/all/../chat', '//work/all', '/work\\all'])
-  assert.equal(linkTarget(incoming), refusedLink);
 });

@@ -61,9 +61,9 @@ test('a saved session is only checking until /v1/me answers; unavailable is unve
 
 test('the destination waits for verified identity and a chosen organisation, and only an app route is kept', () => {
 	const out = run(initial(), { type: 'boot' }, { type: 'launch-read', now: 0, result: { kind: 'none' } });
-	const started = run(out.machine, { type: 'sign-in', returnTo: '/chat' }, { type: 'gate-checked', result: 'settled' });
-	assert.deepEqual(ofType(started.effects, 'start-attempt'), [{ type: 'start-attempt', returnTo: '/chat' }]);
-	const signed = run(started.machine, { type: 'attempt-finished', outcome: { kind: 'signed-in', handle: h(2), userId, returnTo: '/chat' } });
+	const started = run(out.machine, { type: 'sign-in', returnTo: '/equipment' }, { type: 'gate-checked', result: 'settled' });
+	assert.deepEqual(ofType(started.effects, 'start-attempt'), [{ type: 'start-attempt', returnTo: '/equipment' }]);
+	const signed = run(started.machine, { type: 'attempt-finished', outcome: { kind: 'signed-in', handle: h(2), userId, returnTo: '/equipment' } });
 	const install = ofType(signed.effects, 'install')[0]!;
 	assert.equal(install.generation.account, 1, 'the account changes before the save is queued');
 	const written = run(signed.machine, { type: 'install-finished', handle: h(2), result: 'written', now: 0 });
@@ -73,7 +73,7 @@ test('the destination waits for verified identity and a chosen organisation, and
 	assert.ok(loading.kind === 'signed-in' && !loading.ready && loading.destination === null, 'no destination before a choice');
 	const chosen = run(verified.machine, { type: 'org-read', handle: h(2), organisation: verified.machine.generations.organisation, organisationId: orgB }).machine;
 	const ready = view(chosen).account;
-	assert.ok(ready.kind === 'signed-in' && ready.ready && ready.destination === '/chat');
+	assert.ok(ready.kind === 'signed-in' && ready.ready && ready.destination === '/equipment');
 	const used = view(run(chosen, { type: 'destination-used' }).machine).account;
 	assert.ok(used.kind === 'signed-in' && used.destination === null);
 	// An unsafe or unknown destination is dropped.

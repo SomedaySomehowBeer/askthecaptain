@@ -179,10 +179,10 @@ test('unreadable storage: Try reading again reads again; a failed read never bec
 test('sign-in: gate, attempt, save, verify, then the destination; the save uses the advanced account generation', async () => {
 	const t = harness();
 	t.runner.start(); await t.calls.answer('read', null);
-	t.runner.send({ type: 'sign-in', returnTo: '/chat' }); await drain();
+	t.runner.send({ type: 'sign-in', returnTo: '/equipment' }); await drain();
 	const start = t.calls.take('start');
-	assert.deepEqual(start.args, ['/chat']);
-	start.resolve({ kind: 'signed-in', session: { token: token('b'), expiresAt: '2030-10-01T08:30:00.000Z', user: { id: userId, email: 'o@example.test', name: 'O' }, returnTo: '/chat' } });
+	assert.deepEqual(start.args, ['/equipment']);
+	start.resolve({ kind: 'signed-in', session: { token: token('b'), expiresAt: '2030-10-01T08:30:00.000Z', user: { id: userId, email: 'o@example.test', name: 'O' }, returnTo: '/equipment' } });
 	await drain();
 	const install = t.calls.take('install');
 	assert.deepEqual(install.args[0], stored('b'));
@@ -198,7 +198,7 @@ test('sign-in: gate, attempt, save, verify, then the destination; the save uses 
 	const setOrg = t.calls.take('setOrg');
 	assert.deepEqual(setOrg.args.slice(0, 2), [userId, orgA], 'the only membership is chosen and remembered');
 	const ready = account(t.runner);
-	assert.ok(ready.kind === 'signed-in' && ready.ready && ready.destination === '/chat');
+	assert.ok(ready.kind === 'signed-in' && ready.ready && ready.destination === '/equipment');
 	tokenFree(t.snapshots);
 });
 

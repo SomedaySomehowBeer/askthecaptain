@@ -5,7 +5,7 @@
  *  request, asks the gate for a ticket, starts the request here, runs it, then finishes it here and in the gate.
  *
  *  - Pages are read only explicitly: the first page after the zone gate, then More, Try again or Refresh. There is no
- *    cap other than the API's maximum `offset`; past it the list says the rest is on the website.
+ *    cap other than the API's maximum `offset`; past it the list says more exists than it can list (the ceiling).
  *  - Columns keep the API's order and are never re-sorted. An ID already shown is dropped from a later page, with the
  *    "list changed" notice.
  *  - Every request carries an identity (`id`, `generation`). An answer applies only to the exact outstanding request;
@@ -49,7 +49,7 @@ export type CatalogueState = {
 };
 
 const noColumns: readonly Equipment[] = Object.freeze([]);
-/** Whether `offset` is a page the API accepts. Past it, the rest of the list is on the website. */
+/** Whether `offset` is a page the API accepts. Past it, the list has reached its ceiling. */
 const readable = (offset: number | null): offset is number => offset !== null && offset <= maxEquipmentOffset;
 
 export function createCatalogue(): CatalogueState {
@@ -151,15 +151,15 @@ export function catalogueAnswer(outcome: ReadOutcome<EquipmentPage>): CatalogueA
  *  with no equipment ("No equipment is listed yet."). `listed`: columns to draw. */
 export type CatalogueStatus = 'loading' | 'failed' | 'empty' | 'listed';
 /** The control at the end of the columns: More offered, a More read outstanding, the failed page's own Try again,
- *  the website link past the API's maximum offset, or nothing. */
-export type CatalogueMore = 'offered' | 'loading' | 'try-again' | 'website' | 'none';
+ *  the ceiling notice past the API's maximum offset, or nothing. */
+export type CatalogueMore = 'offered' | 'loading' | 'try-again' | 'ceiling' | 'none';
 /** - `stale`: a Refresh's page 0 hasn't succeeded; the columns may be out of date.
  *  - `refresh-failed`: "Couldn't refresh. The schedule may be out of date."
  *  - `more-not-loaded`: "More equipment not loaded yet".
- *  - `listed-on-website`: "More equipment is listed on the website".
+ *  - `ceiling`: "More equipment exists than this version can list".
  *  - `incomplete`: a later page failed; the loaded columns aren't the whole list.
  *  - `list-changed`: "The equipment list changed while loading. Refresh for the current list." */
-export type CatalogueNotice = 'stale' | 'refresh-failed' | 'more-not-loaded' | 'listed-on-website' | 'incomplete' | 'list-changed';
+export type CatalogueNotice = 'stale' | 'refresh-failed' | 'more-not-loaded' | 'ceiling' | 'incomplete' | 'list-changed';
 /** Which failed read Try again repeats: the first page, a later page, or a Refresh's page 0. */
 export type CatalogueTryAgain = 'catalogue' | 'more' | 'refresh' | null;
 export type CatalogueView = {
@@ -183,11 +183,11 @@ export function catalogueView(state: CatalogueState): CatalogueView {
 	if (list === 'current') {
 		if (failure !== null && failure.offset > 0) more = failure.reason === 'access' ? 'none' : 'try-again';
 		else if (state.pending !== null && state.pending.offset > 0) more = 'loading';
-		else if (nextOffset !== null) more = readable(nextOffset) ? 'offered' : 'website';
+		else if (nextOffset !== null) more = readable(nextOffset) ? 'offered' : 'ceiling';
 	}
 	const notices: CatalogueNotice[] = [];
 	if (list === 'stale') notices.push(failure !== null ? 'refresh-failed' : 'stale');
-	if (list !== 'none' && nextOffset !== null) notices.push(readable(nextOffset) ? 'more-not-loaded' : 'listed-on-website');
+	if (list !== 'none' && nextOffset !== null) notices.push(readable(nextOffset) ? 'more-not-loaded' : 'ceiling');
 	if (list === 'current' && laterFailure) notices.push('incomplete');
 	if (list !== 'none' && state.changed) notices.push('list-changed');
 	let tryAgain: CatalogueTryAgain = null;

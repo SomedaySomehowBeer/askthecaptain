@@ -1,174 +1,23 @@
-import type { WorkView } from '../api/paths.ts';
-import type { WebPath } from '../config.ts';
-import { linkableRoutes, refusedLink } from '../lib/links.ts';
 import type { Wait } from './clock.ts';
 import type { AccountSnapshot, AccountView, LocalState, OrgNotice, ReleaseReason, ServerState, SignInFailure } from './machine.ts';
 import type { Membership } from './me.ts';
 import type { RevocationView } from './revocation.ts';
 import type { UiCommand } from './runner.ts';
 
-/** Every account wording and every navigation decision, as pure functions (docs/plans/expo-mobile-auth-composition-
- *  2026-09.md §4). Screens render what these return; node tests cover every state.
+/** Every account wording, as pure functions and fixed tables (docs/plans/expo-mobile-auth-composition-2026-09.md §4;
+ *  docs/plans/expo-web-session-2026-09.md §B.2). Screens render what these return; node tests cover every state.
  *
  *  Honesty rules this file carries: nothing says "signed in" before identity is verified; nothing says a session is
  *  being ended unless its revocation has begun; no expiry date is shown and nothing is inferred from the phone's clock
  *  (a server wait is shown only as "about {time}", from the wall-clock estimate recorded when the answer arrived). */
 
 // ---------------------------------------------------------------------------------------------------------------
-// Navigation.
+// The account's states as screens see them.
 
 export type SignedInView = Extract<AccountView, { kind: 'signed-in' }>;
-export type RootRoute = '/welcome' | '/organisation' | '/work';
 
 export const isSignedIn = (account: AccountView): account is SignedInView => account.kind === 'signed-in';
 export const isReady = (account: AccountView): boolean => isSignedIn(account) && account.org.kind === 'chosen';
-
-/** Where the person should be: the tabs when ready, the chooser when signed in but not ready, otherwise welcome. The
- *  index route uses this too, so `/` can never reach a tab before the guards allow it. */
-export function routeFor(account: AccountView): RootRoute {
-	if (!isSignedIn(account)) return '/welcome';
-	return account.org.kind === 'chosen' ? '/work' : '/organisation';
-}
-
-/** Whether a pathname already satisfies `routeFor`'s answer when that answer has just changed. The refusal page is open
- *  in every state (outside the guards); when ready, any tab route and Account satisfy `/work`. The organisation page
- *  does not: becoming ready from the chooser must leave it.
- *
- *  A deliberate visit to the organisation page while ready (Switch organisation) is never redirected, because
- *  `AccountStack` replaces only when `routeFor`'s answer changes, never because the pathname differs from it. */
-export function routeHolds(route: RootRoute, pathname: string): boolean {
-	if (pathname === refusedLink) return true;
-	if (route === '/work') return pathname !== '/welcome' && pathname !== '/organisation' && pathname !== '/';
-	return pathname === route;
-}
-
-/** The tab route the person opened the app at, kept through sign-in (§4.7): only a linkable tab route, else null. The
- *  attempt core and the API check it again; record links are not carried in this increment. */
-export function requestedDestination(pathname: string | null): string | null {
-	return pathname !== null && pathname !== '/' && linkableRoutes.has(pathname) ? pathname : null;
-}
-
-/** The tabs subtree's key: everything under it is dropped when the person or the organisation changes. */
-export function tabsKey(account: AccountView): string | null {
-	if (!isSignedIn(account) || account.org.kind !== 'chosen') return null;
-	return `${account.user.id}:${account.org.membership.organisationId}`;
-}
-
-/** The destination to replace to, once, when ready: keyed so a re-render or a second effect cannot apply it twice. */
-export function destinationStep(account: AccountView, appliedKey: string | null): { readonly href: string; readonly key: string } | null {
-	if (!isSignedIn(account) || !account.ready || account.destination === null) return null;
-	const key = `${tabsKey(account)}:${account.destination}`;
-	return key === appliedKey ? null : { href: account.destination, key };
-}
-
-/** What `AccountStack` remembers between renders: the last `routeFor` answer, the last tabs key, the destination step
- *  already applied, and whether the tab route the app was opened at has had its one chance. */
-export type NavMemory = {
-	readonly route: RootRoute | null; readonly key: string | null; readonly applied: string | null; readonly requestedUsed: boolean;
-};
-export const navStart: NavMemory = Object.freeze({ route: null, key: null, applied: null, requestedUsed: false });
-/** The memory a newly mounted `AccountStack` starts with. Only the requested destination's one-use flag carries over
- *  (from requested.ts, per process); route, tabs key and applied destination start empty. */
-export const navMount = (requestedUsed: boolean): NavMemory => Object.freeze({ ...navStart, requestedUsed });
-export type NavAction =
-	| { readonly kind: 'none' }
-	/** The tabs' person or organisation changed while ready (a switch, or a loss that auto-chose the one remaining
-	 *  membership): reset the root stack to a fresh tabs route, so no tab stack or screen state from before survives. */
-	| { readonly kind: 'reset-tabs' }
-	/** Replace to the verified sign-in destination once, then send `destination-used`. */
-	| { readonly kind: 'destination'; readonly href: string }
-	/** Replace to the tab route the app was opened at, once, when a saved session first becomes ready. Sends nothing. */
-	| { readonly kind: 'open-requested'; readonly href: string }
-	| { readonly kind: 'replace'; readonly href: RootRoute };
-
-/** The one navigation decision per snapshot (§4.1).
- *  - Replaces only when `routeFor`'s answer changes, never merely because the pathname differs, so a deliberate visit
- *    (Switch organisation while ready) stays put. `/` is left to the index route's own redirect.
- *  - A new tabs key while ready always resets the tabs, whatever caused it.
- *  - A sign-in destination is applied once; leaving ready forgets it, so a later sign-in applies its own anew.
- *  - `requested`, the tab route the app was opened at (captured once, before any guard redirect), is opened the first
- *    time the account becomes ready with no sign-in destination (a restored saved session). It is used at most once
- *    per process: the first time ready is reached consumes it either way. */
-export function navigationStep(memory: NavMemory, account: AccountView, pathname: string, requested: string | null = null): { readonly memory: NavMemory; readonly action: NavAction } {
-	const route = routeFor(account); const key = tabsKey(account); const ready = isReady(account);
-	const applied = ready ? memory.applied : null;
-	const requestedUsed = memory.requestedUsed || ready;
-	if (memory.key !== null && key !== null && memory.key !== key) return { memory: { route, key, applied, requestedUsed }, action: { kind: 'reset-tabs' } };
-	const step = destinationStep(account, applied);
-	if (step !== null) return { memory: { route, key, applied: step.key, requestedUsed }, action: { kind: 'destination', href: step.href } };
-	const next: NavMemory = { route, key, applied, requestedUsed };
-	if (ready && !memory.requestedUsed && requested !== null && memory.route !== '/work') {
-		return { memory: next, action: pathname === requested ? { kind: 'none' } : { kind: 'open-requested', href: requested } };
-	}
-	if (memory.route === route || pathname === '/' || routeHolds(route, pathname)) return { memory: next, action: { kind: 'none' } };
-	return { memory: next, action: { kind: 'replace', href: route } };
-}
-
-/** The account stack's navigator key inside the container's root state: the first state, depth first, whose allowed
- *  screens include `(tabs)`. Only the account stack declares `(tabs)` (the tabs navigator's screens are work, chat and
- *  resources; the container's root slot is `__root`), and `(tabs)` is allowed exactly when ready, which is the only
- *  time a reset is issued. Null otherwise. */
-type NavState = { readonly key?: unknown; readonly routeNames?: readonly string[]; readonly routes?: readonly { readonly state?: unknown }[] };
-export function findAccountStack(state: unknown): string | null {
-	if (typeof state !== 'object' || state === null) return null;
-	const nav = state as NavState;
-	if (typeof nav.key === 'string' && nav.routeNames?.includes('(tabs)')) return nav.key;
-	for (const route of nav.routes ?? []) {
-		const found = findAccountStack(route.state);
-		if (found !== null) return found;
-	}
-	return null;
-}
-
-/** Replaces every route in the account stack with one fresh tabs route (docs/plans/expo-mobile-native-navigation-
- *  2026-09.md §3.3). The installed StackRouter defers RESET to BaseRouter, which returns it as partial state; rehydration
- *  gives every route a new key, so the old tabs subtree unmounts and a new one mounts at Work. Handled only by the
- *  navigator whose key is `target`.
- *  - `seedViews` (iOS and Android): Work is given as `[views, index]` with My work focused, so the view list is beneath
- *    it from the first render. The tab router fills in Chat and Resources with no state; their first visit is the tab
- *    bar's (`firstVisitParams`).
- *  - Otherwise (the web): no nested state, as before, so Work starts at `index` alone.
- *  No key is given at any depth. */
-export const resetToFreshTabs = (target: string, seedViews: boolean) =>
-	({
-		type: 'RESET',
-		payload: {
-			index: 0,
-			routes: [seedViews
-				? { name: '(tabs)', state: { index: 0, routes: [{ name: 'work', state: { index: 1, routes: [{ name: 'views' }, { name: 'index' }] } }] } }
-				: { name: '(tabs)' }]
-		},
-		target
-	}) as const;
-
-/** The tab bar's params for a tab never visited (§3.2, E1). With the view list as the section stack's initial route
- *  (iOS and Android), `initial: false` builds `[views, index]` in the section navigator's first render; on the web the
- *  default view opens alone, because there every route needs its own history entry. */
-export const firstVisitParams = (anchored: boolean): { readonly screen: 'index'; readonly initial?: false } =>
-	(anchored ? { screen: 'index', initial: false } : { screen: 'index' });
-
-/** An app-initiated entry into the tabs (§3.2a):
- *  - `arrive`: the account's own route changes (becoming ready, a sign-in destination, the requested cold-start route,
- *    the fail-closed reopen, and the index redirect);
- *  - `return-to-my-work`: a control that promises My work ("Go to My work", and Back fallbacks with nowhere to go back). */
-export type TabEntry = { readonly intent: 'arrive'; readonly href: string } | { readonly intent: 'return-to-my-work' };
-export type TabEntryCall = { readonly method: 'replace' | 'dismissTo'; readonly href: string; readonly options: { readonly withAnchor?: true } };
-
-const tabHref = (href: string) => /^\/(work|chat|resources)(\/|$)/.test(href);
-
-/** The one router call for an app-initiated tab entry.
- *  - Native (`anchored`): `withAnchor` makes every nested level `initial: false`, so a section stack built by the entry
- *    has its view list beneath the target from its first render. `return-to-my-work` is `dismissTo('/work')`: it pops back
- *    to the existing tabs (never a second tabs route) and opens My work there, or builds fresh tabs when there are none.
- *    It is never `back()`, which could reach any page. `withAnchor` is applied only to tab routes; the account's other
- *    routes (welcome, the chooser) take no anchor.
- *  - Web: exactly the call made before this contract (`replace`, no options), so browser history is unchanged. */
-export function tabEntryAction(anchored: boolean, entry: TabEntry): TabEntryCall {
-	if (entry.intent === 'return-to-my-work') {
-		return anchored ? { method: 'dismissTo', href: '/work', options: { withAnchor: true } } : { method: 'replace', href: '/work', options: {} };
-	}
-	return { method: 'replace', href: entry.href, options: anchored && tabHref(entry.href) ? { withAnchor: true } : {} };
-}
 
 // ---------------------------------------------------------------------------------------------------------------
 // Waits.
@@ -210,8 +59,7 @@ export type Action =
 		readonly note?: string;
 	}
 	/** Sign out, behind a confirmation step (§4.3). */
-	| { readonly kind: 'sign-out'; readonly id: 'sign-out'; readonly label: 'Sign out'; readonly primary: boolean }
-	| { readonly kind: 'web'; readonly id: string; readonly label: string; readonly path: WebPath };
+	| { readonly kind: 'sign-out'; readonly id: 'sign-out'; readonly label: 'Sign out'; readonly primary: boolean };
 
 export type Line = { readonly title: string; readonly text: string };
 export type Page = { readonly heading: string; readonly body: readonly string[]; readonly notices: readonly Line[]; readonly actions: readonly Action[] };
@@ -221,7 +69,7 @@ const command = (id: string, label: string, cmd: UiCommand, primary: boolean, di
 
 export const copy = {
 	captain: 'Captain',
-	webOnly: "Signing in isn't available in this preview. Use Captain on the web.",
+	webOnly: "Signing in isn't available in this preview.",
 	misconfigured: 'This build has no valid Captain address.',
 	opening: 'Opening…',
 	openingSlow: "Still opening this phone's secure storage. If this continues, close and reopen Captain.",
@@ -257,9 +105,7 @@ export const copy = {
 	strayEnding: 'Captain is ending that session.',
 	sessionEnded: 'Your session has ended. Sign in again.',
 	saveFailed: "Captain couldn't save this sign-in on this phone.",
-	signOutConfirm: "Sign out of Captain on this phone? Uninstalling Captain doesn't sign you out.",
-	webMissing: "The Captain website address isn't set in this build.",
-	openWeb: 'Open Captain on the web'
+	signOutConfirm: "Sign out of Captain on this phone? Uninstalling Captain doesn't sign you out."
 } as const;
 
 export const signInNotices: Readonly<Record<SignInFailure, string>> = Object.freeze({
@@ -321,12 +167,12 @@ function strayRetry(snapshot: AccountSnapshot, now: number, format: FormatAbout)
 // ---------------------------------------------------------------------------------------------------------------
 // Pages.
 
-export type PageOptions = { readonly now: number; readonly webAvailable: boolean; readonly format?: FormatAbout; readonly returnTo?: string | null };
+export type PageOptions = { readonly now: number; readonly format?: FormatAbout; readonly returnTo?: string | null };
 
-/** `welcome`: every state that is not signed in (§4.2). */
+/** `welcome` on iOS and Android: every state that is not signed in (§4.2). The web welcome is `webWelcomePage`. */
 export function welcomePage(snapshot: AccountSnapshot, options: PageOptions): Page {
-	const { now, webAvailable } = options; const format = options.format ?? formatAbout;
-	const base = welcomeBase(snapshot, now, webAvailable, format, options.returnTo ?? null);
+	const { now } = options; const format = options.format ?? formatAbout;
+	const base = welcomeBase(snapshot, now, format, options.returnTo ?? null);
 	const faults = faultLines(snapshot);
 	const retry = strayRetry(snapshot, now, format);
 	return {
@@ -344,14 +190,11 @@ function signInAction(snapshot: AccountSnapshot, returnTo: string | null, label 
 	return command('sign-in', label, cmd, primary, reason, note);
 }
 
-function welcomeBase(snapshot: AccountSnapshot, now: number, webAvailable: boolean, format: FormatAbout, returnTo: string | null): Page {
+function welcomeBase(snapshot: AccountSnapshot, now: number, format: FormatAbout, returnTo: string | null): Page {
 	const account = snapshot.account;
 	const plain = (body: string, heading: string = copy.captain): Page => ({ heading, body: [body], notices: [], actions: [] });
 	switch (account.kind) {
-		case 'web-only':
-			return webAvailable
-				? { heading: copy.captain, body: [copy.webOnly], notices: [], actions: [{ kind: 'web', id: 'web', label: copy.openWeb, path: '/' }] }
-				: { heading: copy.captain, body: [copy.webOnly, copy.webMissing], notices: [], actions: [] };
+		case 'web-only': return plain(copy.webOnly);
 		case 'misconfigured': return plain(copy.misconfigured);
 		case 'starting': return plain(account.slow ? copy.openingSlow : copy.opening);
 		case 'startup-failed': return plain(copy.startupFailed);
@@ -428,7 +271,7 @@ export const organisationCopy = {
 	chooseHeading: 'Choose an organisation',
 	switchHeading: 'Switch organisation',
 	loading: 'Checking your organisations…',
-	none: "You aren't in an organisation yet. Organisations are created and joined on the Captain website.",
+	none: "You aren't in an organisation yet. Ask the person who runs your business for an invitation.",
 	notRemembered: "Captain will use this organisation now but couldn't remember it for next time.",
 	current: 'Current'
 } as const;
@@ -439,10 +282,34 @@ export const roleLabel = (membership: Membership): string =>
 export const accountCopy = {
 	heading: 'Account',
 	checking: 'Checking your access…',
-	elsewhere: 'Organisation creation, invitations, passkeys and other settings are on the Captain website.',
 	switch: 'Switch organisation',
-	otherSettings: 'Other settings on the web'
+	passkeys: 'Passkeys',
+	passkeysIntro: 'A passkey is a second check at sign-in: after Google, your device confirms it is you.',
+	passkeysLoading: 'Loading your passkeys…',
+	passkeysNone: 'No passkeys yet. Sign-in is Google alone.',
+	passkeysUnavailable: "Passkeys aren't available on this Captain.",
+	passkeysFailed: "Couldn't load your passkeys.",
+	passkeysNative: 'This version lists passkeys in the browser only.',
+	passkeysManage: 'Adding and removing passkeys comes in a later version.',
+	synced: 'synced passkey',
+	thisDevice: 'this device only',
+	notUsed: 'not used yet',
+	tryAgain: 'Try again'
 } as const;
+
+/** One passkey's second line: "synced passkey, added {date}, last used {date}" from the API's instants, in the
+ *  person's own calendar ("added" is always present; a never-used passkey says so). */
+export function passkeyDetail(passkey: { readonly backedUp: boolean; readonly createdAt: string; readonly lastUsedAt: string | null }, formatDate: (iso: string) => string = shortDate): string {
+	const kind = passkey.backedUp ? accountCopy.synced : accountCopy.thisDevice;
+	const used = passkey.lastUsedAt === null ? accountCopy.notUsed : `last used ${formatDate(passkey.lastUsedAt)}`;
+	return `${kind}, added ${formatDate(passkey.createdAt)}, ${used}`;
+}
+
+/** "3 Oct 2026" from an API instant; the instant itself if it cannot be read. */
+export const shortDate = (iso: string): string => {
+	const date = new Date(iso);
+	return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+};
 
 /** Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §3-4, C2). The same results as the web,
  *  with "this phone". A refusal or an unknown answer never says that nothing changed: the write may have committed. */
@@ -493,121 +360,6 @@ export function signedInNotices(account: SignedInView): readonly Line[] {
 	return lines;
 }
 
-/** My work (docs/plans/expo-mobile-my-work-read-2026-09.md §3.5). No wording claims an access check is under way, and
- *  a failed read is never described as an empty list. */
-export const workCopy = {
-	heading: 'My work',
-	subtitle: 'Open tasks assigned to you',
-	loading: 'Loading your work…',
-	emptyTitle: 'Nothing open is assigned to you',
-	emptyBody: 'Tasks you own appear here while they are open.',
-	failedFirst: "Couldn't load your work",
-	failedRefresh: "Couldn't refresh. This list may be out of date.",
-	failedMore: "Couldn't load more",
-	access: "Captain couldn't read this organisation's work. If your access has changed, Captain will show it the next time it checks.",
-	list: "Captain couldn't read this list.",
-	open: 'Open',
-	refresh: 'Refresh',
-	more: 'More',
-	tryAgain: 'Try again',
-	busy: 'Loading…',
-	capNotice: 'Some more open tasks may be available on the Captain website.',
-	openWebWork: 'Open My work on the web'
-} as const;
-
-/** All tasks (docs/plans/expo-mobile-all-tasks-read-2026-09.md §5): open tasks only, assigned to anyone. It never says
- *  "in progress" or "everything", names no total, and says nothing about a person beyond the three owner facts. */
-export const allWorkCopy = {
-	heading: 'All tasks',
-	subtitle: 'Open tasks assigned to anyone',
-	loading: 'Loading open tasks…',
-	emptyTitle: 'No open tasks in this organisation',
-	emptyBody: 'Tasks appear here while they are open, whoever they are assigned to.',
-	failedFirst: "Couldn't load open tasks",
-	failedRefresh: workCopy.failedRefresh,
-	failedMore: workCopy.failedMore,
-	access: workCopy.access,
-	list: workCopy.list,
-	open: workCopy.open,
-	refresh: workCopy.refresh,
-	more: workCopy.more,
-	tryAgain: workCopy.tryAgain,
-	busy: workCopy.busy,
-	capNotice: workCopy.capNotice,
-	// Tied to the checked web title for owner=all ("All tasks"); if that title changes, this label changes with it.
-	openWebWork: 'Open All tasks on the Captain website'
-} as const;
-
-export type WorkViewCopy = { readonly [K in keyof typeof workCopy]: string };
-
-/** The whole wording for one view, looked up once by the screen's bound view (never picked string by string). */
-export const workViewCopy = (view: WorkView): WorkViewCopy => (view === 'all' ? allWorkCopy : workCopy);
-
-/** The owner facts All tasks shows, and nothing more: no names in this slice. */
-export const ownerLabels = Object.freeze({ you: 'Assigned to you', 'someone-else': 'Assigned to someone else', none: 'No owner' } as const);
-
-/** "+N more" for a row's tags beyond the ones shown; null when there are none. */
-export const moreTags = (tagCount: number, shown: number): string | null => (tagCount > shown ? `+${tagCount - shown} more` : null);
-
-type WorkProblemView = { readonly op: 'first' | 'refresh' | 'more'; readonly kind: 'unavailable' | 'access' | 'list' };
-
-/** The wording for a failed read in one view: the operation decides the line for an unavailable answer; a refusal says
- *  what kind it was, the same for every operation. */
-export function workViewProblemText(copy: WorkViewCopy, problem: WorkProblemView): string {
-	if (problem.kind === 'access') return copy.access;
-	if (problem.kind === 'list') return copy.list;
-	return problem.op === 'first' ? copy.failedFirst : problem.op === 'refresh' ? copy.failedRefresh : copy.failedMore;
-}
-
-/** My work's failure wording (unchanged). */
-export const workProblemText = (problem: WorkProblemView): string => workViewProblemText(workCopy, problem);
-
-/** Inventory, counted stock read-only (docs/plans/expo-mobile-inventory-read-2026-09.md §3, §6). Only a loaded row says
- *  how much is in stock; the empty wording is used only for a successful answer with no items; a failed, pending or
- *  inert read never says or implies there is no stock. No fixed wording contains a digit. */
-export const stockCopy = {
-	heading: 'Inventory',
-	subtitle: 'Counted stock, by location',
-	loading: 'Loading stock…',
-	emptyTitle: 'No stock items are listed yet.',
-	emptyBody: 'Items are added and counted on the Captain website.',
-	notCounted: 'Not counted yet.',
-	below: 'Below reorder point',
-	failedFirst: "Couldn't load the stock list.",
-	failedRefresh: "Couldn't refresh. This list may be out of date.",
-	access: "Captain couldn't read this organisation's stock. If your access has changed, Captain will show it the next time it checks.",
-	list: "Captain couldn't read the stock list.",
-	refresh: 'Refresh',
-	tryAgain: 'Try again',
-	busy: 'Loading…',
-	openWeb: 'Count stock on the website'
-} as const;
-
-type StockProblemView = { readonly op: 'first' | 'refresh'; readonly kind: 'unavailable' | 'access' | 'list' };
-
-/** The wording for a failed stock read: the operation decides the line for an unavailable answer; a refusal says what
- *  kind it was. */
-export function stockProblemText(problem: StockProblemView): string {
-	if (problem.kind === 'access') return stockCopy.access;
-	if (problem.kind === 'list') return stockCopy.list;
-	return problem.op === 'first' ? stockCopy.failedFirst : stockCopy.failedRefresh;
-}
-
-type StockRowView = { readonly name: string; readonly count: string | null; readonly unit: string; readonly reorderPoint: string | null; readonly below: boolean };
-
-/** "{count} {unit}", both exactly as the API returned them (no conversion, rounding or pluralising), or "Not counted
- *  yet." */
-export const stockCountText = (row: StockRowView): string => (row.count === null ? stockCopy.notCounted : `${row.count} ${row.unit}`);
-
-/** "Reorder point: {reorderPoint} {unit}", verbatim, or null when none is set. */
-export const stockReorderText = (row: StockRowView): string | null => (row.reorderPoint === null ? null : `Reorder point: ${row.reorderPoint} ${row.unit}`);
-
-/** One row read as one element: name, count, then reorder point and the below flag when present. */
-export function stockRowLabel(row: StockRowView): string {
-	const reorder = stockReorderText(row);
-	return [row.name, stockCountText(row), ...(reorder === null ? [] : [reorder]), ...(row.below ? [stockCopy.below] : [])].join(', ');
-}
-
 // ---------------------------------------------------------------------------------------------------------------
 // Equipment schedule.
 
@@ -619,10 +371,10 @@ export const equipmentCopy = {
 	heading: 'Equipment schedule',
 	subtitle: 'Bookings for shared equipment',
 	loading: 'Loading the schedule…',
-	zoneUnsupported: "Times can't be shown in the business time zone on this device. Open the schedule on the website.",
+	zoneUnsupported: "Times can't be shown in the business time zone on this device.",
 	zoneChanged: 'The business time zone changed. Refresh to see the schedule.',
 	emptyTitle: 'No equipment is listed yet.',
-	emptyBody: 'Equipment is added on the Captain website.',
+	emptyBody: 'Equipment appears here once it is added.',
 	access: "Captain couldn't read this organisation's equipment. If your access has changed, Captain will show it the next time it checks.",
 	failedFirst: "Couldn't load the schedule.",
 	failedRefresh: "Couldn't refresh. The schedule may be out of date.",
@@ -637,7 +389,7 @@ export const equipmentCopy = {
 	tryAgainFirst: 'Try again first, or Refresh.',
 	more: 'More equipment',
 	moreNotLoaded: 'More equipment not loaded yet',
-	onWebsite: 'More equipment is listed on the website',
+	ceiling: 'More equipment exists than this version can list',
 	listChanged: 'The equipment list changed while loading. Refresh for the current list.',
 	incomplete: "Couldn't load more equipment. The columns shown aren't the whole list.",
 	stale: 'May be out of date',
@@ -662,9 +414,7 @@ export const equipmentCopy = {
 	booking: 'Booking',
 	maintenance: 'Maintenance',
 	panelNote: 'As of the last read. Availability can change before a reservation is saved.',
-	close: 'Close',
-	openWeb: 'Open the schedule on the website',
-	webMissing: "The website's address isn't set in this build."
+	close: 'Close'
 } as const;
 
 /** "Times in {zone}", the zone exactly as the organisation stores it. */
@@ -716,3 +466,152 @@ export function reservationLabel(equipmentName: string, r: ReservationText, time
 }
 /** One column's accessibility summary for the dates shown: its name, then the state's line. */
 export const equipmentColumnSummary = (equipmentName: string, text: string): string => `${equipmentName}: ${text}`;
+
+// ---------------------------------------------------------------------------------------------------------------
+// The web (docs/plans/expo-web-session-2026-09.md §B.2).
+
+/** The web welcome's wording. Nothing says "signed in" before `/v1/me` answered 200; an unavailable check never says
+ *  the person is signed out, and a failed sign-out never says the session ended. */
+export const webCopy = {
+	checking: 'Checking your sign-in…',
+	signInHeading: 'Sign in to Captain',
+	signIn: 'Continue with Google. If your account has a passkey, your browser asks for it next.',
+	signInAction: 'Sign in with Google',
+	inviteOnly: 'Access is by invitation while Captain is in its first voyage.',
+	unavailableHeading: "Couldn't check your sign-in",
+	unavailable: "Captain's service didn't answer, so it can't tell whether you're signed in. If you were, nothing has changed.",
+	unavailableRetrying: 'Checking again…',
+	signedOutHeading: 'Signed out',
+	signedOut: 'Signed out.',
+	sessionEnded: 'Your session has ended. Sign in again.',
+	signingOut: 'Signing out…',
+	signOutFailedHeading: "Couldn't confirm you're signed out",
+	signOutFailed: "Captain's service didn't answer. You may still be signed in.",
+	misconfigured: "This page isn't served from a Captain address, so it can't sign you in.",
+	signOutConfirm: 'Sign out of Captain in this browser?',
+	errorTitle: 'Sign-in',
+	errorFallback: 'Sign-in did not finish. Try again.'
+} as const;
+
+/** The API's sign-in error codes, as `/welcome?error=<code>` carries them (the vocabulary of the old sign-in page). */
+export const signInErrors: Readonly<Record<string, string>> = Object.freeze({
+	request_invalid: 'That sign-in link had expired. Start again.',
+	google_failed: 'Google did not complete the sign-in. Try again.',
+	exchange_failed: 'The sign-in could not be finished. Try again.',
+	passkey_failed: 'The passkey could not be checked. Try again.',
+	native_sign_in_disabled: 'Signing in from the Captain app is not available on this Captain. Close this window to return to the app.'
+});
+
+/** The line for `?error=`: a known code's wording, the fallback for any other value, nothing when there is none. The
+ *  code itself is never shown. */
+export function signInErrorText(code: unknown): string | null {
+	if (code === undefined || code === null || code === '') return null;
+	return (typeof code === 'string' ? signInErrors[code] : undefined) ?? webCopy.errorFallback;
+}
+
+export type WebWelcome = {
+	readonly heading: string; readonly body: readonly string[]; readonly notices: readonly Line[];
+	/** The sign-in link is offered. */
+	readonly signIn: boolean;
+	/** Try again: enabled, disabled with its reason, or absent. */
+	readonly retry: { readonly disabled: string | null } | null;
+};
+
+/** The web welcome for every state that is not signed in. `error` is the page's `?error=` value, if any. */
+export function webWelcomePage(snapshot: AccountSnapshot, options: { readonly now: number; readonly error?: unknown; readonly format?: FormatAbout }): WebWelcome {
+	const account = snapshot.account; const format = options.format ?? formatAbout;
+	const errorText = signInErrorText(options.error);
+	const errorNotice: Line[] = errorText === null ? [] : [{ title: webCopy.errorTitle, text: errorText }];
+	const plain = (heading: string, body: readonly string[]): WebWelcome => ({ heading, body, notices: errorNotice, signIn: false, retry: null });
+	switch (account.kind) {
+		case 'checking': return plain(copy.captain, [webCopy.checking]);
+		case 'misconfigured': return plain(copy.captain, [webCopy.misconfigured]);
+		case 'signed-out': {
+			const notice = account.notice;
+			if (notice?.kind === 'released') {
+				const text = notice.reason === 'session-ended' ? webCopy.sessionEnded : webCopy.signedOut;
+				return { heading: webCopy.signedOutHeading, body: [webCopy.signIn], notices: [{ title: webCopy.signedOutHeading, text }, ...errorNotice], signIn: true, retry: null };
+			}
+			return { heading: webCopy.signInHeading, body: [webCopy.signIn], notices: errorNotice, signIn: true, retry: null };
+		}
+		case 'unverified': {
+			const blocked = waiting(account.wait, options.now);
+			const body = [webCopy.unavailable, ...(account.retrying ? [webCopy.unavailableRetrying] : blocked ? [tryAgainAfter(account.wait!, format)] : [])];
+			return { heading: webCopy.unavailableHeading, body, notices: errorNotice, signIn: false, retry: { disabled: account.retrying ? webCopy.unavailableRetrying : blocked ? tryAgainAfter(account.wait!, format) : null } };
+		}
+		case 'releasing':
+			if (!account.canRetry) return plain(webCopy.signingOut, []);
+			return { heading: webCopy.signOutFailedHeading, body: [webCopy.signOutFailed], notices: errorNotice, signIn: false, retry: { disabled: null } };
+		default:
+			// The native machine's other states never occur on the web; a neutral page if one ever did.
+			return plain(copy.captain, []);
+	}
+}
+
+/** The passkey step-up page (§B.2). */
+export const stepUpCopy = {
+	heading: 'One more step',
+	body: 'This account is protected by a passkey. Confirm it is you.',
+	waiting: 'Your browser is asking for your passkey.',
+	checking: 'Checking…',
+	use: 'Use my passkey',
+	tryAgain: 'Try again',
+	dismissed: 'The passkey prompt was dismissed.',
+	unsupported: "This browser couldn't use a passkey.",
+	optionsFailed: "Captain couldn't start the passkey check. Start again from sign-in.",
+	expired: 'This sign-in has expired. Start again from sign-in.',
+	verifyFailed: 'The passkey could not be checked. Try again.',
+	startOver: 'Back to sign in',
+	done: 'Your passkey is confirmed. Opening Captain…',
+	native: 'Passkeys are confirmed in the browser while signing in. There is nothing to do here.'
+} as const;
+
+/** Accepting an invitation (§B.2). A refusal is definitive; no answer is not, and never suggests opening the
+ *  single-use link again. */
+export const invitationCopy = {
+	heading: 'Invitation',
+	missing: 'This link is missing its invitation.',
+	signInFirst: 'Sign in with the address the invitation was sent to, then it can be accepted.',
+	ready: "You've been invited to join an organisation on Captain.",
+	accept: 'Accept the invitation',
+	accepting: 'Accepting…',
+	refusedTitle: "This invitation can't be used.",
+	unknownTitle: "The invitation's result isn't confirmed.",
+	unknown: "Captain couldn't confirm whether the invitation was accepted. Check whether the organisation is now listed for you; if it isn't, ask for a new invitation link.",
+	organisations: 'Your organisations',
+	openThreads: 'Open threads'
+} as const;
+
+/** "You're now part of {name}." */
+export const invitationAcceptedText = (organisationName: string): string => `You're now part of ${organisationName}.`;
+
+/** The API's refusal codes for an invitation; any other code gets the general line. */
+export const invitationRefusals: Readonly<Record<string, string>> = Object.freeze({
+	invitation_invalid: 'This invitation is not open: it may have been used, withdrawn or expired.',
+	forbidden: 'This invitation was sent to another address. Sign in with that address.'
+});
+export const invitationRefusalText = (code: string): string => invitationRefusals[code] ?? 'Captain refused this invitation.';
+
+/** The thread list shell (docs/proposals/2026-09-29-chat-first-captain.md "Navigation"), empty in R1. */
+export const threadsCopy = {
+	heading: 'Threads',
+	filters: ['All', 'Needs you', 'Tasks', 'Bookings', 'Stock', 'Records', 'Files', 'People'] as const,
+	filterGroup: 'Filter threads',
+	pinnedEquipment: 'Equipment schedule',
+	pinnedEquipmentDetail: 'Bookings for shared equipment',
+	pinnedTeam: 'Team',
+	pinnedTeamDetail: 'Not in this version yet',
+	emptyTitle: 'No threads to show yet',
+	emptyBody: "This version doesn't read threads yet, so none are listed. Nothing is hidden. The equipment schedule above is live.",
+	search: 'Search',
+	searchHint: 'Not available yet',
+	account: 'Account and settings'
+} as const;
+
+/** A link this app will not open. */
+export const refusedCopy = {
+	heading: 'This link can’t be opened in Captain',
+	title: 'Nothing was opened',
+	body: 'The link is not one this app can open. Nothing was changed.',
+	back: 'Go to threads'
+} as const;

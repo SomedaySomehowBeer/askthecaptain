@@ -14,7 +14,7 @@ const origin = 'https://api.example.test';
 const token = `sess_${'T'.repeat(43)}`;
 const expiresAt = '2030-02-01T00:00:00.000Z';
 const user = { id: '3f2504e0-4f89-41d3-9a0c-0305e82c3301', email: 'nat@example.test', name: 'Nat' };
-const signedInBody = { token, expiresAt, user, returnTo: '/work' };
+const signedInBody = { token, expiresAt, user, returnTo: '/equipment' };
 const code = `nh_${'C'.repeat(43)}`;
 const s256 = (value: string) => createHash('sha256').update(value).digest('base64url');
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -47,8 +47,8 @@ test('the start URL: origin, fixed path, the native parameters, and return_to on
 	const pkce = { challenge: 'c'.repeat(43), attempt: 'a'.repeat(43) };
 	const base = `${origin}/auth/google/start?client=native&code_challenge=${pkce.challenge}&code_challenge_method=S256&attempt=${pkce.attempt}`;
 	assert.equal(startUrl(origin, pkce), base);
-	assert.equal(startUrl(origin, pkce, '/work/views'), `${base}&return_to=%2Fwork%2Fviews`);
-	assert.equal(startUrl(origin, pkce, '/chat?filter=unread&x=1'), `${base}&return_to=%2Fchat%3Ffilter%3Dunread%26x%3D1`);
+	assert.equal(startUrl(origin, pkce, '/equipment'), `${base}&return_to=%2Fequipment`);
+	assert.equal(startUrl(origin, pkce, '/resources/equipment?date=1'), `${base}&return_to=%2Fresources%2Fequipment%3Fdate%3D1`);
 	for (const refused of ['', '//evil.test', '/\\evil.test', 'https://evil.test/work', 'app.askthecaptain.dev:/work', '/auth/callback', '/unknown', '/link-not-allowed', `/${'a'.repeat(2048)}`])
 		assert.equal(startUrl(origin, pkce, refused), base, refused.slice(0, 40));
 });
@@ -57,12 +57,12 @@ test('a full attempt: one browser session with this attempt’s challenge, then 
 	const { platform, opened } = fakePlatform(); const { transport, sent } = fakeTransport(() => answered(200, signedInBody));
 	const attempts = createAttempts({ platform, transport });
 	assert.equal(attempts.state(), 'idle');
-	const outcome = attempts.start('/work');
+	const outcome = attempts.start('/equipment');
 	assert.equal(attempts.state(), 'opening');
 	await until(() => opened.length === 1);
 	assert.equal(attempts.state(), 'awaiting-callback');
 	assert.equal(opened[0]!.prefix, 'app.askthecaptain.dev:/auth/callback');
-	const start = startOf(opened[0]!); assert.equal(start.returnTo, '/work');
+	const start = startOf(opened[0]!); assert.equal(start.returnTo, '/equipment');
 	opened[0]!.resolve({ type: 'success', url: callbackFor(opened[0]!) });
 	assert.deepEqual(await outcome, { kind: 'signed-in', session: signedInBody });
 	assert.equal(sent.length, 1);

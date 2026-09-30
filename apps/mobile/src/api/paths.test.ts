@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { apiPaths, maxWorkPages, myWorkPath, nativeStartPath, organisationPath, stockPath, workPageSize } from './paths.ts';
+import { apiPaths, googleStartPath, maxWorkPages, myWorkPath, nativeStartPath, organisationPath, stockPath, workPageSize } from './paths.ts';
 
 const id = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
@@ -10,8 +10,11 @@ test('stock requests active items across locations without query or user-control
 });
 
 test('the fixed paths are the routes the app calls, and the start path is separate', () => {
-	assert.deepEqual(apiPaths, { me: '/v1/me', nativeExchange: '/auth/native/exchange', signOut: '/auth/sign-out', revokeOthers: '/v1/me/sessions/revoke-others' });
-	assert.equal(nativeStartPath, '/auth/google/start');
+	assert.deepEqual(apiPaths, {
+		me: '/v1/me', nativeExchange: '/auth/native/exchange', signOut: '/auth/sign-out', revokeOthers: '/v1/me/sessions/revoke-others',
+		passkeyOptions: '/auth/passkey/options', passkeyVerify: '/auth/passkey/verify', passkeys: '/v1/me/passkeys', acceptInvitation: '/v1/invitations/accept'
+	});
+	assert.equal(nativeStartPath, '/auth/google/start'); assert.equal(googleStartPath, nativeStartPath);
 	assert.ok(!(Object.values(apiPaths) as string[]).includes(nativeStartPath), 'the client never requests the start');
 });
 

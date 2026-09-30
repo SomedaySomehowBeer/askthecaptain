@@ -29,6 +29,8 @@ export function useEquipmentSchedule() {
 	const bound = useRef<ReadScope | null>(null);
 	if (bound.current === null && scope !== null) bound.current = scope;
 	const inert = listInert(bound.current, scope);
+	/** The account is still being checked (the web's first `/v1/me`, or the native start): no scope yet, said as such. */
+	const checking = bound.current === null && (shown.kind === 'checking' || shown.kind === 'starting');
 	const scopeRef = useRef<ReadScope | null>(scope); scopeRef.current = scope;
 	// The account's own membership check (design E2): signed in and not refreshing, read at the press, scope unchanged.
 	const membershipChecked = shown.kind === 'signed-in' && !shown.refreshing && !inert;
@@ -97,6 +99,7 @@ export function useEquipmentSchedule() {
 	return {
 		state: inert ? null : stateRef.current,
 		inert,
+		checking,
 		now,
 		membershipChecked,
 		press: (intent: Intent) => act((s) => press(s, intent)),

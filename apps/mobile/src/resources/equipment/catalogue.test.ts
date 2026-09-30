@@ -172,7 +172,7 @@ test('the only stop is the API maximum offset, and it is worded', () => {
 	const last = finishCatalogueRead(loading, request, ok(page(1_000_000, range(2_000, 100), true)));
 	assert.equal(last.nextOffset, 1_000_100);
 	assert.deepEqual(catalogueView(last), {
-		status: 'listed', columns: last.columns, stale: false, more: 'website', notices: ['listed-on-website'], tryAgain: null, access: false,
+		status: 'listed', columns: last.columns, stale: false, more: 'ceiling', notices: ['ceiling'], tryAgain: null, access: false,
 	});
 	noneBut(last, null);
 });

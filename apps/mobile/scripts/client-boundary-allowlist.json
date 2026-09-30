@@ -18,7 +18,8 @@
     "expo-dev-client": "development builds (§8)",
     "expo-web-browser": "openAuthSessionAsync (§8)",
     "expo-secure-store": "session and organisation choice: the only storage mechanism (§8)",
-    "expo-crypto": "random bytes and SHA-256 for PKCE and attempts (§8, Q10)"
+    "expo-crypto": "random bytes and SHA-256 for PKCE and attempts (§8, Q10)",
+    "@simplewebauthn/browser": "the passkey step-up on the web: startAuthentication over the API's assertion options (docs/plans/expo-web-session-2026-09.md §B.2)"
   },
   "devDependencies": {
     "typescript": "typecheck (§8)",

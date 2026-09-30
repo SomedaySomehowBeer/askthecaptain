@@ -1,52 +1,51 @@
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useAccount } from '../../../account/AccountProvider.tsx';
-import { equipmentCopy, equipmentTimesIn } from '../../../account/copy.ts';
-import { Button } from '../../../components/AccountPage.tsx';
-import { Notice } from '../../../components/Notice.tsx';
-import { Screen } from '../../../components/Screen.tsx';
-import type { Equipment } from '../../../resources/equipment/data.ts';
-import { ReservationPanel } from '../../../resources/equipment/ReservationPanel.tsx';
-import { panelRow, scheduleScreen, type Control, type Intent, type ScheduleScreen } from '../../../resources/equipment/schedule.ts';
-import { Timeline, WebLink } from '../../../resources/equipment/Timeline.tsx';
-import { useEquipmentSchedule } from '../../../resources/equipment/useEquipmentSchedule.ts';
-import { colors, type } from '../../../theme/tokens.ts';
+import { equipmentCopy, equipmentTimesIn, threadsCopy, webCopy } from '../account/copy.ts';
+import { Button } from '../components/AccountPage.tsx';
+import { Notice } from '../components/Notice.tsx';
+import { Screen } from '../components/Screen.tsx';
+import type { Equipment } from '../resources/equipment/data.ts';
+import { ReservationPanel } from '../resources/equipment/ReservationPanel.tsx';
+import { panelRow, scheduleScreen, type Control, type Intent, type ScheduleScreen } from '../resources/equipment/schedule.ts';
+import { Timeline } from '../resources/equipment/Timeline.tsx';
+import { useEquipmentSchedule } from '../resources/equipment/useEquipmentSchedule.ts';
+import { colors, type } from '../theme/tokens.ts';
 
-/** Resources → Equipment schedule, read-only (docs/plans/expo-mobile-equipment-read-2026-09.md §5). Bookings for shared
- *  equipment across equipment and days. Only a fully read period may leave time blank, and only as "no confirmed
- *  reservations when it was read"; unread, loading, failed, partial, conflicting and stale time is hatched with its
- *  words. There is no reserve, edit or cancel control: one fixed link opens the schedule on the website. */
+/** The equipment schedule, read-only, opened from its pinned row (docs/plans/expo-mobile-equipment-read-2026-09.md §5;
+ *  D38: buttons only). Bookings for shared equipment across equipment and days. Only a fully read period may leave
+ *  time blank, and only as "no confirmed reservations when it was read"; unread, loading, failed, partial, conflicting
+ *  and stale time is hatched with its words. There is no reserve, edit or cancel control yet. */
 export default function EquipmentSchedule() {
 	const schedule = useEquipmentSchedule();
-	const { webLink } = useAccount();
 	const [open, setOpen] = useState<{ equipment: Equipment; reservationId: string } | null>(null);
 	const state = schedule.state;
 	// The panel shows only a reservation still drawn for its equipment; it closes once it is no longer returned or has
 	// been contradicted (review S2).
 	const row = open === null || state === null ? null : panelRow(state, open.equipment.id, open.reservationId);
 	useEffect(() => { if (open !== null && row === null) setOpen(null); }, [open, row]);
+	const back = { label: threadsCopy.heading, onPress: () => { if (router.canGoBack()) router.back(); else router.replace('/'); } };
 
-	// Before the scope is bound, or after it changed (the tabs are about to reset): the loading line and nothing else.
+	// Before the scope is bound (the account still being checked), or after it changed (the list is about to take
+	// over): the loading line and nothing else.
 	if (schedule.inert || state === null) {
 		return (
-			<Screen section="resources" title={equipmentCopy.heading}>
+			<Screen back={back} title={equipmentCopy.heading}>
 				<Text style={styles.subtitle}>{equipmentCopy.subtitle}</Text>
-				<Text testID="equipment-loading" style={styles.body}>{equipmentCopy.loading}</Text>
+				<Text testID="equipment-loading" style={styles.body}>{schedule.checking ? webCopy.checking : equipmentCopy.loading}</Text>
 			</Screen>
 		);
 	}
 
 	const screen = scheduleScreen(state, schedule.now(), schedule.membershipChecked);
-	const web = webLink('/resources/equipment');
-	const header = <Header screen={screen} web={web} onRefresh={schedule.refresh} onPress={schedule.press} />;
+	const header = <Header screen={screen} onRefresh={schedule.refresh} onPress={schedule.press} />;
 
 	if (screen.body !== 'timeline' || state.range === null || screen.zone === null) {
 		return (
-			<Screen section="resources" title={equipmentCopy.heading}>
+			<Screen back={back} title={equipmentCopy.heading}>
 				<View style={styles.stack}>
 					{header}
 					<Body screen={screen} onPress={schedule.press} />
-					{screen.body === 'loading' ? null : <WebLink href={web} />}
 				</View>
 			</Screen>
 		);
@@ -54,11 +53,10 @@ export default function EquipmentSchedule() {
 
 	const zone = screen.zone;
 	return (
-		<Screen section="resources" title={equipmentCopy.heading} list={(frame) => (
+		<Screen back={back} title={equipmentCopy.heading} list={(frame) => (
 			<View style={styles.fill}>
 				<Timeline
-					state={state} screen={screen} zone={zone} web={web} frame={frame} header={header}
-					footer={<WebLink href={web} />}
+					state={state} screen={screen} zone={zone} frame={frame} header={header} footer={null}
 					onSettle={schedule.settle} onScale={schedule.scale} onEdge={schedule.edge} onToday={schedule.today} onPress={schedule.press}
 					onOpen={(equipment, reservation) => setOpen({ equipment, reservationId: reservation.id })}
 				/>
@@ -71,7 +69,7 @@ export default function EquipmentSchedule() {
 }
 
 /** Subtitle, zone line, Refresh, the one screen-level problem with its way out, the catalogue notices and the legend. */
-function Header({ screen, web, onRefresh, onPress }: { screen: ScheduleScreen; web: string | null; onRefresh: () => boolean; onPress: (intent: Intent) => boolean }) {
+function Header({ screen, onRefresh, onPress }: { screen: ScheduleScreen; onRefresh: () => boolean; onPress: (intent: Intent) => boolean }) {
 	const cellRetry = screen.cellRetry;
 	// With the schedule still shown (a failed Refresh keeps it, labelled stale), its Try again sits with the problem.
 	const tryAgain = screen.body === 'timeline' || screen.body === 'empty' ? screen.tryAgain : null;
@@ -89,13 +87,7 @@ function Header({ screen, web, onRefresh, onPress }: { screen: ScheduleScreen; w
 			{cellRetry === null ? null : (
 				<ControlButton testID="equipment-cells-try-again" label={cellRetry.label} control={cellRetry} onPress={() => { onPress(cellRetry.intent); }} />
 			)}
-			{screen.notices.map((notice) => (
-				<View key={notice} style={styles.stack}>
-					<Text testID="equipment-notice" style={styles.detail}>{notice}</Text>
-					{/* The API ceiling: the words and the link together (review S3). */}
-					{notice === equipmentCopy.onWebsite ? <WebLink href={web} testID="equipment-web-ceiling" /> : null}
-				</View>
-			))}
+			{screen.notices.map((notice) => <Text key={notice} testID="equipment-notice" style={styles.detail}>{notice}</Text>)}
 			{screen.body === 'timeline' ? <Text testID="equipment-legend" style={styles.detail}>{equipmentCopy.legend}</Text> : null}
 			{/* Archived equipment isn't listed, so the header says so where the legend is read (review S4). */}
 			{screen.body === 'timeline' || screen.body === 'empty' ? <Text testID="equipment-archived" style={styles.detail}>{equipmentCopy.archived}</Text> : null}

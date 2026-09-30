@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Action, Line } from '../account/copy.ts';
-import { copy, isSignedIn, nextWake, revocationDisabled, revocationLines, revokeOthersCopy, snapshotWaits } from '../account/copy.ts';
+import { copy, isSignedIn, nextWake, revocationDisabled, revocationLines, revokeOthersCopy, snapshotWaits, webCopy } from '../account/copy.ts';
 import { useRevocation, type Account } from '../account/AccountProvider.tsx';
 import type { Wait } from '../account/clock.ts';
 import type { PersonScope } from '../account/revocation.ts';
@@ -30,7 +30,7 @@ export function AccountPageFrame({ heading, children, header }: { heading: strin
 	return (
 		<View style={[styles.page, { paddingTop: insets.top }]}>
 			{header ?? <View style={styles.spacer} />}
-			<ScrollView contentContainerStyle={{ paddingHorizontal: space.page, paddingBottom: 32 + insets.bottom }}>
+			<ScrollView contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}>
 				<Text role="heading" style={styles.heading}>{heading}</Text>
 				{children}
 			</ScrollView>
@@ -65,22 +65,30 @@ export function Button({ label, onPress, primary = false, disabled = false, reas
 	);
 }
 
+/** A button that is a plain link: on the web React Native Web renders a View with `href` as an anchor, so the browser
+ *  navigates in the same tab (the sign-in start, a full-page step). Never `Linking.openURL`, which opens a new tab. */
+export function LinkButton({ href, label, primary = false, testID }: { href: string; label: string; primary?: boolean; testID?: string }) {
+	const anchor = { href } as object;
+	return (
+		<View style={styles.buttonWrap}>
+			<Pressable testID={testID} role="link" aria-label={label} style={[styles.button, primary ? styles.primary : styles.secondary]} {...anchor}>
+				<Text style={[styles.buttonText, primary && styles.primaryText]}>{label}</Text>
+			</Pressable>
+		</View>
+	);
+}
+
 /** Every action on a page. A forbidden action is shown disabled with its reason, never hidden. Sign out asks first. */
 export function Actions({ actions, account }: { actions: readonly Action[]; account: Account }) {
 	const [confirming, setConfirming] = useState(false);
 	return (
 		<View style={styles.stack}>
 			{actions.map((action) => {
-				if (action.kind === 'web') {
-					const href = account.webLink(action.path);
-					if (href === null) return <Text key={action.id} style={styles.reason}>{copy.webMissing}</Text>;
-					return <Button key={action.id} testID={`account-action-${action.id}`} label={action.label} onPress={() => { void Linking.openURL(href); }} />;
-				}
 				if (action.kind === 'sign-out') {
 					if (!confirming) return <Button key="sign-out" testID="account-action-sign-out" label="Sign out" primary={action.primary} onPress={() => setConfirming(true)} />;
 					return (
 						<View key="sign-out" style={styles.confirm}>
-							<Text style={styles.body}>{copy.signOutConfirm}</Text>
+							<Text style={styles.body}>{Platform.OS === 'web' ? webCopy.signOutConfirm : copy.signOutConfirm}</Text>
 							<Button testID="account-action-sign-out-confirm" label="Sign out" primary onPress={() => { setConfirming(false); account.send({ type: 'sign-out' }); }} />
 							<Button testID="account-action-sign-out-cancel" label="Keep me signed in" onPress={() => setConfirming(false)} />
 						</View>
@@ -101,7 +109,7 @@ export function Actions({ actions, account }: { actions: readonly Action[]; acco
 }
 
 /** Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §4). Everything that must survive leaving
- *  and re-entering this screen (in flight, slow, the server's wait, the last result) is the runner's, read through
+ *  and re-entering this screen (in flight, slow, the server's wait, the last result) is the source's, read through
  *  `useRevocation`; only whether the confirmation is open is local. The person scope is captured when the confirmation
  *  opens and sent with the press, so a press made for another sign-in (even as the same person) sends nothing. */
 export function RevokeOthers({ account }: { account: Account }) {
@@ -140,16 +148,17 @@ export function RevokeOthers({ account }: { account: Account }) {
 const styles = StyleSheet.create({
 	page: { flex: 1, backgroundColor: colors.page },
 	spacer: { minHeight: 52 },
+	content: { paddingHorizontal: space.page, width: '100%', maxWidth: space.maxContentWidth, alignSelf: 'center' },
 	heading: { fontSize: type.heading, lineHeight: 32, fontWeight: '600', color: colors.heading, marginTop: 4, marginBottom: 14 },
 	stack: { gap: 12, marginBottom: 12 },
 	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
 	buttonWrap: { gap: 4 },
-	button: { minHeight: 44, borderRadius: 22, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
-	primary: { backgroundColor: colors.body },
+	button: { minHeight: space.minTarget, borderRadius: 22, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
+	primary: { backgroundColor: colors.action },
 	secondary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
 	disabled: { opacity: 0.45 },
 	buttonText: { fontSize: type.body, fontWeight: '600', color: colors.body },
-	primaryText: { color: colors.card },
+	primaryText: { color: colors.actionText },
 	reason: { fontSize: 13, lineHeight: 18, color: colors.muted },
 	confirm: { gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card }
 });
