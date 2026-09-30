@@ -54,24 +54,25 @@ items wait for a live count.
 Kept as history, not authority: the 2026-09-22 mobile mockups (D14 moves to the chat-first prototype), the
 delivery plan and batch plans, the linked-chat and work-record contracts, the files-in-place proposal.
 
-## 3. Decisions the rebuild needs
+## 3. Decisions
 
-Each of these is the owner's. The recommendation is given with each.
+The owner decided items 1 to 4 on 30 September 2026 as recommended. Items 5 to 7 are recommendations still.
 
 1. **Web session.** The API accepts only a bearer token and has no CORS; the cookie lived in Next.js. Options: (a) the
    API serves the Expo web export from its own origin and issues an HttpOnly cookie session, with a CSRF check; (b) a
-   static host plus CORS and a token held by the page. **Recommend (a):** one origin, no token in page storage, one
+   static host plus CORS and a token held by the page. **Decided: (a).** One origin, no token in page storage, one
    fewer service. The `app` CNAME then points at the API.
 2. **Agents as principals.** Every RLS policy resolves `current_user_id()` through memberships. Options: a separate
    agents table touching every policy, or agents as users with `kind = 'agent'` and long-lived revocable keys in
-   place of sessions. **Recommend agents as users:** the policies, memberships and audit paths carry over unchanged.
+   place of sessions. **Decided: agents are users.** The policies, memberships and audit paths carry over unchanged.
 3. **Threads.** The 0042/0043 chat tables enforce participant-only privacy with about a thousand lines of triggers and
    definer functions. Record threads need audience-by-record. Options: bend the guards, or one new thread model
    (`threads` of kind record, topic or private; `thread_messages`) with private threads keeping the participant rules
-   and `chat_audit_events`, and the small staging chat data migrated. **Recommend the new model** and retire 0042/0043
-   after migration; two message stores would be a carry-over.
+   and `chat_audit_events`, and the small staging chat data migrated. **Decided: the new model.** Retire 0042/0043
+   after migration; two message stores would be a carry-over. Shared pins and personal stars carry into the new
+   model; the item panel read API does not.
 4. **Saved views.** Retire, per the proposal's fixed filters, or keep as private filters over the thread list.
-   **Recommend retire.**
+   **Decided: retire.**
 5. **Passkeys and Web Push.** Both continue on the Expo web build (WebAuthn and a service worker exist there); native
    push is a later increment. **Recommend keep both.**
 6. **Stocktake and reminders workflows.** They are live definitions; the proposal makes them the Stock keeper's and
