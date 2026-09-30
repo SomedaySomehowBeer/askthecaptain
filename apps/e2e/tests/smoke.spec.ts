@@ -8,23 +8,11 @@ test('the API is up and can reach its database', async ({ request }) => {
 	expect(await ready.json()).toEqual({ ok: true });
 });
 
-test('signed-out people are sent to sign in, and the page is the real one', async ({ page }) => {
-	await page.goto(`${webUrl()}/`);
-	await expect(page).toHaveURL(/\/sign-in/);
-	await expect(page).toHaveTitle(/Sign in · Ask The Captain/);
-	await expect(page.getByRole('heading', { name: 'Ask The Captain' })).toBeVisible();
-	// Either the sign-in action, or the honest statement that it is not configured; never a 500 shell.
-	const action = page.getByRole('link', { name: 'Continue with Google' });
-	const unconfigured = page.getByText('Sign-in is not set up.');
-	await expect(action.or(unconfigured)).toBeVisible();
-	// Next's route announcer carries role="alert", so the check is for the app's own failed state.
-	await expect(page.locator('.notice--failed')).toHaveCount(0);
-});
-
-test('every area needs a session', async ({ request }) => {
-	for (const path of ['/work', '/work/views', '/work/tags', '/work/tasks/00000000-0000-4000-8000-000000000000/tags', '/work/new', '/work/projects', '/work/projects/new', '/work/projects/00000000-0000-4000-8000-000000000000', '/work/series', '/work/series/new', '/work/series/00000000-0000-4000-8000-000000000000', '/work/tasks/00000000-0000-4000-8000-000000000000', '/chat', '/chat/views', '/resources', '/resources/views', '/resources/inventory', '/resources/equipment', '/resources/equipment/manage', '/resources/equipment/new', '/resources/equipment/00000000-0000-4000-8000-000000000000/reservations/00000000-0000-4000-8000-000000000000', '/today', '/inbox', '/inbox/x', '/inbox/contacts/x', '/settings/contacts', '/settings/contacts/00000000-0000-4000-8000-000000000000', '/notes', '/notes/00000000-0000-4000-8000-000000000000', '/commitments', '/calendar', '/settings', '/settings/members', '/settings/connections', '/settings/inference', '/settings/workflows', '/settings/notifications', '/settings/delete', '/settings/export', '/settings/passkeys', '/welcome']) {
-		const response = await request.get(`${webUrl()}${path}`, { maxRedirects: 0 });
-		expect(response.status(), path).toBe(307);
-		expect(response.headers()['location'], path).toMatch(/\/sign-in/);
-	}
+test('the web origin serves the Expo shell', async ({ request }) => {
+	const response = await request.get(`${webUrl()}/`, { maxRedirects: 0 });
+	expect(response.status()).toBe(200);
+	expect(response.headers()['content-type']).toContain('text/html');
+	const html = await response.text();
+	expect(html).toMatch(/<div\b[^>]*\bid=["']root["']/);
+	expect(html).toContain('/_expo/');
 });

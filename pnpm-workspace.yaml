@@ -2,9 +2,6 @@ packages:
   - "apps/*"
   - "packages/*"
 
-patchedDependencies:
-  next@15.5.25: patches/next@15.5.25.patch
-
 # Expo SDK 57's transitive native peers. Drawer support is upstream in expo-router;
 # these are not app imports. Keep its auto-installed peers on the SDK's versions;
 # revisit all four pins on each SDK upgrade.

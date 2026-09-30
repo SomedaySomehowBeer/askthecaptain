@@ -102,7 +102,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | Path | What |
 |---|---|
 | `apps/api` | Hono HTTP API: auth, routes over services, webhooks, health |
-| `apps/web` | Next.js web client, delivered through #174 and retired by the chat-first rebuild (D37, R1); what remains is deletion work, not target scope |
+| `apps/web` | Retired Next.js web client; source and build configuration removed in R1c (D37) |
 | `apps/e2e` | Playwright deployment smoke suite (deploy workflow, currently paused) and browser regression checks against the Expo web export |
 | `apps/mobile` | The one Expo/React Native client with Expo Router for web, iOS and Android (D37). Shell/auth/platform/account composition (#188/#189/#193/#197), My work (#199), All tasks (#201), native navigation (#205), person-scoped session controls (#207), read-only [Inventory](plans/expo-mobile-inventory-read-2026-09.md) (#210) and the [equipment timeline](plans/expo-mobile-equipment-read-2026-09.md) (E-1 #212, E-2 #213) merged after review and CI; the three-tab navigation is replaced by the thread list (D28, R2). Business writes remain; native sign-in stays off, with no installed-app, simulator or device evidence. Native acceptance precedes device release. |
 | `packages/db` | Drizzle schema, hand-written SQL migrations, RLS policies, typed queries |
@@ -111,7 +111,7 @@ A pnpm/Turborepo monorepo, TypeScript throughout.
 | `packages/engine` | durable workflow execution: pg-boss and a small typed runner in the API process |
 | `packages/model` | the inference client: provider adapter, structured output, budgets, usage |
 | Retired embedding app | `askthecaptain-embed` remains stopped with autostart off; repository assets removed, live resource removal is a separate operation (D21) |
-| `packages/ui` | Retired in R1: only Next.js imported it; logo, icon and splash assets move to `apps/mobile` |
+| `packages/ui` | Removed in R1c: only Next.js imported it; owned brand assets live in `apps/mobile/assets/brand` |
 | `infra` | OpenTofu for Neon, Cloudflare and monitoring; the inference Sprite's bootstrap files, which the API uploads when an owner sets up a subscription |
 
 **Clients.** One Expo/React Native application with Expo Router serves web, iOS and Android

@@ -1,5 +1,5 @@
-/** The scrollable schedule range and its bounded occupancy chunks (contract §4.2): a local port of the web's
- *  `apps/web/src/app/resources/equipment/range.ts`, with the same `Chunk` and `ScheduleRange` shapes.
+/** The scrollable schedule range and its bounded occupancy chunks (contract §4.2): ported from the retired
+ *  Next.js schedule, preserving the `Chunk` and `ScheduleRange` shapes.
  *
  *  The range runs from one calendar month before the anchor date to six calendar months after it. Each chunk is at
  *  most `chunkDays` civil days, aligned to the anchor, far inside the API's 93-day read limit. Every boundary is the

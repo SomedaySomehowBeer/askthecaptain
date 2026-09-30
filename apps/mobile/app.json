@@ -13,15 +13,27 @@
     },
     "android": {
       "package": "app.askthecaptain.dev",
-      "allowBackup": false
+      "allowBackup": false,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/brand/adaptive-icon-foreground.png",
+        "monochromeImage": "./assets/brand/adaptive-icon-monochrome.png",
+        "backgroundColor": "#f1f5ee"
+      }
     },
     "web": {
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "favicon": "./assets/brand/favicon.png"
     },
     "plugins": [
       "expo-router",
       ["expo-secure-store", { "configureAndroidBackup": true }]
-    ]
+    ],
+    "icon": "./assets/brand/icon.png",
+    "splash": {
+      "image": "./assets/brand/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f1f5ee"
+    }
   }
 }

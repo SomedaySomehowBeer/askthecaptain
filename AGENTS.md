@@ -86,7 +86,7 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 | `infra` | OpenTofu (`infra/tofu`) and the inference Sprite's bootstrap files (`infra/sprites`, D18); the retired embedding app remains stopped with repository assets removed (D21) |
 
 The Expo shell is application code in `apps/mobile` (merged #188). The Next.js app (`apps/web`) and
-`packages/ui` are retired in R1; logo, icon and splash assets move to `apps/mobile`. The earlier
+`packages/ui` are removed in this R1c PR; owned brand assets now live in `apps/mobile/assets/brand`. The earlier
 client proof under `docs/proposals/assets/captain-client-proof-2026-09-23` was a standalone,
 fictional harness outside the pnpm workspace, not application code. It and its `client-proof`
 workflow were retired in R0 (#215) and live only in git history.

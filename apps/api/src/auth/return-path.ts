@@ -1,5 +1,5 @@
 /** Where a sign-in may send a person afterwards: a path on this app, never another origin.
- *  The web keeps the same rule in `apps/web/src/lib/session-state.ts` (`safeReturn`); change both together. */
+ *  The API owns the callback redirect for the Expo web client. */
 
 const maxLength = 2048;
 const probe = 'https://return-path.invalid';

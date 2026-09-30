@@ -1,5 +1,12 @@
 # Staging resumed; production paused (2026-09-27)
 
+## Next.js source retirement (30 September 2026)
+
+This pull request removes the Next.js source, `packages/ui`, the Next.js Playwright suites and their CI jobs; the
+repository's web client is the API-served Expo export. Before it merged, the owner completed the cutover below and
+step 5 of [the runbook](expo-web-cutover.md): `askthecaptain-web-staging` was scaled to zero machines (its last
+image `git-b484e30` remains in the registry for rollback). Production stays paused.
+
 ## Web cutover to the API-served Expo export (30 September 2026, about 07:35 UTC)
 
 Steps 1–3 of [the cutover runbook](expo-web-cutover.md) ran on the staging pair (D37, #218, #219). The API

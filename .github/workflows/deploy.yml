@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       promote:
-        description: 'Also deploy production after the staging gate passes'
+        description: 'Also deploy production after the staging API deploy succeeds'
         type: boolean
         default: false
   push:
@@ -15,6 +15,7 @@ concurrency:
   group: deploy
   cancel-in-progress: false
 jobs:
+  # The web export is served by the API image; there is no separate web deploy or web smoke job.
   api-staging:
     runs-on: ubuntu-latest
     steps:
@@ -26,41 +27,14 @@ jobs:
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
       - run: flyctl deploy --config apps/api/fly.staging.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
-  web-staging:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      # One machine per app while we develop (scale-to-zero is in the fly config). The scale step
-      # removes any extra machine an earlier deploy created; --ha=false stops deploy adding one.
-      - run: flyctl scale count 1 --yes --config apps/web/fly.staging.toml
-        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
-      - run: flyctl deploy --config apps/web/fly.staging.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
-        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
-  e2e-gate:
-    needs: [api-staging, web-staging]
-    runs-on: ubuntu-latest
-    env:
-      E2E_WEB_URL: https://app.askthecaptain.app
-      E2E_API_URL: https://api-staging.askthecaptain.app
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @captain/e2e exec playwright install --with-deps chromium
-      - run: pnpm --filter @captain/e2e e2e
   production:
     # Production stays dormant until launch (D17). Promote by hand: run this workflow with promote=true.
     if: github.event_name == 'workflow_dispatch' && inputs.promote
-    needs: [e2e-gate]
+    needs: [api-staging]
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
       - run: flyctl deploy --config apps/api/fly.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
-        env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }
-      - run: flyctl deploy --config apps/web/fly.toml --depot --ha=false --image-label "git-${GITHUB_SHA}"
         env: { FLY_API_TOKEN: "${{ secrets.FLY_API_TOKEN }}" }

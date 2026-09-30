@@ -2,7 +2,6 @@
 **/.terraform
 **/node_modules
 **/dist
-**/.next
 docs
 # infra stays out except the Sprite files the API uploads when an owner sets up a subscription (D18).
 infra/*
