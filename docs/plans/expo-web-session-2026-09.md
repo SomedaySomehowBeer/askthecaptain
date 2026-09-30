@@ -51,7 +51,8 @@ session and a CSRF check.
    - The chosen organisation is kept in `localStorage` under the person's user id, falling back to the first
      membership.
    - The transport (`src/api/client.ts`) keeps its byte budget and outcomes; `native-send.ts` gains a web variant
-     that sends cookies and the header. `paths.ts` gains no new paths in R1.
+     that sends cookies and the header. `paths.ts` allow-lists the existing passkey options/verify,
+     passkey-list and invitation-accept routes needed by these screens; R1b adds no server endpoints.
    - The native account machine, SecureStore and the PKCE handoff stay as they are and stay dormant.
 2. **Screens.** A new root layout with no tabs:
    - `/` — the thread list, empty in R1: the header, the filter row, the pinned rows (Equipment schedule, Team) and an
