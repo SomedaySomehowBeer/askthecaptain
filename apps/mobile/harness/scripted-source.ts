@@ -1,3 +1,4 @@
+import { passkeyHarness } from './passkey-fixtures.ts';
 import type { AccountSource } from '../src/account/account-source.ts';
 import { outsideSnapshots } from '../src/account/account-source.ts';
 import { createClampedClock, type Wait } from '../src/account/clock.ts';
@@ -32,7 +33,7 @@ export const harnessOrgC: Membership = Object.freeze({ organisationId: 'feedface
 export const timedWaitMs = 5_000;
 
 export const scenarioNames = [
-	'ready', 'ready-destination', 'misconfigured', 'starting', 'starting-slow', 'startup-failed',
+	'passkeys-empty', 'passkeys-loaded', 'passkeys-unavailable', 'passkeys-failed', 'ready', 'ready-destination', 'misconfigured', 'starting', 'starting-slow', 'startup-failed',
 	'storage-unavailable', 'storage-unreadable', 'signed-out', 'signed-out-busy', 'signed-out-cancelled', 'signed-out-released',
 	'signing-in', 'closing', 'saving', 'checking', 'unverified', 'unverified-retry-at', 'releasing', 'releasing-warning',
 	'releasing-retry-at', 'choose', 'none', 'lost-named', 'lost-unnamed', 'not-remembered', 'refreshing', 'fault',
@@ -67,6 +68,7 @@ const signedIn = (overrides: Partial<Extract<AccountView, { kind: 'signed-in' }>
 
 function scenario(name: ScenarioName, wait: Wait): AccountSnapshot {
 	switch (name) {
+		case 'passkeys-empty': case 'passkeys-loaded': case 'passkeys-unavailable': case 'passkeys-failed':
 		case 'ready': return snap(signedIn());
 		case 'ready-destination': return snap(signedIn({ destination: '/equipment' }));
 		case 'misconfigured': return outsideSnapshots.misconfigured;
@@ -262,7 +264,7 @@ export function createScriptedSource(name: ScenarioName, options: {
 
 
 	return Object.freeze({
-		web: null,
+		web: name.startsWith('passkeys-') ? passkeyHarness(name, () => currentPerson()?.epoch ?? null) : null,
 		revokeOthers,
 		revocationView,
 		revocations: () => revocationSent,

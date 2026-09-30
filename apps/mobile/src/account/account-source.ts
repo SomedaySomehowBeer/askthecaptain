@@ -25,7 +25,7 @@ export type AccountSource = {
 	 *  changes; the shared idle object with no runner. */
 	readonly revocationView: () => RevocationView;
 	/** The web-only calls (docs/plans/expo-web-session-2026-09.md §B.2): the sign-in link, the passkey step-up, the
-	 *  passkeys list and accepting an invitation. Null on iOS and Android, whose screens say so. */
+	 *  passkey controls and accepting an invitation. Null on iOS and Android, whose screens say so. */
 	readonly web: WebCalls | null;
 };
 

@@ -65,7 +65,7 @@ function harness(options: { storage?: boolean; client?: ApiClient; slowAfterMs?:
 	 *  call. `postRaw`: the next `post` resolves with exactly what the test answers, not mapped to a client outcome (a
 	 *  broken client resolving something unusable). */
 	const flags = { getThrows: false, postThrows: false, postRaw: false };
-	const client: ApiClient = {
+	const client: ApiClient = { delete: async () => ({ ok: false, kind: 'unavailable', status: 0 }),
 		get: <T>(path: unknown, t: string | null, parse: (value: unknown) => T) => {
 			if (flags.getThrows) { flags.getThrows = false; throw new Error(`client detail ${token('q')}`); }
 			return calls.make<ApiOutcome<unknown>>('get', [path, t]).then((answer) => answer.ok ? { ok: true as const, value: parse(answer.value) } : answer as ApiOutcome<T>);
