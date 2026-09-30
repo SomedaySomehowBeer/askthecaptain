@@ -21,16 +21,23 @@ records deliberately; never claim a live data audit from a code inventory.
 - **Inference is data-only (D2).** A model is called only inside an `infer` step with an
   instruction, input data and an output schema. The output is validated before any code sees it.
   The model gets no tools, makes no writes, and never sees a credential, a token or a key.
-- **Every write is a version (D29).** A write is role-checked inside Row Level Security, stores a
-  full snapshot with who (person, agent or system), what caused it and when, and is recorded in
+- **Business changes are versioned (D29).** A business write is role-checked inside Row Level
+  Security, stores a full snapshot with who (person, agent or system), what caused it and when, and is recorded in
   `audit_events`, except private thread records (D25), which are recorded in the
   participant-scoped, append-only `chat_audit_events` so audit never reveals a private conversation
-  to nonparticipants. Writes made together are one change set; undo writes a new version and
-  never rewrites history. A person-enabled workflow writes as that person (D4); an agent writes
-  under its own key with member limits (D30). There is no signed request or confirmation token.
+  to nonparticipants. Store typed before/after changes as well as snapshots. A person can select
+  independent changes to reverse; undo applies checked inverse operations, preserves unrelated
+  later edits, and appends a new change set. Conflicts and dependencies are explicit; never restore
+  an entire old snapshot over newer work. See the
+  [privacy and selective-undo contract](docs/plans/private-threads-and-selective-undo-2026-09.md).
+  A person-enabled workflow writes as that person (D4); an agent writes under its own key with member limits (D30). There is no signed request or confirmation token.
   Code, never the model, decides when an action needs approval: an external action, or a write to
   a record linked to an outside company or person, waits as `pending` with an approval card
   showing the exact editable content (D31).
+- **Private threads stay outside inference (D25/D33).** Only an explicit participant `@` mention
+  permits a call. The classifier and any needed agent receive only the calling message, never
+  thread history, summaries or cached context. A call grants no thread membership; replies,
+  private causes and call records remain participant-scoped.
 - **Nothing leaves unapproved (D5).** An outside message is sent only after its owner, or an agent
   within admin-set limits, approves the exact content. No inbox; the retired outbox is not a
   requirement for a Captain mail product.
@@ -99,7 +106,8 @@ outside the pnpm workspace, retired in R0.
 
 - Small pull requests, one concern each, with the workspace outcome named in the body and the decision it
   relies on when there is one. CI must be green. Squash-merge.
-- Design of screens and of the step catalog is a plan matter: the reviewed chat-first prototype
+- Design of screens and of the step catalog is a plan matter: the
+  [checked-in chat-first prototype](docs/proposals/assets/captain-chat-first-2026-09-30/README.md)
   and its documented behaviour are the design authority; propose changes in a plan amendment
   before building (D14). The 2026-09-22 mockups are historical.
 - Do not add a package, a table, a dependency or a background process that the plan does not
@@ -118,6 +126,7 @@ outside the pnpm workspace, retired in R0.
 ## Definition of done
 
 Typecheck passes. Tests pass against Postgres. Touched screens pass their Playwright checks on the
-Expo web export. Every write is versioned and undoable; no external action bypasses approval. The
-pull request names the workspace outcome. Nothing in the diff contradicts a decision in the plan. If a step was
-skipped, the pull request says so.
+Expo web export. Business changes are versioned with selective reversal or an explicit reason
+why reversal is unavailable; private agent calls expose only the invoking message, and no external
+action bypasses approval. The pull request names the workspace outcome. Nothing in the diff
+contradicts a decision in the plan. If a step was skipped, the pull request says so.

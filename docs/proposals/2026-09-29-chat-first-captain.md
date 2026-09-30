@@ -3,8 +3,11 @@
 Status: **proposal, 29 September 2026.** Not adopted. Nothing here changes `docs/plan.md` until a
 reviewed amendment does. Outcomes: **discuss work**, **manage shared work**, **allocate resources**.
 
-Prototype: a fictional, clickable set of screens accompanies this proposal (link in the pull request). All names and
-data in it are invented. The audit of what carries over and the order of work are in
+Prototype: the owner-supplied [17-screen HTML export](assets/captain-chat-first-2026-09-30/README.md)
+is checked in unchanged. All names and data in it are invented. The 30 September
+[privacy and selective-undo amendment](../plans/private-threads-and-selective-undo-2026-09.md)
+refines the behaviour below and takes precedence over older prototype interactions. The audit of
+what carries over and the order of work are in
 [the rebuild plan](../plans/chat-first-rebuild-2026-09.md).
 
 ## Why
@@ -25,7 +28,8 @@ data in it are invented. The audit of what carries over and the order of work ar
    talk to each other in the open.
 4. **Inside the organisation agents act; what goes outside is approved.** Approval is a privilege. A record's owner
    has it for that record; an admin can grant it to an agent within limits.
-5. **Everything can be undone.** Every write makes a version. Undo is what lets agents work unapproved.
+5. **Changes can be selectively reversed.** Business writes retain versions and typed changes. Undo reverses
+   selected changes without overwriting unrelated later work; conflicts and irreversible effects are explicit.
 6. **The model reads and drafts; code decides and writes.**
 
 ## Rules in detail
@@ -38,7 +42,9 @@ data in it are invented. The audit of what carries over and the order of work ar
 - Filters: All, Needs you, Tasks, Bookings, Stock, Records, Files, People.
 - Pinned rows open views that are not lists of threads: the equipment schedule, and the team.
 - A conversation with no record is a topic: a record whose only content is its thread.
-- Private conversations between people stay participant-only, as now (D25), and appear in the same list.
+- Private conversations stay participant-only (D25) and appear in the same list. They never enter the
+  classifier unless a participant explicitly `@` mentions an agent; that call exposes only the calling message.
+  Neither the called agent nor a delegated agent may read prior messages, summaries or cached thread context.
 
 ### Threads
 - A record thread is visible to whoever can see the record.
@@ -60,9 +66,12 @@ data in it are invented. The audit of what carries over and the order of work ar
   weekly summary. It is quiet by design.
 - A message in the project thread that is about one task can be moved to that task's thread.
 
-### Captain reads every message
+### Captain reads shared messages; private calls are explicit
 - Captain is an agent like the others, with its own key. Its job is to read and to route.
-- A cheap classifier runs over every message, not only the first. It returns schema-checked data: what the thread is
+- A cheap classifier runs over every message in shared record/topic threads, not only the first. Private
+  threads are excluded unless a participant explicitly mentions an agent, and then only the calling message
+  enters classification or agent processing. A mention grants no thread membership or standing history access.
+  The classifier returns schema-checked data: what a shared thread is, or what a private calling message requests
   (task, booking, stock count, topic), the facts it can see (date, equipment, quantity, company) and which tags apply.
 - **When the data adds something new, Captain applies it as a plain change**, worded exactly as if a person had done
   it: "Captain added the tag Summer lager launch", "Captain made this a booking". Never "Captain thinks".
@@ -72,17 +81,22 @@ data in it are invented. The audit of what carries over and the order of work ar
   does not change anything. A second, slightly larger read of the last message and the recommendation decides whether
   to stay quiet or to ask, with the change offered as one tap: "Move both to after the labels?"
 - A new thread is therefore only an empty thread with the composer ready. The person writes; Captain reads.
-- Every change Captain makes is versioned and undoable like any other, and the person can correct the kind with one
-  tap.
+- Every change Captain makes is versioned and subject to selective undo like any other, and the person can
+  correct the kind with one tap. Private calls cannot automatically broaden a thread's audience. Their replies
+  and source links stay private; follow-up context requires a new explicitly mentioned message.
 
 ### Versions and undo
 - Every write to a record stores a full snapshot with who did it (person, agent or system), what caused it (the
   message, workflow run or scan) and when.
 - The person who asked is not stored separately. It is read from the thread through the cause.
-- Changes made together are one change set and undo together.
-- Undo writes a new version that restores an earlier snapshot. History is never rewritten.
-- Undo is refused, with the reason, when something has already gone outside the organisation, or when restoring would
-  break a rule such as a slot that is now taken.
+- Store immutable typed changes with before/after values and stable field/item identities alongside snapshots.
+- Changes made together are one change set. A person can select whole sets or independent changes within them.
+- Preview inverse operations against current state, preserving unselected later edits. Same-field changes and
+  dependencies produce explicit conflicts; equality of a value alone does not prove it was untouched.
+- Applying a preview rechecks revisions, permissions and domain rules atomically, with retry-safe identity, then
+  writes new versions and a reversal change set. History is never rewritten or replaced by an old snapshot.
+- External effects cannot be unsent by undo, and occupied slots or dependent work may prevent a reversal. The
+  [selective-undo contract](../plans/private-threads-and-selective-undo-2026-09.md) defines these rules and R3 tests.
 
 ### Agents
 - Owners and admins add agents. An agent can do what a member can do, and never what only an admin can.
@@ -90,7 +104,8 @@ data in it are invented. The audit of what carries over and the order of work ar
 - **Each agent has its own key.** Every write is made with it and recorded against that agent. A key can be replaced
   or withdrawn without touching any other agent. The audit log gains an `agent` actor kind.
 - **Agents can trigger each other.** They do so by mentioning one another in a record's thread, so the exchange is
-  visible to everyone who can see the record. There are no private channels between agents.
+  visible to everyone who can see the record. There are no hidden channels between agents. A participant's
+  explicit private call may be routed within its calling-message scope; this never permits thread history access.
 - Loops are stopped by code noticing that nothing is changing, not by counting hand-offs:
   - every chain starts from a person's message, a schedule or a record event, and carries that origin;
   - each hand-off records which agent was asked, about which record, at which version, for what;
@@ -152,7 +167,8 @@ Captain prints the worksheet, so code knows the layout and the model only reads 
 | Check units, ranges, totals and known items | Code |
 | Save the values as one change set; leave unreadable boxes blank and say so | Code |
 
-- No approval is needed. The scan can be undone as a whole.
+- Internal scan processing needs no human approval; any third-party effect still follows D31. The scan is one
+  change set: reverse it as a whole or select independent changes under D29's conflict and dependency rules.
 - Writing in the notes box is a note. Writing in a margin is a note attached to the nearest row and marked as such.
 - The photo is kept and linked from the versions it produced.
 
@@ -172,7 +188,7 @@ cheapest model that does the job; the conflict read is the one place a slightly 
 | D11 three tabs | Replaced: one list of threads grouped by tag, with filters and pinned views |
 | D7 projects and tasks | Amended: a project becomes a kind of tag; a task can carry several projects |
 | D13 attachment bytes never stored | Amended: Captain stores photos of its own worksheets |
-| D25 private chat | Extended: record threads follow the record's audience; private conversations are unchanged |
+| D25 private chat | Record threads follow the record's audience; private threads retain participant access and only explicit message-scoped agent calls are allowed |
 | Non-goal "a conversational model with tools or autonomous writes" | Reworded: autonomous writes are made by code, from schema-checked results |
 | New | Versions and undo; agent identities and keys; agent-to-agent hand-offs; approval as a privilege; pending; file markers |
 

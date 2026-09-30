@@ -9,6 +9,10 @@ retired, and the order of work. Retirements listed here are recommendations unti
 The audit read `main` at `2d3f1ef`: every route group and service in `apps/api`, every table and migration in
 `packages/db`, every package, workflow, infrastructure file, both clients, and every document. Nothing was run.
 
+The owner's 30 September follow-up adds the
+[private-call and selective-undo contract](private-threads-and-selective-undo-2026-09.md) and the
+[checked-in prototype export](../proposals/assets/captain-chat-first-2026-09-30/README.md).
+
 ## 1. What carries over
 
 | Area | Keep as is | Adapt |
@@ -70,7 +74,9 @@ The owner decided items 1 to 4 on 30 September 2026 as recommended. Items 5 to 7
    (`threads` of kind record, topic or private; `thread_messages`) with private threads keeping the participant rules
    and `chat_audit_events`, and the small staging chat data migrated. **Decided: the new model.** Retire 0042/0043
    after migration; two message stores would be a carry-over. Shared pins and personal stars carry into the new
-   model; the item panel read API does not.
+   model; the item panel read API does not. Existing participant-only chats remain private even
+   when linked to shared records. A private thread bypasses classification except for explicit
+   agent mentions, which expose only the calling message and never grant history access.
 4. **Saved views.** Retire, per the proposal's fixed filters, or keep as private filters over the thread list.
    **Decided: retire.**
 5. **Passkeys and Web Push.** Both continue on the Expo web build (WebAuthn and a service worker exist there); native
@@ -90,8 +96,8 @@ while the new one becomes usable; nothing deploys to production.
 | R0 | Adopt | Plan amendment (D27–D38 and edits), AGENTS.md, this document | The client-proof asset and workflow, one-off workflows, engine fixture, `packages/retrieval`, validation records for retired screens |
 | R1 | Web session and shell | API serves the web export and cookie sessions; Expo web signs in; an empty thread list; passkey step-up and push re-proved | `apps/web` and its CI, `packages/ui` (assets moved), `webPaths` |
 | R2 | Threads | The thread model (decision 3); the thread list grouped by tag; a record thread with the small card, oldest-first, folded earlier messages, open at first unread; the composer | 0042/0043 after migration; item panels; three-tab navigation |
-| R3 | Versions and undo | `record_versions`, change sets, cause; change lines in threads; undo | The audit log as a state store (stocktake idempotency, Xero sync state move to their own tables) |
-| R4 | Captain reads | Agents as users with keys; the Captain agent; the classifier as an `infer` step; tags and kind applied as plain changes; mention routing | `commitments` naming, legacy work fields, the six-job field |
+| R3 | Versions and selective undo | Snapshots plus typed before/after changes, change sets and causes; selection/preview, dependency and conflict checks, atomic retry-safe inverse operations; see the privacy/undo contract | The audit log as a state store (stocktake idempotency, Xero sync state move to their own tables) |
+| R4 | Captain reads | Agents as users with keys; the Captain agent; the classifier as an `infer` step for shared messages; private mentions expose only the calling message; tags and kind applied as plain changes; mention routing | `commitments` naming, legacy work fields, the six-job field |
 | R5 | Pending and approval | `pending` bookings holding the slot; approval cards; take-ownership privilege; the equipment schedule as a pinned view with buttons only | Saved views |
 | R6 | First agents | Scheduler and Stock keeper doing internal work; hand-off chains with loop stop and budget; agent approval limits | `chase-due` and `stocktake` definitions |
 | R7 | Files | Drive connector; marker files; change notices in the thread | — |
@@ -104,5 +110,7 @@ while the new one becomes usable; nothing deploys to production.
   account and a device.
 - The equipment timeline ships with scale buttons and native scrolling only. Pinch and custom pan are a later
   increment that names its dependency (D38).
-- A screen touched by a change gets a Playwright check on the Expo web export; every write is versioned and undoable;
-  no outside action bypasses approval.
+- A screen touched by a change gets a Playwright check on the Expo web export. Business writes
+  retain versions and typed changes; selective reversal preserves unrelated later edits and
+  explains conflicts and irreversible effects. Private calls expose only the invoking message.
+  No outside action bypasses approval.

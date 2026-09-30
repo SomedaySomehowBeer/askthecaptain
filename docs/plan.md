@@ -5,7 +5,10 @@ amended on 30 September 2026 for the chat-first rebuild (D27–D38). This is the
 Captain. Decisions in §13 change through reviewed pull requests. The
 [chat-first proposal](proposals/2026-09-29-chat-first-captain.md) states the rules; the
 [rebuild plan](plans/chat-first-rebuild-2026-09.md) records the audit, the owner's decisions and
-increments R0–R9.
+increments R0–R9. The owner's 30 September
+[private-call and selective-undo amendment](plans/private-threads-and-selective-undo-2026-09.md)
+refines D25, D29 and D33; the [prototype export](proposals/assets/captain-chat-first-2026-09-30/README.md)
+is the repository design reference.
 The [delivery plan](plans/captain-workspace-delivery-2026-09.md) separates implemented capabilities
 from targets. The [audit](plans/captain-scope-audit-2026-09-25.md) records the correction and issue
 coverage; the [implementation inventory](plans/captain-workspace-migration-inventory-2026-09.md)
@@ -71,9 +74,10 @@ handles correspondence. Captain does not need an Inbox/Outbox to be useful.
   labelled input and output schema. Validate output before deterministic code uses it. No model
   tools, writes or credentials. Generated prose is allowed inside a validated result with sources.
   The model has four jobs (D36); every decision and write is code.
-- **Versioned writes:** every write is role-checked in RLS and stores a full snapshot with who,
-  what caused it and when (D29); undo writes a new version. A person-enabled workflow acts as that
-  person; an agent writes under its own key within member limits (D4, D30). No signed request or
+- **Versioned writes:** business-record writes are role-checked in RLS and store a full snapshot with who,
+  what caused it and when, plus typed before/after changes (D29). Undo reverses selected changes
+  against current state, preserving unrelated later edits, and appends new versions.
+  A person-enabled workflow acts as that person; an agent writes under its own key within member limits (D4, D30). No signed request or
   confirmation token; code decides when an external action or an outside-linked record waits as
   pending for approval of its exact content (D31).
 - **Nothing leaves unapproved:** an outside message is sent only after its owner, or an agent
@@ -196,7 +200,7 @@ These target semantics do not claim the old schema has already changed.
 | Saved views | Retired (D26): the thread list has fixed filters (D28) | [Contract](plans/saved-work-views-2026-09.md) delivered in #153/#154 and since retired; `saved_views` is removed in R5 after a live count |
 | Equipment | Exclusive resources and bookings/maintenance with occupied start/end, setup/cleanup, revision and work/person links; a booking is pending, confirmed or cancelled (D32) | Migration 0036 and web shipped; [contract](plans/equipment-reservations-2026-09.md); standalone task links and revision-aware project movement added by #136; `pending` joins the status check and the no-overlap predicate in R5 |
 | Threads | One thread per record, topics without a record, and private threads between people: `threads` (kind record, topic or private) and `thread_messages`; private threads keep participant-only rules and `chat_audit_events` (D27, D25) | R2 replaces the 0042/0043 tables (`conversations`, `conversation_participants`, `conversation_links`, `messages`, pins, stars, reads) after migrating staging data; the [linked-chat contract](plans/linked-chat-2026-09.md) was delivered in #169/#171/#173/#174 and is since retired |
-| Versions | A full snapshot per write with actor (person, agent or system), cause and time; change sets; undo as a new version (D29) | `record_versions` in R3; the audit log stops being a state store (stocktake idempotency and Xero sync state move to their own tables) |
+| Versions | Business-record snapshots plus typed before/after changes with stable identities, actor, cause and time; selectable change sets and revision-checked inverse operations (D29) | `record_versions` in R3; the audit log stops being a state store (stocktake idempotency and Xero sync state move to their own tables) |
 | Agents | Users of kind `agent` with a membership, a long-lived revocable key and a fixed capability list in code (D30) | R4; audit actor kind `agent`; chain origin, loop stop and budget in the run model |
 | Approvals | Pending records with an approval card holding the exact editable content; take-ownership privilege; agent approval limits (D31) | R5 (pending, owner approval), R9 (outside messages, agent limits) |
 | Evidence | Business source links and deliberately shared correspondence with source-qualified identity and provenance | Existing generic evidence references reusable but need a bounded sharing/access contract; no mailbox archive |
@@ -290,7 +294,8 @@ The rebuild plan retires `chase-due` and `stocktake` with R6, once the Scheduler
 agents do that work.
 
 A new business workflow gets explicit source permissions, typed steps, budgets, idempotency and
-failure states. Captain's reading of messages (D33) and an agent's work (D30) run on the same
+failure states. Captain's reading of shared messages and explicit private message-only calls
+(D33, D25) and an agent's work (D30) run on the same
 runner, with the chain's origin, loop stop and budget in the run model. Inference and background
 jobs are not needed for ordinary task management or chat.
 
@@ -402,7 +407,8 @@ never copied credentials. The shared connection schema remains for Xero and Shop
   encrypted with the data key (AES-256-GCM). Rotation re-wraps data keys. No third-party key service
   and no extra cloud account.
 - Rate limits per IP, user, organisation and connection. Webhook signature verification.
-- Every write stores a version (D29) and an audit event; an agent's write is recorded against its
+- Business-record writes store versions and typed changes (D29); writes remain audited under
+  their domain rules. An agent's write is recorded against its
   key with actor kind `agent` (D30). Data export and organisation deletion as first-class operations: an
   owner or admin downloads every tenant table as newline-delimited JSON without credentials; an owner
   deletes the organisation by typing its name, providers are told to revoke, and the platform keeps a
@@ -430,7 +436,8 @@ replaced by the thread list (D28):
   fold-out) that stays in view while the thread scrolls. Below it, messages, change lines written
   by code from versions, and approval cards, oldest to newest; the thread opens at the first
   unread, with earlier messages folded behind one row. A new thread is an empty composer; Captain
-  reads what the person writes (D33). A pending record shows its approval card with the exact
+  reads shared messages; a private thread invokes an agent only through an explicit mention,
+  exposing just the calling message (D33). A pending record shows its approval card with the exact
   editable content (D31).
 - **Pinned views** — views that are not lists of threads open from pinned rows: the equipment
   schedule (confirmed, pending and cleaning; scale buttons and native scrolling only, gestures
@@ -455,8 +462,11 @@ inference and workflow configuration reachable through account controls. Remove 
 onboarding, drafting preferences and mail/discovery workflows with their retirement increments.
 The generic runner's activity UI and inference setup can be reused without keeping old duties.
 
-**Design authority (D14).** The reviewed chat-first prototype (linked from the proposal's pull
-request) and its documented behaviour are the design authority. The
+**Design authority (D14).** The owner-supplied
+[chat-first HTML prototype](proposals/assets/captain-chat-first-2026-09-30/README.md), checked in
+unchanged with its checksum, and the reviewed behaviour contracts are the design authority.
+The privacy and selective-undo amendment takes precedence over older prototype interactions;
+new selection/conflict screens require reviewed designs before implementation. The
 [2026-09-22 mobile mockups](proposals/assets/captain-mobile-2026-09-22/README.md) are historical.
 The Expo architecture harness is technical evidence, not a replacement visual design.
 `packages/ui/design/`, the verbatim legacy Claude Design mirror, is retired with `packages/ui`
@@ -524,7 +534,7 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 | D11 | Replaced by D28 (2026-09-30). Was: exactly Work, Chat and Resources, each with a grouped view list one page left, delivered in #159/#188/#205 and since retired. Account controls still open Settings; scoped redirects may preserve valid record links without preserving old UI/actions. |
 | D12 | Hosting is Fly.io Sydney, Neon Postgres, Cloudflare, GitHub Actions. The web client is the Expo web export served by the API (D37). |
 | D13 | Captain retains selected business attachment/file metadata and provider links, never attachment bytes, with one exception: photos of Captain's own worksheets (D35). Any text extraction requires an allow list, size cap, brief cache expiry and labelled untrusted infer input; this does not authorise mailbox-wide ingestion. |
-| D14 | The reviewed chat-first prototype and its documented behaviour are the design authority (§10); the 2026-09-22 mockups are historical. `packages/ui/design/` is retired with `packages/ui` and is never hand-edited; components and tokens live in `apps/mobile`. Technical proof screens do not supersede the reviewed prototype. |
+| D14 | The checked-in owner-supplied chat-first prototype and reviewed behaviour contracts are the design authority (§10); the 2026-09-22 mockups are historical. `packages/ui/design/` is retired with `packages/ui` and is never hand-edited; components and tokens live in `apps/mobile`. Technical proof screens do not supersede the reviewed prototype. |
 | D15 | Inventory is a counted list for ingredients, consumables and finished product, not a ledger. Each stock item is a record with a thread (D27) and counts are versioned writes (D29). Each quantity has one explicit authority: Captain count or a connected provider. Shopify is optional; never hand-overwrite provider-owned quantities. No movements, conversions, lots or costing. |
 | D16 | Envelope encryption uses a master key held in the API's secrets wrapping per-tenant data keys; no cloud key-management service and no AWS account. |
 | D17 | One environment until the second customer: one Neon branch and compute, one live pair of Fly apps. Current staging releases are manual from reviewed merged code per the operational record; automatic deploy is disabled and production stays dormant. |
@@ -535,17 +545,17 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
 | D22 | Retired product decision: automatic mail/note project discovery is legacy. Projects are managed in Work; any later suggestion over deliberately shared business evidence needs a separate reviewed contract and does not restore mailbox discovery. |
 | D23 | Discussion of a record is its thread (D27), not a Notes/comments subsystem. Business evidence retains source identity; handle an actual note reference deliberately when affected, without invented messages or a requirement to retain Notes as a product. Captain is not a document editor. |
 | D24 | Equipment scheduling is core. Continuous interval timelines support hours/days/weeks by scale buttons and resource scrolling; focal zoom and other touch gestures are deferred (D38). Bookings are pending, confirmed or cancelled (D32); the server atomically prevents overlapping pending and confirmed occupancy, including setup/cleanup/maintenance; unknown and unloaded periods are explicit. Filters cannot hide competing resource occupancy. |
-| D25 | Record threads follow the record's audience (D27); private threads between people are unchanged: participant-only, with retry-safe sends, reconnect/read state and source-linked summaries as D2 infer outputs. The latest-six item panel is superseded by the record thread. Shared pins and personal stars carry into the thread model: pins reference original messages and are audited; stars are personal thread bookmarks. Private thread writes, including personal stars and read positions, are audited in the participant-scoped `chat_audit_events`; the tenant-wide `audit_events` receives no chat identifiers. The [linked-chat contract](plans/linked-chat-2026-09.md) specified the first increments, delivered in #169/#171/#173/#174 and replaced by the thread model in R2. |
+| D25 | Record threads follow the record's audience (D27); private threads remain participant-only with retry-safe sends and reconnect/read state. They are excluded from classification and inference unless a participant explicitly mentions an agent; only the calling message may be processed, never prior history, summaries or cached context. A call grants no thread membership. Private source links, call records and replies remain participant-scoped; existing linked chats retain their private audience during migration. The latest-six item panel is superseded by the record thread. Shared pins and personal stars carry into the thread model: pins reference original messages and are audited; stars are personal thread bookmarks. Private thread writes, including personal stars and read positions, are audited in the participant-scoped `chat_audit_events`; the tenant-wide `audit_events` receives no chat identifiers. The [linked-chat contract](plans/linked-chat-2026-09.md) specified the first increments, delivered in #169/#171/#173/#174 and replaced by the thread model in R2. |
 | D26 | Retired (2026-09-30): saved views are removed and the thread list has fixed filters (D28). Delivered as private, versioned filters in #153/#154; `saved_views` is dropped in R5 after a live count. |
 | D27 | Every record — task, project, booking, stock item, production record, company or file — has one thread: a small card with its current state on top and, below it, every message, change line written by code from versions, and approval card. A conversation with no record is a topic. A record thread is visible to whoever can see the record; private threads between people stay participant-only. |
 | D28 | The app is one list of threads, newest activity first, grouped by tag with foldable headings and filtered by All, Needs you, Tasks, Bookings, Stock, Records, Files and People. No tabs; views that are not lists of threads (the equipment schedule, the team) open from pinned rows. Messages read oldest to newest and a thread opens at the first unread. Replaces D11. |
-| D29 | Every write stores a full snapshot with who (person, agent or system), what caused it and when; writes made together are one change set. Undo writes a new version restoring an earlier snapshot; history is never rewritten. Undo is refused, with the reason, once something has gone outside the organisation or when restoring would break a rule. |
-| D30 | Agents are users of kind `agent`: a plain name, a long-lived revocable key instead of a session, a membership, and a fixed list in code of what they can do — what a member can, never what only an admin can. Every agent write is recorded against its key (audit actor kind `agent`). Agents ask each other by mention in a record's thread, never privately; a chain carries its origin, never asks the same agent the same thing about the same record version twice, and stops on a shared admin-set time and inference budget. |
+| D29 | Business writes retain full snapshots and immutable typed before/after changes with actor, cause, revisions and stable identities. A person can select whole change sets or independent changes within them to reverse. Preview and atomically apply inverse operations against current state, preserving unrelated later edits; conflicting or dependent changes are explicit, never silently overwritten. Reversal appends a retry-safe change set and new versions, never restores a whole snapshot over later work. Current permissions, domain rules and external-effect limits still apply; see the private-call and selective-undo contract. |
+| D30 | Agents are users of kind `agent`: a plain name, a long-lived revocable key instead of a session, a membership, and a fixed list in code of what they can do — what a member can, never what only an admin can. Every agent write is recorded against its key (audit actor kind `agent`). Agents ask each other by mention in shared record threads, with no hidden inter-agent conversation. A participant's explicit private call may be routed only within its calling-message scope (D25/D33); a chain carries its origin, never asks the same agent the same thing about the same record version twice, and stops on a shared admin-set time and inference budget. |
 | D31 | Code, never the model, decides whether approval is needed: any external action type, or any record linked to an outside company or person, waits as pending with an approval card showing the exact editable content. Acting under a person's name always needs that person. Taking ownership is a grantable privilege and a visible versioned change. An agent may approve within admin-set limits (kind, counterparties, amount per action and per week), under its own name from a shared address, never its own draft. |
 | D32 | Bookings are pending, confirmed or cancelled. Pending holds the slot with no expiry, and the no-overlap rule covers pending and confirmed; the booking's owner, an admin or the organisation owner can cancel it. An agent's internal booking is confirmed at once. Pending is never shown as free. |
-| D33 | Captain is an agent that reads every message through a cheap schema-checked classifier and applies what is new as a plain change worded as a person's ("Captain added the tag …"), never "Captain thinks"; it asks another agent by mention. On a conflict with the card it changes nothing, and a second, slightly larger read decides whether to stay quiet or offer the change as one tap. A new thread is an empty composer. |
+| D33 | Captain reads messages in shared record/topic threads through a cheap schema-checked classifier. Private threads bypass it unless a participant explicitly `@` mentions an agent; classification and every needed agent receive only that calling message, with no thread history or persistent context (D25). Captain applies what is new as a plain change worded as a person's ("Captain added the tag …"), never "Captain thinks"; it asks another agent by mention. On a conflict with the card it changes nothing, and a second, slightly larger read decides whether to stay quiet or offer the change as one tap. A new thread is an empty composer. |
 | D34 | Files stay in Google Drive; Captain has no file client. "Working on" adds an advisory marker file beside the original and removes it when done; Captain watches Drive and posts in the thread when someone else saves; what is in Drive when the person finishes becomes the next version. |
-| D35 | Worksheets are printed by Captain from versioned code templates carrying a code. Code locates the code and crops the boxes; the model reads each box to a typed value with a confidence; code checks units, ranges and totals and saves one change set, leaving unreadable boxes blank. No approval; the scan undoes as a whole. The photo is kept in object storage and linked from the versions it produced. |
+| D35 | Worksheets are printed by Captain from versioned code templates carrying a code. Code locates the code and crops the boxes; the model reads each box to a typed value with a confidence; code checks units, ranges and totals and saves one change set, leaving unreadable boxes blank. Internal scans need no human approval; third-party effects follow D31. A scan is one change set, reversible as a whole or as selected independent changes under D29. The photo is kept in object storage and linked from the versions it produced. |
 | D36 | The model has four jobs, each schema-checked: a message to a structured request, a handwritten box to a value, drafting an outside message, summarising a thread. Everything else, including every decision and write, is code. |
 | D37 | The client is one Expo/React Native application with Expo Router for web, iOS and Android; the Next.js app is retired. The API serves the Expo web export from its own origin with an HttpOnly cookie session and a CSRF check; Playwright checks run against that export. |
 | D38 | Equipment timeline touch gestures are deferred: scale buttons and native scrolling only, with no gesture or animation dependency, until a reviewed increment names the dependency and its device gate. |
@@ -563,7 +573,9 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   PR B execution gates (§17) passed real-Postgres and hosted rollback-only checks. R2 replaces the
   0042/0043 tables with the thread model (D27) after migrating staging data; summaries,
   notifications and native delivery need their own contracts.
-- Versions: the migration sequence for `record_versions` (R3), including moving stocktake
+- Versions: the [selective-undo contract](plans/private-threads-and-selective-undo-2026-09.md)
+  defines selection, inverse operations, concurrency and privacy. The R3 schema/migration contract
+  must name the typed change journal alongside `record_versions`, including moving stocktake
   idempotency and Xero sync state out of the audit log into their own tables.
 - Agents: where agent keys are stored, how they are rotated and withdrawn, and the shared admin-set
   chain budget (D30).
