@@ -13,7 +13,7 @@ function fixture() {
  let next: ApiOutcome<never> | null = null;
  let pending: (() => Promise<void>) | null = null;
  const calls: { method: string; path: string; body?: unknown; token: string | null }[] = [];
- const client: ApiClient = {
+ const client: ApiClient = { patch: async () => ({ ok: false, kind: 'unavailable', status: 0 }),
   async get(path, token, parse) { calls.push({ method: 'GET', path, token }); if (next) return next; return { ok: true, value: parse(list) }; },
   async post(path, token, body, parse) { calls.push({ method: 'POST', path, body, token }); if (pending) await pending(); if (next) return next; return { ok: true, value: parse(path.endsWith('/options') ? registration : row) }; },
   async delete(path, token, parse) { calls.push({ method: 'DELETE', path, token }); if (pending) await pending(); if (next) return next; return { ok: true, value: parse({ ok: true }) }; }

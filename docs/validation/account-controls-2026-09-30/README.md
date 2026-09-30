@@ -5,6 +5,8 @@ Outcome: **manage shared work** — people protect their own Captain account fro
 Expo client (D37). Members/invitations and push devices remain the next two PRs.
 Based on main `654a608`; no deployment or hosted account was used.
 
+The second slice is recorded separately in [Members and invitations](members.md).
+
 ## Behaviour and scope
 
 Settings extends its existing passkey section using the current account layout, components and

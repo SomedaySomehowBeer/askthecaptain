@@ -264,3 +264,38 @@ it('without the export the API still answers and the page says the web build is 
 	const session = setCookie(response, 'captain_session')!;
 	assert.ok(!('secure' in session.attributes), 'an http app URL sets no Secure attribute');
 });
+
+it('cookie member controls retain CSRF, tenant, owner/admin and last-owner rules', async () => {
+ const owner = await signIn(), admin = await signIn(), member = await signIn(), stranger = await signIn();
+ const request = (cookie: string, path: string, method = 'GET', body?: unknown) => call(app, path, { cookie, method, body, headers: { [web]: 'web' } });
+ const organisation = await read<{ id: string }>(await request(owner.cookie, '/v1/organisations', 'POST', { name: 'Cookie crew' }), 201);
+ const base = `/v1/organisations/${organisation.id}`;
+ const ownerMe = await read<{ user: { id: string } }>(await request(owner.cookie, '/v1/me'), 200);
+ const adminMe = await read<{ user: { id: string } }>(await request(admin.cookie, '/v1/me'), 200);
+ const memberMe = await read<{ user: { id: string } }>(await request(member.cookie, '/v1/me'), 200);
+ const invite = async (email: string, role: 'admin' | 'member') => read<{ invitation: { id: string }; token: string }>(await request(owner.cookie, `${base}/invitations`, 'POST', { email, role }), 201);
+ const adminInvite = await invite(admin.identity.email, 'admin');
+ assert.match(adminInvite.token, /^inv_[A-Za-z0-9_-]{43}$/);
+ await read(await request(admin.cookie, '/v1/invitations/accept', 'POST', { token: adminInvite.token }), 200);
+ const memberInvite = await invite(member.identity.email, 'member');
+ await read(await request(member.cookie, '/v1/invitations/accept', 'POST', { token: memberInvite.token }), 200);
+ assert.equal((await request(stranger.cookie, `${base}/members`)).status, 404, 'another tenant cannot list the crew');
+ assert.equal((await request(member.cookie, `${base}/invitations`)).status, 403);
+ assert.equal((await request(member.cookie, `${base}/members/${adminMe.user.id}`, 'PATCH', { role: 'member' })).status, 403);
+ assert.equal((await request(admin.cookie, `${base}/members/${adminMe.user.id}`, 'PATCH', { role: 'owner' })).status, 403);
+ assert.equal((await request(admin.cookie, `${base}/members/${ownerMe.user.id}`, 'DELETE')).status, 403);
+ const last = await read<{ code: string }>(await request(owner.cookie, `${base}/members/${ownerMe.user.id}`, 'DELETE'), 400);
+ assert.equal(last.code, 'last_owner');
+ assert.equal((await call(app, `${base}/members/${memberMe.user.id}`, { cookie: owner.cookie, method: 'PATCH', body: { role: 'admin' } })).status, 401, 'cookie PATCH requires the web header');
+ await read(await request(admin.cookie, `${base}/members/${memberMe.user.id}`, 'PATCH', { role: 'admin' }), 200);
+ const listed = await read<{ members: { userId: string; role: string }[] }>(await request(owner.cookie, `${base}/members`), 200);
+ assert.equal(listed.members.find(row => row.userId === memberMe.user.id)?.role, 'admin');
+ const pending = await invite(person().email, 'member');
+ assert.equal((await call(app, `${base}/invitations/${pending.invitation.id}`, { cookie: owner.cookie, method: 'DELETE' })).status, 401, 'cookie DELETE requires the web header');
+ await read(await request(admin.cookie, `${base}/invitations/${pending.invitation.id}`, 'DELETE'), 200);
+ const invitations = await read<{ invitations: unknown[] }>(await request(owner.cookie, `${base}/invitations`), 200);
+ assert.deepEqual(invitations.invitations, []);
+ assert.equal((await request(stranger.cookie, `${base}/members/${memberMe.user.id}`, 'DELETE')).status, 404);
+ await read(await request(owner.cookie, `${base}/members/${memberMe.user.id}`, 'DELETE'), 200);
+ assert.equal((await request(member.cookie, `${base}/members`)).status, 404, 'the removed member loses access');
+});

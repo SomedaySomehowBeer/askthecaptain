@@ -19,7 +19,7 @@ test('sign-in keeps safe destinations and discards external or sign-in destinati
 test('invitation writes never retry an uncertain single-use response and discard results after the person changes', async () => {
  let epoch: string | null = 'one'; let sends = 0; let accepted = 0;
  let resolve!: (value: any) => void;
- const client: ApiClient = { delete: async () => ({ ok: false, kind: 'unavailable', status: 0 }), get: async () => ({ ok: false, kind: 'unavailable', status: 0 }), post: () => { sends++; return new Promise(done => { resolve = done; }); } };
+ const client: ApiClient = { patch: async () => ({ ok: false, kind: 'unavailable', status: 0 }), delete: async () => ({ ok: false, kind: 'unavailable', status: 0 }), get: async () => ({ ok: false, kind: 'unavailable', status: 0 }), post: () => { sends++; return new Promise(done => { resolve = done; }); } };
  const web = createWebCalls(client, 'https://captain.example.test', { accountEpoch: () => epoch, accepted: () => { accepted++; }, sessionEnded: () => {} });
  const lost = web.acceptInvitation('invite'); resolve({ ok: false, kind: 'unavailable', status: 0 }); assert.deepEqual(await lost, { kind: 'unknown' }); assert.equal(sends, 1);
  const stale = web.acceptInvitation('invite'); epoch = 'two'; resolve({ ok: true, value: {} }); assert.deepEqual(await stale, { kind: 'stale' }); assert.equal(accepted, 0);

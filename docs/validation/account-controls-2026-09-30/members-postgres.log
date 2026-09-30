@@ -1,0 +1,112 @@
+TAP version 13
+# Subtest: health answers without a session
+ok 1 - health answers without a session
+  ---
+  duration_ms: 1083.472841
+  type: 'test'
+  ...
+# Subtest: readiness rejects an administrative database connection without exposing role details
+ok 2 - readiness rejects an administrative database connection without exposing role details
+  ---
+  duration_ms: 19.245542
+  type: 'test'
+  ...
+# Subtest: Google sign-in hands the web a one-time code that becomes a session
+ok 3 - Google sign-in hands the web a one-time code that becomes a session
+  ---
+  duration_ms: 80.854603
+  type: 'test'
+  ...
+# Subtest: return_to must be a path on the app
+ok 4 - return_to must be a path on the app
+  ---
+  duration_ms: 27.388485
+  type: 'test'
+  ...
+# Subtest: a destination read back from a stored sign-in request is checked again and falls back home
+ok 5 - a destination read back from a stored sign-in request is checked again and falls back home
+  ---
+  duration_ms: 79.598083
+  type: 'test'
+  ...
+# Subtest: a person creates an organisation and becomes its owner; others cannot see it
+ok 6 - a person creates an organisation and becomes its owner; others cannot see it
+  ---
+  duration_ms: 52.545808
+  type: 'test'
+  ...
+# Subtest: invitations are verified by the signed-in email and roles are guarded
+ok 7 - invitations are verified by the signed-in email and roles are guarded
+  ---
+  duration_ms: 140.003346
+  type: 'test'
+  ...
+# Subtest: signing out revokes the session
+ok 8 - signing out revokes the session
+  ---
+  duration_ms: 22.309219
+  type: 'test'
+  ...
+# Subtest: the callback spends the code, sets the HttpOnly session cookie and returns to the checked path
+ok 9 - the callback spends the code, sets the HttpOnly session cookie and returns to the checked path
+  ---
+  duration_ms: 1110.797198
+  type: 'test'
+  ...
+# Subtest: a spent, missing or refused code and a repeated Google error each go to the welcome page with its own code
+ok 10 - a spent, missing or refused code and a repeated Google error each go to the welcome page with its own code
+  ---
+  duration_ms: 73.5352
+  type: 'test'
+  ...
+# Subtest: the cookie is refused without the web client header, and bearer requests are unchanged
+ok 11 - the cookie is refused without the web client header, and bearer requests are unchanged
+  ---
+  duration_ms: 57.459669
+  type: 'test'
+  ...
+# Subtest: a passkey steps up through the step-up cookie, and verify moves the session into the session cookie
+ok 12 - a passkey steps up through the step-up cookie, and verify moves the session into the session cookie
+  ---
+  duration_ms: 96.512323
+  type: 'test'
+  ...
+# Subtest: sign-out with the cookie ends the session and clears both cookies
+ok 13 - sign-out with the cookie ends the session and clears both cookies
+  ---
+  duration_ms: 17.898942
+  type: 'test'
+  ...
+# Subtest: a native sign-in is handed to the app's fixed callback with no cookie
+ok 14 - a native sign-in is handed to the app's fixed callback with no cookie
+  ---
+  duration_ms: 48.581209
+  type: 'test'
+  ...
+# Subtest: the export is served at the root with the page as the fallback, and the API's paths are never shadowed
+ok 15 - the export is served at the root with the page as the fallback, and the API's paths are never shadowed
+  ---
+  duration_ms: 27.584125
+  type: 'test'
+  ...
+# Subtest: without the export the API still answers and the page says the web build is missing
+ok 16 - without the export the API still answers and the page says the web build is missing
+  ---
+  duration_ms: 30.693577
+  type: 'test'
+  ...
+# Subtest: cookie member controls retain CSRF, tenant, owner/admin and last-owner rules
+ok 17 - cookie member controls retain CSRF, tenant, owner/admin and last-owner rules
+  ---
+  duration_ms: 197.163857
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4961.688497

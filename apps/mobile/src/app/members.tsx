@@ -1,0 +1,97 @@
+import { router } from 'expo-router';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useAccount } from '../account/AccountProvider.tsx';
+import { isSignedIn, webCopy } from '../account/copy.ts';
+import { createMemberControls } from '../account/member-controls.ts';
+import { managesMembers, memberChangeAllowed, type MemberScope, type MembersCalls, type MembersData, type Member } from '../account/members.ts';
+import type { Role } from '../account/me.ts';
+import { Button } from '../components/AccountPage.tsx';
+import { PlainScreen } from '../components/Screen.tsx';
+import { colors, space, type } from '../theme/tokens.ts';
+import Welcome from './welcome.tsx';
+
+export default function Members() {
+ const account = useAccount(), view = account.snapshot.account;
+ const back = () => router.dismissTo('/settings');
+ let content;
+ if (view.kind === 'checking' || view.kind === 'starting') content = <Text style={styles.body}>{webCopy.checking}</Text>;
+ else if (view.kind === 'unverified') return <Welcome />;
+ else if (!isSignedIn(view)) return null;
+ else if (view.org.kind !== 'chosen' || view.scope === null) content = <><Text style={styles.body}>Choose an organisation to manage its members.</Text><Button label="Choose organisation" onPress={() => router.push('/organisation')} /></>;
+ else if (!managesMembers(view.org.membership.role)) content = <Text testID="members-denied" style={styles.body}>Only owners and admins can manage members and invitations.</Text>;
+ else if (Platform.OS !== 'web' || account.web === null) content = <Text style={styles.body}>Member management is available in the browser in this version.</Text>;
+ else content = <MembersPanel key={`${view.scope.epoch}:${view.org.membership.role}`} calls={account.web.members} scope={{ ...view.scope, role: view.org.membership.role }} name={view.org.membership.organisationName} now={account.now} />;
+ return <PlainScreen title="Members" back={{ label: 'Settings', onPress: back }}>{content}</PlainScreen>;
+}
+function MembersPanel({ calls, scope, name, now }: { calls: MembersCalls; scope: MemberScope; name: string; now: () => number }) {
+ const [controls] = useState(() => createMemberControls(calls, scope, now));
+ const state = useSyncExternalStore(controls.subscribe, controls.snapshot, controls.snapshot);
+ const [email, setEmail] = useState(''), [role, setRole] = useState<'admin' | 'member'>('member'), [copy, setCopy] = useState('');
+ const [, wake] = useState(0);
+ useEffect(() => { void controls.refresh(); return () => controls.dispose(); }, [controls]);
+ useEffect(() => setCopy(''), [state.invitation]);
+ const delay = Math.max(0, state.waitUntil - now());
+ useEffect(() => { if (!delay) return; const timer = setTimeout(() => wake(n => n + 1), Math.min(2_147_483_647, delay)); return () => clearTimeout(timer); }, [delay]);
+ const busy = state.phase === 'loading' || state.phase === 'saving';
+ const disabled = busy || delay > 0 || state.needsRefresh;
+ const actor = state.data?.members.find(row => row.userId === scope.userId);
+ const copyLink = async () => {
+  const link = state.invitation;
+  if (!link) return;
+  try { await navigator.clipboard.writeText(link.url); if (controls.snapshot().invitation === link) setCopy('Link copied.'); }
+  catch { if (controls.snapshot().invitation === link) setCopy('Could not copy automatically. Select and copy the link below.'); }
+ };
+ return <View style={styles.stack}>
+  <Text style={styles.body}>{name}</Text>
+  {state.phase === 'loading' ? <Text testID="members-loading" style={styles.body}>Loading members and invitations…</Text> : null}
+  {state.message ? <Text testID="members-status" role={state.phase === 'failed' || state.phase === 'refused' ? 'alert' : 'status'} style={styles.body}>{state.message}</Text> : null}
+  {state.phase === 'saving' ? <Text testID="members-saving" role="status" style={styles.body}>Saving your change…</Text> : null}
+  {delay > 0 ? <Text testID="members-wait" style={styles.body}>Captain asked you to wait before trying again.</Text> : null}
+  <Button testID="members-refresh" label="Refresh members and invitations" disabled={busy || delay > 0} onPress={() => { void controls.refresh(); }} />
+  {state.invitation ? <View style={styles.card} testID="members-invitation-link">
+   <Text style={styles.body}>For {state.invitation.email}. The link is shown only here; copy it before leaving.</Text>
+   <TextInput testID="invitation-link" accessibilityLabel="Invitation link" value={state.invitation.url} editable={false} multiline selectTextOnFocus style={styles.input} />
+   <Button label="Copy invitation link" testID="invitation-copy" onPress={() => { void copyLink(); }} />
+   {copy ? <Text role="status" testID="invitation-copy-status" style={styles.body}>{copy}</Text> : null}
+  </View> : null}
+  {state.data ? <>
+   <Text role="heading" style={styles.heading}>Members</Text>
+   {state.data.members.length === 0 ? <Text testID="members-empty" style={styles.body}>No members were returned. Refresh before making changes.</Text> : null}
+   {state.data.members.map(member => <MemberRow key={`${member.userId}:${member.role}`} member={member} data={state.data!} scope={scope} disabled={disabled} change={controls.change} />)}
+   {actor && managesMembers(actor.role) ? <View style={styles.card}>
+    <Text role="heading" style={styles.heading}>Invite someone</Text>
+    <Text style={styles.body}>Create a link for their email address. They sign in with Google using that address. Links last seven days and work once. Captain does not send an email.</Text>
+    <TextInput testID="invite-email" accessibilityLabel="Email address" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} maxLength={320} editable={!disabled} placeholder="person@example.com" style={styles.input} />
+    <RoleChoices label="Invitation role" roles={['member', 'admin']} value={role} disabled={disabled} onChange={value => setRole(value as 'admin' | 'member')} />
+    <Button testID="invite-create" label="Create invitation" primary disabled={disabled} onPress={() => { void controls.change({ kind: 'invite', email, role }); }} />
+   </View> : null}
+   <Text role="heading" style={styles.heading}>Pending invitations</Text>
+   {state.data.invitations.length === 0 ? <Text testID="invitations-empty" style={styles.body}>No pending invitations.</Text> : null}
+   {state.data.invitations.map(invitation => <View style={styles.card} key={invitation.id} testID={`invitation-${invitation.id}`}>
+    <Text style={styles.body}>{invitation.email}</Text><Text style={styles.body}>{invitation.role} · Expires {new Date(invitation.expiresAt).toLocaleDateString()}</Text>
+    <Button label={`Revoke invitation for ${invitation.email}`} testID={`invitation-revoke-${invitation.id}`} disabled={disabled} onPress={() => { void controls.change({ kind: 'revoke', id: invitation.id }); }} />
+   </View>)}
+  </> : null}
+ </View>;
+}
+function RoleChoices({ label, roles, value, disabled, onChange }: { label: string; roles: readonly Role[]; value: Role; disabled: boolean; onChange(value: Role): void }) {
+ return <View style={styles.stack} role="group" aria-label={label}><Text style={styles.body}>{label}: {value}</Text><View style={styles.row}>{roles.map(role => <Button key={role} label={role} disabled={disabled || role === value} onPress={() => onChange(role)} />)}</View></View>;
+}
+function MemberRow({ member, data, scope, disabled, change }: { member: Member; data: MembersData; scope: MemberScope; disabled: boolean; change: ReturnType<typeof createMemberControls>['change'] }) {
+ const [role, setRole] = useState<Role>(member.role);
+ const actor = data.members.find(row => row.userId === scope.userId);
+ const canEdit = actor?.role === 'owner' || (actor?.role === 'admin' && member.role !== 'owner');
+ const lastOwner = member.role === 'owner' && data.members.filter(row => row.role === 'owner').length === 1;
+ return <View style={styles.card} testID={`member-${member.userId}`}>
+  <Text style={styles.heading}>{member.name || member.email}{member.userId === scope.userId ? ' (you)' : ''}</Text>
+  <Text style={styles.body}>{member.email}</Text><Text style={styles.body}>Role: {member.role}</Text>
+  {lastOwner ? <Text style={styles.body}>The last owner must stay until another owner is appointed.</Text> : null}
+  {canEdit ? <>
+   <RoleChoices label={`Role for ${member.email}`} roles={actor?.role === 'owner' ? ['owner', 'admin', 'member'] : ['admin', 'member']} value={role} disabled={disabled || lastOwner} onChange={setRole} />
+   <Button testID={`member-role-${member.userId}`} label={`Save role for ${member.email}`} disabled={disabled || !memberChangeAllowed(data, scope, { kind: 'role', userId: member.userId, role })} onPress={() => { void change({ kind: 'role', userId: member.userId, role }); }} />
+   <Button testID={`member-remove-${member.userId}`} label={`Remove ${member.email}`} disabled={disabled || !memberChangeAllowed(data, scope, { kind: 'remove', userId: member.userId })} onPress={() => { void change({ kind: 'remove', userId: member.userId }); }} />
+  </> : <Text style={styles.body}>Only an owner can change an owner.</Text>}
+ </View>;
+}
+const styles = StyleSheet.create({ stack: { gap: 12 }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }, card: { gap: 10, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14 }, heading: { fontSize: 18, fontWeight: '600', color: colors.heading }, body: { fontSize: type.body, lineHeight: 21, color: colors.body }, input: { minHeight: space.minTarget, padding: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 8, fontSize: type.body, color: colors.body, backgroundColor: colors.card } });
