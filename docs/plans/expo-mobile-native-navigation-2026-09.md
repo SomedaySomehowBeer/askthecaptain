@@ -2,7 +2,7 @@
 
 Status: merged in #205 after independent review and all CI passed, 27 September 2026. Outcome: **manage shared work** through predictable navigation.
 Source evidence is from the installed Expo Router 57.0.23 and Captain after #201/#202. The source implementation now follows this contract. Validation is recorded in
-[the implementation evidence](../validation/mobile-native-navigation-2026-09-27/README.md). No native/device evidence is claimed; native sign-in stays off.
+the implementation evidence (validation record removed in the chat-first rebuild; see git history). No native/device evidence is claimed; native sign-in stays off.
 
 **Outcome by source; device verification pending.** On iOS and Android, a section's view list is beneath the open view for the entries E1–E12 (§3.2,
 §3.2a), and in the boot and remount cases of §3.0 other than L2. The first rendered state is already that shape, so no

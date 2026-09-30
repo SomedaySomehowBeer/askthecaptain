@@ -1,7 +1,7 @@
 # Linked chat web delivery — 27 September 2026
 
 Status: adopted in #172, after core API #169 and personal state/pins #171. Read API #173 and
-web #174 are released to staging; [validation](../validation/chat-web-2026-09-27/README.md) records
+web #174 are released to staging; validation (validation record removed in the chat-first rebuild; see git history) records
 local/CI acceptance and limits of hosted checks.
 Outcome: **discuss work** (D25), following D6/D11/D14. This defines the web implementation;
 none of these screens is delivered by adopting this plan. Linked-chat storage/behaviour remains

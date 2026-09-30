@@ -1,7 +1,7 @@
 # Mobile Inventory read (M-read slice 3)
 
 Status: adopted in #208 and **implemented in #210**, 27 September 2026, after independent reviews and all three CI jobs passed.
-[Validation](../validation/mobile-inventory-read-2026-09-27/README.md): 289 mobile tests, four exports/scans and browser acceptance at 360/390/430 px. Native sign-in remains off; no installed-app or device acceptance. The contract below records the implemented design.
+Validation (validation record removed in the chat-first rebuild; see git history): 289 mobile tests, four exports/scans and browser acceptance at 360/390/430 px. Native sign-in remains off; no installed-app or device acceptance. The contract below records the implemented design.
 Claude B drafted the contract; root reviewed API fidelity and scope; Claude A independently
 reviewed it, with all four findings incorporated. Repository facts were checked against the
 #207 implementation with #205 navigation integrated; #206/#207 are now merged. Outcome:
