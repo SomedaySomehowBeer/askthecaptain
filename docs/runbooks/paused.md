@@ -1,5 +1,9 @@
 # Staging resumed; production paused (2026-09-27)
 
+## One-off workflows and retired-screen evidence removed (30 September 2026, UTC)
+
+The chat-first rebuild (R0) removed `.github/workflows/retire-elevated-runtime.yml`, `.github/workflows/reconcile-retired-output.yml` and `.github/scripts/` from the repository; both workflows had completed on 26 September and were already disabled, and their evidence stays in [the activation record](../validation/runtime-activation-2026-09-26/README.md) and the sections below. The same change removed the client-proof harness and the validation records for retired web and mobile screens; git history keeps them.
+
 ## Session controls released (27 September 2026, approximately 11:02 UTC)
 
 Reviewed API #204 and web #206 are deployed from clean merge source `b484e30` after green CI.
@@ -119,7 +123,7 @@ evidence; no hosted signed-in session or staging multi-user capacity is claimed.
 The final five-app comparison confirmed exactly one machine in each staging app, image-only
 changes there, and unchanged production/embedding identities/configurations with all still
 stopped. Deployment, backup and credential-operation workflows remain disabled. No credential changes,
-DNS changes, infrastructure applies or demo-data resets occurred. See [validation](../validation/sign-in-return-2026-09-27/README.md).
+DNS changes, infrastructure applies or demo-data resets occurred. See validation (validation record removed in the chat-first rebuild; see git history).
 For a rollback, retain the return-path fix, restricted runtime and chat-aware API/schema; prefer a
 compatible forward fix or stop the affected service while repairing rather than restore the known
 unsafe redirect behaviour.
@@ -133,7 +137,7 @@ has the same tree, `a280cb5f04fd13ab8a417fb16ea087e8d40e71a6`.
 passed workspace typecheck, 471 Postgres tests, 13 infra tests, React retry regression, web build
 and both complete two-person Chat browser suites. Both suites also passed locally, with mobile
 and desktop layouts. The two Claude Opus agents implemented disjoint files and reviewed each
-other; all blocking findings were resolved. See [validation](../validation/chat-web-2026-09-27/README.md).
+other; all blocking findings were resolved. See validation (validation record removed in the chat-first rebuild; see git history).
 
 The clean-source Linux/amd64 web image was pushed as
 `registry.fly.io/askthecaptain-web-staging:git-dd50c6d@sha256:bd6a216d2e990c18851d43fe589f9b7a1c07efc8a02162606f86ccc144095ddf`
@@ -400,7 +404,7 @@ groups, all 16 saved-view regression groups in one run, and all 10 existing Work
 The focused and saved-view suites used the existing opt-in disposable-fixture rate-limit clock;
 Work regression used ordinary limits. The first focused run found an ambiguous test selector;
 its corrected full rerun passed. No loading-timing or native-device acceptance is claimed.
-[Evidence and populated captures](../validation/tag-views-2026-09-26/README.md) are retained.
+Evidence and populated captures were recorded (validation record removed in the chat-first rebuild; see git history).
 
 Rollback is an image-only update on the same web machine to the previous `git-7e60a1e` digest
 `sha256:2a88aa7468032c224b387e1ea0a5ac0768270c7a54426b270bbf03afde9a8ac1`, preserving its current
@@ -502,8 +506,8 @@ window. Moving its existing cooldown before bulk booking setup preserved all ass
 application limits; the final complete rerun exited 0. Task-owned local servers were stopped and
 the disposable fixture removed; shared Chrome was left running.
 
-[Calendar screenshots and scope](../validation/equipment-scroll-2026-09-26/README.md) and
-[task-history proof](../validation/project-history-2026-09-26/README.md) cover 360/390/430 and
+Calendar screenshots and scope (validation record removed in the chat-first rebuild; see git history) and
+task-history proof (validation record removed in the chat-first rebuild; see git history) cover 360/390/430 and
 1440-pixel layouts. Hosted Chrome checks passed signed-out equipment/Work/project/recurrence
 redirects, Google sign-in entry, phone/desktop layout and absence of browser exceptions. They do
 not establish an authenticated hosted session or a full Google round trip. Native-device gestures,
@@ -545,7 +549,7 @@ local servers were stopped after validation and their throwaway databases dispos
 
 CI exposed an existing reminder-test race: it asserted two independent waits after observing only
 the first. The test now waits for both; its original assertions remain and production workflow code
-is unchanged. [Populated screenshots and design scope](../validation/project-overview-2026-09-25/README.md)
+is unchanged. Populated screenshots and design scope (validation record removed in the chat-first rebuild; see git history)
 record comparisons at 360/390/430 and 1440 pixels. Claude implemented the API/test fix, root reviewed
 them, and Claude approved the UI and final proof.
 
@@ -579,7 +583,7 @@ passed against a real API and disposable Postgres: ten workspace, seven Work-rec
 checklist/navigation and three design groups. The three design groups passed again on the final
 image source, including the completed-task due-date tooltip, required-evidence refusal and
 keyboard focus after list removal/regrouping. Populated screens were checked at 360/390/430 and
-1440 pixels; [screenshots and scope](../validation/work-design-2026-09-25/README.md) are recorded.
+1440 pixels; screenshots and scope (validation record removed in the chat-first rebuild; see git history) are recorded.
 The task-owned local web server and fixture were stopped; the fixture removed its temporary database.
 
 A real browser checked hosted signed-out Work/project/series routes and Google sign-in entry at

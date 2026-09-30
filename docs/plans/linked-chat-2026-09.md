@@ -5,7 +5,7 @@ the §11 amendments to `AGENTS.md` and `docs/plan.md`.
 PR B (#169) shipped to staging after the runtime-role repair (#162–#168), with migration 0042
 and hosted rollback-only isolation/write checks. PR C (#171) shipped with migration 0043 and hosted rollback-only
 verification. The [web delivery amendment](linked-chat-web-2026-09.md) was adopted in #172; its
-read API shipped in #173 and web in #174. See the [web validation](../validation/chat-web-2026-09-27/README.md)
+read API shipped in #173 and web in #174. See the web validation (validation record removed in the chat-first rebuild; see git history)
 for local/CI acceptance and the separately bounded hosted checks.
 PR C execution clarifications below are adopted with this reviewed amendment.
 

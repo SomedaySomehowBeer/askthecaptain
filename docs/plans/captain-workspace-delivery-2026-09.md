@@ -18,7 +18,7 @@ its remaining native and release gates still apply. Neither document declares un
 
 | Slice | State |
 |---|---|
-| 0. Architecture proof | Built as a fictional harness; web checks and bundle exports pass locally and in the new `client-proof` CI check ([#120](https://github.com/SomedaySomehowBeer/askthecaptain/pull/120)). Native-device acceptance has not been run. |
+| 0. Architecture proof | Built as a fictional harness; web checks and bundle exports pass locally and in the `client-proof` CI check (retired in the chat-first rebuild, R0) ([#120](https://github.com/SomedaySomehowBeer/askthecaptain/pull/120)). Native-device acceptance has not been run. |
 | 1. Reviewed amendments | Original amendment merged in #116; its assistant-retention assumptions are corrected by the 25 September audit. Scope cleanup is now required. |
 | 2. Client and work foundation | In progress: task/tag API merged in #117. Web now has the three-tab shell, grouped view lists, real filtered Work and task creation. Tag creation/renaming and individual task tag editing are now available. Private saved Work views are delivered in #153/#154 and default business views in #159. `apps/mobile` (#178): shell (#188), authentication core (#189) and platform adapters/account state (#193) are merged. [Sign-in composition and the account screens](expo-mobile-auth-composition-2026-09.md) merged in #197. The read-only [Work → My work list](expo-mobile-my-work-read-2026-09.md) (M-read slice 1) is implemented and independently reviewed, with local tests, exports and browser checks passing. The read-only [Work → All tasks list](expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2, open tasks assigned to anyone, owner facts without names) is implemented and independently reviewed, with local tests, exports and browser checks passing. Native sign-in stays off, and there is no simulator or device evidence. The response byte budget is implemented and locally validated in #202. Other reads, writes and native acceptance remain; this does not complete slice 2. |
 | 3. Equipment scheduling | First API increment: equipment, maintenance/reservations, database overlap enforcement, revisions, cancellation and bounded occupancy reads. The [contract](equipment-reservations-2026-09.md) defines the integrity boundary. Web timeline and catalogue/create/edit/cancel controls are implemented, with browser checks against real Postgres. Native clients and real-device gestures remain pending; this does not complete slice 3. |
@@ -215,7 +215,7 @@ that quantity. The launch walkthrough must demonstrate fewer places to check.
 
 ## Proof scope and acceptance ledger
 
-The [isolated client proof](../proposals/assets/captain-client-proof-2026-09-23/README.md) is
+The isolated client proof (retired in the chat-first rebuild, R0; see git history) was
 fictional, local-only and disposable. It evaluates client rendering and shared logic. Its local
 message actions are not multi-user chat; its overlap calculation is not database enforcement.
 No paid build service, deployment, provider credential or production data is required.
