@@ -570,7 +570,7 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   audit and export/deletion for the first three increments. Core storage/API shipped in #169 on
   the restricted staging runtime. PR C (#171) shipped pins/stars/read positions/edits to staging; the
   [web delivery amendment](plans/linked-chat-web-2026-09.md) defines PR D. Its bounded read API prerequisite shipped in #173; web #174 is released to staging, with local and CI two-person browser acceptance. Hosted checks cover anonymous protection and sign-in, not an authenticated two-person session.
-  PR B execution gates (§17) passed real-Postgres and hosted rollback-only checks. R2 replaces the
+  PR B execution gates (§17) passed real-Postgres and hosted rollback-only checks. The [threads contract](plans/threads-2026-09.md) specifies R2: it replaces the
   0042/0043 tables with the thread model (D27) after migrating staging data; summaries,
   notifications and native delivery need their own contracts.
 - Versions: the [selective-undo contract](plans/private-threads-and-selective-undo-2026-09.md)
