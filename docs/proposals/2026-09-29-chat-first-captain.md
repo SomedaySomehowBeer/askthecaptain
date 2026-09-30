@@ -32,8 +32,8 @@ data in it are invented.
 ### Navigation
 - The home screen is a single list of threads, newest activity first, with what needs the person marked.
 - A row is dense: title, time, the record's key facts, the latest message on one line, and a count of what needs you.
-- The list is grouped by project. Threads with no project are grouped by kind (stock and suppliers, equipment
-  upkeep, people). A group can be folded, and its heading shows how many threads need the person.
+- The list is grouped by tag. A thread with several tags appears under each. A group can be folded, and its heading
+  shows how many threads need the person; a project's heading also shows its owner and date.
 - Filters: All, Needs you, Tasks, Bookings, Stock, Records, Files, People.
 - Pinned rows open views that are not lists of threads: the equipment schedule, and the team.
 - A conversation with no record is a topic: a record whose only content is its thread.
@@ -48,13 +48,31 @@ data in it are invented.
   newest if there is none. Earlier messages are folded behind one row. Newest-first was considered and rejected:
   exchanges, and agent hand-offs in particular, read backwards.
 
-### Projects
+### Projects are tags
+- A project is a tag with more on it: an owner, dates, a thread and a planning task. Any thread can carry several
+  tags, so one booking can belong to two projects and to Production at once. The thread is the unit; projects and
+  areas are ways of grouping it.
 - A project has its own thread, and a new project starts with a planning task. They do different jobs.
 - **The planning task** is where setting up happens: agreeing dates, listing tasks, booking equipment, checking stock.
   It has an owner, a due date and steps, and it finishes. Its steps come from a template in code.
 - **The project thread** is the project's record: changes to the project itself, decisions that span tasks, and a
   weekly summary. It is quiet by design.
 - A message in the project thread that is about one task can be moved to that task's thread.
+
+### Captain reads every message
+- Captain is an agent like the others, with its own key. Its job is to read and to route.
+- A cheap classifier runs over every message, not only the first. It returns schema-checked data: what the thread is
+  (task, booking, stock count, topic), the facts it can see (date, equipment, quantity, company) and which tags apply.
+- **When the data adds something new, Captain applies it as a plain change**, worded exactly as if a person had done
+  it: "Captain added the tag Summer lager launch", "Captain made this a booking". Never "Captain thinks".
+- **When the data needs an agent, Captain asks in the thread** by mentioning it, the same way a person would:
+  "@Scheduler book the canning line on Thursday from 1:00 to 5:00 pm". The agent replies in the thread.
+- **When the data conflicts with the thread**, say a message implies a new date while the card holds another, Captain
+  does not change anything. A second, slightly larger read of the last message and the recommendation decides whether
+  to stay quiet or to ask, with the change offered as one tap: "Move both to after the labels?"
+- A new thread is therefore only an empty thread with the composer ready. The person writes; Captain reads.
+- Every change Captain makes is versioned and undoable like any other, and the person can correct the kind with one
+  tap.
 
 ### Versions and undo
 - Every write to a record stores a full snapshot with who did it (person, agent or system), what caused it (the
@@ -139,7 +157,8 @@ Captain prints the worksheet, so code knows the layout and the model only reads 
 
 ### Workflows stay code
 The model is used for four narrow jobs, each with a schema-checked result: turning a message into a structured request,
-reading a handwritten box, drafting text for an outside message, and summarising a thread. Everything else is code.
+reading a handwritten box, drafting text for an outside message, and summarising a thread. Reading a message uses the
+cheapest model that does the job; the conflict read is the one place a slightly larger model is used. Everything else is code.
 
 ## Effect on adopted decisions
 
@@ -149,7 +168,8 @@ reading a handwritten box, drafting text for an outside message, and summarising
 | D3 typed workflow steps | Unchanged |
 | D4 workflows act as the person who enabled them | Amended: agents act under their own name and key, with member-level limits |
 | D5 no autonomous correspondence | Amended: outside messages need approval of the exact content, by the owner or by an agent within admin-set limits |
-| D11 three tabs | Replaced: one list of threads with filters and pinned views |
+| D11 three tabs | Replaced: one list of threads grouped by tag, with filters and pinned views |
+| D15 and the project/task model | Amended: a project becomes a kind of tag; a task can carry several projects |
 | D13 attachment bytes never stored | Amended: Captain stores photos of its own worksheets |
 | D25 private chat | Extended: record threads follow the record's audience; private conversations are unchanged |
 | Non-goal "a conversational model with tools or autonomous writes" | Reworded: autonomous writes are made by code, from schema-checked results |
