@@ -28,6 +28,9 @@ native sign-in remains disabled. The native source, SecureStore and auth-session
 retained, with no browser token stored in them. Fully reload after account/platform edits:
 Fast Refresh can retain the previous account instance.
 
+The [R1b validation record](../../docs/validation/expo-web-shell-2026-09-30/README.md) contains
+the local results and synthetic screenshots.
+
 ## Local checks
 
 Run heavy commands under `flock /tmp/atc-build.lock` on a shared machine:

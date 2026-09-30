@@ -1,0 +1,10 @@
+PASS 360px: session confirmation/cancel, remount-persistent progress/result/wait, slow wording, counts, failures and expiry
+PASS 360px: Equipment schedule bootstrap order, one flight, never-free partial/conflict/failed cells, zone change, waits, More and stale scope suppression
+PASS 360px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
+PASS 390px: session confirmation/cancel, remount-persistent progress/result/wait, slow wording, counts, failures and expiry
+PASS 390px: Equipment schedule bootstrap order, one flight, never-free partial/conflict/failed cells, zone change, waits, More and stale scope suppression
+PASS 390px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
+PASS 430px: session confirmation/cancel, remount-persistent progress/result/wait, slow wording, counts, failures and expiry
+PASS 430px: Equipment schedule bootstrap order, one flight, never-free partial/conflict/failed cells, zone change, waits, More and stale scope suppression
+PASS 430px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
+PASS 1280px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
