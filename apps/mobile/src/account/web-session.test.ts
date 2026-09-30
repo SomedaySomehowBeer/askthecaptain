@@ -55,7 +55,7 @@ test('failed foreground refresh keeps verified identity and says the check faile
  const h = harness(); await h.signedIn(); await h.tick(30_000); h.source.send({ type: 'refresh' });
  h.calls[1]!.fail({ ok: false, kind: 'unavailable', status: 0 }); await flush();
  let view = h.view(); assert.equal(view.kind, 'signed-in'); if (view.kind === 'signed-in') assert.equal(view.notice?.kind, 'refresh-unavailable');
- await h.tick(30_000); h.source.send({ type: 'refresh' }); h.calls[2]!.answer(me()); await flush();
+ await h.tick(30_000); assert.equal(h.calls.length, 3, 'failed refresh retries at the paced deadline'); h.source.send({ type: 'refresh' }); h.calls[2]!.answer(me()); await flush();
  view = h.view(); if (view.kind === 'signed-in') assert.equal(view.notice, null);
 });
 

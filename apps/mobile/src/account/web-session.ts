@@ -142,7 +142,7 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 	const scheduleRetry = () => {
 		if (retryTimer !== null) { timers.clear(retryTimer); retryTimer = null; }
 		const wait = pacingWait(); const delay = wait === null ? 0 : remaining(wait, clock.now());
-		retryTimer = timers.set(delay, () => { retryTimer = null; if (state.kind === 'signed-in' && reloadMemberships) loadMe(true); else if (state.kind === 'unavailable') loadMe(); });
+		retryTimer = timers.set(delay, () => { retryTimer = null; if (state.kind === 'signed-in' && reloadMemberships) loadMe(true); else if (state.kind === 'unavailable' || (state.kind === 'signed-in' && state.notice?.kind === 'refresh-unavailable')) loadMe(); });
 	};
 
 	const loadMe = (ignoreSpacing = false) => {
@@ -163,7 +163,7 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 				return;
 			}
 			meWait = answer.kind === 'unavailable' && answer.retryAfter !== undefined ? waitFor(answer.retryAfter * 1000, clock, wallNow) : null;
-			if (state.kind === 'signed-in') { set({ ...state, refreshing: false, notice: { kind: 'refresh-unavailable' } }); return; }
+			if (state.kind === 'signed-in') { set({ ...state, refreshing: false, notice: { kind: 'refresh-unavailable' } }); scheduleRetry(); return; }
 			if (state.kind === 'checking' || state.kind === 'unavailable') { set({ kind: 'unavailable', retrying: false }); scheduleRetry(); }
 		});
 	};
