@@ -1,6 +1,6 @@
 /** Organisation-zone civil time for the equipment schedule (contract §4.1).
  *
- *  A local, read-only port of the web's `apps/web/src/app/resources/equipment/time.ts`. Every conversion names the
+ *  The shared client's read-only time conversion logic (ported from the retired Next.js schedule). Every conversion names the
  *  organisation zone explicitly; nothing here reads or falls back to the device's own zone. Pure: no React, no native
  *  module and no workspace package.
  *

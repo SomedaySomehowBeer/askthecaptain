@@ -1,5 +1,5 @@
-/** Occupancy cells and queue decisions for the read-only equipment schedule (contract §4.4): a local port of the web's
- *  `apps/web/src/app/resources/equipment/loads.ts`, adapted to one read per (equipment, chunk). Pure: no React, no
+/** Occupancy cells and queue decisions for the read-only equipment schedule (contract §4.4): ported from the retired
+ *  Next.js schedule, adapted to one read per (equipment, chunk). Pure: no React, no
  *  native module, no timers and no reads. The hook sends reads only through the screen coordinator (`coordinator.ts`).
  *
  *  - A cell is keyed by its equipment and its chunk's exact instants, never a chunk index, so a new anchor can never

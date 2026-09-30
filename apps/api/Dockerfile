@@ -2,8 +2,6 @@ FROM node:22-alpine AS build
 RUN corepack enable
 WORKDIR /repo
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
-# pnpm patches (patches/*.patch, declared in pnpm-workspace.yaml) must be present before install.
-COPY patches ./patches
 COPY apps/api/package.json apps/api/
 # Includes engine source; the API dependency closure installs pg-boss and its runtime dependencies.
 COPY packages ./packages
@@ -16,20 +14,17 @@ RUN pnpm --filter @captain/api build \
  && pnpm --filter @captain/api exec node --import tsx --input-type=module -e "await import('@captain/engine')"
 
 # The Expo web export the API serves from its own origin (docs/plans/expo-web-session-2026-09.md §A.1). Its own
-# stage, so the runtime image carries the export and none of the mobile toolchain. Only the two public build
-# variables reach the bundle (apps/mobile/src/config.ts); no secret exists in this stage. Both default to the app's
-# public origin, which points at the API; a deployment serving another origin overrides them with build args.
+# stage, so the runtime image carries the export and none of the mobile toolchain. The public API URL is the
+# only build argument (apps/mobile/src/config.ts); no secret exists in this stage. Web sessions use the page origin.
 FROM node:22-alpine AS web
 RUN corepack enable
 WORKDIR /repo
 ENV CI=1 EXPO_NO_TELEMETRY=1
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json tsconfig.base.json ./
-COPY patches ./patches
 COPY apps/mobile/package.json apps/mobile/
 RUN pnpm install --frozen-lockfile --filter @captain/mobile...
 COPY apps/mobile ./apps/mobile
 ARG EXPO_PUBLIC_API_URL=https://app.askthecaptain.app
-ARG EXPO_PUBLIC_APP_URL=https://app.askthecaptain.app
 # The harness selector is never set here (mobile auth composition contract §7.1): this is the production export.
 RUN env -u CAPTAIN_MOBILE_HARNESS pnpm --filter @captain/mobile exec expo export --platform web --output-dir dist/web --max-workers 2 \
  && test -f /repo/apps/mobile/dist/web/index.html

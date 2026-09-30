@@ -1,5 +1,5 @@
-/** Continuous time geometry for the equipment schedule (contract §5): a local port of the web's
- *  `apps/web/src/app/resources/equipment/geometry.ts`. Pixels are proportional to elapsed time, so a 23- or 25-hour
+/** Continuous time geometry for the equipment schedule (contract §5): ported from the retired
+ *  Next.js schedule. Pixels are proportional to elapsed time, so a 23- or 25-hour
  *  day is drawn at its true length and a reservation is one continuous interval across day boundaries.
  *  Pure: no React or native modules. */
 import { DAY } from './zone.ts';

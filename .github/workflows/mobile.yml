@@ -12,7 +12,6 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - 'package.json'
-      - 'patches/**'
       - 'tsconfig.base.json'
   push:
     branches: [main]
@@ -25,7 +24,6 @@ on:
       - 'pnpm-lock.yaml'
       - 'pnpm-workspace.yaml'
       - 'package.json'
-      - 'patches/**'
       - 'tsconfig.base.json'
 permissions:
   contents: read

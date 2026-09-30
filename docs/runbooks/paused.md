@@ -1,5 +1,9 @@
 # Staging resumed; production paused (2026-09-27)
 
+## Next.js source retirement (30 September 2026)
+
+This R1c PR removes the Next.js source; the repository web client is now the API-served Expo export. This records repository changes only: DNS cutover, Fly retirement and hosted checks remain owner release work.
+
 ## One-off workflows and retired-screen evidence removed (30 September 2026, UTC)
 
 The chat-first rebuild (R0) removed `.github/workflows/retire-elevated-runtime.yml`, `.github/workflows/reconcile-retired-output.yml` and `.github/scripts/` from the repository; both workflows had completed on 26 September and were already disabled, and their evidence stays in [the activation record](../validation/runtime-activation-2026-09-26/README.md) and the sections below. The same change removed the client-proof harness and the validation records for retired web and mobile screens; git history keeps them.
