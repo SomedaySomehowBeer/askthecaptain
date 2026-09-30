@@ -29,7 +29,7 @@ const page = (snapshot: AccountSnapshot, now = 0): Page => welcomePage(snapshot,
 const text = (p: Page) => JSON.stringify(p);
 
 const everyState: AccountSnapshot[] = [
-	outsideSnapshots.webOnly, outsideSnapshots.misconfigured, outsideSnapshots.starting, outsideSnapshots.startingSlow, outsideSnapshots.startupFailed,
+	outsideSnapshots.misconfigured, outsideSnapshots.starting, outsideSnapshots.startingSlow, outsideSnapshots.startupFailed,
 	snap({ kind: 'storage-unavailable' }), snap({ kind: 'storage-unreadable', reading: false, slow: false }, { signInOffered: true }),
 	snap({ kind: 'storage-unreadable', reading: true, slow: true }),
 	snap({ kind: 'signed-out', notice: null, gate: 'idle' }, { signInOffered: true }), snap({ kind: 'signed-out', notice: null, gate: 'waiting' }),
@@ -209,8 +209,7 @@ test('wait timer: the remaining time on the monotonic deadline; nothing when no 
 	assert.equal(nextWake([], 0), null);
 });
 
-test('copy: web-only and misconfigured say so plainly, with no website link and no repeated value', () => {
-	assert.deepEqual(page(outsideSnapshots.webOnly), { heading: copy.captain, body: [copy.webOnly], notices: [], actions: [] });
+test('copy: misconfigured says so plainly, with no website link and no repeated value', () => {
 	assert.deepEqual(page(outsideSnapshots.misconfigured).body, [copy.misconfigured]);
 	assert.deepEqual(page(outsideSnapshots.startupFailed).body, [copy.startupFailed]);
 	assert.deepEqual(page(outsideSnapshots.startingSlow).body, [copy.openingSlow]);

@@ -3,8 +3,8 @@
  *  with fakes.
  *
  *  Nothing runs at import beyond building adapter objects and reading the build configuration: no storage is opened, no
- *  browser shown and no request made until composition calls these. The web preview imports this too; there
- *  `authPlatform` is null, so composition stops at web-only before touching anything else. */
+ *  browser shown and no request made until composition calls these. The web imports this too, but
+ *  selects its cookie account source instead of calling native composition. */
 import { config } from '../config.ts';
 import type { AccountPlatform } from './account-platform.ts';
 import { authPlatform, openDeviceStorage } from './expo.ts';

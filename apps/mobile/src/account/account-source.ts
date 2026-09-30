@@ -16,7 +16,7 @@ export type AccountSource = {
 	readonly send: (command: UiCommand) => void;
 	readonly now: () => number;
 	/** Organisation-scoped reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.1): the runner's own, token-free.
-	 *  With no runner (starting, web-only, misconfigured, startup failed) it answers `superseded` and sends nothing. */
+	 *  With no runner (starting, misconfigured, startup failed) it answers `superseded` and sends nothing. */
 	readonly read: ScopedRead;
 	/** Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md §4): the runner's own, token-free. With
 	 *  no runner it answers `stale` and sends nothing. */
@@ -38,7 +38,6 @@ const frozen = (account: AccountView): AccountSnapshot =>
 export const outsideSnapshots = Object.freeze({
 	starting: frozen({ kind: 'starting', slow: false }),
 	startingSlow: frozen({ kind: 'starting', slow: true }),
-	webOnly: frozen({ kind: 'web-only' }),
 	misconfigured: frozen({ kind: 'misconfigured' }),
 	startupFailed: frozen({ kind: 'startup-failed' })
 });
@@ -67,7 +66,7 @@ const defaultTimers: Timers = {
  *  again, so the slow notice is only wording (a slow storage open is never timed out into a second composition).
  *
  *  - Until it answers: `starting`, and after ten seconds on this source's own timer, `starting` slow.
- *  - `web-only`, `misconfigured`, or a rejected promise (`startup-failed`): a fixed snapshot for the life of the
+ *  - `misconfigured`, or a rejected promise (`startup-failed`): a fixed snapshot for the life of the
  *    process. The rejection's reason is neither shown nor logged; only a full restart composes again.
  *  - A runner: its cached snapshot. If the slow notice has already appeared, the runner's own `starting` is shown slow
  *    too, so the wording never steps back while starting continues.
@@ -107,7 +106,7 @@ export function createAccountSource(composition: () => Promise<Composition>, tim
 	try { started = composition(); } catch { started = Promise.reject(new Error('composition threw')); }
 	started.then(
 		(result) => settle(result.kind === 'ready' ? { kind: 'runner', ready: result }
-			: { kind: 'fixed', snapshot: result.kind === 'web-only' ? outsideSnapshots.webOnly : outsideSnapshots.misconfigured }),
+			: { kind: 'fixed', snapshot: outsideSnapshots.misconfigured }),
 		() => settle({ kind: 'fixed', snapshot: outsideSnapshots.startupFailed }));
 
 	return Object.freeze({

@@ -3,12 +3,8 @@ import { useState, useSyncExternalStore } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AccountProvider, useAccount } from '../../src/account/AccountProvider.tsx';
 import { RootStack } from '../../src/account/RootStack.tsx';
-import { createWebCalls } from '../../src/account/web-calls.ts';
-import { createApiClient, createTransport } from '../../src/api/client.ts';
-import { webSend } from '../../src/platform/fetch.ts';
-import { pageOrigin } from '../../src/platform/app-web.ts';
 import { createScriptedSource, revocationControls, scenarioFrom, transitions, type ScriptedSource } from '../scripted-source.ts';
-import { readControls } from '../work-fixtures.ts';
+import { readControls } from '../read-controls.ts';
 
 /** The test-only harness root (docs/plans/expo-mobile-auth-composition-2026-09.md §7.1), bundled only when
  *  CAPTAIN_MOBILE_HARNESS=1 sets the router root to harness/app (web export only). It renders the production
@@ -17,8 +13,6 @@ import { readControls } from '../work-fixtures.ts';
  *  - the command log (`account-command-log`, a JSON array of every command sent);
  *  - a render counter (`account-render-count`) for a component subscribed to the account;
  *  - transition controls (`harness-transition-{lost|lost-single|switch|release|verify}`).
- *  A web scenario's web calls (the step-up, passkeys, an invitation) go through the production web transport to the
- *  harness page's own origin, so the browser check answers them as the API would; nothing else leaves the page.
  *  No routing logic lives here. */
 export const harnessMarker = 'CAPTAIN_MOBILE_HARNESS_7f3a';
 
@@ -29,12 +23,7 @@ const initialSearch = Platform.OS === 'web' && typeof window !== 'undefined' ? w
  *  can remount this root layout (for example when history leads to a route the guards no longer allow), and a remount
  *  must keep the scripted account, its state after transitions and its command log, not start the scenario again. */
 let scripted: ScriptedSource | null = null;
-const harnessSource = (): ScriptedSource => (scripted ??= createScriptedSource(scenarioFrom(initialSearch), {
-	webCalls: (hooks) => {
-		const origin = pageOrigin(typeof window === 'undefined' ? undefined : window.location) ?? 'https://harness.invalid';
-		return createWebCalls(createApiClient(createTransport({ origin, send: webSend })), origin, hooks);
-	}
-}));
+const harnessSource = (): ScriptedSource => (scripted ??= createScriptedSource(scenarioFrom(initialSearch)));
 /** Renders of the account-subscribed panel for the page's life, so a remount cannot hide renders by starting over. */
 let renderCount = 0;
 
@@ -100,12 +89,12 @@ function RevocationPanel({ source }: { source: ScriptedSource }) {
 	);
 }
 
-/** Reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.7), kept apart from the send-only command log and from the
+/** Equipment reads (docs/plans/expo-mobile-equipment-read-2026-09.md §6), kept apart from the send-only command log and from the
  *  account render counter:
  *  - `work-read-log`: a JSON array of every read sent, `{ id, path, epoch }`, oldest first. Shown as one line, so many
  *    reads don't crowd the screen; its text content is always complete.
  *  - `work-read-pending`: a JSON array of the IDs still pending, oldest first.
- *  - `harness-read-{control}`: resolves the **oldest** pending read (see work-fixtures.ts for each control's answer). A
+ *  - `harness-read-{control}`: resolves the **oldest** pending read (see read-controls.ts and equipment-fixtures.ts for each control's answer). A
  *    read whose scope changed before it is resolved answers `superseded`, as in the runner. */
 function ReadPanel({ source }: { source: ScriptedSource }) {
 	const reads = useSyncExternalStore(source.subscribeReads, source.reads, source.reads);

@@ -598,7 +598,6 @@ function retryMain(machine: Machine, now: number, effects: Effect[]): Machine {
 export type AccountView =
 	/** Provider states outside any runner (account-source.ts): not a native build, no valid API address, or composition
 	 *  failed. The machine never produces these. */
-	| { readonly kind: 'web-only' }
 	| { readonly kind: 'misconfigured' }
 	| { readonly kind: 'startup-failed' }
 	| { readonly kind: 'starting'; readonly slow: boolean }

@@ -3,7 +3,7 @@
  *  `appAccountPlatform` in ./app-account.ts, which binds the installed modules.
  *
  *  Interface agreed between the platform side (A) and composition (B):
- *  - `compose` checks `authPlatform` first: null means web-only, and nothing else here is touched.
+ *  - `compose` checks `authPlatform` first: null means misconfigured, and nothing else here is touched.
  *  - Then `apiOrigin`: null means misconfigured (the value is never repeated).
  *  - Then `openDeviceStorage()`, exactly once, never timed out into a second call.
  *  - `send` goes only into `createTransport({ origin: apiOrigin, send })`.
@@ -16,7 +16,7 @@ import type { AuthPlatform } from '../auth/contracts.ts';
 import type { DeviceStorage } from './secure-storage.ts';
 
 export type AccountPlatform = {
-	/** The attempt core's platform services on iOS and Android; null everywhere else (the web preview). */
+	/** The attempt core's platform services on iOS and Android; null on platforms without native adapters; web uses its own cookie source. */
 	readonly authPlatform: AuthPlatform | null;
 	/** The validated API origin from src/config.ts, or null when the build's value was refused. */
 	readonly apiOrigin: string | null;

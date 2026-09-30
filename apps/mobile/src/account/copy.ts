@@ -69,7 +69,6 @@ const command = (id: string, label: string, cmd: UiCommand, primary: boolean, di
 
 export const copy = {
 	captain: 'Captain',
-	webOnly: "Signing in isn't available in this preview.",
 	misconfigured: 'This build has no valid Captain address.',
 	opening: 'Opening…',
 	openingSlow: "Still opening this phone's secure storage. If this continues, close and reopen Captain.",
@@ -194,7 +193,6 @@ function welcomeBase(snapshot: AccountSnapshot, now: number, format: FormatAbout
 	const account = snapshot.account;
 	const plain = (body: string, heading: string = copy.captain): Page => ({ heading, body: [body], notices: [], actions: [] });
 	switch (account.kind) {
-		case 'web-only': return plain(copy.webOnly);
 		case 'misconfigured': return plain(copy.misconfigured);
 		case 'starting': return plain(account.slow ? copy.openingSlow : copy.opening);
 		case 'startup-failed': return plain(copy.startupFailed);

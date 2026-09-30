@@ -5,11 +5,8 @@ import type { ReadOutcome, ReadScope, ScopedRead } from '../src/account/contract
 import type { OrganisationPath } from '../src/api/paths.ts';
 import type { Parse } from '../src/auth/contracts.ts';
 import { equipmentFixture, isEquipmentControl, isEquipmentPath } from './equipment-fixtures.ts';
-import { stockFixture } from './stock-fixtures.ts';
-import { fixtureBody, isWorkBodyControl, type ReadControl } from './work-fixtures.ts';
+import type { ReadControl } from './read-controls.ts';
 
-/** Inventory's read: exactly `/v1/organisations/{id}/stock`, with no query (`stockPath`). */
-const stockPathPattern = /^\/v1\/organisations\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/stock$/;
 import { slowAfterMs, type AccountSnapshot, type AccountView } from '../src/account/machine.ts';
 import {
 	admit, idleRevocation, samePerson, sendingRevocation, settledRevocation, slowRevocation, staleOutcome,
@@ -17,7 +14,6 @@ import {
 } from '../src/account/revocation.ts';
 import type { Membership } from '../src/account/me.ts';
 import type { UiCommand } from '../src/account/runner.ts';
-import type { WebCallHooks, WebCalls } from '../src/account/web-calls.ts';
 
 /** The test harness's account source (docs/plans/expo-mobile-auth-composition-2026-09.md §7.1). Not a route: it lives
  *  outside harness/app. It has the production source's surface (`subscribe`, `snapshot`, `send`, `now`) and never a
@@ -36,18 +32,12 @@ export const harnessOrgC: Membership = Object.freeze({ organisationId: 'feedface
 export const timedWaitMs = 5_000;
 
 export const scenarioNames = [
-	'ready', 'ready-destination', 'web-only', 'misconfigured', 'starting', 'starting-slow', 'startup-failed',
+	'ready', 'ready-destination', 'misconfigured', 'starting', 'starting-slow', 'startup-failed',
 	'storage-unavailable', 'storage-unreadable', 'signed-out', 'signed-out-busy', 'signed-out-cancelled', 'signed-out-released',
 	'signing-in', 'closing', 'saving', 'checking', 'unverified', 'unverified-retry-at', 'releasing', 'releasing-warning',
 	'releasing-retry-at', 'choose', 'none', 'lost-named', 'lost-unnamed', 'not-remembered', 'refreshing', 'fault',
-	// Scripted web sessions (docs/plans/expo-web-session-2026-09.md §B.3): the states the web account source shows.
-	'web-checking', 'web-signed-out', 'web-signed-out-released', 'web-one', 'web-several', 'web-unavailable', 'web-unavailable-wait',
-	'web-step-up', 'web-signing-out', 'web-sign-out-failed'
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
-/** A web scenario applies the commands the web source would (choose, sign out); the others only record them. */
-export const isWebScenario = (name: ScenarioName): boolean => name.startsWith('web-');
-
 export const scenarioFrom = (search: string): ScenarioName => {
 	const value = new URLSearchParams(search).get('scenario');
 	return (scenarioNames as readonly string[]).includes(value ?? '') ? (value as ScenarioName) : 'ready';
@@ -79,7 +69,6 @@ function scenario(name: ScenarioName, wait: Wait): AccountSnapshot {
 	switch (name) {
 		case 'ready': return snap(signedIn());
 		case 'ready-destination': return snap(signedIn({ destination: '/equipment' }));
-		case 'web-only': return outsideSnapshots.webOnly;
 		case 'misconfigured': return outsideSnapshots.misconfigured;
 		case 'starting': return outsideSnapshots.starting;
 		case 'starting-slow': return outsideSnapshots.startingSlow;
@@ -112,15 +101,6 @@ function scenario(name: ScenarioName, wait: Wait): AccountSnapshot {
 				Object.freeze({ local: 'copy-may-remain' as const, server: 'pending' as const, wait: null, closeAppWarning: true, canRetry: true })
 			])
 		});
-		case 'web-checking': return snap({ kind: 'checking' });
-		case 'web-signed-out': case 'web-step-up': return snap({ kind: 'signed-out', notice: null, gate: 'idle' }, { signInOffered: true });
-		case 'web-signed-out-released': return snap({ kind: 'signed-out', notice: { kind: 'released', reason: 'sign-out', local: 'deleted', server: 'ended' }, gate: 'idle' }, { signInOffered: true });
-		case 'web-one': return snap(signedIn({ memberships: [harnessOrgA] }));
-		case 'web-several': return snap(signedIn({ memberships: [harnessOrgA, harnessOrgB, harnessOrgC] }));
-		case 'web-unavailable': return snap({ kind: 'unverified', retrying: false, wait: null });
-		case 'web-unavailable-wait': return snap({ kind: 'unverified', retrying: false, wait });
-		case 'web-signing-out': return snap({ kind: 'releasing', reason: 'sign-out', local: 'deleted', server: 'revoking', wait: null, slow: false, closeAppWarning: false, canRetry: false });
-		case 'web-sign-out-failed': return snap({ kind: 'releasing', reason: 'sign-out', local: 'deleted', server: 'pending', wait: null, slow: false, closeAppWarning: false, canRetry: true });
 	}
 }
 
@@ -172,9 +152,6 @@ export type ScriptedSource = AccountSource & {
 
 export function createScriptedSource(name: ScenarioName, options: {
 	readonly readClock?: () => number;
-	/** The web calls for a web scenario, built over the harness page's origin so the browser check can answer them;
-	 *  the hooks are this source's (an accepted membership is chosen; an ended session shows as signed out). */
-	readonly webCalls?: (hooks: WebCallHooks) => WebCalls;
 } = {}): ScriptedSource {
 	const clock = createClampedClock(options.readClock ?? (() => performance.now()));
 	const until = clock.now() + timedWaitMs;
@@ -218,16 +195,13 @@ export function createScriptedSource(name: ScenarioName, options: {
 		if (control === 'refused-400') return { kind: 'refused', status: 400 };
 		if (control === 'unauthorised') return superseded; // as a 401 does in production: the screen applies nothing
 		if (control === 'client-bug') return { kind: 'client-bug' };
-		// The read's own path decides the fixture: Inventory's stock list, the equipment schedule's reads, or a Work list (whose offset and view, and so
-		// owners, come from the exact path). A body control with no fixture for that list answers as an unreadable body.
+		// The read's own path selects its equipment fixture; unmatched controls yield an unreadable body.
 		try {
-			if (stockPathPattern.test(p.entry.path)) return { kind: 'ok', value: p.parse(stockFixture(control)) };
 			if (isEquipmentPath(p.entry.path)) {
 				if (!isEquipmentControl(control)) return { kind: 'unavailable', wait: null };
 				return { kind: 'ok', value: p.parse(equipmentFixture(control, p.entry.path)) };
 			}
-			if (!isWorkBodyControl(control)) return { kind: 'unavailable', wait: null };
-			return { kind: 'ok', value: p.parse(fixtureBody(control, p.entry.path, p.scope.userId)) };
+			return { kind: 'unavailable', wait: null };
 		} catch { return { kind: 'unavailable', wait: null }; }
 	}
 
@@ -286,20 +260,9 @@ export function createScriptedSource(name: ScenarioName, options: {
 		}
 	}
 
-	const webHooks: WebCallHooks = {
-		accountEpoch: () => (current.account.kind === 'signed-in' ? current.account.person.epoch : null),
-		accepted: (membership) => {
-			const account = current.account;
-			if (account.kind !== 'signed-in') return;
-			const others = account.memberships.filter((m) => m.organisationId !== membership.organisationId);
-			set(snap(signedIn({ memberships: [...others, membership], org: { kind: 'chosen', membership } })));
-		},
-		sessionEnded: () => set(snap({ kind: 'signed-out', notice: { kind: 'released', reason: 'session-ended', local: 'deleted', server: 'not-needed' }, gate: 'idle' }, { signInOffered: true }))
-	};
-	const web: WebCalls | null = isWebScenario(name) && options.webCalls !== undefined ? options.webCalls(webHooks) : null;
 
 	return Object.freeze({
-		web,
+		web: null,
 		revokeOthers,
 		revocationView,
 		revocations: () => revocationSent,
@@ -344,15 +307,6 @@ export function createScriptedSource(name: ScenarioName, options: {
 			const account = current.account;
 			if (command.type === 'destination-used' && account.kind === 'signed-in' && account.destination !== null) {
 				set(snap({ ...account, destination: null }, { signInOffered: current.signInOffered, fault: current.fault, strays: current.strays }));
-			}
-			if (!isWebScenario(name)) return;
-			// The web source's own effects, scripted: choosing applies at once; signing out ends in "Signed out."
-			if (command.type === 'choose-organisation' && account.kind === 'signed-in') {
-				const membership = account.memberships.find((m) => m.organisationId === command.organisationId);
-				if (membership !== undefined) set(snap(signedIn({ memberships: account.memberships, org: { kind: 'chosen', membership } })));
-			}
-			if (command.type === 'sign-out' && account.kind === 'signed-in') {
-				set(snap({ kind: 'signed-out', notice: { kind: 'released', reason: 'sign-out', local: 'deleted', server: 'ended' }, gate: 'idle' }, { signInOffered: true }));
 			}
 		},
 		log: () => log,

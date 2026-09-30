@@ -46,10 +46,10 @@ function recordingBuilders(overrides: Partial<Builders> = {}) {
 	return { builders, made };
 }
 
-test('web-only: no auth platform means nothing else is touched', async () => {
+test('missing native auth adapter is misconfigured without opening storage', async () => {
 	const { platform, touched } = fakePlatform({ auth: false });
 	const { builders, made } = recordingBuilders();
-	assert.deepEqual(await compose(platform, builders), { kind: 'web-only' });
+	assert.deepEqual(await compose(platform, builders), { kind: 'misconfigured' });
 	assert.deepEqual(touched, []); assert.equal(made.runners.length, 0);
 });
 

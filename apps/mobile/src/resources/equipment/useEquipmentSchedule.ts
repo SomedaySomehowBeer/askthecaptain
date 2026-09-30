@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAccount } from '../../account/AccountProvider.tsx';
 import type { ReadScope } from '../../account/contracts.ts';
-import { listInert } from '../../work/my-work-list.ts';
+import { scopeInert } from '../../account/read-scope.ts';
 import type { Scale } from './geometry.ts';
 import type { ScheduleRange } from './range.ts';
 import {
@@ -10,11 +10,10 @@ import {
 } from './schedule.ts';
 
 /** The equipment schedule for its screen (contract docs/plans/expo-mobile-equipment-read-2026-09.md §4.4; design note
- *  revision 2). Effects only: every decision is in `schedule.ts`. It lives only in this mounted screen's memory, exactly
- *  as Inventory does (`useStock`):
+ *  revision 2). Effects only: every decision is in `schedule.ts`. It lives only in this mounted screen's memory:
  *
  *  - **Bound scope.** The first ready scope rendered is kept as `bound`; every read names it as `expected`, and the runner
- *    builds each path from its own current scope. After a scope change the hook is `inert` until the tabs reset remounts
+ *    builds each path from its own current scope. After a scope change the hook is `inert` until navigation remounts
  *    the screen: nothing is sent, no answer applies, and the screen shows only the loading line.
  *  - **One pump.** `pump` asks `beginRead` for the single read to send, sends it through the runner, applies the answer
  *    with `receive`, and pumps again. It runs after mount, after each answer, after each press and settle, and when the
@@ -28,7 +27,7 @@ export function useEquipmentSchedule() {
 
 	const bound = useRef<ReadScope | null>(null);
 	if (bound.current === null && scope !== null) bound.current = scope;
-	const inert = listInert(bound.current, scope);
+	const inert = scopeInert(bound.current, scope);
 	/** The account is still being checked (the web's first `/v1/me`, or the native start): no scope yet, said as such. */
 	const checking = bound.current === null && (shown.kind === 'checking' || shown.kind === 'starting');
 	const scopeRef = useRef<ReadScope | null>(scope); scopeRef.current = scope;
@@ -40,7 +39,7 @@ export function useEquipmentSchedule() {
 	if (stateRef.current === null && bound.current !== null) stateRef.current = createSchedule(bound.current);
 	const [, setVersion] = useState(0);
 	const mounted = useRef(false);
-	const live = () => mounted.current && !listInert(bound.current, scopeRef.current);
+	const live = () => mounted.current && !scopeInert(bound.current, scopeRef.current);
 	const commit = (next: ScheduleState) => {
 		if (next === stateRef.current) return;
 		stateRef.current = next;

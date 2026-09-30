@@ -3,13 +3,14 @@
 Workspace outcome: people can sign into the Expo web client, switch organisations, manage
 sessions and open the read-only equipment schedule. The thread shell has no thread records
 or business writes yet. Implementation review: [PR #218](https://github.com/SomedaySomehowBeer/askthecaptain/pull/218),
-dependent on [plan #214](https://github.com/SomedaySomehowBeer/askthecaptain/pull/214) and
-[API #217](https://github.com/SomedaySomehowBeer/askthecaptain/pull/217).
+implementing the adopted [plan #214](https://github.com/SomedaySomehowBeer/askthecaptain/pull/214).
+It carries the [R1a API commits from #217](https://github.com/SomedaySomehowBeer/askthecaptain/pull/217);
+that PR will be closed as superseded after #218 merges.
 
 ## Evidence
 
 - `pnpm --filter @captain/mobile check`: TypeScript and the source boundary guard passed.
-- `pnpm --filter @captain/mobile test`: 373 pure-logic tests and 20 boundary-guard tests passed,
+- `pnpm --filter @captain/mobile test`: 340 pure-logic tests and 20 boundary-guard tests passed,
   zero skipped. Includes late identity responses after sign-out, organisation/person changes,
   paced retries and Retry-After, invitation reconciliation, stale passkey reads, revocation races
   and the fixed native handoff parser. Native protocol/storage tests use injected adapters.
@@ -23,14 +24,25 @@ dependent on [plan #214](https://github.com/SomedaySomehowBeer/askthecaptain/pul
   organisation switching, no-membership Account, sign-out failure, unavailable route retention,
   invitation outcomes, passkey listing, browser WebAuthn and no overflow/page errors. The three
   phone widths also exercise the retained equipment timeline and session-control harness.
-- [Postgres results](postgres.log): all eight `apps/api/src/web/session.test.ts` tests passed,
+- [Postgres results](postgres.log), from the initial R1b validation: all eight `apps/api/src/web/session.test.ts` tests passed,
   zero skipped, against an isolated database created and dropped by the repository harness.
   They cover callback cookies, CSRF, bearer compatibility, step-up, cookie clearing, native
   handoff and export/API routing. This is separate from the browser test's mocked verify response.
 
-The local browser export/screenshots were captured at `1f710a4`; `feebaf7` then adds automatic
-paced retry after a failed signed-in identity refresh, covered by the final pure tests. Final
-PR CI rebuilds from source and runs the browser suite again.
+## Follow-up cleanup
+
+The pre-merge follow-up removes the dead Work and Inventory parsers, list state, query builders,
+tests and fixtures. The scope guard and its existing isolation test now live in the account
+layer; runner byte-budget tests use equipment pages. It also removes the obsolete web-preview
+state, unexercised web harness scenarios and the unused `EXPO_PUBLIC_APP_URL` allowance, with
+a guard assertion that rejects the retired variable. The used equipment/failure controls remain
+in `harness/read-controls.ts`. Comments and the mobile workflow summary now describe current code.
+
+Pure-test count changes from 373 to 340; all 20 boundary tests remain. Fresh production web,
+iOS, Android and harness exports are checked with the workflow's secret canaries. The browser
+log and screenshots below are refreshed from those exports. API code is unchanged by this
+cleanup; the recorded eight Postgres tests were not repeated. SDK compatibility and generated
+Android backup evidence above are from the initial R1b validation.
 
 ## Screenshots
 

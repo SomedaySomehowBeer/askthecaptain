@@ -45,8 +45,8 @@ node apps/e2e/scripts/mobile-shell-ci.mjs
 
 The harness is a separate, web-only export. Never deploy it. Production exports leave
 `CAPTAIN_MOBILE_HARNESS` unset. The source and bundle guard excludes server packages, secret
-variables and harness code from production. Only the two existing public URL variables are
-permitted; web API requests use the serving origin rather than those build-time URLs.
+variables and harness code from production. Only the native API URL variable `EXPO_PUBLIC_API_URL` is permitted; web API requests use
+the serving origin instead.
 
 The browser suite exercises the production session source against synthetic API answers at
 360, 390, 430 and 1280 pixels, plus the retained equipment and session-revocation harness at
