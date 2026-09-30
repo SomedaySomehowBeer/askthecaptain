@@ -1,5 +1,22 @@
 # Staging resumed; production paused (2026-09-27)
 
+## Web cutover to the API-served Expo export (30 September 2026, about 07:35 UTC)
+
+Steps 1–3 of [the cutover runbook](expo-web-cutover.md) ran on the staging pair (D37, #218, #219). The API
+`askthecaptain-api-staging` was deployed from `main` at `519b1ad` (image `deployment-01M3RKG66S2WX49H5X5F4ME5ZM`,
+previous `git-b484e30`); the release command ran with no new migration. The certificates for `app`, apex and `www`
+moved from `askthecaptain-web-staging` to the API app and were issued; `infra/tofu/dns.tf` now points all three at
+`askthecaptain-api-staging.fly.dev` (applied by `tofu.yml` on #219). `APP_URL` and `API_URL` did not change.
+
+Hosted checks on `https://app.askthecaptain.app`: `/readyz` ok; `/` serves the Expo shell with `no-store`;
+`/_expo/…` assets are `immutable`; `/v1/…` still answers as the API; `/auth/passkey` is served as a page; `www`
+and the apex serve the shell. The owner signed in with Google, saw the organisation in the shell, and signed out.
+
+Not exercised: the passkey step-up (the owner's account has no passkey and the shell cannot register one), invitation
+acceptance (no screen creates an invitation) and Web Push registration (no device control on the export). These three
+account controls are tracked as the next increment in #221. Native sign-in stays off;
+production and the embedding service stay stopped; the deploy and backup workflows stay disabled.
+
 ## One-off workflows and retired-screen evidence removed (30 September 2026, UTC)
 
 The chat-first rebuild (R0) removed `.github/workflows/retire-elevated-runtime.yml`, `.github/workflows/reconcile-retired-output.yml` and `.github/scripts/` from the repository; both workflows had completed on 26 September and were already disabled, and their evidence stays in [the activation record](../validation/runtime-activation-2026-09-26/README.md) and the sections below. The same change removed the client-proof harness and the validation records for retired web and mobile screens; git history keeps them.
