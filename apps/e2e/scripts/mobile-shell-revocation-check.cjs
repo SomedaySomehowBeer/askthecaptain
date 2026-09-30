@@ -15,8 +15,8 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  const send = async n => {
   await action().click(); await id('account-action-revoke-others-confirm').click(); await count(n);
  };
- await freshPage(); await page().clock.install(); await page().clock.pauseAt(await page().evaluate(() => Date.now()));
- await scenario('ready', '/work'); await openAccount();
+ await freshPage(); await page().clock.install(); await page().clock.pauseAt(await page().evaluate(() => Date.now() + 1_000));
+ await scenario('ready', '/'); await openAccount();
  await action().click(); await expect(id('account-action-revoke-others-confirm')).toBeVisible();
  await id('account-action-revoke-others-cancel').click(); await count(0);
  await send(1); await expect(action()).toBeDisabled(); await expect(status()).toContainText('Signing out everywhere else…');

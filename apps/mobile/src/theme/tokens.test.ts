@@ -1,19 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { colors, tabBar, tabBarWidth, type } from './tokens.ts';
+import { colors, space, type } from './tokens.ts';
 
-test('the tab bar keeps the approved geometry: about 290 × 54 on a 390 pt phone, 22 pt icons, 11 pt labels, 44 pt targets', () => {
-	assert.ok(Math.abs(tabBarWidth(390) - 290) < 1, String(tabBarWidth(390)));
-	assert.equal(tabBar.height, 54); assert.equal(tabBar.icon, 22); assert.equal(tabBar.label, 11);
-	assert.ok(tabBar.minTarget >= 44);
-	assert.equal(tabBarWidth(320), 240, 'small phones keep three reachable tabs');
-	assert.equal(tabBarWidth(1024), 360, 'tablets keep a compact bar');
-	assert.ok(tabBarWidth(390) / 3 >= tabBar.minTarget);
+test('the palette is the reviewed green-grey set: background, surface, text, action and lines', () => {
+	assert.equal(colors.page, '#f1f5ee'); assert.equal(colors.card, '#ffffff');
+	assert.equal(colors.body, '#1f3a2c'); assert.equal(colors.heading, '#142619'); assert.equal(colors.muted, '#54655a');
+	assert.equal(colors.action, '#276744'); assert.equal(colors.actionText, '#ffffff');
+	assert.equal(colors.line, '#d8e0d3'); assert.equal(colors.rowLine, '#e6ece2');
+	assert.equal(colors.sage, '#dbe6d4'); assert.equal(colors.sageText, '#2d4c36');
+	for (const value of Object.values(colors)) assert.match(value, /^#[0-9a-f]{6}$/, 'every colour is a plain hex value');
 });
 
-test('the selected tab is the darker grey-green at 50% with green text; headings are 26 pt; the palette is paper and forest', () => {
-	assert.equal(colors.selectedPill, 'rgba(217, 222, 214, 0.5)');
-	assert.equal(colors.selectedText, '#197334');
+test('headings are 26 pt, targets at least 44 pt, the gutter 16 pt, and wide screens keep a readable column', () => {
 	assert.equal(type.heading, 26);
-	assert.equal(colors.page, '#f3ecdf'); assert.equal(colors.heading, '#142619'); assert.equal(colors.mint, '#90e8a8');
+	assert.ok(space.minTarget >= 44);
+	assert.equal(space.page, 16);
+	assert.ok(space.maxContentWidth >= 600 && space.maxContentWidth <= 900);
 });

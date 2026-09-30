@@ -60,12 +60,11 @@ jobs:
           node apps/mobile/scripts/check-android-backup.mjs "$RUNNER_TEMP/captain-mobile-config.json"
       - name: Pure-logic tests
         run: pnpm --dir apps/mobile run test
-      # Public build configuration only, pointing nowhere real. Server-style variables hold unique canary values: the
+      # Public API configuration only, pointing nowhere real. Server-style variables hold unique canary values: the
       # bundle check below fails if any of them, a secret variable name or a postgres URL reaches an exported bundle.
       - name: Export web, iOS and Android bundles (JavaScript only; not a native build)
         env:
           EXPO_PUBLIC_API_URL: https://api.example.invalid
-          EXPO_PUBLIC_APP_URL: https://app.example.invalid
           DATABASE_URL: postgres://canary-mobile-export@db.example.invalid/canary
           MASTER_KEY: canary-mobile-master-key-must-not-bundle
           GOOGLE_CLIENT_SECRET: canary-mobile-google-secret-must-not-bundle
@@ -78,11 +77,10 @@ jobs:
             env -u CAPTAIN_MOBILE_HARNESS pnpm --dir apps/mobile exec expo export --platform "$platform" --output-dir "dist/$platform" --max-workers 2
           done
       # The test-only account harness: a separate web-only export into its own directory, with the same synthetic public
-      # URLs and secret canaries. It is never a native build (app.config.ts refuses one) and is never deployed.
+      # API URL and secret canaries. It is never a native build (app.config.ts refuses one) and is never deployed.
       - name: Export the account harness (web only; test-only)
         env:
           EXPO_PUBLIC_API_URL: https://api.example.invalid
-          EXPO_PUBLIC_APP_URL: https://app.example.invalid
           DATABASE_URL: postgres://canary-mobile-export@db.example.invalid/canary
           MASTER_KEY: canary-mobile-master-key-must-not-bundle
           GOOGLE_CLIENT_SECRET: canary-mobile-google-secret-must-not-bundle
@@ -100,7 +98,7 @@ jobs:
       # approximation of the shell: not native rendering, gestures, accessibility services or device evidence.
       - name: Install Chromium for the shell approximation
         run: pnpm --filter @captain/e2e exec playwright install --with-deps chromium
-      - name: Mobile shell and account browser approximation
+      - name: Expo web shell and cookie-session browser checks
         env:
           MOBILE_SHELL_SCREENSHOTS: ${{ github.workspace }}/apps/e2e/test-results/mobile-shell
         run: node apps/e2e/scripts/mobile-shell-ci.mjs
@@ -120,5 +118,5 @@ jobs:
             echo '### Mobile shell checks'
             echo 'Bundle exports for web, iOS and Android are JavaScript bundles only.'
             echo 'They are not a native build, a signed build, a simulator run or device acceptance.'
-            echo 'The browser check runs separate production and synthetic account harness web exports in Chromium; it approximates layout, navigation and account controls only.'
+            echo 'The browser check runs the production cookie client with synthetic API answers, plus the equipment and account harness, at phone and desktop widths.'
           } >> "$GITHUB_STEP_SUMMARY"

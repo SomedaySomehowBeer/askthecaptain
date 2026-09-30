@@ -10,13 +10,12 @@ import { createCredentialStore } from './store.ts';
  *  injected (../platform/account-platform.ts), so node tests cover it with fakes; ../platform/app-account.ts binds the
  *  installed modules. It is called once per process (instance.ts): nothing here times out into a second composition.
  *
- *  Order: `authPlatform` null is web-only and nothing else is touched; a refused `apiOrigin` is misconfigured (the value
+ *  Order: `authPlatform` null is misconfigured and nothing else is touched; a refused `apiOrigin` is misconfigured (the value
  *  is never repeated); then storage is opened exactly once; then transport, client, two distinct cleanups, attempts and
  *  the runner, which is started. The raw monotonic source is clamped here, once, and that single clock goes to the
  *  runner, both cleanups and the attempt core, and back to the account source for screens. */
 
 export type Composition =
-	| { readonly kind: 'web-only' }
 	| { readonly kind: 'misconfigured' }
 	| { readonly kind: 'ready'; readonly runner: AccountRunner; readonly clock: Clock };
 
@@ -30,12 +29,11 @@ export type Builders = {
 };
 export const defaultBuilders: Builders = Object.freeze({ createTransport, createApiClient, createCleanup, createAttempts, createAccountRunner });
 
-const webOnly: Composition = Object.freeze({ kind: 'web-only' });
 const misconfigured: Composition = Object.freeze({ kind: 'misconfigured' });
 
 export async function compose(platform: AccountPlatform, build: Builders = defaultBuilders): Promise<Composition> {
 	const authPlatform = platform.authPlatform;
-	if (authPlatform === null) return webOnly;
+	if (authPlatform === null) return misconfigured;
 	const origin = platform.apiOrigin;
 	if (origin === null) return misconfigured;
 	const storage = await platform.openDeviceStorage();

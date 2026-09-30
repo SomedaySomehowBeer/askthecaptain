@@ -2,23 +2,20 @@ import { StatusBar } from 'expo-status-bar';
 import { useState, useSyncExternalStore } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { AccountProvider, useAccount } from '../../src/account/AccountProvider.tsx';
-import { AccountStack } from '../../src/account/AccountStack.tsx';
-import { config, webLink, type WebPath } from '../../src/config.ts';
+import { RootStack } from '../../src/account/RootStack.tsx';
 import { createScriptedSource, revocationControls, scenarioFrom, transitions, type ScriptedSource } from '../scripted-source.ts';
-import { readControls } from '../work-fixtures.ts';
+import { readControls } from '../read-controls.ts';
 
 /** The test-only harness root (docs/plans/expo-mobile-auth-composition-2026-09.md §7.1), bundled only when
  *  CAPTAIN_MOBILE_HARNESS=1 sets the router root to harness/app (web export only). It renders the production
- *  AccountStack inside the production AccountProvider with a scripted source, and adds only:
+ *  RootStack inside the production AccountProvider with a scripted source, and adds only:
  *  - the marker, as a testID so minification cannot drop it;
  *  - the command log (`account-command-log`, a JSON array of every command sent);
  *  - a render counter (`account-render-count`) for a component subscribed to the account;
  *  - transition controls (`harness-transition-{lost|lost-single|switch|release|verify}`).
- *  The tabs mount proof (`harness-tabs-mount`) is in harness/app/(tabs)/_layout.tsx.
  *  No routing logic lives here. */
 export const harnessMarker = 'CAPTAIN_MOBILE_HARNESS_7f3a';
 
-const links = (path: WebPath) => webLink(config.webOrigin, path);
 /** Read once, from the page URL the harness was loaded at; a later route replace that drops the query changes nothing. */
 const initialSearch = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.search : '';
 
@@ -35,9 +32,9 @@ export default function HarnessLayout() {
 	return (
 		<>
 			<StatusBar style="dark" />
-			<AccountProvider source={source} webLink={links}>
+			<AccountProvider source={source}>
 				<View style={styles.root}>
-					<View style={styles.app}><AccountStack /></View>
+					<View style={styles.app}><RootStack /></View>
 					<HarnessPanel source={source} />
 				</View>
 			</AccountProvider>
@@ -92,12 +89,12 @@ function RevocationPanel({ source }: { source: ScriptedSource }) {
 	);
 }
 
-/** Reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.7), kept apart from the send-only command log and from the
+/** Equipment reads (docs/plans/expo-mobile-equipment-read-2026-09.md §6), kept apart from the send-only command log and from the
  *  account render counter:
  *  - `work-read-log`: a JSON array of every read sent, `{ id, path, epoch }`, oldest first. Shown as one line, so many
  *    reads don't crowd the screen; its text content is always complete.
  *  - `work-read-pending`: a JSON array of the IDs still pending, oldest first.
- *  - `harness-read-{control}`: resolves the **oldest** pending read (see work-fixtures.ts for each control's answer). A
+ *  - `harness-read-{control}`: resolves the **oldest** pending read (see read-controls.ts and equipment-fixtures.ts for each control's answer). A
  *    read whose scope changed before it is resolved answers `superseded`, as in the runner. */
 function ReadPanel({ source }: { source: ScriptedSource }) {
 	const reads = useSyncExternalStore(source.subscribeReads, source.reads, source.reads);

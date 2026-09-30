@@ -5,11 +5,8 @@ import type { ReadOutcome, ReadScope, ScopedRead } from '../src/account/contract
 import type { OrganisationPath } from '../src/api/paths.ts';
 import type { Parse } from '../src/auth/contracts.ts';
 import { equipmentFixture, isEquipmentControl, isEquipmentPath } from './equipment-fixtures.ts';
-import { stockFixture } from './stock-fixtures.ts';
-import { fixtureBody, isWorkBodyControl, type ReadControl } from './work-fixtures.ts';
+import type { ReadControl } from './read-controls.ts';
 
-/** Inventory's read: exactly `/v1/organisations/{id}/stock`, with no query (`stockPath`). */
-const stockPathPattern = /^\/v1\/organisations\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/stock$/;
 import { slowAfterMs, type AccountSnapshot, type AccountView } from '../src/account/machine.ts';
 import {
 	admit, idleRevocation, samePerson, sendingRevocation, settledRevocation, slowRevocation, staleOutcome,
@@ -35,13 +32,12 @@ export const harnessOrgC: Membership = Object.freeze({ organisationId: 'feedface
 export const timedWaitMs = 5_000;
 
 export const scenarioNames = [
-	'ready', 'ready-destination', 'web-only', 'misconfigured', 'starting', 'starting-slow', 'startup-failed',
+	'ready', 'ready-destination', 'misconfigured', 'starting', 'starting-slow', 'startup-failed',
 	'storage-unavailable', 'storage-unreadable', 'signed-out', 'signed-out-busy', 'signed-out-cancelled', 'signed-out-released',
 	'signing-in', 'closing', 'saving', 'checking', 'unverified', 'unverified-retry-at', 'releasing', 'releasing-warning',
-	'releasing-retry-at', 'choose', 'none', 'lost-named', 'lost-unnamed', 'not-remembered', 'refreshing', 'fault'
+	'releasing-retry-at', 'choose', 'none', 'lost-named', 'lost-unnamed', 'not-remembered', 'refreshing', 'fault',
 ] as const;
 export type ScenarioName = (typeof scenarioNames)[number];
-
 export const scenarioFrom = (search: string): ScenarioName => {
 	const value = new URLSearchParams(search).get('scenario');
 	return (scenarioNames as readonly string[]).includes(value ?? '') ? (value as ScenarioName) : 'ready';
@@ -72,8 +68,7 @@ const signedIn = (overrides: Partial<Extract<AccountView, { kind: 'signed-in' }>
 function scenario(name: ScenarioName, wait: Wait): AccountSnapshot {
 	switch (name) {
 		case 'ready': return snap(signedIn());
-		case 'ready-destination': return snap(signedIn({ destination: '/chat/views' }));
-		case 'web-only': return outsideSnapshots.webOnly;
+		case 'ready-destination': return snap(signedIn({ destination: '/equipment' }));
 		case 'misconfigured': return outsideSnapshots.misconfigured;
 		case 'starting': return outsideSnapshots.starting;
 		case 'starting-slow': return outsideSnapshots.startingSlow;
@@ -112,7 +107,7 @@ function scenario(name: ScenarioName, wait: Wait): AccountSnapshot {
 /** Scripted changes the browser check drives:
  *  - `lost`: the chosen organisation is gone and two memberships remain, so the chooser shows (not ready);
  *  - `lost-single`: the chosen organisation is gone and the one remaining membership is chosen at once (ready
- *    throughout, a new tabs key: the tabs must still be reset);
+ *    throughout, a new scope: the root stack must still return to the thread list);
  *  - `switch`: ready with organisation A to ready with organisation B (as from Switch organisation);
  *  - `release`: ready to releasing with the close-app warning;
  *  - `verify`: identity verified with organisation A chosen and no sign-in destination (a restored saved session). */
@@ -155,8 +150,10 @@ export type ScriptedSource = AccountSource & {
 	readonly resolveRevocation: (control: RevocationControl) => void;
 };
 
-export function createScriptedSource(name: ScenarioName, readClock: () => number = () => performance.now()): ScriptedSource {
-	const clock = createClampedClock(readClock);
+export function createScriptedSource(name: ScenarioName, options: {
+	readonly readClock?: () => number;
+} = {}): ScriptedSource {
+	const clock = createClampedClock(options.readClock ?? (() => performance.now()));
 	const until = clock.now() + timedWaitMs;
 	const wait: Wait = Object.freeze({ until, about: new Date(Date.now() + timedWaitMs).toISOString() });
 	let current = scenario(name, wait);
@@ -198,16 +195,13 @@ export function createScriptedSource(name: ScenarioName, readClock: () => number
 		if (control === 'refused-400') return { kind: 'refused', status: 400 };
 		if (control === 'unauthorised') return superseded; // as a 401 does in production: the screen applies nothing
 		if (control === 'client-bug') return { kind: 'client-bug' };
-		// The read's own path decides the fixture: Inventory's stock list, the equipment schedule's reads, or a Work list (whose offset and view, and so
-		// owners, come from the exact path). A body control with no fixture for that list answers as an unreadable body.
+		// The read's own path selects its equipment fixture; unmatched controls yield an unreadable body.
 		try {
-			if (stockPathPattern.test(p.entry.path)) return { kind: 'ok', value: p.parse(stockFixture(control)) };
 			if (isEquipmentPath(p.entry.path)) {
 				if (!isEquipmentControl(control)) return { kind: 'unavailable', wait: null };
 				return { kind: 'ok', value: p.parse(equipmentFixture(control, p.entry.path)) };
 			}
-			if (!isWorkBodyControl(control)) return { kind: 'unavailable', wait: null };
-			return { kind: 'ok', value: p.parse(fixtureBody(control, p.entry.path, p.scope.userId)) };
+			return { kind: 'unavailable', wait: null };
 		} catch { return { kind: 'unavailable', wait: null }; }
 	}
 
@@ -266,7 +260,9 @@ export function createScriptedSource(name: ScenarioName, readClock: () => number
 		}
 	}
 
+
 	return Object.freeze({
+		web: null,
 		revokeOthers,
 		revocationView,
 		revocations: () => revocationSent,

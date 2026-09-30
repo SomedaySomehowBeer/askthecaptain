@@ -26,7 +26,7 @@ const hasExactly = (value: Record<string, unknown>, keys: readonly string[]) => 
 const text = (value: unknown, min: number, max: number): value is string =>
 	typeof value === 'string' && value.length >= min && value.length <= max;
 
-function parseMembership(value: unknown): Membership {
+export function parseMembership(value: unknown): Membership {
 	if (!isRecord(value) || !hasExactly(value, ['organisationId', 'organisationName', 'role', 'status'])) return refuse();
 	const { organisationId, organisationName, role, status } = value;
 	if (!isCanonicalUuid(organisationId) || !text(organisationName, 1, 500)) return refuse();
@@ -34,7 +34,8 @@ function parseMembership(value: unknown): Membership {
 	return Object.freeze({ organisationId, organisationName, role: role as Role });
 }
 
-/** The person and their active memberships, exactly as the API sends them. A name may be empty (users.name defaults to
+/** The person and their active memberships, exactly as the API sends them (`parseMembership` alone also reads the
+ *  membership `POST /v1/invitations/accept` returns). A name may be empty (users.name defaults to
  *  ''); an organisation appears at most once. */
 export function parseMe(value: unknown): Me {
 	if (!isRecord(value) || !hasExactly(value, ['user', 'memberships', 'passkeyVerified'])) return refuse();

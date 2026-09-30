@@ -60,7 +60,8 @@ export type SignInFailure = Exclude<AttemptKind, 'signed-in'> | 'busy';
 export type Notice =
 	| { readonly kind: 'sign-in'; readonly outcome: SignInFailure }
 	| { readonly kind: 'released'; readonly reason: ReleaseReason; readonly local: LocalResult; readonly server: 'ended' | 'not-needed' }
-	| { readonly kind: 'organisation-not-remembered' };
+	| { readonly kind: 'organisation-not-remembered' }
+	| { readonly kind: 'refresh-unavailable' };
 
 export type OrgState =
 	| { readonly kind: 'loading' }
@@ -597,7 +598,6 @@ function retryMain(machine: Machine, now: number, effects: Effect[]): Machine {
 export type AccountView =
 	/** Provider states outside any runner (account-source.ts): not a native build, no valid API address, or composition
 	 *  failed. The machine never produces these. */
-	| { readonly kind: 'web-only' }
 	| { readonly kind: 'misconfigured' }
 	| { readonly kind: 'startup-failed' }
 	| { readonly kind: 'starting'; readonly slow: boolean }

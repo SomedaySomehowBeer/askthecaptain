@@ -45,8 +45,8 @@ test('before composition answers: starting, slow after ten seconds on its own ti
 	assert.equal(source.now(), 0);
 });
 
-test('web-only and misconfigured are fixed frozen snapshots; the timer is cleared', async () => {
-	for (const [kind, expected] of [['web-only', outsideSnapshots.webOnly], ['misconfigured', outsideSnapshots.misconfigured]] as const) {
+test('misconfigured is a fixed frozen snapshot; the timer is cleared', async () => {
+	for (const [kind, expected] of [['misconfigured', outsideSnapshots.misconfigured]] as const) {
 		const t = fakeTimers();
 		const source = createAccountSource(async () => ({ kind }), t.timers);
 		await drain();
@@ -94,7 +94,7 @@ test('read: with no runner it answers superseded and builds nothing; with a runn
 	let built = 0;
 	const path = () => { built += 1; return '/v1/organisations/x' as never; };
 	const parse = (value: unknown) => value;
-	for (const composition of [() => new Promise<Composition>(() => undefined), async (): Promise<Composition> => ({ kind: 'web-only' }), async (): Promise<Composition> => ({ kind: 'misconfigured' }), () => Promise.reject(new Error('x'))]) {
+	for (const composition of [() => new Promise<Composition>(() => undefined), async (): Promise<Composition> => ({ kind: 'misconfigured' }), () => Promise.reject(new Error('x'))]) {
 		const source = createAccountSource(composition, fakeTimers().timers);
 		await drain();
 		assert.deepEqual(await source.read(scope, path, parse), { kind: 'superseded' });
@@ -111,7 +111,7 @@ test('read: with no runner it answers superseded and builds nothing; with a runn
 
 test('sign out everywhere else: with no runner it answers stale and shows the shared idle view; with a runner it delegates unchanged', async () => {
 	const expected = { epoch: 'a1', userId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301' };
-	for (const composition of [() => new Promise<Composition>(() => undefined), async (): Promise<Composition> => ({ kind: 'web-only' }), async (): Promise<Composition> => ({ kind: 'misconfigured' }), () => Promise.reject(new Error('x'))]) {
+	for (const composition of [() => new Promise<Composition>(() => undefined), async (): Promise<Composition> => ({ kind: 'misconfigured' }), () => Promise.reject(new Error('x'))]) {
 		const source = createAccountSource(composition, fakeTimers().timers);
 		await drain();
 		assert.deepEqual(await source.revokeOthers(expected), { kind: 'stale' });

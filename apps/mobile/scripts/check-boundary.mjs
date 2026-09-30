@@ -13,7 +13,7 @@
  *  node: or Node built-ins, never @captain/*, never a path escaping apps/mobile, never a non-literal import/require.
  *  Tests (*.test.*) and build config (app/metro/babel config) run in Node, so they may use node: built-ins and
  *  allowlisted dev packages, but the other rules hold. Everywhere, the only environment reads are
- *  process.env.EXPO_PUBLIC_API_URL and process.env.EXPO_PUBLIC_APP_URL, with one narrow allowance: the root
+ *  process.env.EXPO_PUBLIC_API_URL, with one narrow allowance: the root
  *  app.config.* may also read process.env.CAPTAIN_MOBILE_HARNESS, process.env.EAS_BUILD and process.argv, to select the
  *  test-only account harness for the web export and refuse it for native builds (docs/plans/
  *  expo-mobile-auth-composition-2026-09.md §7.1). Nowhere else, including src/ and harness/, may read them.
@@ -54,7 +54,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const defaultMobileRoot = path.resolve(here, '..');
-export const allowedEnv = new Set(['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_APP_URL']);
+export const allowedEnv = new Set(['EXPO_PUBLIC_API_URL']);
 const sourceExtensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts']);
 /** Generated trees and the guard itself, skipped only directly under the mobile root (with hidden root directories such
  *  as .expo). A directory of the same name deeper down, such as src/scripts, is ordinary source and is scanned.

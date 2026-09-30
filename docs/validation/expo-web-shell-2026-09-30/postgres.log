@@ -1,0 +1,58 @@
+TAP version 13
+# Subtest: the callback spends the code, sets the HttpOnly session cookie and returns to the checked path
+ok 1 - the callback spends the code, sets the HttpOnly session cookie and returns to the checked path
+  ---
+  duration_ms: 1298.524975
+  type: 'test'
+  ...
+# Subtest: a spent, missing or refused code and a repeated Google error each go to the welcome page with its own code
+ok 2 - a spent, missing or refused code and a repeated Google error each go to the welcome page with its own code
+  ---
+  duration_ms: 88.676342
+  type: 'test'
+  ...
+# Subtest: the cookie is refused without the web client header, and bearer requests are unchanged
+ok 3 - the cookie is refused without the web client header, and bearer requests are unchanged
+  ---
+  duration_ms: 52.022279
+  type: 'test'
+  ...
+# Subtest: a passkey steps up through the step-up cookie, and verify moves the session into the session cookie
+ok 4 - a passkey steps up through the step-up cookie, and verify moves the session into the session cookie
+  ---
+  duration_ms: 121.7049
+  type: 'test'
+  ...
+# Subtest: sign-out with the cookie ends the session and clears both cookies
+ok 5 - sign-out with the cookie ends the session and clears both cookies
+  ---
+  duration_ms: 25.186382
+  type: 'test'
+  ...
+# Subtest: a native sign-in is handed to the app's fixed callback with no cookie
+ok 6 - a native sign-in is handed to the app's fixed callback with no cookie
+  ---
+  duration_ms: 69.845682
+  type: 'test'
+  ...
+# Subtest: the export is served at the root with the page as the fallback, and the API's paths are never shadowed
+ok 7 - the export is served at the root with the page as the fallback, and the API's paths are never shadowed
+  ---
+  duration_ms: 50.428707
+  type: 'test'
+  ...
+# Subtest: without the export the API still answers and the page says the web build is missing
+ok 8 - without the export the API still answers and the page says the web build is missing
+  ---
+  duration_ms: 47.753449
+  type: 'test'
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 8
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3055.253101

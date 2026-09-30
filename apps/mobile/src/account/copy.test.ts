@@ -1,14 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { outsideSnapshots } from './account-source.ts';
-import { captureRequested, consumeRequested, requested, requestedConsumed, resetRequestedForTests } from './requested.ts';
 import {
-	copy, destinationStep, faultLines, findAccountStack, firstVisitParams, resetToFreshTabs, navigationStep, navMount, navStart, nextWake, releaseWording, requestedDestination, routeFor, routeHolds,
-	signInNotices, snapshotWaits, tabEntryAction, tabsKey, welcomePage, moreTags, workCopy, workProblemText, type NavMemory, type Page,
+	copy, faultLines, nextWake, releaseWording, signInNotices, snapshotWaits, welcomePage, type Page,
 	revocationDisabled, revocationLines, revokeOthersCopy,
-	stockCopy, stockCountText, stockProblemText, stockReorderText, stockRowLabel,
 	equipmentCellText, equipmentColumnSummary, equipmentCopy, equipmentTimesIn, equipmentWaitText, reservationBuffersText, reservationLabel,
-	reservationOccupiedText, reservationSpanText
+	reservationOccupiedText, reservationSpanText,
+	invitationRefusalText, passkeyDetail, signInErrorText, threadsCopy, webCopy, webWelcomePage
 } from './copy.ts';
 import { idleRevocation, sendingRevocation, settledRevocation, slowRevocation, unknownResult } from './revocation.ts';
 import type { AccountSnapshot, AccountView, StrayView } from './machine.ts';
@@ -27,11 +25,11 @@ const signedIn = (org: Membership | 'choose' | 'none' | 'loading', destination: 
 });
 const wait = (until: number) => ({ until, about: '2030-01-01T12:05:00.000Z' });
 const format = () => '12:05';
-const page = (snapshot: AccountSnapshot, now = 0, webAvailable = true): Page => welcomePage(snapshot, { now, webAvailable, format });
+const page = (snapshot: AccountSnapshot, now = 0): Page => welcomePage(snapshot, { now, format });
 const text = (p: Page) => JSON.stringify(p);
 
 const everyState: AccountSnapshot[] = [
-	outsideSnapshots.webOnly, outsideSnapshots.misconfigured, outsideSnapshots.starting, outsideSnapshots.startingSlow, outsideSnapshots.startupFailed,
+	outsideSnapshots.misconfigured, outsideSnapshots.starting, outsideSnapshots.startingSlow, outsideSnapshots.startupFailed,
 	snap({ kind: 'storage-unavailable' }), snap({ kind: 'storage-unreadable', reading: false, slow: false }, { signInOffered: true }),
 	snap({ kind: 'storage-unreadable', reading: true, slow: true }),
 	snap({ kind: 'signed-out', notice: null, gate: 'idle' }, { signInOffered: true }), snap({ kind: 'signed-out', notice: null, gate: 'waiting' }),
@@ -49,39 +47,6 @@ const everyState: AccountSnapshot[] = [
 			}))))
 ];
 
-test('inventory: exact fixed wording with no digits; counts, reorder points and units shown exactly as returned', () => {
-	assert.deepEqual({ ...stockCopy }, {
-		heading: 'Inventory', subtitle: 'Counted stock, by location', loading: 'Loading stock…',
-		emptyTitle: 'No stock items are listed yet.', emptyBody: 'Items are added and counted on the Captain website.',
-		notCounted: 'Not counted yet.', below: 'Below reorder point',
-		failedFirst: "Couldn't load the stock list.", failedRefresh: "Couldn't refresh. This list may be out of date.",
-		access: "Captain couldn't read this organisation's stock. If your access has changed, Captain will show it the next time it checks.",
-		list: "Captain couldn't read the stock list.", refresh: 'Refresh', tryAgain: 'Try again', busy: 'Loading…',
-		openWeb: 'Count stock on the website'
-	});
-	for (const text of Object.values(stockCopy)) assert.doesNotMatch(text, /\d/, text);
-	const row = { name: '  Pale malt ', count: '12.50', unit: ' kg', reorderPoint: '0.125', below: true };
-	assert.equal(stockCountText(row), '12.50  kg', 'verbatim: no trimming, rounding or unit change');
-	assert.equal(stockReorderText(row), 'Reorder point: 0.125  kg');
-	assert.equal(stockRowLabel(row), '  Pale malt , 12.50  kg, Reorder point: 0.125  kg, Below reorder point');
-	const long = `${'9'.repeat(80)}`;
-	assert.equal(stockCountText({ ...row, count: long, unit: 'kegs' }), `${long} kegs`, 'an 80-digit count is kept whole');
-	assert.equal(stockCountText({ ...row, count: '0012.500', unit: 'kegs' }), '0012.500 kegs', 'leading zeros and scale kept');
-	const plain = { name: 'Hops', count: null, unit: 'bags', reorderPoint: null, below: false };
-	assert.equal(stockCountText(plain), 'Not counted yet.');
-	assert.equal(stockReorderText(plain), null);
-	assert.equal(stockRowLabel(plain), 'Hops, Not counted yet.');
-	assert.equal(stockCountText({ ...plain, count: '1' }), '1 bags', 'a unit is never pluralised or singularised');
-	assert.equal(stockProblemText({ op: 'first', kind: 'unavailable' }), stockCopy.failedFirst);
-	assert.equal(stockProblemText({ op: 'refresh', kind: 'unavailable' }), stockCopy.failedRefresh);
-	for (const op of ['first', 'refresh'] as const) {
-		assert.equal(stockProblemText({ op, kind: 'access' }), stockCopy.access);
-		assert.equal(stockProblemText({ op, kind: 'list' }), stockCopy.list);
-	}
-	for (const text of [stockCopy.failedFirst, stockCopy.failedRefresh, stockCopy.access, stockCopy.list, stockCopy.loading])
-		assert.doesNotMatch(text, /no stock|nothing (is )?in stock|empty/i, 'no failed or pending state claims there is no stock');
-});
-
 test('equipment schedule: fixed wording has no digits and never calls time free or available', () => {
 	for (const [key, text] of Object.entries(equipmentCopy)) {
 		assert.doesNotMatch(text, /\d/, key);
@@ -90,7 +55,7 @@ test('equipment schedule: fixed wording has no digits and never calls time free 
 	assert.equal(equipmentCopy.loading, 'Loading the schedule…');
 	assert.equal(equipmentCopy.partial, 'Not every reservation is shown for these dates. Gaps are not confirmed free.');
 	assert.equal(equipmentCopy.conflict, 'Captain received conflicting details for a reservation. Refresh to read it again.');
-	assert.equal(equipmentCopy.zoneUnsupported, "Times can't be shown in the business time zone on this device. Open the schedule on the website.");
+	assert.equal(equipmentCopy.zoneUnsupported, "Times can't be shown in the business time zone on this device.");
 	assert.equal(equipmentTimesIn('Australia/Sydney'), 'Times in Australia/Sydney');
 	assert.equal(equipmentWaitText(wait(5_000), format), 'Try again after about 12:05');
 	// Every state has its line; failures pick access or "couldn't read"; a stale cell names its re-read failure.
@@ -158,239 +123,6 @@ test('sign out everywhere else: disabled while in flight and until a wait ends (
 	assert.equal(revocationDisabled(settledRevocation({ kind: 'ok', ended: 2 }), 0), null, 'a repeat is allowed');
 });
 
-test('routeFor: welcome unless signed in; the chooser until an organisation is chosen; Work when ready (also for the index)', () => {
-	for (const s of everyState) assert.equal(routeFor(s.account), '/welcome', s.account.kind);
-	for (const org of ['choose', 'none', 'loading'] as const) assert.equal(routeFor(signedIn(org)), '/organisation');
-	assert.equal(routeFor(signedIn(orgA)), '/work');
-});
-
-test('routeHolds: the refusal page always holds; the chooser and index do not satisfy Work', () => {
-	assert.ok(routeHolds('/welcome', '/link-not-allowed') && routeHolds('/work', '/link-not-allowed'));
-	assert.ok(routeHolds('/work', '/chat/views') && routeHolds('/work', '/settings'));
-	assert.ok(!routeHolds('/work', '/organisation') && !routeHolds('/work', '/welcome') && !routeHolds('/work', '/'));
-	assert.ok(!routeHolds('/welcome', '/work') && !routeHolds('/organisation', '/work'));
-});
-
-test('tabs key and destination: keyed by person and organisation; the destination only when ready, once', () => {
-	assert.equal(tabsKey(signedIn(orgA)), `${user.id}:${orgA.organisationId}`);
-	assert.equal(tabsKey(signedIn('choose')), null);
-	assert.equal(destinationStep(signedIn('choose'), null), null);
-	const step = destinationStep(signedIn(orgA, '/chat/views'), null)!;
-	assert.equal(step.href, '/chat/views');
-	assert.equal(destinationStep(signedIn(orgA, '/chat/views'), step.key), null, 'applied once');
-	assert.equal(requestedDestination('/work/views'), '/work/views');
-	for (const path of ['/', '/welcome', '/settings', '/link-not-allowed', '/unknown', null]) assert.equal(requestedDestination(path), null, String(path));
-});
-
-function walk(steps: [AccountView, string][], requested: string | null = null, start: NavMemory = navStart): string[] {
-	let memory: NavMemory = start; const actions: string[] = [];
-	for (const [account, pathname] of steps) {
-		const step = navigationStep(memory, account, pathname, requested); memory = step.memory;
-		const action = step.action;
-		actions.push('href' in action ? `${action.kind} ${action.href}` : action.kind);
-	}
-	return actions;
-}
-
-test('navigation: replace only when the answer changes; a deliberate chooser visit while ready stays put', () => {
-	const signedOut = snap({ kind: 'signed-out', notice: null, gate: 'idle' }).account;
-	assert.deepEqual(walk([
-		[signedOut, '/welcome'], [signedIn('choose'), '/welcome'], [signedIn(orgA), '/organisation'],
-		[signedIn(orgA), '/settings'], [signedIn(orgA), '/organisation'], [signedIn(orgA), '/organisation']
-	]), ['none', 'replace /organisation', 'replace /work', 'none', 'none', 'none']);
-	// The index route redirects itself; the stack does not replace `/` a second time.
-	assert.deepEqual(walk([[signedOut, '/']]), ['none']);
-	// A tab route reached while not ready goes to welcome.
-	assert.deepEqual(walk([[signedOut, '/work']]), ['replace /welcome']);
-});
-
-test('navigation: a new organisation while ready resets the tabs (a switch, or a loss that auto-chose the one left); loss to the chooser replaces', () => {
-	assert.deepEqual(walk([[signedIn(orgA), '/work'], [signedIn(orgB), '/organisation']]), ['none', 'reset-tabs'], 'switch from Account');
-	assert.deepEqual(walk([[signedIn(orgA), '/chat/views'], [signedIn(orgB), '/chat/views']]), ['none', 'reset-tabs'], 'loss with one membership left: ready throughout');
-	assert.deepEqual(walk([[signedIn(orgA), '/work'], [signedIn('choose'), '/work']]), ['none', 'replace /organisation']);
-});
-
-test('requested: captured once, only a linkable tab route; later captures change nothing', () => {
-	resetRequestedForTests();
-	captureRequested('/work/views'); captureRequested('/chat');
-	assert.equal(requested(), '/work/views');
-	resetRequestedForTests();
-	captureRequested('/settings'); captureRequested('/chat');
-	assert.equal(requested(), null, 'the first capture decides, even when it is not a tab route');
-	assert.equal(requestedConsumed(), false);
-	consumeRequested(); consumeRequested();
-	assert.equal(requestedConsumed(), true);
-	resetRequestedForTests();
-	assert.equal(requestedConsumed(), false, 'reset for the next test');
-});
-
-/** One mount of AccountStack, as it runs: memory seeded from the process flag, the flag set once from each result. */
-function mount(steps: [AccountView, string][]): string[] {
-	let memory = navMount(requestedConsumed()); const actions: string[] = [];
-	for (const [account, pathname] of steps) {
-		const step = navigationStep(memory, account, pathname, requested()); memory = step.memory;
-		if (step.memory.requestedUsed && !requestedConsumed()) consumeRequested();
-		const action = step.action;
-		actions.push('href' in action ? `${action.kind} ${action.href}` : action.kind);
-	}
-	return actions;
-}
-
-test('requested destination: one chance per process, not again after the stack remounts', () => {
-	resetRequestedForTests();
-	try {
-		captureRequested('/work/views');
-		const checking = snap({ kind: 'checking' }).account;
-		assert.deepEqual(mount([[checking, '/welcome'], [signedIn(orgA), '/welcome']]), ['none', 'open-requested /work/views']);
-		assert.equal(requestedConsumed(), true, 'the first ready consumed it');
-		// The root layout remounts while ready (for example after history reaches a route the guards no longer allow).
-		assert.deepEqual(mount([[signedIn(orgA), '/work']]), ['none'], 'a remount does not open it again');
-		// A remount before ready, then ready: still not again.
-		assert.deepEqual(mount([[checking, '/welcome'], [signedIn(orgA), '/welcome']]), ['none', 'replace /work']);
-	} finally { resetRequestedForTests(); }
-});
-
-test('requested destination: consumed at the first ready even when a sign-in destination wins', () => {
-	resetRequestedForTests();
-	try {
-		captureRequested('/work/views');
-		const signedOut = snap({ kind: 'signed-out', notice: null, gate: 'idle' }).account;
-		assert.deepEqual(mount([[signedOut, '/welcome'], [signedIn(orgA, '/chat'), '/welcome']]), ['none', 'destination /chat']);
-		assert.equal(requestedConsumed(), true);
-		assert.deepEqual(mount([[signedIn(orgA), '/chat']]), ['none'], 'no second cold-restore route after a remount');
-		assert.deepEqual(walk([[signedIn(orgA), '/chat']], '/work/views', navMount(true)), ['none'], 'the pure step with the flag injected');
-		assert.deepEqual(walk([[signedIn(orgA), '/chat']], '/work/views', navMount(false)), ['open-requested /work/views'], 'and without it');
-	} finally { resetRequestedForTests(); }
-});
-
-test('findAccountStack: the account stack by its allowed (tabs) screen, using the real route names', () => {
-	// As installed expo-router builds them: declared screens with guarded-off ones removed, then other route files.
-	const readyNames = ['organisation', '(tabs)', 'settings', 'index', 'link-not-allowed', '+not-found'];
-	const tabs = { key: 'tab-3', routeNames: ['work', 'chat', 'resources'], routes: [{ state: { key: 'work-stack', routeNames: ['index', 'views'], routes: [] } }] };
-	const root = (names: string[]) => ({ key: 'root-1', routeNames: ['__root'], routes: [{ state: { key: 'stack-7', routeNames: names, routes: [{ state: tabs }] } }] });
-	assert.equal(findAccountStack(root(readyNames)), 'stack-7');
-	// Not ready: `(tabs)` is not allowed, and no other navigator (root slot, tabs, section stacks) is ever chosen.
-	assert.equal(findAccountStack(root(['organisation', 'index', 'link-not-allowed', '+not-found'])), null);
-	assert.equal(findAccountStack(root(['welcome', 'index', 'link-not-allowed', '+not-found'])), null);
-	assert.equal(findAccountStack(undefined), null);
-	assert.deepEqual(resetToFreshTabs('stack-7', false), { type: 'RESET', payload: { index: 0, routes: [{ name: '(tabs)' }] }, target: 'stack-7' }, 'web: unchanged');
-});
-
-/** Every `key` anywhere in a value, and every route `name`, walking objects and arrays. */
-function collect(value: unknown, found: { keys: number; names: Set<string> } = { keys: 0, names: new Set() }) {
-	if (Array.isArray(value)) { for (const item of value) collect(item, found); return found; }
-	if (typeof value !== 'object' || value === null) return found;
-	for (const [field, inner] of Object.entries(value)) {
-		if (field === 'key') found.keys += 1;
-		if (field === 'name' && typeof inner === 'string') found.names.add(inner);
-		collect(inner, found);
-	}
-	return found;
-}
-
-test('native navigation: the seeded tabs reset gives Work [views, index] with My work focused, and no key at any depth', () => {
-	const seeded = resetToFreshTabs('stack-7', true);
-	assert.deepEqual(seeded, {
-		type: 'RESET', target: 'stack-7',
-		payload: { index: 0, routes: [{ name: '(tabs)', state: { index: 0, routes: [{ name: 'work', state: { index: 1, routes: [{ name: 'views' }, { name: 'index' }] } }] } }] }
-	});
-	const { keys, names } = collect(seeded.payload);
-	assert.equal(keys, 0, 'no key: rehydration gives every route a fresh one, so nothing from the old tabs survives');
-	assert.deepEqual([...names].sort(), ['(tabs)', 'index', 'views', 'work'], 'only declared route names');
-	assert.equal(collect(resetToFreshTabs('stack-7', false).payload).keys, 0);
-});
-
-test('native navigation: a first tab visit names its default view; anchored stacks build [views, index] in one render, the web opens it alone', () => {
-	assert.deepEqual(firstVisitParams(true), { screen: 'index', initial: false });
-	assert.deepEqual(firstVisitParams(false), { screen: 'index' });
-	assert.ok(!('initial' in firstVisitParams(false)), 'the web call is exactly the previous one');
-});
-
-test('native navigation: every app-initiated tab entry has one call; the web keeps exactly its previous calls', () => {
-	// Arriving (becoming ready, a destination, the requested route, the fail-closed reopen, the index redirect).
-	for (const href of ['/work', '/work/all', '/work/views', '/chat', '/resources/inventory']) {
-		assert.deepEqual(tabEntryAction(true, { intent: 'arrive', href }), { method: 'replace', href, options: { withAnchor: true } }, href);
-		assert.deepEqual(tabEntryAction(false, { intent: 'arrive', href }), { method: 'replace', href, options: {} }, href);
-	}
-	// The account's other routes are never anchored: they are not section stacks.
-	for (const href of ['/welcome', '/organisation', '/settings', '/link-not-allowed', '/workshop', '/']) {
-		assert.deepEqual(tabEntryAction(true, { intent: 'arrive', href }), { method: 'replace', href, options: {} }, href);
-	}
-	// "Go to My work" and Back fallbacks: always /work, never back(); native returns to the existing tabs.
-	assert.deepEqual(tabEntryAction(true, { intent: 'return-to-my-work' }), { method: 'dismissTo', href: '/work', options: { withAnchor: true } });
-	assert.deepEqual(tabEntryAction(false, { intent: 'return-to-my-work' }), { method: 'replace', href: '/work', options: {} });
-});
-
-test('native navigation pin: within a mount started at process boot, route changes happen only on the first ready or after a not-ready snapshot', () => {
-	resetRequestedForTests();
-	try {
-		captureRequested('/work/all');
-		const checking = snap({ kind: 'checking' }).account;
-		const signedOut = snap({ kind: 'signed-out', notice: null, gate: 'idle' }).account;
-		const sequence: [AccountView, string][] = [
-			[checking, '/welcome'], [signedIn('choose'), '/welcome'], [signedIn(orgA), '/organisation'], [signedIn(orgA), '/work/all'],
-			[signedIn(orgA), '/settings'], [signedIn(orgA), '/organisation'], [signedIn(orgB), '/organisation'], [signedIn(orgB), '/work'],
-			[signedIn('choose'), '/work'], [signedIn(orgA), '/organisation'], [signedOut, '/work'], [signedIn(orgB, '/chat'), '/welcome'],
-			[signedIn(orgB, '/chat'), '/chat']
-		];
-		let memory = navMount(requestedConsumed()); let previousReady = false; let firstReadySeen = false;
-		for (const [account, pathname] of sequence) {
-			const step = navigationStep(memory, account, pathname, requested()); memory = step.memory;
-			if (step.memory.requestedUsed && !requestedConsumed()) consumeRequested();
-			const ready = routeFor(account) === '/work';
-			const changesRoute = step.action.kind === 'replace' || step.action.kind === 'destination' || step.action.kind === 'open-requested';
-			if (changesRoute && ready) assert.ok(!previousReady || !firstReadySeen, `${step.action.kind} at ${pathname} follows a not-ready snapshot or is this mount's first ready`);
-			if (ready) firstReadySeen = true;
-			previousReady = ready;
-		}
-	} finally { resetRequestedForTests(); }
-});
-
-test('native navigation pin: a mount started while ready changes nothing except on the organisation page (L2, unchanged)', () => {
-	resetRequestedForTests();
-	try {
-		captureRequested('/work/all'); consumeRequested();
-		for (const pathname of ['/work', '/work/all', '/work/views', '/chat', '/resources/inventory', '/settings', '/', '/link-not-allowed']) {
-			assert.deepEqual(mount([[signedIn(orgA), pathname]]), ['none'], pathname);
-		}
-		// The recorded limitation: a remount while ready on Switch organisation replaces it with Work (a second tabs route
-		// when the navigation state was retained). Pinned so that any change to it is deliberate.
-		assert.deepEqual(mount([[signedIn(orgA), '/organisation']]), ['replace /work']);
-	} finally { resetRequestedForTests(); }
-});
-
-test('navigation: a tabs reset is only ever issued while ready (a reset while not ready would be silently ignored)', () => {
-	const views: AccountView[] = [signedIn(orgA), signedIn(orgB), signedIn('choose'), signedIn(orgA), snap({ kind: 'checking' }).account, signedIn(orgB)];
-	let memory: NavMemory = navStart; let resets = 0;
-	for (const account of views) {
-		const step = navigationStep(memory, account, '/work'); memory = step.memory;
-		if (step.action.kind === 'reset-tabs') { resets += 1; assert.equal(routeFor(account), '/work', 'ready'); }
-	}
-	assert.equal(resets, 1, 'only the in-place change A → B; passing through a not-ready state lets the guard drop the tabs');
-});
-
-test('navigation: the tab route the app was opened at is opened once when a saved session becomes ready', () => {
-	const checking = snap({ kind: 'checking' }).account;
-	const signedOut = snap({ kind: 'signed-out', notice: null, gate: 'idle' }).account;
-	assert.deepEqual(walk([[checking, '/welcome'], [signedIn(orgA), '/welcome'], [signedIn(orgA), '/work/views']], '/work/views'),
-		['none', 'open-requested /work/views', 'none']);
-	assert.deepEqual(walk([[checking, '/welcome'], [signedIn('choose'), '/welcome'], [signedIn(orgA), '/organisation']], '/work/views'),
-		['none', 'replace /organisation', 'open-requested /work/views'], 'also after the chooser');
-	assert.deepEqual(walk([[signedIn(orgA), '/work/views']], '/work/views'), ['none'], 'already there');
-	assert.deepEqual(walk([[signedIn(orgA), '/work'], [signedOut, '/work'], [signedIn(orgA), '/welcome']], '/work/views'),
-		['open-requested /work/views', 'replace /welcome', 'replace /work'], 'once per process: not again after a later sign-in');
-	assert.deepEqual(walk([[checking, '/welcome'], [signedIn(orgA, '/chat'), '/welcome']], '/work/views'),
-		['none', 'destination /chat'], "a sign-in destination wins and consumes the request");
-});
-
-test('navigation: the destination is applied once, and anew after leaving ready (same person, organisation and destination)', () => {
-	const signedOut = snap({ kind: 'signed-out', notice: null, gate: 'idle' }).account;
-	assert.deepEqual(walk([
-		[signedIn(orgA, '/chat/views'), '/organisation'], [signedIn(orgA, '/chat/views'), '/chat/views'], [signedIn(orgA), '/chat/views'],
-		[signedOut, '/chat/views'], [signedIn(orgA, '/chat/views'), '/welcome']
-	]), ['destination /chat/views', 'none', 'none', 'replace /welcome', 'destination /chat/views']);
-});
-
 test('copy: every state has a heading; no wording states an expiry date or infers from the phone clock', () => {
 	for (const s of everyState) {
 		const p = page(s);
@@ -398,16 +130,6 @@ test('copy: every state has a heading; no wording states an expiry date or infer
 		assert.ok(!/expire|expiry|until \d|valid until/i.test(text(p).replace(copy.signInAgainNote, '')), `${s.account.kind}: ${text(p)}`);
 		assert.ok(!/signed in\b/i.test(p.heading), 'never "signed in" before verification');
 	}
-});
-
-test('copy: web-only offers the website only when its address is valid; misconfigured repeats no value', () => {
-	assert.deepEqual(page(outsideSnapshots.webOnly).actions, [{ kind: 'web', id: 'web', label: copy.openWeb, path: '/' }]);
-	const missing = page(outsideSnapshots.webOnly, 0, false);
-	assert.deepEqual(missing.actions, []);
-	assert.ok(missing.body.includes(copy.webMissing));
-	assert.deepEqual(page(outsideSnapshots.misconfigured).body, [copy.misconfigured]);
-	assert.deepEqual(page(outsideSnapshots.startupFailed).body, [copy.startupFailed]);
-	assert.deepEqual(page(outsideSnapshots.startingSlow).body, [copy.openingSlow]);
 });
 
 test('copy: sign-in notices, the gate and busy', () => {
@@ -419,8 +141,8 @@ test('copy: sign-in notices, the gate and busy', () => {
 	assert.equal(waiting.actions[0]!.kind === 'command' && waiting.actions[0]!.disabled, copy.gateWaiting, 'shown disabled with its reason');
 	const busy = page(snap({ kind: 'signed-out', notice: null, gate: 'busy' }, { signInOffered: true }));
 	assert.deepEqual(busy.actions.map((a) => a.kind === 'command' && a.command), [{ type: 'retry' }]);
-	const withReturn = welcomePage(snap({ kind: 'signed-out', notice: null, gate: 'idle' }, { signInOffered: true }), { now: 0, webAvailable: true, returnTo: '/chat' });
-	assert.deepEqual(withReturn.actions[0]!.kind === 'command' && withReturn.actions[0]!.command, { type: 'sign-in', returnTo: '/chat' });
+	const withReturn = welcomePage(snap({ kind: 'signed-out', notice: null, gate: 'idle' }, { signInOffered: true }), { now: 0, returnTo: '/equipment' });
+	assert.deepEqual(withReturn.actions[0]!.kind === 'command' && withReturn.actions[0]!.command, { type: 'sign-in', returnTo: '/equipment' });
 });
 
 test('copy: unverified Try again is disabled before the wait and enabled exactly at it; Sign out is always offered', () => {
@@ -487,16 +209,59 @@ test('wait timer: the remaining time on the monotonic deadline; nothing when no 
 	assert.equal(nextWake([], 0), null);
 });
 
-test('My work wording: failures by operation, refusals by kind, no access check claimed, no empty claim', () => {
-	assert.equal(workProblemText({ op: 'first', kind: 'unavailable' }), "Couldn't load your work");
-	assert.equal(workProblemText({ op: 'refresh', kind: 'unavailable' }), "Couldn't refresh. This list may be out of date.");
-	assert.equal(workProblemText({ op: 'more', kind: 'unavailable' }), "Couldn't load more");
-	for (const op of ['first', 'refresh', 'more'] as const) {
-		assert.equal(workProblemText({ op, kind: 'access' }), workCopy.access);
-		assert.equal(workProblemText({ op, kind: 'list' }), "Captain couldn't read this list.");
+test('copy: misconfigured says so plainly, with no website link and no repeated value', () => {
+	assert.deepEqual(page(outsideSnapshots.misconfigured).body, [copy.misconfigured]);
+	assert.deepEqual(page(outsideSnapshots.startupFailed).body, [copy.startupFailed]);
+	assert.deepEqual(page(outsideSnapshots.startingSlow).body, [copy.openingSlow]);
+	assert.ok(!JSON.stringify(copy).toLowerCase().includes('website'));
+});
+
+test('web welcome: checking, signed out (with a released notice), unavailable with the paced Try again, signing out and its failure', () => {
+	const web = (account: AccountView, now = 0, error?: unknown) => webWelcomePage(snap(account), { now, error, format });
+	assert.deepEqual(web({ kind: 'checking' }), { heading: copy.captain, body: [webCopy.checking], notices: [], signIn: false, retry: null });
+	assert.deepEqual(web({ kind: 'signed-out', notice: null, gate: 'idle' }), { heading: webCopy.signInHeading, body: [webCopy.signIn], notices: [], signIn: true, retry: null });
+	const released = web({ kind: 'signed-out', notice: { kind: 'released', reason: 'sign-out', local: 'deleted', server: 'ended' }, gate: 'idle' });
+	assert.equal(released.heading, webCopy.signedOutHeading); assert.deepEqual(released.notices, [{ title: webCopy.signedOutHeading, text: webCopy.signedOut }]); assert.ok(released.signIn);
+	const ended = web({ kind: 'signed-out', notice: { kind: 'released', reason: 'session-ended', local: 'deleted', server: 'not-needed' }, gate: 'idle' });
+	assert.deepEqual(ended.notices, [{ title: webCopy.signedOutHeading, text: webCopy.sessionEnded }]);
+	// Unavailable: never says signed out, never offers sign-in; Try again is disabled until the wait ends, and exactly at it enabled.
+	const blocked = web({ kind: 'unverified', retrying: false, wait: wait(5_000) }, 0);
+	assert.equal(blocked.heading, webCopy.unavailableHeading); assert.ok(!blocked.signIn);
+	assert.deepEqual(blocked.retry, { disabled: 'Try again after about 12:05.' }); assert.ok(blocked.body.includes(webCopy.unavailable));
+	assert.ok(!JSON.stringify(blocked).toLowerCase().includes('signed out'));
+	assert.deepEqual(web({ kind: 'unverified', retrying: false, wait: wait(5_000) }, 5_000).retry, { disabled: null });
+	assert.deepEqual(web({ kind: 'unverified', retrying: true, wait: null }).retry, { disabled: webCopy.unavailableRetrying });
+	assert.deepEqual(web({ kind: 'releasing', reason: 'sign-out', local: 'deleted', server: 'revoking', wait: null, slow: false, closeAppWarning: false, canRetry: false }),
+		{ heading: webCopy.signingOut, body: [], notices: [], signIn: false, retry: null });
+	const failed = web({ kind: 'releasing', reason: 'sign-out', local: 'deleted', server: 'pending', wait: null, slow: false, closeAppWarning: false, canRetry: true });
+	assert.equal(failed.heading, webCopy.signOutFailedHeading); assert.deepEqual(failed.retry, { disabled: null }); assert.ok(!failed.signIn);
+	assert.ok(!JSON.stringify(failed).includes('ended'), 'a failed sign-out never says the session ended');
+	assert.deepEqual(web({ kind: 'misconfigured' }).body, [webCopy.misconfigured]);
+});
+
+test('web welcome: the ?error= code picks its wording, an unknown code the fallback, and the code is never shown', () => {
+	assert.equal(signInErrorText(undefined), null); assert.equal(signInErrorText(''), null);
+	assert.equal(signInErrorText('google_failed'), 'Google did not complete the sign-in. Try again.');
+	assert.equal(signInErrorText('request_invalid'), 'That sign-in link had expired. Start again.');
+	for (const code of ['nope', 'canary-code-7f3a', ['google_failed'], 7]) {
+		const text = signInErrorText(code);
+		assert.equal(text, webCopy.errorFallback, String(code)); assert.ok(!String(text).includes('canary'));
 	}
-	for (const text of Object.values(workCopy)) assert.ok(!/being checked|checking your access|no longer have access/i.test(text), text);
-	assert.equal(workCopy.subtitle, 'Open tasks assigned to you');
-	assert.ok(!/\d/.test(workCopy.capNotice), 'the cap notice names no number');
-	assert.equal(moreTags(5, 3), '+2 more'); assert.equal(moreTags(3, 3), null); assert.equal(moreTags(0, 0), null);
+	const page = webWelcomePage(snap({ kind: 'signed-out', notice: null, gate: 'idle' }), { now: 0, error: 'passkey_failed' });
+	assert.deepEqual(page.notices, [{ title: webCopy.errorTitle, text: 'The passkey could not be checked. Start again from sign-in.' }]);
+});
+
+test('passkeys and invitations: a passkey line names its kind, when it was added and last used; refusals have their own lines', () => {
+	const date = (iso: string) => `d(${iso})`;
+	assert.equal(passkeyDetail({ backedUp: true, createdAt: 'a', lastUsedAt: 'b' }, date), 'synced passkey, added d(a), last used d(b)');
+	assert.equal(passkeyDetail({ backedUp: false, createdAt: 'a', lastUsedAt: null }, date), 'this device only, added d(a), not used yet');
+	assert.equal(invitationRefusalText('invitation_invalid'), 'This invitation is not open: it may have been used, withdrawn or expired.');
+	assert.equal(invitationRefusalText('forbidden'), 'This invitation was sent to another address. Sign in with that address.');
+	assert.equal(invitationRefusalText('canary_code'), 'Captain refused this invitation.');
+});
+
+test('threads shell: the filter row is All, Needs you, Tasks, Bookings, Stock, Records, Files, People; the unavailable state makes no data claim', () => {
+	assert.deepEqual([...threadsCopy.filters], ['All', 'Needs you', 'Tasks', 'Bookings', 'Stock', 'Records', 'Files', 'People']);
+	assert.ok(/not available yet/i.test(threadsCopy.emptyBody));
+	assert.ok(!/\d/.test(JSON.stringify(threadsCopy)), 'no fixed wording contains a digit');
 });

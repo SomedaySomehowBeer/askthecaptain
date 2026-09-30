@@ -28,8 +28,8 @@ const has = (findings, pattern) => assert.ok(findings.some((f) => pattern.test(f
 test('the checked-in allowlist names no @captain/* package and holds the contract’s runtime set', () => {
 	for (const name of [...allowlist.dependencies, ...allowlist.devDependencies]) assert.ok(!name.startsWith('@captain/'), name);
 	for (const name of ['expo', 'react', 'react-native', 'expo-router', 'expo-linking', 'expo-constants', 'react-native-screens', 'react-native-safe-area-context',
-		'expo-dev-client', 'expo-web-browser', 'expo-secure-store', 'expo-crypto']) assert.ok(allowlist.dependencies.has(name), name);
-	for (const name of ['@react-native-async-storage/async-storage', 'react-native-gesture-handler', 'react-native-reanimated', 'expo-notifications', '@sentry/react-native', '@simplewebauthn/browser', 'jest-expo'])
+		'@simplewebauthn/browser', 'expo-dev-client', 'expo-web-browser', 'expo-secure-store', 'expo-crypto']) assert.ok(allowlist.dependencies.has(name), name);
+	for (const name of ['@react-native-async-storage/async-storage', 'react-native-gesture-handler', 'react-native-reanimated', 'expo-notifications', '@sentry/react-native', 'jest-expo'])
 		assert.ok(!allowlist.dependencies.has(name) && !allowlist.devDependencies.has(name), `${name} is excluded by the contract`);
 });
 
@@ -37,7 +37,7 @@ test('a clean manifest and app pass', async () => {
 	const findings = await findingsFor({
 		'app/_layout.tsx': "import { Stack } from 'expo-router';\nimport * as SecureStore from 'expo-secure-store';\nimport { tokens } from '../src/theme/tokens';\nexport default function Layout() { return null; }\n",
 		'src/theme/tokens.ts': 'export const tokens = { forest: "#1f3d2b" };\n',
-		'src/config.ts': 'export const apiUrl = process.env.EXPO_PUBLIC_API_URL;\nexport const appUrl = process.env.EXPO_PUBLIC_APP_URL;\n',
+		'src/config.ts': 'export const apiUrl = process.env.EXPO_PUBLIC_API_URL;\n',
 		'src/links.test.ts': "import assert from 'node:assert/strict';\nimport { test } from 'node:test';\nimport { tokens } from './theme/tokens';\n",
 		'metro.config.js': "const path = require('node:path');\nconst { getDefaultConfig } = require('expo/metro-config');\nmodule.exports = getDefaultConfig(__dirname);\n",
 		'scripts/anything.mjs': "import fs from 'node:fs'; process.env.DATABASE_URL;\n"
@@ -94,10 +94,10 @@ test('a dev-only package is refused in app code but allowed in tests; tests and 
 	assert.ok(!findings.some((f) => /app\.config\.ts: node:path/.test(f)), 'build config runs in Node');
 });
 
-test('only the two public variables may be read from the environment, anywhere outside scripts/', async () => {
+test('only the API public variable may be read from the environment, anywhere outside scripts/', async () => {
 	const findings = await findingsFor({
 		'src/leak.ts': [
-			'const a = process.env.DATABASE_URL;', "const b = process.env['MASTER_KEY'];", 'const { GOOGLE_CLIENT_SECRET } = process.env;',
+			'const retired = process.env.EXPO_PUBLIC_APP_URL;', 'const a = process.env.DATABASE_URL;', "const b = process.env['MASTER_KEY'];", 'const { GOOGLE_CLIENT_SECRET } = process.env;',
 			'const c = process.env?.SPRITES_API_TOKEN;', 'const d = import.meta.env.SECRET;', 'const ok = process.env.EXPO_PUBLIC_API_URL;',
 			'// process.env.COMMENTED_OUT is not a read', '/* process.env.ALSO_COMMENTED */'
 		].join('\n'),
@@ -105,12 +105,13 @@ test('only the two public variables may be read from the environment, anywhere o
 		'src/env.test.ts': 'process.env.NODE_ENV;\n'
 	});
 	has(findings, /leak\.ts: process\.env\.DATABASE_URL is not allowed/);
+	has(findings, /leak\.ts: process\.env\.EXPO_PUBLIC_APP_URL is not allowed/);
 	has(findings, /leak\.ts: a computed, aliased or destructured use of process is not allowed/);
 	has(findings, /leak\.ts: import\.meta\.env is not allowed/);
 	has(findings, /app\.config\.ts: process\.env\.MASTER_KEY is not allowed/);
 	has(findings, /env\.test\.ts: process\.env\.NODE_ENV is not allowed/);
-	assert.ok(!findings.some((f) => /: process\.env\.EXPO_PUBLIC|COMMENTED/.test(f)), JSON.stringify(findings));
-	assert.equal(findings.filter((f) => f.includes('leak.ts')).length, 5, 'two named secrets, two computed or destructured uses, one import.meta.env');
+	assert.ok(!findings.some((f) => /: process\.env\.EXPO_PUBLIC_API_URL|COMMENTED/.test(f)), JSON.stringify(findings));
+	assert.equal(findings.filter((f) => f.includes('leak.ts')).length, 6, 'two secrets, one retired public variable, two computed or destructured uses, one import.meta.env');
 });
 
 test('process cannot be reached through brackets, aliases, destructuring or globals; words in strings are not uses', async () => {
@@ -121,7 +122,7 @@ test('process cannot be reached through brackets, aliases, destructuring or glob
 		].join('\n'),
 		'src/fine.ts': [
 			'const text = "We process your stocktake overnight";', "const other = 'process.env.DATABASE_URL is only text here';",
-			'const api = process.env.EXPO_PUBLIC_API_URL;', 'const note = `It’s ready: ${process.env.EXPO_PUBLIC_APP_URL}`;'
+			'const api = process.env.EXPO_PUBLIC_API_URL;', 'const note = `It’s ready: ${process.env.EXPO_PUBLIC_API_URL}`;'
 		].join('\n'),
 		'src/template.ts': "const t = `Don't ship ${process.env.MASTER_KEY}`;\n"
 	});

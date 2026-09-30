@@ -3,10 +3,15 @@ import { z } from 'zod';
 const schema = z.object({
 	PORT: z.coerce.number().int().positive().default(8080),
 	DATABASE_URL: z.string().min(1),
-	/** The web app's public origin: where sign-in returns to and the only origin allowed for it. */
+	/** The app's public origin: this API's own, since it serves the web export (docs/plans/expo-web-session-2026-09.md
+	 *  §A, D37). Sign-in returns to `${APP_URL}/auth/callback`, the session cookie is Secure when it is https, and
+	 *  passkeys are bound to its host. */
 	APP_URL: z.string().url(),
-	/** This API's public origin, used for the Google redirect URI. */
+	/** This API's public origin, used for the Google and connector redirect URIs. */
 	API_URL: z.string().url(),
+	/** Where the Expo web export lives (`expo export --platform web`). Default: `apps/mobile/dist/web` next to this
+	 *  package. Absent, the API still starts and the page says the web build is missing. */
+	WEB_EXPORT_DIR: z.string().min(1).optional(),
 	SHOPIFY_CLIENT_ID: z.string().min(1).optional(),
 	SHOPIFY_CLIENT_SECRET: z.string().min(1).optional(),
 	SHOPIFY_SYNC_DISABLED: z.enum(['0', '1']).default('0'),

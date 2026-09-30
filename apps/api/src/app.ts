@@ -24,7 +24,7 @@ import type { InferenceService } from './inference/service.ts';
 import { connectionRoutes } from './connections/routes.ts';
 import { randomUUID } from 'node:crypto';
 import type { Sql } from '@captain/db';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 import type { AuthService, Session } from './auth/service.ts';
 import { commitmentsRoutes } from './commitments/routes.ts';
@@ -38,24 +38,33 @@ import { pushRoutes } from './push/routes.ts';
 import type { PushService } from './push/service.ts';
 import { workflowRoutes } from './workflows/routes.ts';
 import type { WorkflowService } from './workflows/service.ts';
+import { callbackErrorCode, callbackFailure, callbackOutcome, clearSessionCookies, clearStepUpCookie, clientHeader, clientHeaderValue, csrfHeaderMissing, sessionCookie, setSessionCookie, setStepUpCookie, stepUpCookie, welcomeError, type CookieSettings } from './web/session.ts';
+import { defaultExportDir, webExport } from './web/static.ts';
 
-export type Deps = { stock?: StockService; shopifyConnections?: ShopifyConnections; shopifySync?: ShopifySync; shopifyScheduleEnabled?: boolean; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService };
-type Vars = { Variables: { requestId: string; session: Session } };
+/** `web`: the Expo web export the API serves from its own origin and the cookie session that goes with it
+ *  (docs/plans/expo-web-session-2026-09.md §A). `exportDir` defaults to `apps/mobile/dist/web`; `secureCookies`
+ *  is true when the app's URL is https. */
+export type Deps = { stock?: StockService; shopifyConnections?: ShopifyConnections; shopifySync?: ShopifySync; shopifyScheduleEnabled?: boolean; inference?: InferenceService; db: Sql; xeroConnections?: XeroConnections; xeroSync?: XeroSync; xeroScheduleEnabled?: boolean; auth: AuthService; organisations: OrganisationService; commitments: CommitmentsService; workflows?: WorkflowService ; push?: PushService ; rateLimiter?: RateLimiter ; lifecycle?: OrganisationLifecycle ; passkeys?: PasskeyService; web?: { exportDir?: string; secureCookies?: boolean } };
+/** `sessionVia` says how the session arrived: a bearer request is answered exactly as before; a cookie request
+ *  also has its cookies cleared on sign-out. */
+type Vars = { Variables: { requestId: string; session: Session; sessionToken: string; sessionVia: 'bearer' | 'cookie' } };
 
 const bearer = (header: string | undefined) => /^Bearer (sess_[A-Za-z0-9_-]+)$/.exec(header ?? '')?.[1];
 const uuid = z.string().uuid();
 const role = z.enum(['owner', 'admin', 'member']);
 
-/** The HTTP surface. Routes parse and check, services decide and write. Sessions arrive as a
- *  bearer token from the web app, which owns the cookie. */
+/** The HTTP surface. Routes parse and check, services decide and write. Sessions arrive as a bearer token
+ *  (the mobile app) or as the `captain_session` cookie the API itself set for the web export it serves. */
 export function createApp(deps: Deps) {
 	const app = new Hono<Vars>();
+	const cookies: CookieSettings = { secure: deps.web?.secureCookies === true };
 
 	app.use('*', async (c, next) => {
 		c.set('requestId', c.req.header('x-request-id') ?? randomUUID());
 		await next();
 		c.header('x-request-id', c.get('requestId'));
-		c.header('cache-control', 'no-store');
+		// Every API answer is no-store; only the web export's hashed assets say otherwise, and they say it first.
+		if (!c.res.headers.has('cache-control')) c.header('cache-control', 'no-store');
 	});
 
 	// Rate limits (plan §9): per address before sign-in, per person and organisation after, and a
@@ -78,6 +87,21 @@ export function createApp(deps: Deps) {
 	// A mobile app starts the same flow with native parameters (mobile foundation contract §3); refused unless enabled.
 	app.get('/auth/google/start', async (c) => c.redirect(await deps.auth.startGoogle(c.get('requestId'), c.req.queries())));
 	app.get('/auth/google/callback', async (c) => c.redirect((await deps.auth.finishGoogle(c.req.query('code') ?? '', c.req.query('state') ?? '', c.get('requestId'))).toString()));
+	// The web sign-in's end (docs/plans/expo-web-session-2026-09.md §A.2): the one-time code is spent here, as the
+	// Next.js callback route did, and the session goes into the HttpOnly cookie; the page never holds the token. A
+	// person with a passkey gets the step-up cookie and the passkey page instead. A mobile app's sign-in gets its
+	// handoff passed to the app's fixed callback, and that path sets, replaces and clears no cookie.
+	app.get('/auth/callback', async (c) => {
+		const code = c.req.query('code');
+		if (!code) return c.redirect(welcomeError(callbackErrorCode(c.req.query('error'))), 303);
+		let outcome: ReturnType<typeof callbackOutcome>;
+		try { outcome = callbackOutcome(await deps.auth.exchange(code, c.get('requestId'))); }
+		catch (caught) { return c.redirect(welcomeError(callbackFailure(caught)), 303); }
+		c.header('referrer-policy', 'no-referrer');
+		if (outcome.kind === 'stepUp') setStepUpCookie(c, outcome.token, cookies);
+		if (outcome.kind === 'session') setSessionCookie(c, outcome.token, outcome.expiresAt, cookies);
+		return c.redirect(outcome.location, 303);
+	});
 	app.post('/auth/session/exchange', async (c) => {
 		const input = z.object({ code: z.string().min(1) }).parse(await c.req.json());
 		const result = await deps.auth.exchange(input.code, c.get('requestId'));
@@ -92,15 +116,26 @@ export function createApp(deps: Deps) {
 		return c.json({ token: result.token, expiresAt: result.session.expiresAt, user: result.session.user, returnTo: result.returnTo });
 	});
 	// Passkey step-up between the Google sign-in and the session (plan §9).
+	// The token comes in the body as before, or from the step-up cookie the callback set when the body has none.
+	const stepUpToken = (c: Context<Vars>, body: { token?: string }): { token: string; fromCookie: boolean } => {
+		if (body.token) return { token: body.token, fromCookie: false };
+		const token = getCookie(c, stepUpCookie);
+		if (!token) throw new HttpError(400, 'invalid_request', 'the request was not understood');
+		return { token, fromCookie: true };
+	};
 	app.post('/auth/passkey/options', async (c) => {
 		if (!deps.passkeys) throw unauthorised('passkeys are not available');
-		const input = z.object({ token: z.string().min(1) }).parse(await c.req.json());
-		return c.json({ options: await deps.auth.stepUpOptions(input.token) });
+		const input = z.object({ token: z.string().min(1).optional() }).parse(await c.req.json());
+		return c.json({ options: await deps.auth.stepUpOptions(stepUpToken(c, input).token) });
 	});
 	app.post('/auth/passkey/verify', async (c) => {
-		const input = z.object({ token: z.string().min(1), response: z.unknown() }).parse(await c.req.json());
-		const result = await deps.auth.completeStepUp(input.token, input.response, c.get('requestId'));
+		const input = z.object({ token: z.string().min(1).optional(), response: z.unknown() }).parse(await c.req.json());
+		const { token, fromCookie } = stepUpToken(c, input);
+		const result = await deps.auth.completeStepUp(token, input.response, c.get('requestId'));
+		if (fromCookie) clearStepUpCookie(c, cookies);
 		if ('nativeHandoff' in result) return c.json({ nativeHandoff: result.nativeHandoff, attempt: result.attempt });
+		// A web step-up through the cookie gets its session in the cookie and never in the page.
+		if (fromCookie) { setSessionCookie(c, result.token, result.session.expiresAt, cookies); return c.json({ ok: true, expiresAt: result.session.expiresAt, user: result.session.user, returnTo: result.returnTo }); }
 		return c.json({ token: result.token, expiresAt: result.session.expiresAt, user: result.session.user, returnTo: result.returnTo });
 	});
 	app.get('/auth/providers', (c) => c.json({ google: deps.auth.googleAvailable }));
@@ -124,15 +159,30 @@ export function createApp(deps: Deps) {
 	app.route('/', connectionRoutes(deps));
 	app.all('/webhooks/gmail', () => { throw legacyRetired(); });
 
+	// The web export, for every GET that is not the API's (§A.1). Mounted before the signed-in routes so a page
+	// never needs a session to load, and after the public API so it never shadows a path the API owns.
+	app.use('*', webExport(deps.web?.exportDir ?? defaultExportDir));
+
 	const signedIn = new Hono<Vars>();
+	// A bearer token, exactly as before; else the session cookie, accepted only with the web client's header (§A.3).
 	signedIn.use('*', async (c, next) => {
-		const token = bearer(c.req.header('authorization')); if (!token) throw unauthorised();
-		c.set('session', await deps.auth.requireSession(token)); await next();
+		const token = bearer(c.req.header('authorization'));
+		if (token) { c.set('sessionVia', 'bearer'); c.set('sessionToken', token); }
+		else {
+			const fromCookie = getCookie(c, sessionCookie); if (!fromCookie) throw unauthorised();
+			if (c.req.header(clientHeader) !== clientHeaderValue) throw csrfHeaderMissing();
+			c.set('sessionVia', 'cookie'); c.set('sessionToken', fromCookie);
+		}
+		c.set('session', await deps.auth.requireSession(c.get('sessionToken'))); await next();
 	});
 	signedIn.use('*', rateLimit(limiter, limits.user, limits.organisation, limits.trigger, limits.chatWrites, limits.sessionRevocations));
 	const actor = (c: { get(key: 'session'): Session; get(key: 'requestId'): string }) => ({ userId: c.get('session').userId, requestId: c.get('requestId') });
 
-	signedIn.post('/auth/sign-out', async (c) => { await deps.auth.signOut(bearer(c.req.header('authorization')), c.get('requestId')); return c.json({ ok: true }); });
+	signedIn.post('/auth/sign-out', async (c) => {
+		await deps.auth.signOut(c.get('sessionToken'), c.get('requestId'));
+		if (c.get('sessionVia') === 'cookie') clearSessionCookies(c, cookies);
+		return c.json({ ok: true });
+	});
 	// Sign out everywhere else (docs/plans/mobile-session-revocation-2026-09.md): ends the person's other sessions. No input.
 	signedIn.post('/v1/me/sessions/revoke-others', async (c) => c.json(await deps.auth.revokeOtherSessions(c.get('session'), c.get('requestId'))));
 	signedIn.get('/v1/me', async (c) => c.json({ user: c.get('session').user, memberships: await deps.organisations.memberships(c.get('session').userId), passkeyVerified: c.get('session').passkeyVerifiedAt !== null }));

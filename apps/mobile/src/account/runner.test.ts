@@ -4,9 +4,8 @@ import type { Cleanup } from '../auth/cleanup.ts';
 import type { ApiClient, ApiOutcome, AttemptOutcome, Attempts, AttemptState } from '../auth/contracts.ts';
 import { createClampedClock } from './clock.ts';
 import { createApiClient, createTransport, maxResponseBytes } from '../api/client.ts';
-import { myWorkPath } from '../api/paths.ts';
-import { beginRead, finishRead, initialWorkList } from '../work/my-work-list.ts';
-import { parseMyWorkPage } from '../work/my-work.ts';
+import { equipmentPagePath } from '../api/paths.ts';
+import { equipmentPageParser } from '../resources/equipment/data.ts';
 import type { CredentialStore, Generation, ReadScope, StoredSession } from './contracts.ts';
 import { idleRevocation, type PersonScope } from './revocation.ts';
 import { createAccountRunner, type AccountRunner, type Timers } from './runner.ts';
@@ -179,10 +178,10 @@ test('unreadable storage: Try reading again reads again; a failed read never bec
 test('sign-in: gate, attempt, save, verify, then the destination; the save uses the advanced account generation', async () => {
 	const t = harness();
 	t.runner.start(); await t.calls.answer('read', null);
-	t.runner.send({ type: 'sign-in', returnTo: '/chat' }); await drain();
+	t.runner.send({ type: 'sign-in', returnTo: '/equipment' }); await drain();
 	const start = t.calls.take('start');
-	assert.deepEqual(start.args, ['/chat']);
-	start.resolve({ kind: 'signed-in', session: { token: token('b'), expiresAt: '2030-10-01T08:30:00.000Z', user: { id: userId, email: 'o@example.test', name: 'O' }, returnTo: '/chat' } });
+	assert.deepEqual(start.args, ['/equipment']);
+	start.resolve({ kind: 'signed-in', session: { token: token('b'), expiresAt: '2030-10-01T08:30:00.000Z', user: { id: userId, email: 'o@example.test', name: 'O' }, returnTo: '/equipment' } });
 	await drain();
 	const install = t.calls.take('install');
 	assert.deepEqual(install.args[0], stored('b'));
@@ -198,7 +197,7 @@ test('sign-in: gate, attempt, save, verify, then the destination; the save uses 
 	const setOrg = t.calls.take('setOrg');
 	assert.deepEqual(setOrg.args.slice(0, 2), [userId, orgA], 'the only membership is chosen and remembered');
 	const ready = account(t.runner);
-	assert.ok(ready.kind === 'signed-in' && ready.ready && ready.destination === '/chat');
+	assert.ok(ready.kind === 'signed-in' && ready.ready && ready.destination === '/equipment');
 	tokenFree(t.snapshots);
 });
 
@@ -324,7 +323,7 @@ test('a revocation refused because the cleanup slot holds another session is a f
 // Organisation-scoped reads (docs/plans/expo-mobile-my-work-read-2026-09.md §3.1–§3.2).
 
 const identity = (value: unknown) => value;
-const stockPath = (scope: ReadScope) => `/v1/organisations/${scope.organisationId}/stock` as never;
+const equipmentPath = (scope: ReadScope) => `/v1/organisations/${scope.organisationId}/equipment` as never;
 /** The scope the snapshot shows now (what a screen would pass as `expected`). */
 const shown = (runner: AccountRunner): ReadScope => {
 	const view = account(runner);
@@ -340,18 +339,18 @@ test('scoped reads: nothing is sent before ready; the path is built from the run
 	const t = harness();
 	t.runner.start(); await t.calls.answer('read', stored('a'));
 	const guessed: ReadScope = { epoch: 'a0.o0', userId, organisationId: orgA };
-	assert.deepEqual(await t.runner.organisationRead(guessed, stockPath, identity), { kind: 'superseded' }, 'checking: superseded');
+	assert.deepEqual(await t.runner.organisationRead(guessed, equipmentPath, identity), { kind: 'superseded' }, 'checking: superseded');
 	assert.equal(getCount(t), 1, 'only the launch /v1/me was sent');
 	await t.calls.answer('get', { ok: true, value: meBody(orgA, orgB) });
-	assert.deepEqual(await t.runner.organisationRead(guessed, stockPath, identity), { kind: 'superseded' }, 'verified but no organisation chosen yet: superseded');
+	assert.deepEqual(await t.runner.organisationRead(guessed, equipmentPath, identity), { kind: 'superseded' }, 'verified but no organisation chosen yet: superseded');
 	await t.calls.answer('readOrg', orgA);
 	const scope = shown(t.runner);
 	assert.equal(scope.organisationId, orgA); assert.equal(scope.userId, userId);
 	const given: ReadScope[] = [];
 	t.clock.now = 30_000; // the refusal spacing is measured from the launch check (§3.2)
-	const read = t.runner.organisationRead({ ...scope }, (current) => { given.push(current); return stockPath(current); }, identity);
+	const read = t.runner.organisationRead({ ...scope }, (current) => { given.push(current); return equipmentPath(current); }, identity);
 	const sent = t.calls.take('get');
-	assert.deepEqual(sent.args, [`/v1/organisations/${orgA}/stock`, token('a')], 'sent synchronously, before any await');
+	assert.deepEqual(sent.args, [`/v1/organisations/${orgA}/equipment`, token('a')], 'sent synchronously, before any await');
 	assert.deepEqual(given, [scope], 'the path function is given the runner\'s current scope');
 	sent.resolve({ ok: false, kind: 'refused', status: 403, code: 'forbidden' });
 	const refused = await read;
@@ -368,13 +367,13 @@ test('scoped reads: a 403 within 30 s of the launch check refreshes nothing; a 4
 	const t = await signedInWithStoredSession([orgA, orgB], orgA);
 	const scope = shown(t.runner);
 	t.clock.now = 29_999;
-	const early = t.runner.organisationRead(scope, stockPath, identity);
+	const early = t.runner.organisationRead(scope, equipmentPath, identity);
 	t.calls.take('get').resolve({ ok: false, kind: 'refused', status: 404, code: 'not_found' });
 	assert.deepEqual(await early, { kind: 'refused', status: 404 });
 	await drain();
 	assert.equal(meSends(t), 1, 'inside the spacing: no /v1/me, and nothing recorded to retry');
 	t.clock.now = 60_000;
-	const bad = t.runner.organisationRead(scope, stockPath, identity);
+	const bad = t.runner.organisationRead(scope, equipmentPath, identity);
 	t.calls.take('get').resolve({ ok: false, kind: 'refused', status: 400, code: 'invalid_request' });
 	assert.deepEqual(await bad, { kind: 'refused', status: 400 });
 	await drain();
@@ -389,13 +388,13 @@ test('scoped reads: an expected scope that is not the current one sends nothing 
 	const now = shown(t.runner);
 	assert.notEqual(now.epoch, before.epoch);
 	const sends = getCount(t);
-	assert.deepEqual(await t.runner.organisationRead(before, stockPath, identity), { kind: 'superseded' }, 'the old epoch');
-	assert.deepEqual(await t.runner.organisationRead({ ...now, organisationId: orgA }, stockPath, identity), { kind: 'superseded' }, 'the current epoch with another organisation');
-	assert.deepEqual(await t.runner.organisationRead({ ...now, userId: '0190c0de-0000-7000-8000-000000000099' }, stockPath, identity), { kind: 'superseded' }, 'the current epoch with another user');
-	assert.deepEqual(await t.runner.organisationRead({ ...now, epoch: `${now.epoch}x` }, stockPath, identity), { kind: 'superseded' }, 'another epoch for the same IDs');
+	assert.deepEqual(await t.runner.organisationRead(before, equipmentPath, identity), { kind: 'superseded' }, 'the old epoch');
+	assert.deepEqual(await t.runner.organisationRead({ ...now, organisationId: orgA }, equipmentPath, identity), { kind: 'superseded' }, 'the current epoch with another organisation');
+	assert.deepEqual(await t.runner.organisationRead({ ...now, userId: '0190c0de-0000-7000-8000-000000000099' }, equipmentPath, identity), { kind: 'superseded' }, 'the current epoch with another user');
+	assert.deepEqual(await t.runner.organisationRead({ ...now, epoch: `${now.epoch}x` }, equipmentPath, identity), { kind: 'superseded' }, 'another epoch for the same IDs');
 	assert.equal(getCount(t), sends, 'none of them sent anything');
-	const current = t.runner.organisationRead(now, stockPath, identity);
-	assert.deepEqual(t.calls.take('get').args, [`/v1/organisations/${orgB}/stock`, token('a')], 'the current scope is read');
+	const current = t.runner.organisationRead(now, equipmentPath, identity);
+	assert.deepEqual(t.calls.take('get').args, [`/v1/organisations/${orgB}/equipment`, token('a')], 'the current scope is read');
 	t.calls.all.at(-1)!.resolve({ ok: true, value: { items: [] } });
 	assert.deepEqual(await current, { kind: 'ok', value: { items: [] } });
 });
@@ -403,20 +402,20 @@ test('scoped reads: an expected scope that is not the current one sends nothing 
 test('scoped reads: an answer that arrives after a switch, or after A → B → A, is superseded, never applied to the new scope', async () => {
 	const t = await signedInWithStoredSession([orgA, orgB], orgA);
 	const a1 = shown(t.runner);
-	const late = t.runner.organisationRead(a1, stockPath, identity);
+	const late = t.runner.organisationRead(a1, equipmentPath, identity);
 	const lateCall = t.calls.take('get');
 	t.runner.send({ type: 'choose-organisation', organisationId: orgB }); await drain();
 	lateCall.resolve({ ok: true, value: { items: ['from A'] } });
 	assert.deepEqual(await late, { kind: 'superseded' }, 'a switch during the flight');
 	// A → B → A: the organisation is A again, but it is a new epoch, so the first A read's answer is not current.
-	const aba = t.runner.organisationRead(shown(t.runner), stockPath, identity);
+	const aba = t.runner.organisationRead(shown(t.runner), equipmentPath, identity);
 	const abaCall = t.calls.take('get');
 	t.runner.send({ type: 'choose-organisation', organisationId: orgA }); await drain();
 	const a2 = shown(t.runner);
 	assert.equal(a2.organisationId, orgA); assert.notEqual(a2.epoch, a1.epoch);
 	abaCall.resolve({ ok: true, value: { items: ['from B'] } });
 	assert.deepEqual(await aba, { kind: 'superseded' });
-	const oldA = t.runner.organisationRead(a1, stockPath, identity);
+	const oldA = t.runner.organisationRead(a1, equipmentPath, identity);
 	assert.deepEqual(await oldA, { kind: 'superseded' }, 'the first A scope is never current again');
 });
 
@@ -426,7 +425,7 @@ test('scoped reads: a membership refresh that keeps the organisation keeps the e
 	t.clock.now = 30_000; t.runner.send({ type: 'refresh' }); await drain();
 	const me = t.calls.take('get');
 	assert.deepEqual(me.args, ['/v1/me', token('a')]);
-	const read = t.runner.organisationRead(scope, stockPath, identity);
+	const read = t.runner.organisationRead(scope, equipmentPath, identity);
 	const readCall = t.calls.take('get');
 	me.resolve({ ok: true, value: meBody(orgA, orgB, 'feedface-9999-4aaa-8bbb-cccccccccccc') }); await drain();
 	assert.equal(shown(t.runner).epoch, scope.epoch, 'new membership list, same organisation: same epoch');
@@ -438,7 +437,7 @@ test('scoped reads: a 401 ends the current session and is superseded; a late 401
 	// The current session: a 401 releases it (compare-delete, no revocation), and the read is superseded.
 	const t = await signedInWithStoredSession([orgA], null);
 	await drain(); t.calls.take('setOrg').resolve('written'); await drain();
-	const current = t.runner.organisationRead(shown(t.runner), stockPath, identity);
+	const current = t.runner.organisationRead(shown(t.runner), equipmentPath, identity);
 	t.calls.take('get').resolve({ ok: false, kind: 'unauthorised' });
 	assert.deepEqual(await current, { kind: 'superseded' }, 'the account dispatch runs first, so a 401 is superseded');
 	const releasing = account(t.runner);
@@ -447,7 +446,7 @@ test('scoped reads: a 401 ends the current session and is superseded; a late 401
 
 	// An old session's read that answers 401 after a sign-out and a new sign-in.
 	const u = await signedInWithStoredSession([orgA, orgB], orgA);
-	const old = u.runner.organisationRead(shown(u.runner), stockPath, identity);
+	const old = u.runner.organisationRead(shown(u.runner), equipmentPath, identity);
 	const oldCall = u.calls.take('get');
 	u.runner.send({ type: 'sign-out' }); await drain();
 	await u.calls.answer('removeIf', 'deleted'); await u.calls.answer('begin', 'revoked');
@@ -475,13 +474,13 @@ test('scoped reads: a path function that throws is a client bug, and nothing is 
 	const scope = shown(t.runner);
 	const sends = getCount(t);
 	assert.deepEqual(await t.runner.organisationRead(scope, () => { throw new TypeError('bad path'); }, identity), { kind: 'client-bug' });
-	// The real builder refusing an offset past the page cap (a hook bug) is the same.
-	assert.deepEqual(await t.runner.organisationRead(scope, (current) => myWorkPath(current, 500), identity), { kind: 'client-bug' });
+	// The real builder refusing an offset between catalogue pages (a hook bug) is the same.
+	assert.deepEqual(await t.runner.organisationRead(scope, (current) => equipmentPagePath(current, 50), identity), { kind: 'client-bug' });
 	assert.equal(getCount(t), sends, 'nothing sent');
-	const valid = t.runner.organisationRead(scope, (current) => myWorkPath(current, 0), identity);
-	assert.deepEqual(t.calls.take('get').args, [`/v1/organisations/${orgA}/tasks?ownerId=${userId}&status=open&offset=0&limit=50`, token('a')]);
-	t.calls.all.at(-1)!.resolve({ ok: true, value: { tasks: [], nextOffset: null } });
-	assert.deepEqual(await valid, { kind: 'ok', value: { tasks: [], nextOffset: null } });
+	const valid = t.runner.organisationRead(scope, (current) => equipmentPagePath(current, 0), identity);
+	assert.deepEqual(t.calls.take('get').args, [`/v1/organisations/${orgA}/equipment?limit=100&offset=0`, token('a')]);
+	t.calls.all.at(-1)!.resolve({ ok: true, value: { equipment: [], nextOffset: null } });
+	assert.deepEqual(await valid, { kind: 'ok', value: { equipment: [], nextOffset: null } });
 });
 
 test('scoped reads never reject: a client that rejects or throws is a client bug, with no account effect; after a switch it is superseded', async () => {
@@ -491,19 +490,19 @@ test('scoped reads never reject: a client that rejects or throws is a client bug
 	const scope = shown(t.runner);
 	const before = t.runner.snapshot();
 	t.clock.now = 60_000; // outside the refusal spacing, so a wrongly dispatched refusal would be visible as a /v1/me
-	const rejected = t.runner.organisationRead(scope, stockPath, identity);
+	const rejected = t.runner.organisationRead(scope, equipmentPath, identity);
 	await t.calls.fail('get');
 	assert.deepEqual(await rejected, { kind: 'client-bug' });
 	assert.equal(t.runner.snapshot(), before, 'no account effect at all: same snapshot object');
 	assert.equal(meSends(t), 1, 'no /v1/me');
 	// A client whose `get` throws synchronously: the same, and the returned promise still resolves.
 	t.flags.getThrows = true;
-	const thrown = t.runner.organisationRead(scope, stockPath, identity);
+	const thrown = t.runner.organisationRead(scope, equipmentPath, identity);
 	assert.ok(thrown instanceof Promise);
 	assert.deepEqual(await thrown, { kind: 'client-bug' });
 	assert.equal(t.runner.snapshot(), before);
 	// A rejection that arrives after a switch is dropped like any late answer.
-	const late = t.runner.organisationRead(scope, stockPath, identity);
+	const late = t.runner.organisationRead(scope, equipmentPath, identity);
 	const lateCall = t.calls.take('get');
 	t.runner.send({ type: 'choose-organisation', organisationId: orgB }); await drain();
 	lateCall.reject(new Error(`client detail ${token('r')}`));
@@ -516,10 +515,10 @@ test('scoped reads: a read\'s Retry-After is its own wait, separate from the acc
 	const t = await signedInWithStoredSession([orgA, orgB], orgA);
 	const scope = shown(t.runner);
 	t.clock.now = 10_000;
-	const busy = t.runner.organisationRead(scope, stockPath, identity);
+	const busy = t.runner.organisationRead(scope, equipmentPath, identity);
 	t.calls.take('get').resolve({ ok: false, kind: 'unavailable', status: 429, retryAfter: 20 });
 	assert.deepEqual(await busy, { kind: 'unavailable', wait: { until: 30_000, about: new Date(20_000).toISOString() } }, 'measured on the shared clamped clock when the answer arrived');
-	const noWait = t.runner.organisationRead(scope, stockPath, identity);
+	const noWait = t.runner.organisationRead(scope, equipmentPath, identity);
 	t.calls.take('get').resolve({ ok: false, kind: 'unavailable', status: 0 });
 	assert.deepEqual(await noWait, { kind: 'unavailable', wait: null });
 	// The read's wait does not hold the account: a foreground refresh 30 s after the launch check is sent at once.
@@ -527,9 +526,9 @@ test('scoped reads: a read\'s Retry-After is its own wait, separate from the acc
 	assert.equal(meSends(t), 2, 'the business wait did not become an account wait');
 	// And the account's wait does not hold reads: a 429 on /v1/me, then a read is still sent.
 	await t.calls.answer('get', { ok: false, kind: 'unavailable', status: 429, retryAfter: 600 });
-	const during = t.runner.organisationRead(shown(t.runner), stockPath, identity);
+	const during = t.runner.organisationRead(shown(t.runner), equipmentPath, identity);
 	const call = t.calls.take('get');
-	assert.deepEqual(call.args, [`/v1/organisations/${orgA}/stock`, token('a')], 'sent despite the account wait');
+	assert.deepEqual(call.args, [`/v1/organisations/${orgA}/equipment`, token('a')], 'sent despite the account wait');
 	call.resolve({ ok: true, value: { items: [] } });
 	assert.deepEqual(await during, { kind: 'ok', value: { items: [] } });
 	t.clock.now = 60_000; t.runner.send({ type: 'refresh' }); await drain();
@@ -608,7 +607,7 @@ test('pacing: a server wait from a refresh blocks every trigger until exactly it
 	const kept = account(t.runner);
 	assert.ok(kept.kind === 'signed-in' && kept.ready && !kept.refreshing, 'unavailable keeps the state');
 	// A refusal from an organisation read is subject to the server wait too (the account wait does not stop the read).
-	const read = t.runner.organisationRead(shown(t.runner), stockPath, identity); await drain();
+	const read = t.runner.organisationRead(shown(t.runner), equipmentPath, identity); await drain();
 	t.clock.now = 89_999;
 	t.calls.take('get').resolve({ ok: false, kind: 'refused', status: 403, code: 'forbidden' });
 	assert.deepEqual(await read, { kind: 'refused', status: 403 }); await drain();
@@ -704,20 +703,20 @@ const jsonChunk = (value: unknown) => new TextEncoder().encode(JSON.stringify(va
 const oversizedChunks = () => {
 	const chunk = new Uint8Array(65_536).fill(0x20);
 	const first = chunk.slice();
-	// A valid task page followed by legal JSON whitespace: absent the budget this would be usable data.
-	first.set(jsonChunk(taskBody('00000000-0000-4000-8000-000000000001')));
+	// A valid equipment page followed by legal JSON whitespace: absent the budget this would be usable data.
+	first.set(jsonChunk(equipmentBody('00000000-0000-4000-8000-000000000001')));
 	return Array.from({ length: Math.floor(maxResponseBytes / chunk.byteLength) + 2 }, (_, index) => index === 0 ? first : chunk);
 };
-const taskBody = (id: string) => ({ tasks: [{ id, title: 'Kept task', ownerId: userId, status: 'open', due: null, tags: [] }], nextOffset: null });
+const equipmentBody = (id: string) => ({ equipment: [{ id, name: 'Kept equipment', archivedAt: null }], nextOffset: null });
 
-/** A ready runner (organisation A) over the real client; `tasks` answers each organisation read in order. */
-async function readyOverRealTransport(tasks: ((url: string) => ReturnType<typeof streamed>)[]) {
+/** A ready runner (organisation A) over the real client; `answers` supplies each organisation read in order. */
+async function readyOverRealTransport(answers: ((url: string) => ReturnType<typeof streamed>)[]) {
 	const signals: AbortSignal[] = [];
 	const origin = 'https://api.example.test';
 	const send = (async (url: string, init: { signal: AbortSignal }) => {
 		signals.push(init.signal);
 		if (url === `${origin}/v1/me`) return streamed(url, 200, [jsonChunk(meBody(orgA, orgB))]);
-		const answer = tasks.shift();
+		const answer = answers.shift();
 		assert.ok(answer, 'no unexpected organisation read');
 		return answer(url);
 	}) as unknown as Parameters<typeof createTransport>[0]['send'];
@@ -729,29 +728,20 @@ async function readyOverRealTransport(tasks: ((url: string) => ReturnType<typeof
 	return { t, signals };
 }
 
-test('byte budget: an oversized scoped read is unavailable, never a client bug; the list keeps its rows; the account is untouched', async () => {
+test('byte budget: an oversized scoped read is unavailable, never a client bug; the account is untouched', async () => {
 	const record: FakeStream = { reads: 0, cancels: [] };
 	const chunks = oversizedChunks();
 	const kept = '00000000-0000-4000-8000-000000000001';
 	const { t, signals } = await readyOverRealTransport([
-		(url) => streamed(url, 200, [jsonChunk(taskBody(kept))]),
+		(url) => streamed(url, 200, [jsonChunk(equipmentBody(kept))]),
 		(url) => streamed(url, 200, chunks, {}, record)
 	]);
 	const scope = shown(t.runner);
-	const readPage = (offset: number) => t.runner.organisationRead(scope, (current) => myWorkPath(current, offset), (value) => parseMyWorkPage(value, { scope, offset }));
-
-	// A first page loads through the real transport and parser.
-	const first = beginRead(initialWorkList, 'first', 0)!;
-	const loaded = finishRead(first.state, first.seq, await readPage(0));
-	assert.deepEqual(loaded.rows.map((row) => row.id), [kept]);
-
-	// Refresh: the answer is a 200 whose body crosses the budget.
-	const refresh = beginRead(loaded, 'refresh', 0)!;
-	const outcome = await readPage(0);
-	assert.deepEqual(outcome, { kind: 'unavailable', wait: null }, 'unavailable, not client-bug');
-	const after = finishRead(refresh.state, refresh.seq, outcome);
-	assert.deepEqual(after.rows.map((row) => row.id), [kept], 'the list keeps its rows');
-	assert.deepEqual(after.problem, { op: 'refresh', kind: 'unavailable', wait: null }, '"Couldn\'t refresh", never an empty list');
+	const readPage = () => t.runner.organisationRead(scope, current => equipmentPagePath(current, 0), equipmentPageParser({ offset: 0, limit: 100 }));
+	const loaded = await readPage();
+	assert.deepEqual(loaded, { kind: 'ok', value: { equipment: [{ id: kept, name: 'Kept equipment' }], nextOffset: null } });
+	const outcome = await readPage();
+	assert.deepEqual(outcome, { kind: 'unavailable', wait: null }, 'unavailable, not client-bug or an empty page');
 
 	// The transport stopped at the crossing chunk: no further read, the stream cancelled, the request aborted.
 	const crossing = Math.floor(maxResponseBytes / 65_536) + 1;
@@ -1073,7 +1063,7 @@ test('byte budget: an oversized 200 from "Sign out everywhere else" is unknown, 
 test('byte budget: an oversized 429 keeps its Retry-After as the read\'s own wait', async () => {
 	const { t } = await readyOverRealTransport([(url) => streamed(url, 429, oversizedChunks(), { 'retry-after': '20' })]);
 	const scope = shown(t.runner);
-	const outcome = await t.runner.organisationRead(scope, (current) => myWorkPath(current, 0), (value) => parseMyWorkPage(value, { scope, offset: 0 }));
+	const outcome = await t.runner.organisationRead(scope, (current) => equipmentPagePath(current, 0), equipmentPageParser({ offset: 0, limit: 100 }));
 	assert.deepEqual(outcome, { kind: 'unavailable', wait: { until: 20_000, about: new Date(20_000).toISOString() } });
 	const view = account(t.runner);
 	assert.ok(view.kind === 'signed-in' && view.ready, 'a business wait never touches the account');

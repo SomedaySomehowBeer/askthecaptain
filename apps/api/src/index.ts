@@ -13,7 +13,10 @@ import { definitions, retiredWorkflowVersions } from '@captain/steps';
 import { InferenceService } from './inference/service.ts';
 import { SpritesClient } from './inference/sprites.ts';
 import { masterKey } from './connections/encryption.ts';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { serve } from '@hono/node-server';
+import { defaultExportDir } from './web/static.ts';
 import { connect } from '@captain/db';
 import { createApp } from './app.ts';
 import { GoogleIdentityProvider } from './auth/google.ts';
@@ -64,7 +67,9 @@ const lifecycle = new OrganisationLifecycle(db, [
 	async (actor, organisationId) => { await inference.remove(actor, organisationId).catch(() => undefined); }
 ]);
 const passkeys = new PasskeyService(db, simpleWebAuthn(env.APP_URL));
-const app = createApp({ stock, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys, nativeSignIn: env.NATIVE_SIGN_IN === '1' }), organisations: new OrganisationService(db), commitments });
+const app = createApp({ stock, shopifyConnections, shopifySync, shopifyScheduleEnabled: env.SHOPIFY_SYNC_DISABLED !== '1' && shopifyConnections.available, passkeys, lifecycle, xeroConnections, xeroSync, xeroScheduleEnabled: env.XERO_SYNC_DISABLED !== '1' && xeroConnections.available, workflows, push, inference, db, auth: new AuthService(db, google, { appUrl: env.APP_URL, sessionTtlDays: env.SESSION_TTL_DAYS, passkeys, nativeSignIn: env.NATIVE_SIGN_IN === '1' }), organisations: new OrganisationService(db), commitments,
+	web: { ...(env.WEB_EXPORT_DIR ? { exportDir: env.WEB_EXPORT_DIR } : {}), secureCookies: env.APP_URL.startsWith('https:') } });
+if (!existsSync(join(env.WEB_EXPORT_DIR ?? defaultExportDir, 'index.html'))) console.warn(`[api] the web export is missing at ${env.WEB_EXPORT_DIR ?? defaultExportDir}; the page will say so`);
 
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, () => console.log(`[api] listening on ${env.PORT}`));

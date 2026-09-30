@@ -22,7 +22,7 @@ const text = (value: unknown, max: number): value is string => typeof value === 
 
 /** The exchange's success body, exactly `{ token, expiresAt, user: { id, email, name }, returnTo }` and nothing else.
  *  Throws a TypeError, never naming a value, on anything else. `returnTo` is only checked as text here: the account
- *  runner applies the app's link rule, and a refused one lands on `/work`. */
+ *  runner applies the app's link rule, and a refused one lands on `/`. */
 export function parseSignedIn(value: unknown): SignedIn {
 	const refuse = (): never => { throw new TypeError('exchange: the sign-in answer was not in the expected form'); };
 	if (!isRecord(value) || !hasExactly(value, ['token', 'expiresAt', 'user', 'returnTo'])) return refuse();
