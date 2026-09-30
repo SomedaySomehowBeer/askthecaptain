@@ -2,7 +2,27 @@
 
 ## Next.js source retirement (30 September 2026)
 
-This R1c PR removes the Next.js source; the repository web client is now the API-served Expo export. This records repository changes only: DNS cutover, Fly retirement and hosted checks remain owner release work.
+This pull request removes the Next.js source, `packages/ui`, the Next.js Playwright suites and their CI jobs; the
+repository's web client is the API-served Expo export. Before it merged, the owner completed the cutover below and
+step 5 of [the runbook](expo-web-cutover.md): `askthecaptain-web-staging` was scaled to zero machines (its last
+image `git-b484e30` remains in the registry for rollback). Production stays paused.
+
+## Web cutover to the API-served Expo export (30 September 2026, about 07:35 UTC)
+
+Steps 1–3 of [the cutover runbook](expo-web-cutover.md) ran on the staging pair (D37, #218, #219). The API
+`askthecaptain-api-staging` was deployed from `main` at `519b1ad` (image `deployment-01M3RKG66S2WX49H5X5F4ME5ZM`,
+previous `git-b484e30`); the release command ran with no new migration. The certificates for `app`, apex and `www`
+moved from `askthecaptain-web-staging` to the API app and were issued; `infra/tofu/dns.tf` now points all three at
+`askthecaptain-api-staging.fly.dev` (applied by `tofu.yml` on #219). `APP_URL` and `API_URL` did not change.
+
+Hosted checks on `https://app.askthecaptain.app`: `/readyz` ok; `/` serves the Expo shell with `no-store`;
+`/_expo/…` assets are `immutable`; `/v1/…` still answers as the API; `/auth/passkey` is served as a page; `www`
+and the apex serve the shell. The owner signed in with Google, saw the organisation in the shell, and signed out.
+
+Not exercised: the passkey step-up (the owner's account has no passkey and the shell cannot register one), invitation
+acceptance (no screen creates an invitation) and Web Push registration (no device control on the export). These three
+account controls are tracked as the next increment in #221. Native sign-in stays off;
+production and the embedding service stay stopped; the deploy and backup workflows stay disabled.
 
 ## One-off workflows and retired-screen evidence removed (30 September 2026, UTC)
 
