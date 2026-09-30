@@ -4,7 +4,8 @@ Status: **proposal, 29 September 2026.** Not adopted. Nothing here changes `docs
 reviewed amendment does. Outcomes: **discuss work**, **manage shared work**, **allocate resources**.
 
 Prototype: a fictional, clickable set of screens accompanies this proposal (link in the pull request). All names and
-data in it are invented.
+data in it are invented. The audit of what carries over and the order of work are in
+[the rebuild plan](../plans/chat-first-rebuild-2026-09.md).
 
 ## Why
 
@@ -169,7 +170,7 @@ cheapest model that does the job; the conflict read is the one place a slightly 
 | D4 workflows act as the person who enabled them | Amended: agents act under their own name and key, with member-level limits |
 | D5 no autonomous correspondence | Amended: outside messages need approval of the exact content, by the owner or by an agent within admin-set limits |
 | D11 three tabs | Replaced: one list of threads grouped by tag, with filters and pinned views |
-| D15 and the project/task model | Amended: a project becomes a kind of tag; a task can carry several projects |
+| D7 projects and tasks | Amended: a project becomes a kind of tag; a task can carry several projects |
 | D13 attachment bytes never stored | Amended: Captain stores photos of its own worksheets |
 | D25 private chat | Extended: record threads follow the record's audience; private conversations are unchanged |
 | Non-goal "a conversational model with tools or autonomous writes" | Reworded: autonomous writes are made by code, from schema-checked results |
