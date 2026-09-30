@@ -100,7 +100,7 @@ jobs:
       # approximation of the shell: not native rendering, gestures, accessibility services or device evidence.
       - name: Install Chromium for the shell approximation
         run: pnpm --filter @captain/e2e exec playwright install --with-deps chromium
-      - name: Mobile shell and account browser approximation
+      - name: Expo web shell and cookie-session browser checks
         env:
           MOBILE_SHELL_SCREENSHOTS: ${{ github.workspace }}/apps/e2e/test-results/mobile-shell
         run: node apps/e2e/scripts/mobile-shell-ci.mjs
@@ -120,5 +120,5 @@ jobs:
             echo '### Mobile shell checks'
             echo 'Bundle exports for web, iOS and Android are JavaScript bundles only.'
             echo 'They are not a native build, a signed build, a simulator run or device acceptance.'
-            echo 'The browser check runs separate production and synthetic account harness web exports in Chromium; it approximates layout, navigation and account controls only.'
+            echo 'The browser check runs the production cookie client with synthetic API answers, plus the equipment and account harness, at phone and desktop widths. Real API cookie tests run against Postgres separately.'
           } >> "$GITHUB_STEP_SUMMARY"

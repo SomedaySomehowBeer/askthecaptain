@@ -1,3 +1,5 @@
+import { useAccount } from '../account/AccountProvider.tsx';
+import Welcome from './welcome.tsx';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -16,7 +18,13 @@ import { colors, type } from '../theme/tokens.ts';
  *  D38: buttons only). Bookings for shared equipment across equipment and days. Only a fully read period may leave
  *  time blank, and only as "no confirmed reservations when it was read"; unread, loading, failed, partial, conflicting
  *  and stale time is hatched with its words. There is no reserve, edit or cancel control yet. */
-export default function EquipmentSchedule() {
+export default function EquipmentPage() {
+	const { snapshot } = useAccount();
+	if (snapshot.account.kind === 'unverified') return <Welcome />;
+	return <EquipmentSchedule />;
+}
+
+function EquipmentSchedule() {
 	const schedule = useEquipmentSchedule();
 	const [open, setOpen] = useState<{ equipment: Equipment; reservationId: string } | null>(null);
 	const state = schedule.state;

@@ -60,7 +60,8 @@ export type SignInFailure = Exclude<AttemptKind, 'signed-in'> | 'busy';
 export type Notice =
 	| { readonly kind: 'sign-in'; readonly outcome: SignInFailure }
 	| { readonly kind: 'released'; readonly reason: ReleaseReason; readonly local: LocalResult; readonly server: 'ended' | 'not-needed' }
-	| { readonly kind: 'organisation-not-remembered' };
+	| { readonly kind: 'organisation-not-remembered' }
+	| { readonly kind: 'refresh-unavailable' };
 
 export type OrgState =
 	| { readonly kind: 'loading' }

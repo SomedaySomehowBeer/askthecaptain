@@ -3,8 +3,9 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccount } from '../account/AccountProvider.tsx';
-import { isSignedIn, threadsCopy } from '../account/copy.ts';
+import { isSignedIn, signedInNotices, threadsCopy } from '../account/copy.ts';
 import { colors, space, type } from '../theme/tokens.ts';
+import { Notice } from './Notice.tsx';
 import { Chevron, Magnifier } from './Icons.tsx';
 
 /** What a list page gets from `Screen` so its own virtualised list scrolls the whole page: the heading (to put first in
@@ -29,7 +30,8 @@ export function Screen({ title, back, children, list }: ScreenProps) {
 	const account = snapshot.account;
 	const organisation = isSignedIn(account) && account.org.kind === 'chosen' ? account.org.membership.organisationName : null;
 	const contentContainerStyle = [styles.content, { paddingBottom: 32 + insets.bottom }];
-	const heading = title ? <Text role="heading" style={styles.heading}>{title}</Text> : null;
+	const titleNode = title ? <Text role="heading" style={styles.heading}>{title}</Text> : null;
+	const heading = <>{titleNode}{isSignedIn(account) ? signedInNotices(account).map(line => <Notice key={line.title} title={line.title}>{line.text}</Notice>) : null}</>;
 	return (
 		<View style={[styles.page, { paddingTop: insets.top }]}>
 			<View style={styles.header}>

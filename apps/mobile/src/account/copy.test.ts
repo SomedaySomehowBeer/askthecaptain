@@ -249,7 +249,7 @@ test('web welcome: the ?error= code picks its wording, an unknown code the fallb
 		assert.equal(text, webCopy.errorFallback, String(code)); assert.ok(!String(text).includes('canary'));
 	}
 	const page = webWelcomePage(snap({ kind: 'signed-out', notice: null, gate: 'idle' }), { now: 0, error: 'passkey_failed' });
-	assert.deepEqual(page.notices, [{ title: webCopy.errorTitle, text: 'The passkey could not be checked. Try again.' }]);
+	assert.deepEqual(page.notices, [{ title: webCopy.errorTitle, text: 'The passkey could not be checked. Start again from sign-in.' }]);
 });
 
 test('passkeys and invitations: a passkey line names its kind, when it was added and last used; refusals have their own lines', () => {
@@ -261,8 +261,8 @@ test('passkeys and invitations: a passkey line names its kind, when it was added
 	assert.equal(invitationRefusalText('canary_code'), 'Captain refused this invitation.');
 });
 
-test('threads shell: the filter row is All, Needs you, Tasks, Bookings, Stock, Records, Files, People; the empty state hides nothing', () => {
+test('threads shell: the filter row is All, Needs you, Tasks, Bookings, Stock, Records, Files, People; the unavailable state makes no data claim', () => {
 	assert.deepEqual([...threadsCopy.filters], ['All', 'Needs you', 'Tasks', 'Bookings', 'Stock', 'Records', 'Files', 'People']);
-	assert.ok(/nothing is hidden/i.test(threadsCopy.emptyBody));
+	assert.ok(/not available yet/i.test(threadsCopy.emptyBody));
 	assert.ok(!/\d/.test(JSON.stringify(threadsCopy)), 'no fixed wording contains a digit');
 });

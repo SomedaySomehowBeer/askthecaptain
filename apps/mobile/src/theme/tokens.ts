@@ -1,6 +1,6 @@
 /** Design tokens (plan D14). Authored here, outside the unedited legacy mirror in `packages/ui/design`. One palette for
  *  every platform: the chat-first prototype's rules (docs/proposals/2026-09-29-chat-first-captain.md), not its pixels.
- *  Light only until a dark palette is reviewed. Type uses the platform's system fonts: Fraunces and Inter are not
+ *  R1b implements the light shell; the prototype also contains a dark reference. Type uses the platform's system fonts: Fraunces and Inter are not
  *  bundled because no licensed font files are in this repository. */
 export const colors = {
 	page: '#f1f5ee', // the light green-grey background

@@ -28,8 +28,8 @@ const has = (findings, pattern) => assert.ok(findings.some((f) => pattern.test(f
 test('the checked-in allowlist names no @captain/* package and holds the contract’s runtime set', () => {
 	for (const name of [...allowlist.dependencies, ...allowlist.devDependencies]) assert.ok(!name.startsWith('@captain/'), name);
 	for (const name of ['expo', 'react', 'react-native', 'expo-router', 'expo-linking', 'expo-constants', 'react-native-screens', 'react-native-safe-area-context',
-		'expo-dev-client', 'expo-web-browser', 'expo-secure-store', 'expo-crypto']) assert.ok(allowlist.dependencies.has(name), name);
-	for (const name of ['@react-native-async-storage/async-storage', 'react-native-gesture-handler', 'react-native-reanimated', 'expo-notifications', '@sentry/react-native', '@simplewebauthn/browser', 'jest-expo'])
+		'@simplewebauthn/browser', 'expo-dev-client', 'expo-web-browser', 'expo-secure-store', 'expo-crypto']) assert.ok(allowlist.dependencies.has(name), name);
+	for (const name of ['@react-native-async-storage/async-storage', 'react-native-gesture-handler', 'react-native-reanimated', 'expo-notifications', '@sentry/react-native', 'jest-expo'])
 		assert.ok(!allowlist.dependencies.has(name) && !allowlist.devDependencies.has(name), `${name} is excluded by the contract`);
 });
 

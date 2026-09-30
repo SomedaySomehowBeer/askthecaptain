@@ -20,7 +20,7 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
   // exactly at now can land in the fake clock's past).
   try { await page().clock.install(); } catch { /* already installed by an earlier suite */ }
   if (freeze) await page().clock.pauseAt(Date.now() + 1_000); else await page().clock.resume();
-  await scenario('ready', '/resources');
+  await scenario('ready', '/equipment');
   await expect(page().getByRole('heading', { name: 'Equipment schedule', exact: true })).toBeVisible();
   await expect(eq('loading')).toHaveText('Loading the schedule…'); await count(1);
   const url = await last(); expect(url.pathname).toMatch(orgPath); expect(url.search).toBe('');
@@ -56,8 +56,6 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  await eq('panel-close').click(); await expect(eq('panel')).toHaveCount(0);
  await eq('scale-hours').click(); await expect(eq('hatch').first()).toBeVisible(); await noOverflow('equipment at Hours');
  await eq('scale-days').click();
- await page().evaluate(() => { window.__opened = []; window.open = url => { window.__opened.push(String(url)); return null; }; });
- await eq('web').first().click(); expect(await page().evaluate(() => window.__opened)).toEqual(['https://app.example.invalid/resources/equipment']);
 
  // A conflict: the same reservation at the same revision with other details, read for another cell.
  await start(); await bootstrap(); await atLeast(3); await occupancy(); await answer('equipment-conflict-a');
@@ -82,7 +80,7 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
 
  // No-timeline states: empty, an unsupported zone, access refused, a failed bootstrap with Try again, and a wait.
  await start(); await bootstrap('equipment-ok', 'equipment-empty');
- await expect(eq('empty')).toContainText('No equipment is listed yet.'); await expect(eq('web')).toBeVisible();
+ await expect(eq('empty')).toContainText('No equipment is listed yet.'); await expect(eq('web')).toHaveCount(0);
  await start(); await answer('equipment-zone-bogus');
  await expect(eq('zone-unsupported')).toContainText("Times can't be shown in the business time zone on this device."); await expect(eq('refresh')).toBeEnabled();
  await count(1);
@@ -111,6 +109,8 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
  await start(); await bootstrap(); await expect(eq('zone')).toBeVisible();
  const epoch = (await log()).at(-1).epoch;
  await page().getByTestId('harness-transition-switch').click();
+ await expect(page().getByRole('heading', { name: 'Threads', exact: true })).toBeVisible();
+ await page().getByTestId('threads-pinned-equipment').click();
  await expect.poll(async () => (await log()).at(-1).epoch).not.toBe(epoch);
  await expect(page().getByText('Sample fermenter', { exact: true })).toHaveCount(0);
  console.log(`PASS ${width}px: Equipment schedule bootstrap order, one flight, never-free partial/conflict/failed cells, zone change, waits, More and stale scope suppression`);

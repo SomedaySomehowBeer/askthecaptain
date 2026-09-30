@@ -5,6 +5,7 @@ import { isSignedIn, threadsCopy, webCopy } from '../account/copy.ts';
 import { Calendar, ChevronRight, People } from '../components/Icons.tsx';
 import { Notice } from '../components/Notice.tsx';
 import { PlainScreen, Screen } from '../components/Screen.tsx';
+import Welcome from './welcome.tsx';
 import { colors, space, type } from '../theme/tokens.ts';
 
 /** `/`: the one list of threads (docs/proposals/2026-09-29-chat-first-captain.md "Navigation"), empty in this
@@ -17,13 +18,14 @@ export default function Home() {
 	if (account.kind === 'checking' || account.kind === 'starting') {
 		return <PlainScreen title="Captain" back={null}><Text testID="shell-checking" style={styles.body}>{webCopy.checking}</Text></PlainScreen>;
 	}
+	if (account.kind === 'unverified') return <Welcome />;
 	if (!isSignedIn(account)) return <Redirect href="/welcome" />;
 	if (account.org.kind !== 'chosen') return <Redirect href="/organisation" />;
 	return (
 		<Screen title={threadsCopy.heading}>
 			<View role="radiogroup" aria-label={threadsCopy.filterGroup} style={styles.filters}>
 				{threadsCopy.filters.map((filter, index) => (
-					<Pressable key={filter} testID={`threads-filter-${index}`} role="radio" aria-checked={index === 0} aria-label={filter}
+					<Pressable key={filter} testID={`threads-filter-${index}`} disabled aria-disabled role="radio" aria-checked={index === 0} aria-label={filter}
 						style={[styles.filter, index === 0 && styles.filterOn]}>
 						<Text style={[styles.filterText, index === 0 && styles.filterTextOn]}>{filter}</Text>
 					</Pressable>

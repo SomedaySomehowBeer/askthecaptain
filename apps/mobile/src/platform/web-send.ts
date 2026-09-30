@@ -23,7 +23,7 @@ export type UnderlyingWebFetch = (url: string, init: SendInit & { redirect: 'err
 export function createWebSend(underlying: UnderlyingWebFetch): Send {
 	return (url, init) => {
 		const headers: Record<string, string> = {};
-		for (const [name, value] of Object.entries(init.headers)) if (name.toLowerCase() !== 'authorization') headers[name] = value;
+		for (const [name, value] of Object.entries(init.headers)) if (name.toLowerCase() !== 'authorization' && name.toLowerCase() !== webClientHeader) headers[name] = value;
 		headers[webClientHeader] = webClientValue;
 		return underlying(url, { ...init, headers, redirect: 'error', credentials: 'include' });
 	};

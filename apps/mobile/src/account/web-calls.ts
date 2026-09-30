@@ -4,6 +4,7 @@
  *  hooks. Every parser is strict and never repeats a value; a body that does not fit is reported as unavailable. */
 import { apiPaths, googleStartPath, isCanonicalInstant } from '../api/paths.ts';
 import type { ApiClient, ApiOutcome } from '../auth/contracts.ts';
+import { callbackUrl } from '../auth/callback.ts';
 import { safeReturnPath } from '../lib/links.ts';
 import { parseMembership, type Membership } from './me.ts';
 import { isCanonicalUuid } from './session.ts';
@@ -25,9 +26,13 @@ export function parseStepUpOptions(value: unknown): { readonly options: unknown 
 }
 
 /** `POST /auth/passkey/verify` on the web: the API has set the session cookie; the app keeps only where to go next
- *  (`returnTo`, a same-origin path, else `/`). Any token in the body is dropped, never kept or repeated. */
-export function parseStepUpVerified(value: unknown): { readonly returnTo: string } {
-	if (!isRecord(value)) return refuse('step-up');
+ *  (`returnTo`, a same-origin path, else `/`). A bearer response is refused. Native mode accepts only the fixed one-time PKCE handoff. */
+export function parseStepUpVerified(value: unknown, native = false): { readonly returnTo: string } {
+	if (native) {
+		if (!isRecord(value) || !hasExactly(value, ['nativeHandoff', 'attempt']) || typeof value.nativeHandoff !== 'string' || !/^nh_[A-Za-z0-9_-]{43}$/.test(value.nativeHandoff) || typeof value.attempt !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(value.attempt)) return refuse('native step-up');
+		return Object.freeze({ returnTo: `${callbackUrl}?code=${value.nativeHandoff}&attempt=${value.attempt}` });
+	}
+	if (!isRecord(value) || !hasExactly(value, ['ok', 'expiresAt', 'user', 'returnTo']) || value.ok !== true || !isCanonicalInstant(value.expiresAt) || !isRecord(value.user) || !isCanonicalUuid(value.user.id)) return refuse('step-up');
 	const returnTo = safeReturnPath(value.returnTo);
 	return Object.freeze({ returnTo: returnTo === null || returnTo.startsWith('/auth/') ? '/' : returnTo });
 }
@@ -73,7 +78,7 @@ export type WebCalls = {
 	 *  `returnTo` is kept only as a same-origin path that is not a sign-in page; otherwise `/`. */
 	signInUrl(returnTo: string | null): string;
 	stepUpOptions(): Promise<ApiOutcome<{ readonly options: unknown }>>;
-	stepUpVerify(response: unknown): Promise<ApiOutcome<{ readonly returnTo: string }>>;
+	stepUpVerify(response: unknown, native?: boolean): Promise<ApiOutcome<{ readonly returnTo: string }>>;
 	passkeys(): Promise<ApiOutcome<PasskeyList>>;
 	acceptInvitation(token: string): Promise<AcceptOutcome>;
 };
@@ -85,6 +90,7 @@ export type WebCallHooks = {
 	readonly accountEpoch: () => string | null;
 	readonly accepted: (membership: Membership) => void;
 	readonly sessionEnded: () => void;
+	readonly reconcileMemberships?: () => void;
 };
 
 const unavailable = <T>(): ApiOutcome<T> => ({ ok: false, kind: 'unavailable', status: 0 });
@@ -102,8 +108,15 @@ export function createWebCalls(client: ApiClient, origin: string, hooks: WebCall
 		signInUrl: (returnTo: string | null) => `${origin}${googleStartPath}?return_to=${encodeURIComponent(returnPath(returnTo))}`,
 		// The step-up token is the `captain_stepup` cookie; the body carries nothing.
 		stepUpOptions: () => settle(() => client.post(apiPaths.passkeyOptions, null, {}, parseStepUpOptions)),
-		stepUpVerify: (response: unknown) => settle(() => client.post(apiPaths.passkeyVerify, null, { response }, parseStepUpVerified)),
-		passkeys: () => settle(() => client.get(apiPaths.passkeys, null, parsePasskeys)),
+		stepUpVerify: (response: unknown, native = false) => settle(() => client.post(apiPaths.passkeyVerify, null, { response }, value => parseStepUpVerified(value, native))),
+		async passkeys() {
+			const epoch = hooks.accountEpoch();
+			if (epoch === null) return unavailable<PasskeyList>();
+			const answer = await settle(() => client.get(apiPaths.passkeys, null, parsePasskeys));
+			if (hooks.accountEpoch() !== epoch) return unavailable<PasskeyList>();
+			if (!answer.ok && answer.kind === 'unauthorised') hooks.sessionEnded();
+			return answer;
+		},
 		async acceptInvitation(token: string): Promise<AcceptOutcome> {
 			const epoch = hooks.accountEpoch();
 			if (epoch === null || typeof token !== 'string' || token.length === 0 || token.length > 500) return { kind: 'stale' };
@@ -112,6 +125,7 @@ export function createWebCalls(client: ApiClient, origin: string, hooks: WebCall
 			if (answer.ok) { hooks.accepted(answer.value); return { kind: 'accepted', membership: answer.value }; }
 			if (answer.kind === 'unauthorised') { hooks.sessionEnded(); return { kind: 'signed-out' }; }
 			if (answer.kind === 'refused') return { kind: 'refused', status: answer.status, code: answer.code };
+			hooks.reconcileMemberships?.();
 			return { kind: 'unknown' };
 		}
 	});

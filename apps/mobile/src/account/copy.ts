@@ -356,6 +356,7 @@ export function revocationDisabled(view: RevocationView, now: number): string | 
 export function signedInNotices(account: SignedInView): readonly Line[] {
 	const lines: Line[] = [];
 	if (account.orgNotice !== null) lines.push({ title: 'Organisation', text: orgNoticeText(account.orgNotice) });
+	if (account.notice?.kind === 'refresh-unavailable') lines.push({ title: 'Connection unavailable', text: 'Captain could not check your session. Your last verified workspace is still shown. Try again when the connection returns.' });
 	if (account.notice?.kind === 'organisation-not-remembered') lines.push({ title: 'Organisation', text: organisationCopy.notRemembered });
 	return lines;
 }
@@ -498,7 +499,7 @@ export const signInErrors: Readonly<Record<string, string>> = Object.freeze({
 	request_invalid: 'That sign-in link had expired. Start again.',
 	google_failed: 'Google did not complete the sign-in. Try again.',
 	exchange_failed: 'The sign-in could not be finished. Try again.',
-	passkey_failed: 'The passkey could not be checked. Try again.',
+	passkey_failed: 'The passkey could not be checked. Start again from sign-in.',
 	native_sign_in_disabled: 'Signing in from the Captain app is not available on this Captain. Close this window to return to the app.'
 });
 
@@ -541,7 +542,7 @@ export function webWelcomePage(snapshot: AccountSnapshot, options: { readonly no
 		}
 		case 'releasing':
 			if (!account.canRetry) return plain(webCopy.signingOut, []);
-			return { heading: webCopy.signOutFailedHeading, body: [webCopy.signOutFailed], notices: errorNotice, signIn: false, retry: { disabled: null } };
+			return { heading: webCopy.signOutFailedHeading, body: [webCopy.signOutFailed], notices: errorNotice, signIn: false, retry: { disabled: waiting(account.wait, options.now) ? tryAgainAfter(account.wait!, format) : null } };
 		default:
 			// The native machine's other states never occur on the web; a neutral page if one ever did.
 			return plain(copy.captain, []);
@@ -560,7 +561,7 @@ export const stepUpCopy = {
 	unsupported: "This browser couldn't use a passkey.",
 	optionsFailed: "Captain couldn't start the passkey check. Start again from sign-in.",
 	expired: 'This sign-in has expired. Start again from sign-in.',
-	verifyFailed: 'The passkey could not be checked. Try again.',
+	verifyFailed: 'The passkey could not be checked. Start again from sign-in.',
 	startOver: 'Back to sign in',
 	done: 'Your passkey is confirmed. Opening Captain…',
 	native: 'Passkeys are confirmed in the browser while signing in. There is nothing to do here.'
@@ -602,7 +603,7 @@ export const threadsCopy = {
 	pinnedTeam: 'Team',
 	pinnedTeamDetail: 'Not in this version yet',
 	emptyTitle: 'No threads to show yet',
-	emptyBody: "This version doesn't read threads yet, so none are listed. Nothing is hidden. The equipment schedule above is live.",
+	emptyBody: "Threads are not available yet. You can open the equipment schedule above.",
 	search: 'Search',
 	searchHint: 'Not available yet',
 	account: 'Account and settings'

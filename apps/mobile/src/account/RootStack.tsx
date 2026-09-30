@@ -9,7 +9,7 @@ import { isReady, isSignedIn } from './copy.ts';
  *  production's src/app/_layout.tsx and by the harness layout, so the harness tests this code.
  *
  *  - Guards: `welcome` only when not signed in; `organisation` whenever signed in; the thread list, settings and the
- *    equipment schedule while signed in or still checking (so a page opened directly stays open while `/v1/me` is
+ *    equipment schedule while signed in, still checking, or unable to verify (so a page opened directly stays open while `/v1/me` is
  *    out, and shows the check in words). The step-up, invitation and refusal pages are outside the guards. Losing a
  *    guard drops the route: the router then shows the index, which redirects to where the account allows.
  *  - A new person or organisation while ready (a switch, a loss that auto-chose the one remaining membership), or
@@ -21,7 +21,7 @@ export function RootStack() {
 	const account = snapshot.account;
 	const pathname = usePathname();
 	const signedIn = isSignedIn(account); const ready = isReady(account);
-	const checking = account.kind === 'checking' || account.kind === 'starting';
+	const checking = account.kind === 'checking' || account.kind === 'starting' || account.kind === 'unverified';
 	const key = signedIn && account.org.kind === 'chosen' ? `${account.user.id}:${account.org.membership.organisationId}` : null;
 
 	const previous = useRef<{ key: string | null; ready: boolean }>({ key, ready });
@@ -44,7 +44,7 @@ export function RootStack() {
 			<Stack.Protected guard={!signedIn}>
 				<Stack.Screen name="welcome" />
 			</Stack.Protected>
-			<Stack.Protected guard={signedIn}>
+			<Stack.Protected guard={signedIn || checking}>
 				<Stack.Screen name="organisation" />
 			</Stack.Protected>
 			<Stack.Protected guard={signedIn || checking}>

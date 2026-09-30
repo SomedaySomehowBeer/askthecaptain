@@ -8,8 +8,7 @@
  *  for organisation reads.
  *
  *  - On start, `GET /v1/me`: 200 is signed in; 401 is signed out; anything else is unavailable, said as `unverified`
- *    with the wait until the next try. While signed in, a failed refresh changes nothing shown: the person stays where
- *    they are.
+ *    with the wait until the next try. While signed in, a failed refresh keeps the verified workspace and adds a connection notice.
  *  - `/v1/me` is paced as on device: never within 30 seconds of the last send (`refreshSpacingMs`), and never before
  *    a server's `Retry-After`. An unavailable first check tries again by itself when that wait ends; a foreground
  *    refresh or Try again before it is dropped. A successful invitation reloads memberships at once, since the
@@ -29,8 +28,7 @@ import type { ReadOutcome, ReadScope, ScopedRead } from './contracts.ts';
 import { refreshSpacingMs, slowAfterMs, type AccountSnapshot, type AccountView, type Notice, type OrgNotice } from './machine.ts';
 import { parseMe, type Me, type Membership } from './me.ts';
 import {
-	admit, idleRevocation, parseRevoked, resultOf, samePerson, sendingRevocation, settledRevocation, slowRevocation, staleOutcome, clientBugOutcome,
-	unknownResult, type PersonScope, type RevocationView, type RevokeOutcome
+	admit, idleRevocation, parseRevoked, resultOf, samePerson, sendingRevocation, settledRevocation, slowRevocation, staleOutcome, type PersonScope, type RevocationView, type RevokeOutcome
 } from './revocation.ts';
 import type { Timers, UiCommand } from './runner.ts';
 import { createWebCalls, type WebCalls } from './web-calls.ts';
@@ -78,6 +76,7 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 	// Pacing for `/v1/me`: when the last one was sent, the server's wait, and whether one is out.
 	let lastMeSent: number | null = null; let meWait: Wait | null = null; let meInFlight = false;
 	let retryTimer: unknown = null;
+	let started = false; let meRevision = 0; let reloadMemberships = false; let signOutWait: Wait | null = null;
 	let snapshot: AccountSnapshot | null = null;
 	const listeners = new Set<() => void>();
 	const notify = () => { for (const listener of [...listeners]) { try { listener(); } catch { /* a screen's error is its own */ } } };
@@ -126,7 +125,7 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 				else org = { kind: 'choose' };
 				if (current !== null && org.kind !== 'chosen') memory.forget(me.user.id);
 			}
-			set({ kind: 'signed-in', me, org, refreshing: false, notice: state.notice, orgNotice });
+			set({ kind: 'signed-in', me, org, refreshing: false, notice: state.notice?.kind === 'refresh-unavailable' ? null : state.notice, orgNotice });
 			return;
 		}
 		// A new sign-in (or another person than before): a new account and organisation generation.
@@ -143,18 +142,20 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 	const scheduleRetry = () => {
 		if (retryTimer !== null) { timers.clear(retryTimer); retryTimer = null; }
 		const wait = pacingWait(); const delay = wait === null ? 0 : remaining(wait, clock.now());
-		retryTimer = timers.set(delay, () => { retryTimer = null; if (state.kind === 'unavailable') loadMe(); });
+		retryTimer = timers.set(delay, () => { retryTimer = null; if (state.kind === 'signed-in' && reloadMemberships) loadMe(true); else if (state.kind === 'unavailable') loadMe(); });
 	};
 
 	const loadMe = (ignoreSpacing = false) => {
-		if (!mayLoadMe(ignoreSpacing)) return;
+		if (!mayLoadMe(ignoreSpacing)) { if (ignoreSpacing) { reloadMemberships = true; if (!meInFlight) scheduleRetry(); } return; }
+		reloadMemberships = false;
 		meInFlight = true; lastMeSent = clock.now();
 		if (state.kind === 'unavailable') set({ kind: 'unavailable', retrying: true });
 		else if (state.kind === 'signed-in') set({ ...state, refreshing: true });
-		const sentFor = generations.account;
+		const sentFor = generations.account; const revision = meRevision;
 		void client.get(apiPaths.me, null, parseMe).catch((): ApiOutcome<Me> => ({ ok: false, kind: 'unavailable', status: 0 })).then((answer) => {
 			meInFlight = false;
-			if (sentFor !== generations.account && state.kind !== 'checking' && state.kind !== 'unavailable') return; // signed out meanwhile
+			if (sentFor !== generations.account) return;
+			if (revision !== meRevision) { if (reloadMemberships) loadMe(true); return; }
 			if (answer.ok) { meWait = null; applyMe(answer.value); return; }
 			if (answer.kind === 'unauthorised') {
 				if (state.kind === 'signed-in' || state.kind === 'signing-out' || state.kind === 'sign-out-failed') sessionEnded();
@@ -162,13 +163,15 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 				return;
 			}
 			meWait = answer.kind === 'unavailable' && answer.retryAfter !== undefined ? waitFor(answer.retryAfter * 1000, clock, wallNow) : null;
-			if (state.kind === 'signed-in') { set({ ...state, refreshing: false }); return; }
+			if (state.kind === 'signed-in') { set({ ...state, refreshing: false, notice: { kind: 'refresh-unavailable' } }); return; }
 			if (state.kind === 'checking' || state.kind === 'unavailable') { set({ kind: 'unavailable', retrying: false }); scheduleRetry(); }
 		});
 	};
 
 	const signOut = () => {
 		if (state.kind !== 'signed-in' && state.kind !== 'sign-out-failed') return;
+		if (remaining(signOutWait, clock.now()) > 0) return;
+		generations.account += 1; generations.organisation += 1;
 		set({ kind: 'signing-out' });
 		const sentFor = generations.account;
 		void client.post(apiPaths.signOut, null, {}, (value) => value).catch((): ApiOutcome<unknown> => ({ ok: false, kind: 'unavailable', status: 0 })).then((answer) => {
@@ -178,6 +181,7 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 				set({ kind: 'signed-out', notice: { kind: 'released', reason: 'sign-out', local: 'deleted', server: 'ended' } });
 				return;
 			}
+			signOutWait = answer.kind === 'unavailable' && answer.retryAfter !== undefined ? waitFor(answer.retryAfter * 1000, clock, wallNow) : null;
 			set({ kind: 'sign-out-failed' });
 		});
 	};
@@ -195,6 +199,7 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 	/** A membership the person just accepted: chosen at once, then memberships reloaded. */
 	const accepted = (membership: Membership) => {
 		if (state.kind !== 'signed-in') return;
+		meRevision += 1;
 		const others = state.me.memberships.filter((m) => m.organisationId !== membership.organisationId);
 		const me: Me = Object.freeze({ ...state.me, memberships: Object.freeze([...others, membership]) });
 		generations.organisation += 1;
@@ -211,7 +216,7 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 		try { target = path(current!); } catch { return clientBug; }
 		let answer: ApiOutcome<T>;
 		try { answer = await client.get(target, null, parse); } catch { return clientBug; }
-		if (!answer.ok && answer.kind === 'unauthorised') { if (sameScope(scope(), expected)) sessionEnded(); return superseded; }
+		if (!answer.ok && answer.kind === 'unauthorised') { if (person()?.userId === expected.userId && expected.epoch.startsWith(`${person()!.epoch}.`)) sessionEnded(); return superseded; }
 		if (!sameScope(scope(), expected)) return superseded;
 		if (answer.ok) return { kind: 'ok', value: answer.value };
 		if (answer.kind === 'refused') { if (answer.status === 403 || answer.status === 404) loadMe(); return { kind: 'refused', status: answer.status }; }
@@ -219,7 +224,7 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 	};
 
 	// Sign out everywhere else, with the runner's rules (revocation.ts).
-	let revocationFor: PersonScope | null = null; let revocation: RevocationView = idleRevocation; let slowTimer: unknown = null;
+	let revocationFor: PersonScope | null = null; let revocation: RevocationView = idleRevocation;
 	const revocationView = (): RevocationView => (samePerson(revocationFor, person()) ? revocation : idleRevocation);
 	const setRevocation = (view: RevocationView) => { if (view === revocation) return; revocation = view; notify(); };
 	const revokeOthers = async (expected: PersonScope): Promise<RevokeOutcome> => {
@@ -229,10 +234,10 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 		const refusal = admit(revocation, clock.now());
 		if (refusal !== null) return refusal;
 		setRevocation(sendingRevocation);
-		slowTimer = timers.set(slowAfterMs, () => { slowTimer = null; setRevocation(slowRevocation(revocation)); });
+		const slowTimer = timers.set(slowAfterMs, () => { if (samePerson(person(), expected)) setRevocation(slowRevocation(revocation)); });
 		let answer: ApiOutcome<{ readonly ended: number }>;
 		try { answer = await client.post(apiPaths.revokeOthers, null, {}, parseRevoked); } catch { answer = { ok: false, kind: 'unavailable', status: 0 }; }
-		if (slowTimer !== null) { timers.clear(slowTimer); slowTimer = null; }
+		timers.clear(slowTimer);
 		if (!samePerson(person(), expected)) { return staleOutcome; }
 		const result = resultOf(answer, (seconds) => waitFor(seconds * 1000, clock, wallNow));
 		if (result === 'unauthorised') { revocation = idleRevocation; sessionEnded(); return staleOutcome; }
@@ -246,7 +251,7 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 			case 'unavailable': return { kind: 'unverified', retrying: state.retrying, wait: pacingWait() };
 			case 'signed-out': return { kind: 'signed-out', notice: state.notice, gate: 'idle' };
 			case 'signing-out': return { kind: 'releasing', reason: 'sign-out', local: 'deleted', server: 'revoking', wait: null, slow: false, closeAppWarning: false, canRetry: false };
-			case 'sign-out-failed': return { kind: 'releasing', reason: 'sign-out', local: 'deleted', server: 'pending', wait: null, slow: false, closeAppWarning: false, canRetry: true };
+			case 'sign-out-failed': return { kind: 'releasing', reason: 'sign-out', local: 'deleted', server: 'pending', wait: signOutWait, slow: false, closeAppWarning: false, canRetry: true };
 			case 'signed-in': return {
 				kind: 'signed-in', user: state.me.user, memberships: state.me.memberships,
 				org: state.org.kind === 'chosen' ? { kind: 'chosen', membership: state.org.membership } : { kind: state.org.kind },
@@ -256,10 +261,10 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 		}
 	};
 
-	const web: WebCalls = createWebCalls(client, deps.origin, { accountEpoch, accepted, sessionEnded });
+	const web: WebCalls = createWebCalls(client, deps.origin, { accountEpoch, accepted, sessionEnded, reconcileMemberships: () => { meRevision += 1; loadMe(true); } });
 
 	return Object.freeze({
-		start() { loadMe(true); },
+		start() { if (!started) { started = true; loadMe(true); } },
 		subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
 		snapshot(): AccountSnapshot {
 			snapshot ??= Object.freeze({ account: Object.freeze(view()), signInOffered: state.kind === 'signed-out', fault: false, strays: Object.freeze([]) });

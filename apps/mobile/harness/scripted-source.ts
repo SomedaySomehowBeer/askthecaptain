@@ -78,7 +78,7 @@ const signedIn = (overrides: Partial<Extract<AccountView, { kind: 'signed-in' }>
 function scenario(name: ScenarioName, wait: Wait): AccountSnapshot {
 	switch (name) {
 		case 'ready': return snap(signedIn());
-		case 'ready-destination': return snap(signedIn({ destination: '/chat/views' }));
+		case 'ready-destination': return snap(signedIn({ destination: '/equipment' }));
 		case 'web-only': return outsideSnapshots.webOnly;
 		case 'misconfigured': return outsideSnapshots.misconfigured;
 		case 'starting': return outsideSnapshots.starting;

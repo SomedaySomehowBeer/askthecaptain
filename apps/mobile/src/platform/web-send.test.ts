@@ -19,7 +19,7 @@ test('cookies are included, the web client header is set and redirects refused; 
 	const { underlying, calls } = recording();
 	const send = createWebSend(underlying);
 	const signal = new AbortController().signal;
-	await send(`${origin}/v1/me`, { method: 'GET', headers: { accept: 'application/json', 'x-captain-client': 'native' }, redirect: 'follow' as 'error', credentials: 'omit', signal } as Parameters<typeof send>[1]);
+	await send(`${origin}/v1/me`, { method: 'GET', headers: { accept: 'application/json', 'x-captain-client': 'native', 'X-Captain-Client': 'other' }, redirect: 'follow' as 'error', credentials: 'omit', signal } as Parameters<typeof send>[1]);
 	await send(`${origin}/auth/sign-out`, { method: 'POST', headers: { accept: 'application/json' }, body: '{}', redirect: 'error', signal });
 	assert.equal(calls.length, 2);
 	for (const call of calls) {

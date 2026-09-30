@@ -7,6 +7,7 @@ import type { PasskeyList } from '../account/web-calls.ts';
 import { Actions, Button, Lines, RevokeOthers, useWaitWake } from '../components/AccountPage.tsx';
 import { Notice } from '../components/Notice.tsx';
 import { PlainScreen } from '../components/Screen.tsx';
+import Welcome from './welcome.tsx';
 import { colors, type } from '../theme/tokens.ts';
 
 /** Account, opened from the avatar (docs/plans/expo-web-session-2026-09.md §B.2): who you are, Switch organisation,
@@ -21,8 +22,9 @@ export default function Settings() {
 	if (view.kind === 'checking' || view.kind === 'starting') {
 		return <PlainScreen title={accountCopy.heading} back={{ label: 'Back', onPress: back }}><Text style={styles.muted}>{webCopy.checking}</Text></PlainScreen>;
 	}
-	if (!isSignedIn(view) || view.org.kind !== 'chosen') return null; // the guard removes this route
-	const membership = view.org.membership;
+	if (view.kind === 'unverified') return <Welcome />;
+	if (!isSignedIn(view)) return null;
+	const membership = view.org.kind === 'chosen' ? view.org.membership : null;
 	const faults = faultLines(account.snapshot);
 	const notices = [...signedInNotices(view), ...(faults.length > 0 ? [{ title: 'Unexpected problem', text: faults.join(' ') }] : [])];
 	return (
@@ -32,14 +34,14 @@ export default function Settings() {
 				<View accessible style={styles.card}>
 					<Text style={styles.name}>{view.user.name || view.user.email}</Text>
 					{view.user.name ? <Text style={styles.muted}>{view.user.email}</Text> : null}
-					<Text testID="account-organisation" style={styles.org}>{membership.organisationName}</Text>
-					<Text style={styles.muted}>{roleLabel(membership)}</Text>
+					<Text testID="account-organisation" style={styles.org}>{membership?.organisationName ?? 'No organisation selected'}</Text>
+					<Text style={styles.muted}>{membership === null ? '' : roleLabel(membership)}</Text>
 				</View>
 				<Lines body={[]} notices={notices} />
 				<Button testID="account-action-switch" label={accountCopy.switch} onPress={() => router.push('/organisation')} />
 				<Actions actions={[{ kind: 'sign-out', id: 'sign-out', label: 'Sign out', primary: false }]} account={account} />
 				<RevokeOthers account={account} />
-				<Passkeys account={account} personEpoch={view.person.epoch} />
+				<Passkeys key={view.person.epoch} account={account} personEpoch={view.person.epoch} />
 			</View>
 		</PlainScreen>
 	);

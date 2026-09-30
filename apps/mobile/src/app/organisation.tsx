@@ -4,6 +4,7 @@ import { useAccount } from '../account/AccountProvider.tsx';
 import { faultLines, isSignedIn, organisationCopy, roleLabel, signedInNotices, type Action } from '../account/copy.ts';
 import { AccountPageFrame, Actions, Lines, useWaitWake } from '../components/AccountPage.tsx';
 import { PlainScreen } from '../components/Screen.tsx';
+import Welcome from './welcome.tsx';
 import { colors, space, type } from '../theme/tokens.ts';
 
 /** Choosing an organisation (docs/plans/expo-mobile-auth-composition-2026-09.md §4.4): the chooser while signed in but
@@ -14,7 +15,7 @@ export default function Organisation() {
 	const account = useAccount();
 	useWaitWake(account);
 	const view = account.snapshot.account;
-	if (!isSignedIn(view)) return null; // the guard removes this route; nothing to show in between
+	if (!isSignedIn(view)) return <Welcome />; // the guard removes this route; nothing to show in between
 	const current = view.org.kind === 'chosen' ? view.org.membership.organisationId : null;
 	const faults = faultLines(account.snapshot);
 	const notices = [...signedInNotices(view), ...(faults.length > 0 ? [{ title: 'Unexpected problem', text: faults.join(' ') }] : [])];
