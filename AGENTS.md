@@ -87,8 +87,9 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 
 The Expo shell is application code in `apps/mobile` (merged #188). The Next.js app (`apps/web`) and
 `packages/ui` are retired in R1; logo, icon and splash assets move to `apps/mobile`. The earlier
-client proof under `docs/proposals/assets/captain-client-proof-2026-09-23` was a fictional harness
-outside the pnpm workspace, retired in R0.
+client proof under `docs/proposals/assets/captain-client-proof-2026-09-23` was a standalone,
+fictional harness outside the pnpm workspace, not application code. It and its `client-proof`
+workflow were retired in R0 (#215) and live only in git history.
 
 - Migrations are hand-written SQL, numbered, never edited after merge. One migration per pull
   request. Drizzle describes the schema; SQL is what runs.

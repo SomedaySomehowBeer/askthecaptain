@@ -80,7 +80,7 @@ assignment above.
 - A valid tab route the app was opened at is kept for that process. It is the sign-in `returnTo`, and it is opened once
   when a restored saved session becomes ready.
 - All 185 mobile tests, four exports, boundary scans and browser checks at 360/390/430 px pass; see
-  the [validation record](../validation/mobile-account-composition-2026-09-27/README.md).
+  the validation record (validation record removed in the chat-first rebuild; see git history).
 
 The [first My work read contract](expo-mobile-my-work-read-2026-09.md) was adopted in #198 after
 independent review.
@@ -109,7 +109,7 @@ installed-app evidence.
 - **Review:** A reviewed the parser and path code and wrote the runner and machine regression tests. Root owns the
   parser, the browser checks and integration. All 218 mobile tests pass (zero skipped), all ten workspace checks pass, and all four exports and scans pass.
   Browser checks at 360/390/430 px and Expo SDK compatibility pass; see the
-  [validation record](../validation/mobile-my-work-read-2026-09-27/README.md).
+  validation record (validation record removed in the chat-first rebuild; see git history).
 - **Remaining:**
   - other reads, and all writes;
   - native transport buffering/cancellation evidence (the response byte budget is implemented in #202);
@@ -134,7 +134,7 @@ after independent review and green CI; see its [validation record](../validation
     route and the harness fixtures by view, with tests;
   - Codex: the All tasks browser check;
   - peer reviews done.
-- Tests, exports and browser checks passed; see the [validation record](../validation/mobile-all-tasks-read-2026-09-27/README.md).
+- Tests, exports and browser checks passed; see the validation record (validation record removed in the chat-first rebuild; see git history).
   Native, simulator and device evidence remain unavailable; native sign-in stays off.
 
 Completed ownership:
@@ -231,7 +231,7 @@ is complete merely because a draft or agent state is ready.
 ### Native navigation implementation
 
 The source changes and reciprocal review are complete; validation and remaining device gates are
-recorded in [the evidence](../validation/mobile-native-navigation-2026-09-27/README.md). Native initial
+recorded in the evidence (validation record removed in the chat-first rebuild; see git history). Native initial
 routes, fresh reset state and app-initiated tab entry share one platform decision. Web history keeps
 its previous behaviour. L1/L2 remain open; native sign-in stays off.
 
@@ -245,7 +245,7 @@ phone widths. Neither merge deployed or enabled native sign-in.
 The web control merged in #206 and the mobile control in #207 after independent review and green CI.
 Web validation includes 141 tests and real two-session browser acceptance. Mobile validation includes
 276 tests, four exports/scans and the complete synthetic browser suite at 360/390/430 px.
-[Web evidence](../validation/session-revocation-web-2026-09-27/README.md) and
+Web evidence (validation record removed in the chat-first rebuild; see git history) and
 [mobile evidence](../validation/session-revocation-mobile-2026-09-27/README.md) distinguish these
 checks from native acceptance. Any staging release is recorded separately in the runbook.
 
@@ -257,7 +257,7 @@ units, and links to the website for changes. It adds no schema, dependency, serv
 business write. The stock API is unpaginated; the response budget and list virtualisation bound
 this initial client. Implementation merged in #210 after independent reviews and all three CI jobs passed.
 Local validation passed 289 mobile tests, ten workspace checks, four exports/scans and the complete
-browser suite at 360/390/430 px; [evidence](../validation/mobile-inventory-read-2026-09-27/README.md).
+browser suite at 360/390/430 px; evidence (validation record removed in the chat-first rebuild; see git history).
 The ownership below is completed. No native enablement or deployment accompanied the merge.
 
 - Codex owns the pure parser and fixed API path, tests, fixture bodies, browser checks and integration.
@@ -298,5 +298,5 @@ Codex exhausted its usage allowance on 27 September and is unavailable until 4 O
 (git, serial validation, integration, PRs, CI, docs) in the meantime and reassigned the two state modules Codex had
 owned. Validation is recorded in [the E-1 evidence](../validation/mobile-equipment-data-2026-09-28/README.md). E-2
 (hooks, `/resources` screen, copy, `webPaths`, harness fixtures and browser checks) followed in #213 after two design
-reviews, an independent code review and browser evidence; see [the E-2 evidence](../validation/mobile-equipment-ui-2026-09-28/README.md).
+reviews, an independent code review and browser evidence; see the E-2 evidence (validation record removed in the chat-first rebuild; see git history).
 Native sign-in stays off; no device, simulator or signed-build evidence exists.

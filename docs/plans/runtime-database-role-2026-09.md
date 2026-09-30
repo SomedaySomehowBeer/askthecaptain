@@ -92,7 +92,7 @@ this repair. No customer content is reset, deleted, or converted.
    remain referenced by historical policies and infrastructure state; do not destroy it blindly.
    Resetting its password through the Neon control plane also requires reconciling the existing
    Terraform-managed credential state as an owner operation. The manual-only
-   `.github/workflows/retire-elevated-runtime.yml` implements that authorised step for the fixed
+   `.github/workflows/retire-elevated-runtime.yml` (removed in the chat-first rebuild, R0, after its 26 September run; see git history) implemented that authorised step for the fixed
    project and role: check identity/readiness, reset once, wait for Neon operations, prove the old
    password is rejected and refresh only the password in state. A rejected-password baseline
    skips the reset on resume. It rejects managed infrastructure
@@ -106,7 +106,7 @@ this repair. No customer content is reset, deleted, or converted.
    legacy URL too. Both are sensitive values in the Tigris state bucket, and neither is a runtime login.
    Retirement invalidates the distributed credential, not the role’s ability to sign in.
    The role-only refresh can leave the dependent URL output stale. The separate manual
-   `.github/workflows/reconcile-retired-output.yml` (#167) repairs that output from existing state:
+   `.github/workflows/reconcile-retired-output.yml` (#167; removed in the chat-first rebuild, R0, after its 26 September run) repaired that output from existing state:
    refresh off, all three referenced resources must be no-ops, and only that sensitive output may
    change to the independently derived value. Before/after comparisons protect resource values,
    credentials, lineage and other outputs, allowing only the expected role dependency restoration.

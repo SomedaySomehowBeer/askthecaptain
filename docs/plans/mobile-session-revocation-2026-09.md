@@ -3,7 +3,7 @@
 Status: all three increments merged after independent review and green CI, 27 September 2026.
 Outcome: **manage shared work** through secure account access. Both Claude Opus agents and root
 reviewed the work. Separate evidence covers the [API #204](../validation/session-revocation-api-2026-09-27/README.md),
-[web #206](../validation/session-revocation-web-2026-09-27/README.md), and
+web #206 (validation record removed in the chat-first rebuild; see git history), and
 [mobile #207](../validation/session-revocation-mobile-2026-09-27/README.md).
 
 It implements foundation §4 "Remote revocation" and §9 step 6 (#178) at the foundation's small scope: **end the
@@ -444,4 +444,4 @@ is claimed.
 
 ## Implementation status — 27 September 2026
 
-All three increments are merged after independent review and green CI: API #204, web #206, mobile #207. See the separate [web](../validation/session-revocation-web-2026-09-27/README.md) and [mobile](../validation/session-revocation-mobile-2026-09-27/README.md) evidence. Any staging release is recorded in [the runbook](../runbooks/paused.md); these source merges do not establish native enablement or device acceptance.
+All three increments are merged after independent review and green CI: API #204, web #206, mobile #207. See the separate web (validation record removed in the chat-first rebuild; see git history) and [mobile](../validation/session-revocation-mobile-2026-09-27/README.md) evidence. Any staging release is recorded in [the runbook](../runbooks/paused.md); these source merges do not establish native enablement or device acceptance.
