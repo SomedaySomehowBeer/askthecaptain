@@ -20,6 +20,7 @@ export const apiPaths = {
 	passkeyVerify: '/auth/passkey/verify',
 	/** The person's registered passkeys (GET, signed in). */
 	passkeys: '/v1/me/passkeys',
+	passkeyRegistrationOptions: '/v1/me/passkeys/options',
 	/** Accepts an invitation the signed-in person was sent (POST `{ token }`, signed in). */
 	acceptInvitation: '/v1/invitations/accept'
 } as const;
@@ -33,7 +34,7 @@ export const nativeStartPath = googleStartPath;
 declare const organisationPathBrand: unique symbol;
 /** A path under one organisation. Only organisationPath and the fixed equipment query builders make these. */
 export type OrganisationPath = string & { readonly [organisationPathBrand]: true };
-export type ApiPath = FixedApiPath | OrganisationPath;
+export type ApiPath = FixedApiPath | OrganisationPath | PasskeyPath;
 
 const canonicalUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const maxSegmentLength = 200;
@@ -115,4 +116,11 @@ export function occupancyPath(scope: ScopeIds, equipmentId: string, span: Occupa
 	if (low < apiEarliestInstant || high >= apiLatestInstant || high <= low || high - low > maxOccupancyWindowMs)
 		throw new TypeError('occupancy path: the window is outside the API bounds');
 	return `${organisationPath(scope.organisationId, 'equipment', equipmentId, 'reservations')}?from=${from}&to=${to}&limit=${occupancyPageSize}` as OrganisationPath;
+}
+
+/** A person-owned passkey, never a server-supplied URL. */
+export type PasskeyPath = `/v1/me/passkeys/${string}`;
+export function passkeyPath(id: string): PasskeyPath {
+	if (!isCanonicalUuid(id)) throw new TypeError('passkey path: invalid ID');
+	return `/v1/me/passkeys/${id}`;
 }

@@ -104,6 +104,7 @@ export type Parse<T> = (value: unknown) => T;
  *  `redirect: 'error'` (not claimed to protect the bearer on native until the device check passes). The token is
  *  passed per request by the account runner, so the client holds none. No request is retried automatically. */
 export type ApiClient = {
+	delete<T>(path: ApiPath, token: string | null, parse: Parse<T>): Promise<ApiOutcome<T>>;
 	get<T>(path: ApiPath, token: string | null, parse: Parse<T>): Promise<ApiOutcome<T>>;
 	post<T>(path: ApiPath, token: string | null, body: unknown, parse: Parse<T>): Promise<ApiOutcome<T>>;
 };

@@ -16,7 +16,7 @@ function harness(remembered: string | null = null) {
  const request = <T>(path: string, token: string | null, parse: Parse<T>, body?: unknown): Promise<ApiOutcome<T>> => new Promise(resolve => {
   calls.push({ path, token, body, answer(value) { try { resolve({ ok: true, value: parse(value) }); } catch { resolve({ ok: false, kind: 'unavailable', status: 200 }); } }, fail: resolve });
  });
- const client: ApiClient = { get: (path, token, parse) => request(path, token, parse), post: (path, token, body, parse) => request(path, token, parse, body) };
+ const client: ApiClient = { delete: async () => ({ ok: false, kind: 'unavailable', status: 0 }), get: (path, token, parse) => request(path, token, parse), post: (path, token, body, parse) => request(path, token, parse, body) };
  const writes: string[][] = [];
  const source = createWebSession({ client, origin: 'https://captain.example.test', memory: { read: () => remembered, write: (u, o) => { writes.push([u, o]); return true; }, forget: () => {} }, monotonicNow: () => now, wallNow: () => 1_800_000_000_000 + now, timers: { set: (ms, run) => { const id = ++nextTimer; timers.set(id, { at: now + ms, run }); return id; }, clear: id => { timers.delete(id as number); } } });
  return { source, calls, writes, view: () => source.snapshot().account, async tick(ms: number) { now += ms; for (const [id, timer] of [...timers]) if (timer.at <= now) { timers.delete(id); timer.run(); } await flush(); }, async signedIn(memberships = [a]) { source.start(); calls[0]!.answer(me(memberships)); await flush(); } };

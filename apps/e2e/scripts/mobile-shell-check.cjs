@@ -101,6 +101,7 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
     identity = 'signed-out'; await go('/auth/passkey'); await expect(heading('Account')).toBeVisible(); expect(assertion?.response?.signature).toBeTruthy(); await cdp.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId }); await cdp.detach();
     // Retain deeper read-only timeline and revocation UI regression checks at phone widths.
     if (width < 500) {
+     await require('./mobile-shell-passkeys-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-revocation-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
      await require('./mobile-shell-equipment-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
     }

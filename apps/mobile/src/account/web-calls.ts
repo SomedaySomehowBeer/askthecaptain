@@ -1,8 +1,8 @@
 /** The web-only requests the account source makes for its screens (docs/plans/expo-web-session-2026-09.md §B.2):
- *  the passkey step-up, the passkeys list and accepting an invitation. Pure over the injected API client (token-free:
- *  on the web the cookie is the session), so node tests use fakes; src/account/web-session.ts builds it with its own
+ *  the passkey step-up, passkey management and accepting an invitation. Pure over the injected API client (no session
+ *  token: on the web the cookie is the session), so node tests use fakes; src/account/web-session.ts builds it with its own
  *  hooks. Every parser is strict and never repeats a value; a body that does not fit is reported as unavailable. */
-import { apiPaths, googleStartPath, isCanonicalInstant } from '../api/paths.ts';
+import { apiPaths, googleStartPath, isCanonicalInstant, passkeyPath } from '../api/paths.ts';
 import type { ApiClient, ApiOutcome } from '../auth/contracts.ts';
 import { callbackUrl } from '../auth/callback.ts';
 import { safeReturnPath } from '../lib/links.ts';
@@ -73,6 +73,20 @@ export type AcceptOutcome =
 	| { readonly kind: 'unknown' }
 	| { readonly kind: 'stale' };
 
+export type PasskeyMutation =
+	| { readonly kind: 'done' } | { readonly kind: 'stale' }
+	| { readonly kind: 'browser'; readonly reason: 'dismissed' | 'exists' | 'unsupported' }
+	| { readonly kind: 'failed'; readonly uncertain: boolean; readonly retryAfter: number; readonly code: string };
+
+/** Registration challenge only, never a session token. Kept inside the call, not UI state or storage. */
+export function parseRegistration(value: unknown): { token: string; options: unknown } {
+	if (!isRecord(value) || !hasExactly(value, ['token', 'options']) || typeof value.token !== 'string' || !/^pkr_[A-Za-z0-9_-]{43}$/.test(value.token) || !isRecord(value.options)) return refuse('registration');
+	return { token: value.token, options: value.options };
+}
+const parseRemoved = (value: unknown): true => {
+	if (!isRecord(value) || !hasExactly(value, ['ok']) || value.ok !== true) return refuse('removed passkey');
+	return true;
+};
 export type WebCalls = {
 	/** The one sign-in link (§B.2): `{origin}/auth/google/start?return_to={path}`, a plain navigation in the same tab.
 	 *  `returnTo` is kept only as a same-origin path that is not a sign-in page; otherwise `/`. */
@@ -80,6 +94,8 @@ export type WebCalls = {
 	stepUpOptions(): Promise<ApiOutcome<{ readonly options: unknown }>>;
 	stepUpVerify(response: unknown, native?: boolean): Promise<ApiOutcome<{ readonly returnTo: string }>>;
 	passkeys(): Promise<ApiOutcome<PasskeyList>>;
+	addPasskey(name: string, create: (options: unknown) => Promise<unknown>, active: () => boolean): Promise<PasskeyMutation>;
+	removePasskey(id: string): Promise<PasskeyMutation>;
 	acceptInvitation(token: string): Promise<AcceptOutcome>;
 };
 
@@ -104,7 +120,35 @@ export function returnPath(candidate: string | null): string {
 }
 
 export function createWebCalls(client: ApiClient, origin: string, hooks: WebCallHooks): WebCalls {
+	const mutation = (answer: ApiOutcome<unknown>, write: boolean): PasskeyMutation => {
+		if (answer.ok) return { kind: 'done' };
+		if (answer.kind === 'unauthorised') { hooks.sessionEnded(); return { kind: 'stale' }; }
+		return { kind: 'failed', uncertain: write && answer.kind === 'unavailable', retryAfter: answer.kind === 'unavailable' ? answer.retryAfter ?? 0 : 0, code: answer.kind === 'refused' ? answer.code : 'unavailable' };
+	};
 	return Object.freeze({
+		async addPasskey(name: string, create: (options: unknown) => Promise<unknown>, active: () => boolean): Promise<PasskeyMutation> {
+			const epoch = hooks.accountEpoch();
+			const current = () => epoch !== null && hooks.accountEpoch() === epoch && active();
+			if (!current()) return { kind: 'stale' };
+			const options = await settle(() => client.post(apiPaths.passkeyRegistrationOptions, null, {}, parseRegistration));
+			if (!current()) return { kind: 'stale' };
+			if (!options.ok) return mutation(options, false);
+			let response: unknown;
+			try { response = await create(options.value.options); }
+			catch (error) {
+				if (!current()) return { kind: 'stale' };
+				return { kind: 'browser', reason: error instanceof Error && error.name === 'NotAllowedError' ? 'dismissed' : error instanceof Error && error.name === 'InvalidStateError' ? 'exists' : 'unsupported' };
+			}
+			if (!current()) return { kind: 'stale' };
+			const answer = await settle(() => client.post(apiPaths.passkeys, null, { token: options.value.token, name: name.trim().slice(0, 60), response }, value => parsePasskeys({ available: true, passkeys: [value] })));
+			return current() ? mutation(answer, true) : { kind: 'stale' };
+		},
+		async removePasskey(id: string): Promise<PasskeyMutation> {
+			const epoch = hooks.accountEpoch();
+			if (epoch === null) return { kind: 'stale' };
+			const answer = await settle(() => client.delete(passkeyPath(id), null, parseRemoved));
+			return hooks.accountEpoch() === epoch ? mutation(answer, true) : { kind: 'stale' };
+		},
 		signInUrl: (returnTo: string | null) => `${origin}${googleStartPath}?return_to=${encodeURIComponent(returnPath(returnTo))}`,
 		// The step-up token is the `captain_stepup` cookie; the body carries nothing.
 		stepUpOptions: () => settle(() => client.post(apiPaths.passkeyOptions, null, {}, parseStepUpOptions)),

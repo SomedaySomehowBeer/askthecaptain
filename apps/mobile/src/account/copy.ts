@@ -288,7 +288,6 @@ export const accountCopy = {
 	passkeysUnavailable: "Passkeys aren't available on this Captain.",
 	passkeysFailed: "Couldn't load your passkeys.",
 	passkeysNative: 'This version lists passkeys in the browser only.',
-	passkeysManage: 'Adding and removing passkeys comes in a later version.',
 	synced: 'synced passkey',
 	thisDevice: 'this device only',
 	notUsed: 'not used yet',

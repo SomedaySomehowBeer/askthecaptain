@@ -8,7 +8,7 @@ const me = '0190c0de-0000-7000-8000-000000000001';
 test('the fixed paths are the routes the app calls, and the start path is separate', () => {
 	assert.deepEqual(apiPaths, {
 		me: '/v1/me', nativeExchange: '/auth/native/exchange', signOut: '/auth/sign-out', revokeOthers: '/v1/me/sessions/revoke-others',
-		passkeyOptions: '/auth/passkey/options', passkeyVerify: '/auth/passkey/verify', passkeys: '/v1/me/passkeys', acceptInvitation: '/v1/invitations/accept'
+		passkeyOptions: '/auth/passkey/options', passkeyVerify: '/auth/passkey/verify', passkeys: '/v1/me/passkeys', passkeyRegistrationOptions: '/v1/me/passkeys/options', acceptInvitation: '/v1/invitations/accept'
 	});
 	assert.equal(nativeStartPath, '/auth/google/start'); assert.equal(googleStartPath, nativeStartPath);
 	assert.ok(!(Object.values(apiPaths) as string[]).includes(nativeStartPath), 'the client never requests the start');

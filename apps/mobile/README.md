@@ -8,9 +8,8 @@ remain separate R1c work.
 The root opens Threads with disabled filters, a read-only Equipment schedule link and an
 unavailable Team row. Threads are not read yet, so the screen makes no claim about actual
 thread counts. Account provides organisation switching, sign out, sign out everywhere else,
-and the registered passkeys list. The invitation page accepts an invitation once and reports an
-uncertain response without replaying the write. Passkey registration/removal and organisation
-export/deletion controls are later work.
+and web passkey listing, naming at registration, and removal. The invitation page accepts an invitation once and reports an
+uncertain response without replaying the write. Members, push devices and organisation export/deletion controls are later work.
 
 ## Sessions
 
@@ -29,7 +28,7 @@ retained, with no browser token stored in them. Fully reload after account/platf
 Fast Refresh can retain the previous account instance.
 
 The [R1b validation record](../../docs/validation/expo-web-shell-2026-09-30/README.md) contains
-the local results and synthetic screenshots.
+the local shell results and synthetic screenshots. The [R2a passkey record](../../docs/validation/account-controls-2026-09-30/README.md) covers registration and removal.
 
 ## Local checks
 
@@ -51,7 +50,8 @@ the serving origin instead.
 The browser suite exercises the production session source against synthetic API answers at
 360, 390, 430 and 1280 pixels, plus the retained equipment and session-revocation harness at
 phone widths. It covers route retention, organisation memory, sign-out failure, invitations,
-passkey listing and a browser WebAuthn assertion. The verify response is mocked; API cookie,
+passkey listing, browser WebAuthn registration and an assertion with the new credential,
+removal, failures and uncertain-write reconciliation. Registration and verify responses are mocked; API cookie,
 CSRF, revocation and step-up tests in `apps/api/src/web/session.test.ts` require real throwaway
 Postgres and provide separate server evidence.
 

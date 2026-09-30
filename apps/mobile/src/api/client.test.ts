@@ -501,3 +501,12 @@ test('budget: a body getter or getReader that throws after headers is an unreada
 		assert.deepEqual(apiOutcome(busy, identity), { ok: false, kind: 'unavailable', status: 429, retryAfter: 20 }, fault);
 	}
 });
+
+test('passkey DELETE uses the bounded transport once, without a body, and rejects redirects', async () => {
+ const f = fakeSend({ text: json({ ok: true }) }); const client = createApiClient(createTransport({ origin, send: f.send }));
+ const path = '/v1/me/passkeys/00000000-0000-4000-8000-000000000005' as const;
+ assert.deepEqual(await client.delete(path, null, value => value), { ok: true, value: { ok: true } });
+ assert.equal(f.calls.length, 1); assert.equal(f.calls[0]!.init.method, 'DELETE'); assert.equal(f.calls[0]!.init.body, undefined); assert.equal(f.calls[0]!.init.redirect, 'error');
+ const redirected = fakeSend({ status: 302 });
+ assert.deepEqual(await createApiClient(createTransport({ origin, send: redirected.send })).delete(path, null, value => value), { ok: false, kind: 'unavailable', status: 0 });
+});
