@@ -14,7 +14,7 @@ and the apex serve the shell. The owner signed in with Google, saw the organisat
 
 Not exercised: the passkey step-up (the owner's account has no passkey and the shell cannot register one), invitation
 acceptance (no screen creates an invitation) and Web Push registration (no device control on the export). These three
-account controls are tracked as the next increment; see the issue opened the same day. Native sign-in stays off;
+account controls are tracked as the next increment in #221. Native sign-in stays off;
 production and the embedding service stay stopped; the deploy and backup workflows stay disabled.
 
 ## One-off workflows and retired-screen evidence removed (30 September 2026, UTC)
