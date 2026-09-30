@@ -55,7 +55,7 @@ after independent review and all three CI jobs passed. Local tests, exports and 
 - synthetic harness reads for the browser proof.
 
 The second, [All tasks](expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2, adopted in #200), merged in #201 after independent review and green CI. Local tests, exports and browser checks passed.
-See the [validation record](../validation/mobile-all-tasks-read-2026-09-27/README.md); native and device gates remain. It adds:
+See the validation record (validation record removed in the chat-first rebuild; see git history); native and device gates remain. It adds:
 - a read-only Work → All tasks list at `/work/all`: open tasks assigned to anyone, with one owner fact per row and
   no names;
 - one shared list screen, hook and parser for both views, with the view fixed at mount;
@@ -178,8 +178,8 @@ rate limit (429) or a server failure keeps the session and shows a retry state (
 - `packages/ui` exports only the unedited legacy `design/` mirror (`packages/ui/package.json`) and has
   no React Native tokens.
 - The [mobile mockups](../proposals/assets/captain-mobile-2026-09-22/README.md) are the approved design (D14).
-- The [client proof](../proposals/assets/captain-client-proof-2026-09-23/README.md) is a fictional
-  harness installed with npm, outside the workspace. It passes bundle exports and has had no
+- The client proof (retired in the chat-first rebuild, R0; see git history) was a fictional
+  harness installed with npm, outside the workspace. It passed bundle exports and had no
   native-device run. Its versions (Expo 57.0.24, React 19.2.3, React Native 0.86.3, as of 23 September)
   are not a pin for this work.
 

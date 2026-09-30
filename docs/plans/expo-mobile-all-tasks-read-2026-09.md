@@ -7,7 +7,7 @@ and the [foundation](expo-mobile-foundation-2026-09.md) link allow list.
 **Implementation status (27 September 2026): implemented and independently reviewed; local validation passed.**
 - Codex's paths, parser, links, sections and configuration, and Claude B's shared screen, hook, copy and harness,
   are written, with peer review done.
-- Local checks, exports and browser validation passed; see the [validation record](../validation/mobile-all-tasks-read-2026-09-27/README.md).
+- Local checks, exports and browser validation passed; see the validation record (validation record removed in the chat-first rebuild; see git history).
   Native sign-in remains off, with **no native, simulator or device evidence**.
 
 **Outcome.** From Work → Views, **All tasks** (previously unavailable) opens, read-only, the open tasks the

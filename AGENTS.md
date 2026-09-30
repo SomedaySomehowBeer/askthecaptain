@@ -68,8 +68,9 @@ pnpm workspaces with Turborepo, TypeScript strict everywhere, ESM.
 | `infra` | OpenTofu (`infra/tofu`) and the inference Sprite's bootstrap files (`infra/sprites`, D18); the retired embedding app remains stopped with repository assets removed (D21) |
 
 The Expo shell is application code in `apps/mobile` (merged #188). The earlier client proof under
-`docs/proposals/assets/captain-client-proof-2026-09-23` is a standalone, fictional harness outside the
-pnpm workspace, not application code.
+`docs/proposals/assets/captain-client-proof-2026-09-23` was a standalone, fictional harness outside the
+pnpm workspace, not application code; it and its `client-proof` workflow were retired in the chat-first rebuild (R0)
+and live only in git history.
 
 - Migrations are hand-written SQL, numbered, never edited after merge. One migration per pull
   request. Drizzle describes the schema; SQL is what runs.

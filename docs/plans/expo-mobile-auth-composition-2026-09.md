@@ -22,7 +22,7 @@ while valid tab destinations are kept through sign-in; the test harness is selec
 
 **Implemented.** Ownership is as in §9, with reciprocal review. All 185 mobile tests, the four
 exports, boundary scans and browser checks at 360/390/430 px pass; see the
-[validation record](../validation/mobile-account-composition-2026-09-27/README.md). Sections 1–9 below remain the
+validation record (validation record removed in the chat-first rebuild; see git history). Sections 1–9 below remain the
 reviewed contract and its starting point. Where the implementation settled a detail differently, this section is
 current.
 

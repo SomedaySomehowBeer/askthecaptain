@@ -238,5 +238,5 @@ replaced it with Work, Chat and Resources.)
 
 The [delivery plan](../../../plans/captain-workspace-delivery-2026-09.md) sequences the reviewed
 amendments, first usable web/iOS workflow and later Android release. A separate
-[Expo client proof](../captain-client-proof-2026-09-23/README.md) tests timeline/chat behaviour
+Expo client proof (retired in the chat-first rebuild, R0; see git history) tested timeline/chat behaviour
 with fictional data. Its technical harness does not replace these visual designs.

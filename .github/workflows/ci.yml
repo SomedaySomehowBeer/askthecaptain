@@ -1,5 +1,5 @@
 name: ci
-# Executable client-proof assets under docs/ have their own client-proof.yml workflow.
+# The former client-proof.yml workflow for executable assets under docs/ was retired in the chat-first rebuild (R0).
 on:
   pull_request:
     paths-ignore: ['docs/**', '**/*.md']

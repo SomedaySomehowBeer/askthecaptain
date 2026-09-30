@@ -10,7 +10,7 @@ composes sign-in and adds the account screens:
 
 The [My work read](../../docs/plans/expo-mobile-my-work-read-2026-09.md) (M-read slice 1) is
 merged in #199 after independent review and passing local tests, exports, browser checks and CI.
-See the [validation record](../../docs/validation/mobile-my-work-read-2026-09-27/README.md).
+See the validation record (validation record removed in the chat-first rebuild; see git history).
 - **What it shows:** Work → My work lists the person's open tasks in the chosen organisation,
   read-only, under the subtitle "Open tasks assigned to you". Page 0 loads on each mount, with
   explicit Refresh, More and Try again, up to 10 pages and 500 rows.
@@ -22,7 +22,7 @@ See the [validation record](../../docs/validation/mobile-my-work-read-2026-09-27
 
 The [All tasks read](../../docs/plans/expo-mobile-all-tasks-read-2026-09.md) (M-read slice 2) is
 merged in #201 after independent review and passing local tests, exports, browser checks and CI.
-See the [validation record](../../docs/validation/mobile-all-tasks-read-2026-09-27/README.md).
+See the validation record (validation record removed in the chat-first rebuild; see git history).
 No native or device result is claimed.
 - **What it shows:** Work → Views → All tasks (`/work/all`) lists the open tasks the Work API returns
   for the chosen organisation, assigned to anyone, read-only, under the subtitle "Open tasks assigned
@@ -38,7 +38,7 @@ No native or device result is claimed.
 
 The [Inventory read](../../docs/plans/expo-mobile-inventory-read-2026-09.md) (M-read slice 3) is
 implemented and independently reviewed; final validation is recorded in the
-[evidence](../../docs/validation/mobile-inventory-read-2026-09-27/README.md).
+evidence (validation record removed in the chat-first rebuild; see git history).
 - Resources → Inventory shows active counted stock grouped by location, with exact decimal strings,
   stored units, uncounted states, reorder points and the server's below-reorder flag.
 - The API returns one unpaginated list, subject to the mobile response byte budget. One virtualised
