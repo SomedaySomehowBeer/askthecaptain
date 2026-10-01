@@ -140,11 +140,11 @@ database waits for a second customer (D17).
 The checked-in configuration and 23 September pause record identify the serving pair under D17 as
 `askthecaptain-api-staging` and `askthecaptain-web-staging`; `app.askthecaptain.app`, the apex and
 `www` are configured to point at the web app and `api-staging.askthecaptain.app` at the API.
-A dormant pair, `askthecaptain-api` and `askthecaptain-web`, is retained; `api.askthecaptain.app`
-points at the production API. The pause record dates its last promotion to 2026-09-05. Under D37
+The dormant production API `askthecaptain-api` is retained; `api.askthecaptain.app`
+points at it. The pause record dates its last promotion to 2026-09-05. Under D37
 the `app` CNAME moved to the API app on 30 September and `askthecaptain-web-staging` was destroyed on
-1 October 2026; staging is the single app `askthecaptain-api-staging`. The dormant production web app
-is retired with the Next.js client when production is next released.
+1 October 2026, as was the dormant production web app `askthecaptain-web`; staging is the single app
+`askthecaptain-api-staging`, and a production release will likewise be one API app serving the export.
 `askthecaptain-embed` is the former D21 mail/note embedding service; it is stopped with autostart off
 following the retirement release. On 25 September staging API/web moved to #135/#136 (merge
 `d11fcdf`, identical image-source tree `7b77ba9`), with one machine per app. The owner-authorised

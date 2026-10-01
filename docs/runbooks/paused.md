@@ -6,8 +6,11 @@ At the owner's instruction the Fly app `askthecaptain-web-staging` was destroyed
 droplet as the owner's Fly login). It had no machines, volumes or certificates; its registry images went with it.
 Staging is now the single app `askthecaptain-api-staging`, which serves the API and the Expo web export. The
 Next.js rollback in the [cutover runbook](expo-web-cutover.md) no longer exists: a web regression is fixed forward, or
-rolled back by redeploying an earlier API image. The dormant production pair `askthecaptain-api` and
-`askthecaptain-web` and the stopped `askthecaptain-embed` were not touched. Eleven merged or superseded remote
+rolled back by redeploying an earlier API image. Later the same day, also at the owner's instruction, the dormant
+production web app `askthecaptain-web` (two stopped machines on the 5 September Next.js image, no volumes) was
+destroyed too. Before it went, `app`, `www` and the apex were confirmed to resolve to `askthecaptain-api-staging`,
+which holds its own certificates for all three; both answered 200 afterwards. The dormant production API
+`askthecaptain-api` and the stopped `askthecaptain-embed` were not touched. Eleven merged or superseded remote
 branches from the assistant era were deleted the same day; no open pull request used them.
 
 ## Next.js source retirement (30 September 2026)
