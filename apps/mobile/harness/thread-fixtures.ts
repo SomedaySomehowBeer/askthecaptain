@@ -14,17 +14,19 @@ export function threadFixture(){
 export function threadHarness(scenario:string,scope:()=>MemberScope|null){
  const f=threadFixture();const client:ApiClient={
   async get(path,_token,parse){
-   if(scenario==='threads-failed')return {ok:false,kind:'unavailable',status:503};
+   if(scenario==='threads-failed'||scenario==='threads-new-failed')return {ok:false,kind:'unavailable',status:503};
    if(scenario==='threads-lost')return {ok:false,kind:'refused',status:404,code:'not_found'};
-   if(scenario==='threads-wait')return {ok:false,kind:'unavailable',status:429,retryAfter:30};
+   if(scenario==='threads-wait'||scenario==='threads-new-wait')return {ok:false,kind:'unavailable',status:429,retryAfter:30};
    const u=new URL(path,'https://harness.invalid');let value:unknown;
-   if(u.pathname.endsWith('/messages')){const before=Number(u.searchParams.get('before')??Infinity),after=Number(u.searchParams.get('after')??0),latest=u.searchParams.has('latest'),rows=latest?f.messages.slice(-50):f.messages.filter(m=>m.seq>after&&m.seq<before).slice(0,50);value={thread:{id:tid,revision:1,lastSeq:65,lastChange:65},messages:rows,hasMore:true};}
+   if(u.pathname.endsWith('/members'))value={members:scenario==='threads-new-empty'?[]:[{userId:author,name:'Pat Crew',email:'pat@example.test',role:'member',status:'active',since:'2026-10-01T00:00:00.000Z'}]};
+   else if(u.pathname.endsWith('/tags'))value={tags:[{id:tagId,name:'Summer lager',createdAt:'2026-10-01T00:00:00.000Z',updatedAt:'2026-10-01T00:00:00.000Z',ownerId:null,startsOn:null,endsOn:null,createdBy:null,revision:1,archivedAt:null}],nextOffset:null};
+   else if(u.pathname.endsWith('/messages')){const before=Number(u.searchParams.get('before')??Infinity),after=Number(u.searchParams.get('after')??0),latest=u.searchParams.has('latest'),rows=latest?f.messages.slice(-50):f.messages.filter(m=>m.seq>after&&m.seq<before).slice(0,50);value={thread:{id:tid,revision:1,lastSeq:65,lastChange:65},messages:rows,hasMore:true};}
    else if(u.pathname.endsWith('/changes'))value={thread:{id:tid,revision:1,lastSeq:65,highWater:65},changes:[],next:65,complete:true};
    else if(u.pathname.endsWith('/'+tid))value=f.detail;
    else value={...f.list,filter:u.searchParams.get('filter')??'all',...(scenario==='threads-empty'?{threads:[],groups:[]}:{}),available:scenario!=='threads-unavailable'};
    return {ok:true,value:parse(value)};
   },
-  async post(path,_token,body,parse){if(path.endsWith('/read'))return {ok:true,value:parse({readPosition:(body as {seq:number}).seq,unread:0})};return {ok:false,kind:'unavailable',status:503};},
+  async post(path,_token,body,parse){if(scenario==='threads-new-pending')return new Promise(()=>{});if(scenario==='threads-new-refused')return {ok:false,kind:'refused',status:409,code:'thread_id_unavailable'};if(path.endsWith('/read'))return {ok:true,value:parse({readPosition:(body as {seq:number}).seq,unread:0})};return {ok:false,kind:'unavailable',status:503};},
   async patch(){return {ok:false,kind:'unavailable',status:503};},async delete(){return {ok:false,kind:'unavailable',status:503};}
  };
  return createWebCalls(client,'https://harness.invalid',{memberScope:scope,accountEpoch:()=>scope()?.epoch??null,accepted(){},sessionEnded(){}});

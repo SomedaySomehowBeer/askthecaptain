@@ -365,3 +365,44 @@ it('the Expo client parses real list, card, message, pin and change payloads for
  assert.equal(parseList(await json(request('GET', `${b.threads}?filter=all`, b.other))).threads.some(row => row.id === privateThread.thread.id), false);
  assert.ok(task);
 });
+
+it('the Expo create controller reconciles an uncertain private create against the real API and parses picker choices', async () => {
+ const { createNewStorage, createNewThread } = await import('../../../mobile/src/threads/create.ts');
+ const { createThreadCalls } = await import('../../../mobile/src/threads/api.ts');
+ const { parseTagPage } = await import('../../../mobile/src/threads/options.ts');
+ const { parseMembers } = await import('../../../mobile/src/account/members.ts');
+ const b = await business('Expo creation');
+ await b.tag('Production', { ownerId: b.owner.user.id, startsOn: '2031-05-01' });
+ assert.equal(parseTagPage(await json(request('GET', `${b.base}/tags?offset=0&limit=50`, b.member))).tags.length, 1);
+ assert.equal(parseMembers(await json(request('GET', `${b.base}/members`, b.member))).length, 4);
+ const scope = { userId: b.member.user.id, organisationId: b.org, epoch: 'test' };
+ let loseResponse = true;
+ const bodies: unknown[] = [];
+ const client: import('../../../mobile/src/auth/contracts.ts').ApiClient = {
+  async get(path, _token, parse) { return { ok: true, value: parse(await json(request('GET', path, b.member))) }; },
+  async post(path, _token, body, parse) {
+   bodies.push(body);
+   const response = await request('POST', path, b.member, body);
+   assert.equal(response.status, loseResponse ? 201 : 200);
+   const value = await response.json();
+   if (loseResponse) { loseResponse = false; return { ok: false, kind: 'unavailable', status: 503 }; }
+   return { ok: true, value: parse(value) };
+  },
+  async patch() { throw new Error('unexpected patch'); }, async delete() { throw new Error('unexpected delete'); },
+ };
+ const calls = createThreadCalls(client, { scope: () => scope, sessionEnded() {}, reconcile() {} });
+ const values = new Map<string, string>();
+ const storage = createNewStorage(() => ({ getItem: key => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value); },
+  removeItem: key => { values.delete(key); }, key: index => [...values.keys()][index] ?? null, get length() { return values.size; } }));
+ const opened: string[] = [];
+ const first = createNewThread(calls, scope, storage, Date.now, randomUUID, id => opened.push(id));
+ first.edit({ private: true, title: 'Supplier costs', body: 'Review these privately', participantIds: [b.owner.user.id] });
+ await first.send();
+ assert.equal(first.snapshot().draft.locked, true); assert.equal(opened.length, 0); first.dispose();
+ const retried = createNewThread(calls, scope, storage, Date.now, randomUUID, id => opened.push(id));
+ await retried.send();
+ assert.deepEqual(bodies[1], bodies[0]); assert.equal(opened.length, 1); assert.equal(values.size, 0);
+ const page = await json<{ messages: Message[] }>(request('GET', `${b.threads}/${opened[0]}/messages?latest=50`, b.member));
+ assert.equal(page.messages.length, 1); assert.equal(page.messages[0]?.body, 'Review these privately');
+ assert.equal((await request('GET', `${b.threads}/${opened[0]}`, b.other)).status, 404);
+});

@@ -48,7 +48,7 @@ export function createThreadControls(calls:ThreadCalls,scope:ReadScope,id:string
    let messages=state.messages;
    if(action.kind==='edit'||action.kind==='delete'){const p=await calls.messages(scope,id,{after:action.message.seq-1,limit:1});if(!active()||p.kind==='stale')return;if(p.kind==='error'){fail(p,true);return;}messages=mergeMessages(messages,p.value.messages);onMessages(p.value.messages);}
    const target=('message'in action)?messages.find(m=>m.id===action.message.id):null;
-   const holds=action.kind==='star'?d.value.thread.starred===action.value:action.kind==='pin'?d.value.pin?.messageId===action.message.id:action.kind==='unpin'?d.value.pin===null:action.kind==='delete'?target?.deletedAt!==null&&target!==undefined:target?.body===action.body.trim();
+   const holds=action.kind==='tag'?d.value.tags.some(t=>t.id===action.tagId)===action.attached:action.kind==='star'?d.value.thread.starred===action.value:action.kind==='pin'?d.value.pin?.messageId===action.message.id:action.kind==='unpin'?d.value.pin===null:action.kind==='delete'?target?.deletedAt!==null&&target!==undefined:target?.body===action.body.trim();
    set({...state,busy:false,detail:d.value,messages,needsRefresh:false,message:holds?'Change confirmed.':result.kind==='error'&&result.status===409?copy.conflict:'Current state loaded. The requested change was not confirmed; choose again.'});
   },
   async displayed(seq:number){

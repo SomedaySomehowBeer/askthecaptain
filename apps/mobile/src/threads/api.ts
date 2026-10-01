@@ -5,7 +5,7 @@ import type { Changes, Detail, Filter, Message, MessagePage, ThreadList } from '
 import { parseChanges, parseDetail, parseList, parseMessage, parseMessages, parseChangedPin, parseRead, parseStar, uuid } from './parse.ts';
 export type Result<T> = { kind: 'ok'; value: T } | { kind: 'stale' } | { kind: 'error'; status: number; code: string; retryAfter: number; uncertain: boolean };
 export type MessageQuery = { latest: number } | { after: number; limit?: number } | { before: number; limit?: number };
-export type Mutation = { kind: 'edit'; message: Message; body: string } | { kind: 'delete'; message: Message } | { kind: 'pin'; message: Message } | { kind: 'unpin' } | { kind: 'star'; value: boolean };
+export type Mutation = { kind: 'edit'; message: Message; body: string } | { kind: 'delete'; message: Message } | { kind: 'pin'; message: Message } | { kind: 'unpin' } | { kind: 'star'; value: boolean } | { kind: 'tag'; tagId:string; attached:boolean; expectedRevision:number };
 export function threadPath(scope: ReadScope, id?: string, ...parts: string[]): OrganisationPath { return organisationPath(scope.organisationId,'threads',...(id?[uuid(id),...parts]:[])); }
 export function queryPath(path: OrganisationPath, values: Record<string, string | number | undefined>): OrganisationPath {
  const query = Object.entries(values).filter(([,v])=>v!==undefined).map(([k,v])=>`${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&');return `${path}?${query}` as OrganisationPath;
@@ -39,6 +39,7 @@ export function createThreadCalls(client: ApiClient, hooks: { scope(): ReadScope
   changes:(s,id,after)=>request(s,'GET',queryPath(threadPath(s,id,'changes'),{after,limit:100}),undefined,v=>{const p=parseChanges(v);if(p.thread.id!==id||p.next<after||p.changes.some(c=>c.changeSeq<=after))throw new TypeError('change cursor mismatch');return p;}),
   send:(s,id,message)=>request(s,'POST',threadPath(s,id,'messages'),message,v=>{const m=parseMessage(v);if(m.threadId!==id||m.id!==message.id)throw new TypeError('message identity mismatch');return m;}),
   mutate(s,id,a){
+   if(a.kind==='tag')return request(s,a.attached?'POST':'DELETE',a.attached?threadPath(s,id,'tags',uuid(a.tagId)):queryPath(threadPath(s,id,'tags',uuid(a.tagId)),{expectedRevision:a.expectedRevision}),{expectedRevision:a.expectedRevision},parseDetail);
    if(a.kind==='star')return request(s,a.value?'POST':'DELETE',threadPath(s,id,'star'),{},parseStar);
    if(a.kind==='pin')return request(s,'POST',threadPath(s,id,'pin'),{messageId:a.message.id},parseChangedPin);
    if(a.kind==='unpin')return request(s,'DELETE',threadPath(s,id,'pin'),undefined,parseChangedPin);
