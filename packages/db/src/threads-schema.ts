@@ -154,9 +154,9 @@ export const chatAuditEvents = pgTable('chat_audit_events', {
 	member(t.organisationId, t.actorId), // on delete set null (actor_id)
 	index('chat_audit_events_by_thread').on(t.organisationId, t.threadId, t.createdAt, t.id),
 	check('chat_audit_events_action_check', sql`${t.action} in ('chat.thread_created', 'chat.thread_updated',
-		'chat.participant_added', 'chat.participant_removed', 'chat.participant_left', 'chat.link_added', 'chat.link_removed',
+		'chat.participant_added', 'chat.participant_removed', 'chat.participant_left',
 		'chat.tag_added', 'chat.tag_removed', 'chat.message_sent', 'chat.message_edited', 'chat.message_deleted', 'chat.pin_added', 'chat.pin_removed',
 		'chat.star_set', 'chat.star_cleared', 'chat.read_advanced')`),
-	check('chat_audit_events_subject_check', sql`${t.subjectKind} in ('thread', 'participant', 'link', 'tag', 'message', 'pin', 'star', 'read')`),
+	check('chat_audit_events_subject_check', sql`${t.subjectKind} in ('thread', 'participant', 'tag', 'message', 'pin', 'star', 'read')`),
 	check('chat_audit_events_personal_check', sql`${t.personal} = (${t.action} in ('chat.star_set', 'chat.star_cleared', 'chat.read_advanced'))`),
 	check('chat_audit_events_detail_check', sql`jsonb_typeof(${t.detail}) = 'object'`)]);

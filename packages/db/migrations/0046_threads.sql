@@ -274,10 +274,10 @@ create table chat_audit_events (
 	foreign key (organisation_id, thread_id) references threads(organisation_id, id) on delete cascade,
 	foreign key (organisation_id, actor_id) references memberships(organisation_id, user_id) on delete set null (actor_id),
 	constraint chat_audit_events_action_check check (action in ('chat.thread_created', 'chat.thread_updated',
-		'chat.participant_added', 'chat.participant_removed', 'chat.participant_left', 'chat.link_added', 'chat.link_removed',
+		'chat.participant_added', 'chat.participant_removed', 'chat.participant_left',
 		'chat.tag_added', 'chat.tag_removed', 'chat.message_sent', 'chat.message_edited', 'chat.message_deleted', 'chat.pin_added', 'chat.pin_removed',
 		'chat.star_set', 'chat.star_cleared', 'chat.read_advanced')),
-	constraint chat_audit_events_subject_check check (subject_kind in ('thread', 'participant', 'link', 'tag', 'message', 'pin', 'star', 'read')),
+	constraint chat_audit_events_subject_check check (subject_kind in ('thread', 'participant', 'tag', 'message', 'pin', 'star', 'read')),
 	constraint chat_audit_events_personal_check check (personal = (action in ('chat.star_set', 'chat.star_cleared', 'chat.read_advanced'))),
 	constraint chat_audit_events_detail_check check (jsonb_typeof(detail) = 'object')
 );
