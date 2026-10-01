@@ -33,8 +33,10 @@ silent, the earlier rule does not carry over.
 - Private threads never enter classification, summaries or agent routing; the migration never
   broadens an existing conversation's audience (D25, amendment §1). R2 ships no inference at all,
   and proves the boundary structurally (§9).
-- Shared pins and personal stars and read positions carry over (D25). The latest-six item panel and
-  its "conversations for this task" reads do not.
+- Pins, stars and read positions carry over (D25), with pins narrowed (owner's review, 1 October):
+  a pin is visible to everyone who can see the thread, so only an owner or admin sets one, and a
+  thread has at most one. A star is visible only to the person who set it. The latest-six item
+  panel and its "conversations for this task" reads do not carry over.
 - Retire the 0042/0043 tables after migrating staging data; two message stores would be a
   carry-over (rebuild plan decision 3).
 
@@ -122,8 +124,14 @@ rows here. Existing `conversation_links` are copied across.
 check (kind in ('message', 'change', 'approval'))`. The R2 guard refuses any insert whose kind is
 not `message`; R3 and R5 replace that guard when they write the other kinds.
 
-**`thread_pins`**, **`thread_stars`**, **`thread_reads`** — as `message_pins`, `conversation_stars`
-and `conversation_reads`, renamed, with `thread_id`.
+**`thread_pins`** — as `message_pins` with `thread_id`, and one change: the partial unique index is
+on `(thread_id) where unpinned_at is null`, so a thread has at most one live pin. The guard refuses
+an insert by anyone whose membership role is not `owner` or `admin`. A pin references the message
+id and never copies its text. Pinning a tombstone is refused.
+
+**`thread_stars`**, **`thread_reads`** — as `conversation_stars` and `conversation_reads`, renamed,
+with `thread_id`. Both are personal: the policies let a person read and write only rows whose
+`user_id` is their own.
 
 **`chat_audit_events`** keeps its name (D25 names it) and gains `thread_id` in place of
 `conversation_id`. Every thread write is recorded here, for record and topic threads too; the
@@ -135,18 +143,34 @@ thread or message identifier. Actions gain `chat.thread_created`, `chat.tag_adde
 
 ## 4. Access
 
-One definer function, `thread_visible(thread_id uuid) returns boolean`, replaces
-`chat_participant`: true when the caller has an active membership in the thread's organisation
-and either the thread is `record` or `topic`, or the thread is `private` and the caller is an
-active participant. Every policy on the tables above uses it, so there is one place to read. A
-record thread's visibility is its record's: today that is active membership, because every record
-policy is member-wide; a migration that narrows a record's policy must amend this function in the
-same file, and the access test in §9 fails until it does.
+Access is row level security on every table, as everywhere else in the schema. The policies call
+one predicate, `thread_visible(thread_id uuid) returns boolean`, rather than repeating the test
+in each of them, for two reasons: Postgres refuses a policy on `thread_participants` that selects
+from `thread_participants` ("infinite recursion detected in policy"), so the participant check
+has to live in a `security definer` function that reads the rows without re-entering their
+policy, as `chat_participant` did in 0042; and seven tables share the same test, which one
+definition keeps from drifting. The function is `stable`, takes no user argument, and reads the
+caller's identity from the transaction's `app.user_id` and `app.organisation_id` settings like
+every other policy.
 
-Powers, as before for private threads: any participant sends, pins and stars; the author edits and
-deletes; an owner or admin participant deletes; the creator and owners/admins manage
-participants. For record and topic threads: any member sends, pins, stars and tags; the author
-edits and deletes; an owner or admin deletes any message. Renaming a topic: any member, with
+It returns true when the caller has an active membership in the thread's organisation and
+either the thread is `record` or `topic`, or the thread is `private` and the caller is an active
+participant. **An active participant** is a person with a row in `thread_participants` for that
+thread whose `state` is `active`: the creator gets one when the private thread is created, and
+so does each person named in `participantIds`; a participant with the power to add people (the
+creator, or an owner or admin participant) adds later ones; the row's state becomes `left` when
+the person leaves or `removed` when removed, and from then on they are not a participant and the
+thread is invisible to them, messages included. A record thread's visibility is its record's:
+today that is active membership, because every record policy is member-wide; a migration that
+narrows a record's policy must amend this function in the same file, and the access test in §9
+fails until it does.
+
+Powers, for private threads: any participant sends and stars; the author edits and deletes; an
+owner or admin participant deletes any message, pins and unpins; the creator and owners/admins
+manage participants. For record and topic threads: any member sends, stars and tags; the author
+edits and deletes; an owner or admin deletes any message, pins and unpins. Pinning is a role
+power in R2; when R5 brings grantable privileges, pinning joins them. A private thread with no
+owner or admin participant therefore has no pin until then. Renaming a topic: any member, with
 `expectedRevision`. Attaching or removing a tag on a private thread: any participant; the tag's
 name is then visible to participants only through the thread, and the tag's own listing never
 counts or names private threads.
@@ -204,7 +228,9 @@ constraint name, and the change feed. Two differences:
 
 **`GET …/threads/:threadId`** — `{ thread: { id, kind, title, revision, lastSeq, lastChange,
 readPosition, unread, starred, createdAt }, card, tags, links, participants, pins }`.
-`participants` is present for private threads only. `pins` are live pins with their message ids.
+`participants` is present for private threads only. `pin` is the one live pin, `{ id, messageId,
+pinnedBy, pinnedAt }`, or null. `GET …/pins` is retired; the change feed still carries pin
+changes as before.
 
 **`card`** by record kind, all computed by code from the record row:
 
@@ -215,13 +241,15 @@ readPosition, unread, starred, createdAt }, card, tags, links, participants, pin
 | stock item | name | counted / not counted | count with unit, counted date |
 | topic, private | title | — | created by, participant count (private) |
 
-The fold-out holds the rest: the record's body or notes, all tags, links, pins, and "Open the
+The fold-out holds the rest: the record's body or notes, all tags, links, and "Open the
 record" for the record's own screen where one exists (equipment for
 bookings; the Work screens are retired, so a task's fold-out shows its fields read-only until R3's
 card editing).
 
-**Messages, changes, pins, read** — `GET …/messages` with exactly one of `latest`, `after`,
-`before` (≤ 100), `GET …/changes`, `GET …/pins`, `POST …/read`, as before.
+**Messages, changes, pin, read** — `GET …/messages` with exactly one of `latest`, `after`,
+`before` (≤ 100), `GET …/changes` and `POST …/read` as before. `POST …/pin { messageId }` sets
+the thread's pin and answers `409 pin_exists` when one is live (unpin first; nothing is replaced
+silently); `DELETE …/pin` clears it. Both are owner/admin only and audited as before.
 
 ## 7. Client
 
@@ -236,15 +264,16 @@ second; the latest message on one line, prefixed with the author's first name; a
 pip when `needsYou`. Rows load 50 at a time with a "Show more" row. Poll every 15 s while visible
 and focused, as before. "New thread" is a fixed button at the bottom right.
 
-**The thread.** The card is pinned at the top and does not scroll; its chevron opens the fold-out
-in place. Messages render oldest first. On open, the client fetches `latest=50`; if `unread > 50`
+**The thread.** The card stays at the top and does not scroll; its chevron opens the fold-out
+in place. The pinned message, when there is one, sits directly under the card as one line with a
+pin mark; tapping it scrolls to the message. Messages render oldest first. On open, the client fetches `latest=50`; if `unread > 50`
 it fetches `after=readPosition-1` instead, so the first unread is on screen, and shows one "Show
 n earlier messages" row above the first loaded message that loads 50 more each time. The list
 scrolls to the first unread message and marks it with a thin line; with nothing unread it opens
 at the newest. The composer sits at the bottom: multi-line, send on button, the send retry and
 locked-draft rules as before. A message shows author, time, body with links, "edited" and
-"Message deleted". Long-press or a small menu offers edit, delete, pin, unpin within the powers
-above. Tombstones, gaps and revision changes behave as before.
+"Message deleted". Long-press or a small menu offers edit, delete, pin and unpin within the
+powers above; the menu shows only what the person may do. Tombstones, gaps and revision changes behave as before.
 
 **New thread.** The composer and nothing else, focused on open. Send creates the topic and
 navigates to it. A "Private" toggle reveals a member picker (from `GET …/members`) and a title
@@ -274,9 +303,11 @@ longer available.
    every `task_series.project_id` becomes a `task_series_tags` row. Each source count must equal
    the rows written (a task tagged with its own project twice counts once).
 5. Copy conversations → threads (`kind = 'private'`, ids, titles, fingerprints, counters,
-   timestamps kept), participants, links, messages (all `kind = 'message'`), pins, stars, reads,
-   and `chat_audit_events` rows (re-pointed). Counts before and after must match per table, or the
-   migration raises and nothing is dropped.
+   timestamps kept), participants, links, messages (all `kind = 'message'`), stars, reads, and
+   `chat_audit_events` rows (re-pointed). Pins: a conversation with several live pins keeps only
+   the newest as its thread's pin; the others are copied as unpinned (`unpinned_at` = migration
+   time, `unpinned_by` null), so nothing is lost and the one-pin rule holds. Counts before and after
+   must match per table, or the migration raises and nothing is dropped.
 6. Drop the 0042/0043 tables and functions, `task_tags`, the three `project_id` columns with
    their constraints and indexes, and `projects`. No cascade. The migration invents no records.
 
@@ -316,8 +347,11 @@ Real Postgres, no skipped database test:
 - Topic creation: one transaction, seq 1, title derivation, retry 200, mismatch 409.
 - List: filters, cursor stability across a new message, `groups` counts versus rows, the
   100-heading cap, `needsYou` rules, unread cap, excerpt exclusion for a private thread.
-- Counters, retries, edits, deletes, pins, stars, reads and the change feed: the existing chat
-  tests moved to the new paths, not rewritten.
+- Pins: a member's pin is refused and an owner's accepted; a second live pin is 409; unpin then
+  pin works; deleting the pinned message unpins it in the same transaction; a conversation with
+  three live pins migrates to one live and two unpinned.
+- Counters, retries, edits, deletes, stars, reads and the change feed: the existing chat tests
+  moved to the new paths, not rewritten.
 - Boundary: a script test asserts that `thread_messages`, `thread_participants` and
   `chat_audit_events` are referenced only from `apps/api/src/threads/` and the migration test, so
   no other module can read private messages; R4 builds its inference boundary on this.
