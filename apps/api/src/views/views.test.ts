@@ -51,7 +51,8 @@ const newView = (person: Person, name: string, f: Filter = filter(), organisatio
 const patch = (person: Person, id: string, body: unknown) => request('PATCH', `${views()}/${id}`, person, body);
 const remove = (person: Person, id: string, revision: number | string) => request('DELETE', `${views()}/${id}?expectedRevision=${revision}`, person);
 const makeTag = async (name: string, person = owner, organisationId = org) => (await json<{ id: string }>(request('POST', `${base(organisationId)}/tags`, person, { name }), 201)).id;
-const makeProject = async (name: string, person = owner, organisationId = org) => (await json<{ id: string }>(request('POST', `${base(organisationId)}/projects`, person, { name }), 201)).id;
+/** Since 0046 a project is a tag: a saved filter's projectId names a tag until saved views retire in R5. */
+const makeProject = makeTag;
 const liveCount = async (person: Person) => (await db.owner<{ n: number }[]>`select count(*)::int as n from saved_views
  where organisation_id = ${org} and owner_id = ${person.user.id} and deleted_at is null`)[0]!.n;
 const row = async (id: string) => (await db.owner`select * from saved_views where id = ${id}`)[0];
@@ -170,8 +171,8 @@ it('validates referenced tags and projects in the tenant at save time, including
   assert.ok(!failure.error.includes('Foreign'), 'the refusal names the field, not another tenant’s record');
  }
  const archived = await makeProject('Archived work');
- const revision = Number((await db.owner`select revision from projects where id = ${archived}`)[0]!.revision);
- await json(request('PATCH', `${base()}/projects/${archived}`, owner, { expectedRevision: revision, archived: true }));
+ const revision = Number((await db.owner`select revision from tags where id = ${archived}`)[0]!.revision);
+ await json(request('PATCH', `${base()}/tags/${archived}`, owner, { expectedRevision: revision, archived: true }));
  const kept = await newView(member, 'Archived project', filter({ projectId: archived, status: 'all' }));
  assert.equal(kept.filter.projectId, archived);
  assert.equal((await json<Detail>(request('GET', `${views()}/${kept.id}`, member))).references!.project!.projectState, 'archived');
@@ -184,7 +185,7 @@ it('validates referenced tags and projects in the tenant at save time, including
  // References are only checked when a filter is supplied: a name-only change keeps a view whose project has since gone.
  const temporary = await makeProject('Short-lived');
  const orphan = await newView(member, 'Orphan', filter({ projectId: temporary }));
- await db.owner`delete from projects where id = ${temporary}`;
+ await db.owner`delete from tags where id = ${temporary}`;
  const renamed = await json<View>(patch(member, orphan.id, { expectedRevision: 1, name: 'Orphan renamed' }));
  assert.equal(renamed.filter.projectId, temporary);
  assert.equal((await json<Failure>(patch(member, orphan.id, { expectedRevision: 2, filter: filter({ projectId: temporary }) }), 400)).field, 'projectId');
@@ -346,7 +347,7 @@ it('references resolve in bounded batches: available, missing and unavailable ne
  assert.deepEqual(available.references!.tags.map(t => t.id), sorted);
 
  await db.owner`delete from tags where id = ${gone}`;
- await db.owner`delete from projects where id = ${leaving}`;
+ await db.owner`delete from tags where id = ${leaving}`;
  const missing = await json<Detail>(request('GET', `${views()}/${view.id}`, person));
  assert.deepEqual(missing.references!.tags.find(t => t.id === gone), { id: gone, state: 'missing' });
  assert.equal(missing.references!.tags.find(t => t.id === kept)!.state, 'available');
@@ -359,23 +360,14 @@ it('references resolve in bounded batches: available, missing and unavailable ne
  try {
   const failed = await json<Detail>(request('GET', `${views()}/${view.id}`, person));
   assert.deepEqual(failed.references!.tags, sorted.map(id => ({ id, state: 'unavailable' })));
-  assert.deepEqual(failed.references!.project, { id: leaving, state: 'missing' });
+  assert.deepEqual(failed.references!.project, { id: leaving, state: 'unavailable' }, 'a project is a tag now, read the same way');
   assert.deepEqual(failed.filter, missing.filter); assert.equal(failed.revision, 1);
   assert.equal((await json<{ views: View[] }>(request('GET', views(), person))).views[0]!.id, view.id);
  } finally { await db.owner`grant select on tags to ${db.owner(db.runtimeRole)}`; }
- const project2 = await makeProject('Present project');
- const withProject = await newView(person, 'Project unavailable', filter({ projectId: project2, tagIds: [kept] }));
- await db.owner`revoke select on projects from ${db.owner(db.runtimeRole)}`;
- try {
-  const failed = await json<Detail>(request('GET', `${views()}/${withProject.id}`, person));
-  assert.deepEqual(failed.references!.project, { id: project2, state: 'unavailable' });
-  assert.deepEqual(failed.references!.tags, [{ id: kept, state: 'available', name: 'aaa Kept' }]);
-  assert.equal(failed.filter.projectId, project2);
- } finally { await db.owner`grant select on projects to ${db.owner(db.runtimeRole)}`; }
-
  // The Work list is queried with exactly the stored IDs: a missing tag narrows to nothing, it never widens to everything.
  const task = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Tagged work' }), 201)).id;
- await json(request('PUT', `${base()}/tasks/${task}/tags/${kept}`, owner));
+ const thread = (await db.owner`select id from threads where task_id = ${task}`)[0]!.id;
+ await json(request('POST', `${base()}/threads/${thread}/tags/${kept}`, owner, { expectedRevision: 1 }));
  const stored = (await json<Detail>(request('GET', `${views()}/${view.id}`, person))).filter;
  const query = (ids: string[]) => ids.map(id => `tagId=${id}`).join('&');
  assert.deepEqual((await json<{ tasks: WorkTask[] }>(request('GET', `${base()}/tasks?${query(stored.tagIds)}`, person))).tasks.map(t => t.id), [task]);

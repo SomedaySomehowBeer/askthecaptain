@@ -54,8 +54,10 @@ it('the export streams every tenant table as newline-delimited JSON, without sec
 	assert.ok((header.tables as string[]).includes('tasks') && (header.tables as string[]).includes('connections') && (header.tables as string[]).includes('audit_events'));
 	const rows = lines.slice(1, -1) as { table: string; row: Record<string, unknown> }[];
 	assert.equal(rows.filter((r) => r.table === 'tasks').length, 1);
-	assert.equal(rows.filter((r) => r.table === 'projects').length, 0, 'no project is created for the organisation or its task');
-	assert.equal(rows.find((r) => r.table === 'tasks')!.row.projectId, null);
+	assert.ok(!(header.tables as string[]).includes('projects') && !(header.tables as string[]).includes('task_tags'), 'retired by 0046');
+	assert.ok(!('projectId' in rows.find((r) => r.table === 'tasks')!.row));
+	assert.equal(rows.filter((r) => r.table === 'threads').length, 1, 'the task’s record thread');
+	assert.match((header.notes as string[]).join(' '), /not a complete thread backup/);
 	const connection = rows.find((r) => r.table === 'connections')!;
 	assert.equal(connection.row.provider, 'google'); assert.ok(!('accessTokenEncrypted' in connection.row) && !('refreshTokenEncrypted' in connection.row) && !Object.keys(connection.row).some((k) => /Encrypted$/.test(k)), 'tokens never leave');
 	assert.ok(rows.every((r) => r.row.organisationId === orgId), 'only this organisation');
@@ -79,7 +81,7 @@ it('deletion needs the owner and the exact name, revokes providers, records the 
 	assert.deepEqual(retired.filter((t) => t in result.rowCounts), [], 'no retired assistant table is counted');
 	assert.deepEqual(revoked, [orgId]);
 	assert.equal((await db.owner`select id from organisations where id = ${orgId}`).length, 0);
-	for (const table of ['tasks', 'projects', 'memberships', 'connections', 'audit_events', 'invitations']) assert.equal((await db.owner.unsafe(`select 1 from ${table} where organisation_id = $1`, [orgId])).length, 0, table);
+	for (const table of ['tasks', 'threads', 'tags', 'memberships', 'connections', 'audit_events', 'invitations']) assert.equal((await db.owner.unsafe(`select 1 from ${table} where organisation_id = $1`, [orgId])).length, 0, table);
 	const [record] = await db.owner`select name, deleted_by_email, row_counts from organisation_deletions where deleted_organisation_id = ${orgId}`;
 	assert.equal(record!.name, 'Harbour Brewing'); assert.equal(record!.deletedByEmail, 'owner@example.com'); assert.equal((record!.rowCounts as Record<string, number>).tasks, 1);
 	assert.equal((await json('GET', `/v1/organisations/${orgId}`, owner.token)).status, 404);

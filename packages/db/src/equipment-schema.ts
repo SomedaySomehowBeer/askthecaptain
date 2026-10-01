@@ -2,7 +2,6 @@ import { sql } from 'drizzle-orm';
 import { check, foreignKey, index, integer, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { memberships, organisations } from './connections-schema.ts';
 // Reference shapes only; the hand-written migrations own the work tables and GiST exclusion.
-const projects = pgTable('projects', { id: uuid('id').primaryKey(), organisationId: uuid('organisation_id').notNull() });
 const tasks = pgTable('tasks', { id: uuid('id').primaryKey(), organisationId: uuid('organisation_id').notNull() });
 const tenant = () => uuid('organisation_id').notNull().references(() => organisations.id, { onDelete: 'cascade' });
 const at = (name: string) => timestamp(name, { withTimezone: true }).notNull().defaultNow();
@@ -18,11 +17,10 @@ export const equipmentReservations = pgTable('equipment_reservations', {
  startsAt: timestamp('starts_at', { withTimezone: true }).notNull(), endsAt: timestamp('ends_at', { withTimezone: true }).notNull(),
  setupMinutes: integer('setup_minutes').notNull().default(0), cleanupMinutes: integer('cleanup_minutes').notNull().default(0),
  occupiedStartsAt: timestamp('occupied_starts_at', { withTimezone: true }).notNull(), occupiedEndsAt: timestamp('occupied_ends_at', { withTimezone: true }).notNull(),
- projectId: uuid('project_id'), taskId: uuid('task_id'), ownerId: uuid('owner_id'), createdBy: uuid('created_by').notNull(),
+ taskId: uuid('task_id'), ownerId: uuid('owner_id'), createdBy: uuid('created_by').notNull(),
  revision: integer('revision').notNull().default(1), createdAt: at('created_at'), updatedAt: at('updated_at'),
 }, t => [unique().on(t.organisationId, t.id), index('equipment_reservations_by_time').on(t.organisationId, t.equipmentId, t.occupiedStartsAt, t.id),
  foreignKey({ columns: [t.organisationId, t.equipmentId], foreignColumns: [equipment.organisationId, equipment.id] }),
- foreignKey({ columns: [t.organisationId, t.projectId], foreignColumns: [projects.organisationId, projects.id] }),
  foreignKey({ columns: [t.organisationId, t.taskId], foreignColumns: [tasks.organisationId, tasks.id] }),
  foreignKey({ columns: [t.organisationId, t.ownerId], foreignColumns: [memberships.organisationId, memberships.userId] }),
  foreignKey({ columns: [t.organisationId, t.createdBy], foreignColumns: [memberships.organisationId, memberships.userId] }),
@@ -36,5 +34,5 @@ export const equipmentReservations = pgTable('equipment_reservations', {
  check('equipment_reservations_setup_check', sql`${t.occupiedStartsAt} = ${t.startsAt} - ${t.setupMinutes} * interval '1 minute'`),
  check('equipment_reservations_cleanup_check', sql`${t.occupiedEndsAt} = ${t.endsAt} + ${t.cleanupMinutes} * interval '1 minute'`),
  // Migration 0036 also adds equipment_reservations_no_overlap (GiST, confirmed occupied [start,end)).
- // Migration 0038 dropped the task-requires-project check; the service compares a task's project null-safely.
+ // Migration 0046 dropped project_id: a booking's tags are on its thread (threads-schema.ts), made by its insert trigger.
 ]);
