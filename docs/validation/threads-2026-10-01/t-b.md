@@ -29,36 +29,31 @@ minutes. Change-feed upserts keep the higher change sequence; only message seque
 gaps. Tombstoned pinned messages disappear immediately, even before their unpin change arrives.
 Native thread transport is not enabled; its shell retains the explicit unavailable state.
 
-## Assumed shapes (T-A not yet integrated)
+## Assumed shapes and merged API reconciliation
 
-The contract does not specify all JSON fields. These are explicit assumptions, not evidence
-of T-A's payloads:
+Main `b9b09fb` (#229) was merged into the branch. The merged `threads/service.ts`,
+`routes.ts`, `list.test.ts`, `threads.test.ts` and tags service were inspected. The earlier
+ambiguities are now resolved:
 
-- List row `status` is string or null; the two facts are strings. `record.kind` and link `kind`
-  are `task`, `booking`, `stock_item`. A group `key` is its tag UUID or `none`; optional owner is
-  `{ userId, name }`, dates are nullable `YYYY-MM-DD`. Tags are strictly `{ id, name }`.
-- Detail uses the top-level name `pin` from amended §6, holding one `{ id, messageId, pinnedBy,
-  pinnedAt }` object or null (not an array). Participants are present only for private threads,
-  with the inherited `{ userId, name, addedAt }` shape.
-- Card is `{ kind, id, title, status, facts, body, notes? }`; nullable body/notes are plain text.
-  Topic/private card IDs may be null. List rows and detail have no `links` field.
-- Message/page/change shapes retain the old contract, renaming `conversationId`/`conversation`
-  to `threadId`/`thread`; messages add `kind: 'message'`. Send/edit/delete return a message.
-  Delete carries `expectedRevision` as a query parameter. Read returns `{ readPosition, unread }`;
-  star returns `{ starred }`. Pin returns the four-field pin; unpin may return it or null.
-- Pins carry no message sequence in §6. If their message is outside the loaded window, a tap
-  checks one bounded change page from the beginning, then loads the matching message's window.
-  If more than 100 changes precede it, the screen explicitly offers another tap to continue;
-  there is no unbounded fetch loop or invented pin excerpt.
+- No list/detail `links`; tags are exactly `{ id, name }`. Detail's live pin key is `pin`.
+- Record kind is `stock`, alongside `task` and `booking`.
+- Group owner is `{ id, name: string | null }`, with nullable owner/dates on every group.
+- Card is `{ record, title, status, facts, fold }`. Each record's fold is validated against
+  its actual fields; topic/private folds have `createdBy` and `open: null`. Booking folds
+  identify the equipment link. Unknown fold fields and retired card shapes are rejected.
+- Pin POST/DELETE return the full pin row (thread, change sequence and unpin metadata),
+  while detail carries the compact live pin. These use separate strict parsers.
+- Messages/pages/change feed use `threadId`/`thread`; read replies use `readPosition`.
+  Message DELETE's expectedRevision query and raw message mutation replies were confirmed.
 
-Re-check these parsers and pin navigation against T-A's real payloads when root reports it
-merged. No implementation file in the parallel API worktree was read or changed.
+A new real-Postgres test feeds the actual API JSON through the Expo parsers for task, booking,
+stock, topic and private cards, owned tag groups, message edits/tombstones, pins, stars, reads
+and changes. It also checks a nonparticipant's 404 and absence from their parsed list.
+No implementation file in the parallel API worktree was read or changed.
 
-The owner announced the #229 amendments (no links, no tag kind, thread wire names and
-`thread_id_unavailable`) while T-B was finishing. Those are applied in the parsers/fixtures.
-The published remote amendment `91e504d` was then read in full; its singular `pin` key is
-also applied. Typecheck, 401 pure tests plus 20 boundary/config tests and fresh exports pass
-after the rebase. The final browser rerun is in progress.
+The remaining navigation limitation is explicit: the compact pin has no message sequence.
+An unloaded pin is found through one bounded change page per tap; after 100 changes, another
+tap may be needed. No unbounded fetch loop or invented pin excerpt is used.
 
 ## Checks
 
@@ -66,7 +61,7 @@ Heavy work uses `flock /tmp/atc-build.lock`; validation/export/browser chains ga
 1500 MB available memory.
 
 - Mobile typecheck and source boundary: passed.
-- **401 mobile pure tests + 20 boundary/config tests**, no skips.
+- **402 mobile pure tests + 20 boundary/config tests**, no skips.
 - SDK compatibility, Android backup configuration, fresh web/iOS/Android/harness exports,
   bundle boundary and canary guards: passed.
 - **9 cookie-session tests** against disposable real Postgres, no skips.
@@ -85,9 +80,9 @@ Full logs: [checks](t-b-checks.log), [Postgres](t-b-postgres.log),
 
 ## Not covered
 
-Thread browser/API responses are synthetic and follow the assumptions above. Existing real
-Postgres checks establish the reused session contract, not the new T-A routes. No new thread
-API integration, hosted round trip, real business/private-thread data, inference, native device,
+Browser responses are synthetic, aligned with the merged API. The new Postgres check exercises
+real thread endpoints and client parsing; it is not a hosted browser round trip. No real
+business/private-thread data, inference, native device,
 assistive technology or cross-browser evidence. No deployment, migration or merge.
 
 R2 message edits/deletes deliberately follow the contract's content-free tombstone and

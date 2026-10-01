@@ -13,7 +13,7 @@ import type { Detail, Message } from '../../threads/contracts.ts';
 import { createThreadControls } from '../../threads/thread-controls.ts';
 import { createComposer } from '../../threads/composer.ts';
 import { browserDrafts } from '../../threads/storage.ts';
-import { hasGap, messagePowers, recordRoute, validBody } from '../../threads/derive.ts';
+import { cardDetails, hasGap, messagePowers, recordRoute, validBody } from '../../threads/derive.ts';
 import { useDeadline, useThreadPoll } from '../../threads/use-poll.ts';
 import { copy } from '../../threads/copy.ts';
 import { colors, space } from '../../theme/tokens.ts';
@@ -52,7 +52,7 @@ function Thread({calls,scope,id,role,now}:{calls:ThreadCalls;scope:ReadScope;id:
   {state.detail?<View testID="thread-card" style={styles.card}>
    <Pressable testID="thread-card-fold" role="button" aria-expanded={fold} aria-label="Record details" onPress={()=>setFold(!fold)} style={styles.row}><Text role="heading" style={styles.title}>{state.detail.card.title}</Text>{state.detail.card.status?<Text style={styles.status}>{state.detail.card.status}</Text>:null}<Text>{fold?'⌃':'⌄'}</Text></Pressable>
    <View style={styles.row}>{state.detail.card.facts.map((fact,i)=><Text key={i} style={[styles.body,{flex:1}]}>{fact}</Text>)}</View>
-   {fold?<ScrollView style={{maxHeight:180}} testID="thread-details"><Text style={styles.body}>{[state.detail.card.body,state.detail.card.notes].filter(Boolean).join('\n')||'No further details.'}</Text><Text style={styles.body}>{state.detail.tags.map(t=>t.name).join(' · ')||'No tags'}</Text>{recordRoute(state.detail)?<Button label="Open the record" onPress={()=>router.push(recordRoute(state.detail!)!)} />:null}{state.detail.thread.kind==='private'?<Text style={styles.body}>{copy.privacy}</Text>:null}</ScrollView>:null}
+   {fold?<ScrollView style={{maxHeight:180}} testID="thread-details"><Text style={styles.body}>{cardDetails(state.detail.card).join('\n')||'No further details.'}</Text><Text style={styles.body}>{state.detail.tags.map(t=>t.name).join(' · ')||'No tags'}</Text>{recordRoute(state.detail)?<Button label="Open the record" onPress={()=>router.push(recordRoute(state.detail!)!)} />:null}{state.detail.thread.kind==='private'?<Text style={styles.body}>{copy.privacy}</Text>:null}</ScrollView>:null}
    <Button testID="thread-star" label={state.detail.thread.starred?'Unstar thread':'Star thread'} disabled={disabled||state.needsRefresh} onPress={()=>{void controls.mutate({kind:'star',value:!state.detail!.thread.starred});}}/>
   </View>:null}
   {state.detail?.pin&&!state.messages.some(m=>m.id===state.detail!.pin!.messageId&&m.deletedAt!==null)?<Pressable testID="thread-pin" role="button" onPress={()=>{void controls.jumpPin().then(jump);}} disabled={disabled} style={styles.pin}><Text numberOfLines={1} style={styles.body}>⌖ {state.messages.find(m=>m.id===state.detail!.pin!.messageId)?.body??'Pinned message — tap to find it'}</Text></Pressable>:null}

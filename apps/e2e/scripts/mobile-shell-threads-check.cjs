@@ -8,9 +8,10 @@ module.exports = async ({ browser, production, base, shots, width }) => {
   const user=uuid(1),org=uuid(2),thread=uuid(11),tag=uuid(12),otherTag=uuid(13),author=uuid(99);
   const instant='2026-10-01T02:00:00.000Z';let readPosition=3,revision=1,starred=false,pin=null,mode='ok',listMode='ok',release;
   let messages=Array.from({length:65},(_,i)=>({id:uuid(i+100),threadId:thread,kind:'message',seq:i+1,changeSeq:i+1,authorId:author,authorName:'Pat Crew',body:`Message ${i+1}: check the packaging plan.`,createdAt:instant,editedAt:null,deletedAt:null,deletedBy:null,revision:1}));
-  let lastChange=65;
+  let lastChange=65,recordMode=false;
   const calls=[],writes=[],reads=[],errors=[],outside=[];
-  const detail=()=>({thread:{id:thread,kind:'topic',title:'Packaging plan',revision,lastSeq:messages.length,lastChange,readPosition,unread:Math.min(51,messages.filter(m=>m.seq>readPosition&&m.authorId!==user&&!m.deletedAt).length),starred,createdAt:instant},card:{kind:'topic',id:null,title:'Packaging plan',status:null,facts:['Pat Crew',''],body:'Review the packaging discussion.'},tags:[{id:tag,name:'Summer lager'}],pin:pin});
+  const topicDetail=()=>({thread:{id:thread,kind:'topic',title:'Packaging plan',revision,lastSeq:messages.length,lastChange,readPosition,unread:Math.min(51,messages.filter(m=>m.seq>readPosition&&m.authorId!==user&&!m.deletedAt).length),starred,createdAt:instant},card:{record:null,title:'Packaging plan',status:null,facts:['Pat Crew',''],fold:{createdBy:author,open:null}},tags:[{id:tag,name:'Summer lager'}],pin:pin});
+  const detail=()=>{const d=topicDetail();if(recordMode){d.thread.kind='record';d.card.record={kind:'task',id:user};d.card.fold={body:'Pack the cans carefully.',status:'open',ownerId:user,ownerName:'Sam Skipper',due:'2026-10-10',evidenceRequired:true,seriesId:null,open:null};}return d;};
   const row=id=>({id,kind:'topic',title:id===thread?'Packaging plan':'Other topic',record:null,status:null,facts:['Pat Crew',''],lastMessageAt:instant,lastMessage:{authorName:'Pat Crew',excerpt:'Check the packaging plan.'},unread:51,needsYou:true,starred:false,tags:[{id:tag,name:'Summer lager'},{id:otherTag,name:'Production'}]});
   await context.route('**/*',async route=>{
    const req=route.request(),url=new URL(req.url());if(![production.origin,base.origin].includes(url.origin)){outside.push(url.origin);return route.abort();}
@@ -24,7 +25,7 @@ module.exports = async ({ browser, production, base, shots, width }) => {
      if(listMode==='failed')return json(503,{}, {'retry-after':'5'});
      if(listMode==='hold')return new Promise(resolve=>{release=async()=>{listMode='ok';await json(200,{filter:'all',available:true,threads:[],nextCursor:null,groups:[]});resolve();};});
      const filter=url.searchParams.get('filter');expect(url.searchParams.get('limit')).toBe('50');
-     return json(200,{filter,available:true,threads:filter==='tasks'?[]:url.searchParams.has('after')?[row(uuid(14))]:[row(thread)],nextCursor:filter==='tasks'||url.searchParams.has('after')?null:'second-page',groups:filter==='tasks'?[]:[{key:tag,label:'Summer lager',threads:2,needsYou:2,owner:{userId:user,name:'Sam Skipper'},startsOn:'2026-10-01',endsOn:'2026-10-10'},{key:otherTag,label:'Production',threads:2,needsYou:2}]});
+     return json(200,{filter,available:true,threads:filter==='tasks'?[]:url.searchParams.has('after')?[row(uuid(14))]:[row(thread)],nextCursor:filter==='tasks'||url.searchParams.has('after')?null:'second-page',groups:filter==='tasks'?[]:[{key:tag,label:'Summer lager',threads:2,needsYou:2,owner:{id:user,name:'Sam Skipper'},startsOn:'2026-10-01',endsOn:'2026-10-10'},{key:otherTag,label:'Production',threads:2,needsYou:2}]});
     }
     if(url.pathname.endsWith('/'+thread))return json(200,detail());
     if(url.pathname.endsWith('/changes')){const after=Number(url.searchParams.get('after'));const changes=messages.filter(m=>m.changeSeq>after).sort((a,b)=>a.changeSeq-b.changeSeq).map(message=>({changeSeq:message.changeSeq,kind:'message',message}));return json(200,{thread:{id:thread,revision,lastSeq:messages.length,highWater:lastChange},changes:changes.slice(0,100),next:changes.length>100?changes[99].changeSeq:lastChange,complete:changes.length<=100});}
@@ -39,7 +40,7 @@ module.exports = async ({ browser, production, base, shots, width }) => {
      if(mode==='unknown')return json(503,{}, {'retry-after':'5'});
      if(mode==='rate')return json(429,{}, {'retry-after':'5'});
      if(url.pathname.endsWith('/star')){starred=req.method()==='POST';return json(200,{starred});}
-     if(url.pathname.endsWith('/pin')){pin=req.method()==='DELETE'?null:{id:uuid(900),messageId:body.messageId,pinnedBy:user,pinnedAt:instant};return json(200,pin);}
+     if(url.pathname.endsWith('/pin')){pin=req.method()==='DELETE'?null:{id:uuid(900),messageId:body.messageId,pinnedBy:user,pinnedAt:instant};return json(200,{...(pin??{id:uuid(900),messageId:body.messageId??messages.at(-1).id,pinnedBy:user,pinnedAt:instant}),threadId:thread,changeSeq:++lastChange,unpinnedBy:req.method()==='DELETE'?user:null,unpinnedAt:req.method()==='DELETE'?instant:null});}
      if(url.pathname.endsWith('/messages')){const old=messages.find(m=>m.id===body.id);if(old)return json(200,old);const message={...messages[0],id:body.id,body:body.body,authorId:user,authorName:'Sam Skipper',seq:messages.length+1,changeSeq:++lastChange};messages.push(message);return json(201,message);}
      const target=messages.find(m=>url.pathname.endsWith('/'+m.id));if(target){expect(req.method()==='DELETE'?Number(url.searchParams.get('expectedRevision')):body.expectedRevision).toBe(target.revision);target.revision++;target.changeSeq=++lastChange;if(req.method()==='PATCH'){target.body=body.body;target.editedAt=instant;}else{target.body=null;target.deletedAt=instant;target.deletedBy=user;if(pin?.messageId===target.id)pin=null;}return json(200,target);}
     }
@@ -56,7 +57,7 @@ module.exports = async ({ browser, production, base, shots, width }) => {
   await id(`thread-row-${thread}`).first().click();await expect(id('thread-unread-line')).toBeVisible();expect(calls.some(p=>p.includes('/messages?after=2&limit=50'))).toBe(true);
   const line=await id('thread-unread-line').boundingBox(),area=await id('thread-messages').boundingBox();expect(line.y).toBeGreaterThanOrEqual(area.y-2);expect(line.y).toBeLessThan(area.y+area.height);
   await overflow();await shot('unread');
-  await id('thread-card-fold').click();await expect(id('thread-details')).toContainText('Review the packaging discussion');await id('thread-card-fold').click();
+  await id('thread-card-fold').click();await expect(id('thread-details')).toContainText('No further details');await id('thread-card-fold').click();
   await id(`message-menu-${uuid(103)}`).click();await expect(page.getByRole('button',{name:'Edit message',exact:true})).toHaveCount(0);await id(`message-menu-${uuid(103)}`).click();
   const beforeCard=await id('thread-card').boundingBox();await id('thread-messages').evaluate(el=>{el.scrollTop=el.scrollHeight;});await page.clock.fastForward(16000);await expect.poll(()=>reads.some(seq=>seq>4)).toBe(true);const afterCard=await id('thread-card').boundingBox();expect(afterCard.y).toBe(beforeCard.y);
   await id('thread-newer').click();await expect(id(`message-${uuid(164)}`)).toBeVisible();await page.clock.fastForward(16000);await id('thread-messages').evaluate(el=>{el.scrollTop=el.scrollHeight;});await page.clock.fastForward(16000);await expect.poll(async()=>{if(!reads.includes(65))await page.clock.fastForward(16000);return reads.includes(65);}).toBe(true);
@@ -66,6 +67,7 @@ module.exports = async ({ browser, production, base, shots, width }) => {
   await id('thread-star').click();await expect(id('thread-star')).toHaveText('Unstar thread');
   await page.getByRole('button',{name:'Pin message',exact:true}).click();await expect(id('thread-pin')).toContainText('Packaging is ready');await id('thread-pin').click();
   await id(`message-menu-${own.id}`).click();await page.getByRole('button',{name:'Delete message',exact:true}).click();await expect(id(`message-${own.id}`)).toContainText('Message deleted');await expect(id('thread-pin')).toHaveCount(0);
+  recordMode=true;await id('thread-refresh').click();await id('thread-card-fold').click();await expect(id('thread-details')).toContainText('Pack the cans carefully.');await expect(id('thread-details')).toContainText('Evidence required');await id('thread-card-fold').click();recordMode=false;await id('thread-refresh').click();
   mode='unknown';await id('thread-composer').fill('Keep this exact message');await id('thread-send').click();await expect(id('composer-status')).toContainText('may have been sent');await expect(id('thread-composer')).toHaveAttribute('readonly','');const pending=writes.at(-1).body;await page.clock.fastForward(5100);
   mode='ok';await page.reload();await expect(id('thread-send')).toHaveText('Retry same message');await id('thread-send').click();await expect(id('thread-composer')).toHaveValue('');expect(writes.filter(w=>w.path.endsWith('/messages')).at(-1).body).toEqual(pending);
   const stored=await page.evaluate(()=>({local:{...localStorage},session:{...sessionStorage}}));expect(JSON.stringify(stored)).not.toContain('Keep this exact');expect(JSON.stringify(stored)).not.toContain(thread);expect(JSON.stringify(stored)).not.toContain('Packaging plan');

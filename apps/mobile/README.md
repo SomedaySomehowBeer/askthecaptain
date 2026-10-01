@@ -9,7 +9,7 @@ The root opens Threads with six fixed filters, grouped cursor pages, a read-only
 schedule link and an unavailable Team row. Thread screens show the fixed record card,
 oldest-first messages, first unread, pending-send recovery, message actions, pins and stars.
 Files and People remain unavailable. Thread responses currently follow the R2 contract using
-strict client parsers; integration with the parallel T-A API is still pending. Account provides organisation switching, sign out, sign out everywhere else,
+strict client parsers; a real-Postgres API test checks them against the merged T-A payloads. Account provides organisation switching, sign out, sign out everywhere else,
 and web passkey listing, naming at registration, and removal. The invitation page accepts an invitation once and reports an
 uncertain response without replaying the write. Owners and admins can open Members from Settings to create and revoke invitation links, change roles and remove members. These controls currently use the web cookie session; native shows an unavailable notice. Notifications in Settings lists and removes personal devices, registers this browser and sends the displayed test notification. Native push and organisation export/deletion controls are later work.
 
