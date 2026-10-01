@@ -1,0 +1,286 @@
+
+> @captain/mobile@ check /tmp/captain-threads-client-2026-10-01/apps/mobile
+> tsc --noEmit -p tsconfig.json && node scripts/check-boundary.mjs
+
+boundary: apps/mobile manifest and sources are within the client boundary
+TAP version 13
+# Subtest: strict list/detail/message parsers reject extra fields, wrong identities, malformed tombstones and bounds
+ok 1 - strict list/detail/message parsers reject extra fields, wrong identities, malformed tombstones and bounds
+  ---
+  duration_ms: 4.686272
+  type: 'test'
+  ...
+# Subtest: retired links, tag kind and read wire names are rejected
+ok 2 - retired links, tag kind and read wire names are rejected
+  ---
+  duration_ms: 1.760852
+  type: 'test'
+  ...
+# Subtest: groups preserve whole-set counts and show a multi-tag row under every heading
+ok 3 - groups preserve whole-set counts and show a multi-tag row under every heading
+  ---
+  duration_ms: 0.535443
+  type: 'test'
+  ...
+# Subtest: row/card and first-unread derivation follows the contract rather than fabricating record screens
+ok 4 - row/card and first-unread derivation follows the contract rather than fabricating record screens
+  ---
+  duration_ms: 1.220544
+  type: 'test'
+  ...
+# Subtest: upserts retain higher change sequence, tombstones, and detect sequence gaps only
+ok 5 - upserts retain higher change sequence, tombstones, and detect sequence gaps only
+  ---
+  duration_ms: 1.001116
+  type: 'test'
+  ...
+# Subtest: message menu powers distinguish author editing from moderation and hide tombstone actions
+ok 6 - message menu powers distinguish author editing from moderation and hide tombstone actions
+  ---
+  duration_ms: 0.573947
+  type: 'test'
+  ...
+# Subtest: body bounds use code points and UTF-8 bytes
+ok 7 - body bounds use code points and UTF-8 bytes
+  ---
+  duration_ms: 1.807664
+  type: 'test'
+  ...
+# Subtest: drafts are scoped, clear on a different person/signout, and malformed records are discarded
+ok 8 - drafts are scoped, clear on a different person/signout, and malformed records are discarded
+  ---
+  duration_ms: 0.731668
+  type: 'test'
+  ...
+# Subtest: failed session storage prevents the first send
+ok 9 - failed session storage prevents the first send
+  ---
+  duration_ms: 1.508581
+  type: 'test'
+  ...
+# Subtest: uncertain sends lock body and preserve ID through remount, never automatically replay
+ok 10 - uncertain sends lock body and preserve ID through remount, never automatically replay
+  ---
+  duration_ms: 1.701666
+  type: 'test'
+  ...
+# Subtest: 429 keeps a draft editable with its ID, paces retry, and cannot fabricate success
+ok 11 - 429 keeps a draft editable with its ID, paces retry, and cannot fabricate success
+  ---
+  duration_ms: 0.784096
+  type: 'test'
+  ...
+# Subtest: ID conflict retains text for explicit new-ID retry; a send only reconciles the same author and thread
+ok 12 - ID conflict retains text for explicit new-ID retry; a send only reconciles the same author and thread
+  ---
+  duration_ms: 0.761849
+  type: 'test'
+  ...
+# Subtest: pending sends coalesce and stale responses cannot enter a new scope
+ok 13 - pending sends coalesce and stale responses cannot enter a new scope
+  ---
+  duration_ms: 0.584833
+  type: 'test'
+  ...
+# Subtest: late 401 does not end a new person; current 401 does
+ok 14 - late 401 does not end a new person; current 401 does
+  ---
+  duration_ms: 0.49843
+  type: 'test'
+  ...
+# Subtest: list responses stay scoped, filter changes reset pages and failed reads back off
+ok 15 - list responses stay scoped, filter changes reset pages and failed reads back off
+  ---
+  duration_ms: 1.416957
+  type: 'test'
+  ...
+# Subtest: thread opening uses first-unread fetch and displayed messages alone advance reads with a throttle
+ok 16 - thread opening uses first-unread fetch and displayed messages alone advance reads with a throttle
+  ---
+  duration_ms: 1.931696
+  type: 'test'
+  ...
+# Subtest: lost access hides thread data and clears its pending draft
+ok 17 - lost access hides thread data and clears its pending draft
+  ---
+  duration_ms: 1.399091
+  type: 'test'
+  ...
+# Subtest: stars reconcile through detail without reissuing the mutation
+ok 18 - stars reconcile through detail without reissuing the mutation
+  ---
+  duration_ms: 1.41126
+  type: 'test'
+  ...
+# Subtest: poll requests coalesce; incomplete feed progress and newer versions converge
+ok 19 - poll requests coalesce; incomplete feed progress and newer versions converge
+  ---
+  duration_ms: 1.024971
+  type: 'test'
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 581.19788
+PASS Android generated config references SecureStore exclusions for backup and device transfer (not device proof)
+Using src/app as the root directory for Expo Router.
+Expo Autolinking module resolution enabled
+Starting Metro Bundler
+
+| (node:2275097) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:2275097) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+Web Bundled 4183ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (896 modules)
+
+› Assets (18):
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/arrow_down.017bc6ba3fc25503e5eb5e53826d48a8.png (9.5KB)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/error.d1ea1496f9057eb392d5bbf3732a61b7.png (469B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/file.19eeb73b9593a38f8e9f418337fc7d10.png (138B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/forward.d8b800c443b8972542883e0b9de2bdc6.png (188B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/pkg.ab19f4cbc543357183a20571f68380a3.png (364B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/back-icon-mask.0a328cd9c1afd0afe8e3b1ec5165b1b4.png (653B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/back-icon.35ba0eaec5a4f5ed12ca16fabeae451d.png (207B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/clear-icon.c94f6478e7ae0cdd9f15de1fcb9e5e55.png (4 variations | 425B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/close-icon.808e1b1b9b53114ec2838071a7e6daa7.png (4 variations | 235B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/search-icon.286d67d3f74808a60a78d3ebf1a5fb57.png (928B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/sitemap.412dd9275b6b48ad28f5e3d81bb1f626.png (465B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/unmatched.20e71bdf79e3a97bf55fd9e164041578.png (4.8KB)
+
+› web bundles (2):
+_expo/static/js/web/entry-6224c38b39bf297f7fc01ba762297bed.js (1.4MB)
+_expo/static/js/web/index-0c133dff28b3699b0746a458fb1e5354.js (20KB)
+
+› Files (3):
+favicon.ico (15KB)
+index.html (630B)
+metadata.json (49B)
+
+Exported: dist/web
+Using src/app as the root directory for Expo Router.
+Expo Autolinking module resolution enabled
+Starting Metro Bundler
+
+| (node:2275178) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:2275178) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+iOS Bundled 11227ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (1221 modules)
+
+› Assets (23):
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/arrow_down.png (9.5KB)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/error.png (469B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/file.png (138B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/forward.png (188B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/pkg.png (364B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/back-icon-mask.png (653B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/back-icon.png (4 variations | 566B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/clear-icon.png (4 variations | 425B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/close-icon.png (4 variations | 235B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/search-icon.png (3 variations | 582B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/sitemap.png (465B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/unmatched.png (4.8KB)
+
+› ios bundles (1):
+_expo/static/js/ios/entry-2e0018f0ec7d9b365be570fbb8f74b4e.hbc (2.9MB)
+
+› Files (1):
+metadata.json (1.6KB)
+
+Exported: dist/ios
+Using src/app as the root directory for Expo Router.
+Expo Autolinking module resolution enabled
+Starting Metro Bundler
+
+| (node:2275270) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:2275270) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+Android Bundled 11549ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (1356 modules)
+
+› Assets (27):
+../../node_modules/.pnpm/@expo-google-fonts+material-symbols@0.4.48/node_modules/@expo-google-fonts/material-symbols/400Regular/MaterialSymbols_400Regular.ttf (967KB)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/arrow_down.png (9.5KB)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/arrow_right.xml (307B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/checkmark.xml (312B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/error.png (469B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/file.png (138B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/forward.png (188B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/pkg.png (364B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/back-icon-mask.png (653B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/back-icon.png (4 variations | 152B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/clear-icon.png (4 variations | 425B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/close-icon.png (4 variations | 235B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/search-icon.png (4 variations | 599B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/sitemap.png (465B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/unmatched.png (4.8KB)
+
+› android bundles (1):
+_expo/static/js/android/entry-caff591b48c02dac89d935589cb36253.hbc (3.2MB)
+
+› Files (1):
+metadata.json (1.9KB)
+
+Exported: dist/android
+Expo Autolinking module resolution enabled
+Starting Metro Bundler
+
+| (node:2275369) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+| (node:2275369) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (Use `node --trace-warnings ...` to show where the warning was created)
+Web Bundled 2900ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (884 modules)
+
+› Assets (18):
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/arrow_down.017bc6ba3fc25503e5eb5e53826d48a8.png (9.5KB)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/error.d1ea1496f9057eb392d5bbf3732a61b7.png (469B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/file.19eeb73b9593a38f8e9f418337fc7d10.png (138B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/forward.d8b800c443b8972542883e0b9de2bdc6.png (188B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/pkg.ab19f4cbc543357183a20571f68380a3.png (364B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/back-icon-mask.0a328cd9c1afd0afe8e3b1ec5165b1b4.png (653B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/back-icon.35ba0eaec5a4f5ed12ca16fabeae451d.png (207B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/clear-icon.c94f6478e7ae0cdd9f15de1fcb9e5e55.png (4 variations | 425B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/close-icon.808e1b1b9b53114ec2838071a7e6daa7.png (4 variations | 235B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/react-navigation/elements/search-icon.286d67d3f74808a60a78d3ebf1a5fb57.png (928B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/sitemap.412dd9275b6b48ad28f5e3d81bb1f626.png (465B)
+../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/unmatched.20e71bdf79e3a97bf55fd9e164041578.png (4.8KB)
+
+› web bundles (2):
+_expo/static/js/web/entry-c259a29c2c7632ac09349b384b363ff9.js (1.4MB)
+_expo/static/js/web/index-91fbfe49bb52dc5aa1d1ff6fb39b2b6f.js (20KB)
+
+› Files (3):
+favicon.ico (15KB)
+index.html (630B)
+metadata.json (49B)
+
+Exported: dist-harness
+boundary: apps/mobile manifest and sources and exported bundles are within the client boundary
+PASS 360px: members, invitation link/copy/revoke, roles/removal, owner/admin restrictions, pending and uncertain writes, scope changes, session expiry and harness states
+PASS 360px: push registration/removal/test, delivery counts, permission/unavailable/failed/loading/pending states, uncertain-write backoff, leaving during permission, 401 and native notice
+PASS 360px: grouped/folded/paged threads, filters, first unread, visible reads, fixed card, send/edit/delete/pin/star, persisted uncertain send, lost access and harness states
+PASS 360px: passkey registration, next-sign-in assertion, removal, cancellation, refusal, uncertain-write reconciliation, session expiry and harness states
+PASS 360px: session confirmation/cancel, remount-persistent progress/result/wait, slow wording, counts, failures and expiry
+PASS 360px: Equipment schedule bootstrap order, one flight, never-free partial/conflict/failed cells, zone change, waits, More and stale scope suppression
+PASS 360px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
+PASS 390px: members, invitation link/copy/revoke, roles/removal, owner/admin restrictions, pending and uncertain writes, scope changes, session expiry and harness states
+PASS 390px: push registration/removal/test, delivery counts, permission/unavailable/failed/loading/pending states, uncertain-write backoff, leaving during permission, 401 and native notice
+PASS 390px: grouped/folded/paged threads, filters, first unread, visible reads, fixed card, send/edit/delete/pin/star, persisted uncertain send, lost access and harness states
+PASS 390px: passkey registration, next-sign-in assertion, removal, cancellation, refusal, uncertain-write reconciliation, session expiry and harness states
+PASS 390px: session confirmation/cancel, remount-persistent progress/result/wait, slow wording, counts, failures and expiry
+PASS 390px: Equipment schedule bootstrap order, one flight, never-free partial/conflict/failed cells, zone change, waits, More and stale scope suppression
+PASS 390px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
+PASS 430px: members, invitation link/copy/revoke, roles/removal, owner/admin restrictions, pending and uncertain writes, scope changes, session expiry and harness states
+PASS 430px: push registration/removal/test, delivery counts, permission/unavailable/failed/loading/pending states, uncertain-write backoff, leaving during permission, 401 and native notice
+PASS 430px: grouped/folded/paged threads, filters, first unread, visible reads, fixed card, send/edit/delete/pin/star, persisted uncertain send, lost access and harness states
+PASS 430px: passkey registration, next-sign-in assertion, removal, cancellation, refusal, uncertain-write reconciliation, session expiry and harness states
+PASS 430px: session confirmation/cancel, remount-persistent progress/result/wait, slow wording, counts, failures and expiry
+PASS 430px: Equipment schedule bootstrap order, one flight, never-free partial/conflict/failed cells, zone change, waits, More and stale scope suppression
+PASS 430px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
+PASS 1280px: members, invitation link/copy/revoke, roles/removal, owner/admin restrictions, pending and uncertain writes, scope changes, session expiry and harness states
+PASS 1280px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors

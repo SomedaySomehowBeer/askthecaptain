@@ -1,19 +1,25 @@
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { createListControls } from '../threads/list-controls.ts';
+import { filters, type Row } from '../threads/contracts.ts';
+import { groupedRows, firstName, unreadLabel } from '../threads/derive.ts';
+import { foldedGroups, saveFolds } from '../threads/storage.ts';
+import { useThreadPoll, useDeadline } from '../threads/use-poll.ts';
+import { copy } from '../threads/copy.ts';
+import type { ThreadCalls } from '../threads/api.ts';
+import type { ReadScope } from '../account/contracts.ts';
+import { Button } from '../components/AccountPage.tsx';
 import { Redirect, router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { isSignedIn, threadsCopy, webCopy } from '../account/copy.ts';
 import { Calendar, ChevronRight, People } from '../components/Icons.tsx';
-import { Notice } from '../components/Notice.tsx';
 import { PlainScreen, Screen } from '../components/Screen.tsx';
 import Welcome from './welcome.tsx';
 import { colors, space, type } from '../theme/tokens.ts';
 
-/** `/`: the one list of threads (docs/proposals/2026-09-29-chat-first-captain.md "Navigation"), empty in this
- *  increment: the header, the filter row, the pinned rows and an honest empty state; no data read yet. While the
- *  account is still being checked it says so; otherwise, when the account does not allow the list, it redirects to
- *  where it does (welcome, or the organisation chooser), so `/` never shows the list before the guards allow it. */
+/** The one scoped list of threads; account guards resolve before any thread read. */
 export default function Home() {
-	const { snapshot } = useAccount();
+	const { snapshot, web, now } = useAccount();
 	const account = snapshot.account;
 	if (account.kind === 'checking' || account.kind === 'starting') {
 		return <PlainScreen title="Captain" back={null}><Text testID="shell-checking" style={styles.body}>{webCopy.checking}</Text></PlainScreen>;
@@ -21,24 +27,48 @@ export default function Home() {
 	if (account.kind === 'unverified') return <Welcome />;
 	if (!isSignedIn(account)) return <Redirect href="/welcome" />;
 	if (account.org.kind !== 'chosen') return <Redirect href="/organisation" />;
-	return (
-		<Screen title={threadsCopy.heading}>
-			<View role="radiogroup" aria-label={threadsCopy.filterGroup} style={styles.filters}>
-				{threadsCopy.filters.map((filter, index) => (
-					<Pressable key={filter} testID={`threads-filter-${index}`} disabled aria-disabled role="radio" aria-checked={index === 0} aria-label={filter}
-						style={[styles.filter, index === 0 && styles.filterOn]}>
-						<Text style={[styles.filterText, index === 0 && styles.filterTextOn]}>{filter}</Text>
-					</Pressable>
-				))}
-			</View>
-			<View style={styles.pinned}>
-				<PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail}
-					icon={<Calendar color={colors.sageText} />} onPress={() => router.push('/equipment')} />
-				<PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted} />} last />
-			</View>
-			<View testID="threads-empty"><Notice title={threadsCopy.emptyTitle}>{threadsCopy.emptyBody}</Notice></View>
-		</Screen>
-	);
+	if(!web||!account.scope)return <Screen title={threadsCopy.heading}><PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/><PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>} last/><Text testID="threads-empty">{copy.unavailable}</Text></Screen>;
+ return <ThreadList key={account.scope.epoch} calls={web.threads} scope={account.scope} now={now} />;
+}
+function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>number}){
+ const [controls]=useState(()=>createListControls(calls,scope,now));
+ const state=useSyncExternalStore(controls.subscribe,controls.snapshot,controls.snapshot);
+ const [folds,setFolds]=useState(foldedGroups);
+ useEffect(()=>{void controls.load();return()=>controls.dispose();},[controls]);
+ const paused=useThreadPoll(()=>controls.load(),now),waiting=useDeadline(state.waitUntil,now);
+ const busy=state.phase==='loading';
+ const toggle=(key:string)=>{const next=new Set(folds);if(next.has(key))next.delete(key);else next.add(key);setFolds(next);saveFolds(next);};
+ return <Screen title={threadsCopy.heading} list={({heading,contentContainerStyle})=><View style={{flex:1}}><ScrollView testID="threads-list" contentContainerStyle={contentContainerStyle}>
+  {heading}
+  <View role="radiogroup" aria-label={threadsCopy.filterGroup} style={styles.filters}>
+   {threadsCopy.filters.map((filter,index)=><Pressable key={filter} testID={`threads-filter-${index}`} disabled={index>5||busy||waiting} aria-disabled={index>5||busy||waiting} role="radio" aria-checked={state.filter===filters[index]} aria-label={filter} onPress={()=>{void controls.filter(filters[index]!);}} style={[styles.filter,state.filter===filters[index]&&styles.filterOn]}><Text style={[styles.filterText,state.filter===filters[index]&&styles.filterTextOn]}>{filter}</Text></Pressable>)}
+  </View><Text style={styles.detail}>{copy.files}</Text>
+  <View style={styles.pinned}>
+   <PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/>
+   <PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>} last/>
+  </View>
+  {busy?<Text testID="threads-loading" style={styles.body}>{copy.loading}</Text>:null}
+  {state.message?<Text testID="threads-status" role="status" style={styles.body}>{state.message}</Text>:null}
+  {paused?<Text style={styles.body}>{copy.paused}</Text>:null}
+  <Button testID="threads-refresh" label="Refresh threads" disabled={busy||waiting||state.phase==='lost'} onPress={()=>{void controls.load();}}/>
+  {state.data?.available&&state.data.threads.length===0?<Text testID="threads-empty" style={styles.body}>{copy.empty}</Text>:null}
+  {state.data?groupedRows(state.data).map(({group,rows})=><View key={group.key} style={{marginTop:16}}>
+   <Pressable testID={`thread-group-${group.key}`} role="button" aria-expanded={!folds.has(group.key)} onPress={()=>toggle(group.key)} style={styles.group}>
+    <Text style={styles.groupLabel} numberOfLines={1}>{folds.has(group.key)?'›':'⌄'} {group.label}</Text><Text style={styles.detail}>{group.threads} threads · {group.needsYou} need you</Text>
+   </Pressable>
+   {group.owner||group.startsOn||group.endsOn?<Text style={styles.detail}>{[group.owner?.name,group.startsOn,group.endsOn].filter(Boolean).join(' · ')}</Text>:null}
+   {!folds.has(group.key)?rows.map(row=><ThreadRow key={row.id} row={row}/>):null}
+   {!folds.has(group.key)&&rows.length===0?<Text style={styles.detail}>Load more threads to see this group.</Text>:null}
+  </View>):null}
+  {state.data?.nextCursor?<Button testID="threads-more" label="Show more" disabled={busy||waiting} onPress={()=>{void controls.load(true);}}/>:null}
+ </ScrollView></View>}/>;
+}
+function ThreadRow({row}:{row:Row}){
+ return <Pressable testID={`thread-row-${row.id}`} onPress={()=>router.push(`/threads/${row.id}`)} role="link" style={[styles.threadRow,row.needsYou&&styles.needs]}>
+  <View style={styles.line}><Text style={styles.threadTitle} numberOfLines={1}>{row.title}</Text><Text style={styles.time}>{row.lastMessageAt?new Date(row.lastMessageAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'No messages'}</Text></View>
+  <Text style={styles.facts} numberOfLines={1}>{[row.status,...row.facts].filter(Boolean).join(' · ')}</Text>
+  <View style={styles.line}><Text style={styles.preview} numberOfLines={1}>{row.lastMessage?`${firstName(row.lastMessage.authorName)}: ${row.lastMessage.excerpt}`:'No messages yet'}</Text>{row.needsYou?<Text testID={`thread-unread-${row.id}`} accessibilityLabel={row.unread?`${unreadLabel(row.unread)} unread`:'Needs you'} style={styles.pip}>{row.unread?unreadLabel(row.unread):'•'}</Text>:null}</View>
+ </Pressable>;
 }
 
 /** A pinned row opens a view that is not a list of threads. One without `onPress` is listed but not available. */
@@ -59,6 +89,7 @@ function PinnedRow({ testID, label, detail, icon, onPress, last = false }: { tes
 }
 
 const styles = StyleSheet.create({
+ group:{minHeight:44,flexDirection:'row',alignItems:'center',gap:8},groupLabel:{flex:1,fontSize:16,fontWeight:'600',color:colors.heading},threadRow:{borderWidth:1,borderColor:colors.line,borderRadius:12,padding:10,marginTop:5,backgroundColor:colors.card},needs:{backgroundColor:colors.sage},line:{flexDirection:'row',alignItems:'center',gap:8},threadTitle:{flex:1,minWidth:0,fontSize:15,fontWeight:'600',color:colors.heading},time:{fontSize:11,color:colors.muted},facts:{fontSize:12,color:colors.sageText,marginTop:3},preview:{flex:1,minWidth:0,fontSize:13,color:colors.muted,marginTop:4},pip:{fontSize:12,borderRadius:10,paddingHorizontal:5,backgroundColor:colors.sageText,color:colors.card},
 	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
 	filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },
 	filter: { minHeight: space.minTarget, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },

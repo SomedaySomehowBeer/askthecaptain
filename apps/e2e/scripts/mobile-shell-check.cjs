@@ -43,6 +43,7 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
        if (passkeys === 'fail') return json(503, { error: { code: 'unavailable' } });
        return json(200, { available: true, passkeys: passkeys === 'empty' ? [] : [{ id: '00000000-0000-4000-8000-000000000005', name: 'Sample passkey', deviceType: 'multiDevice', backedUp: true, createdAt: '2026-09-01T00:00:00.000Z', lastUsedAt: null }] });
       }
+      if (/\/threads$/.test(url.pathname)) return json(200, { filter: url.searchParams.get('filter') || 'all', available: true, threads: [], groups: [], nextCursor: null });
       if (url.pathname === '/v1/me/sessions/revoke-others') return json(200, { ended: 2 });
       if (url.pathname === '/v1/invitations/accept') {
        if (invite === 'unknown') return route.abort();
@@ -70,9 +71,10 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
     identity = 'signed-in'; memberships = [a, b]; await freshPage(); await go('/');
     await expect(heading('Threads')).toBeVisible(); await expect(id('shell-organisation')).toHaveText(a.organisationName);
     await expect(page.getByRole('tab')).toHaveCount(0); await expect(page.getByRole('radio')).toHaveCount(8);
-    for (const radio of await page.getByRole('radio').all()) await expect(radio).toBeDisabled();
+    await expect(id('threads-empty')).toBeVisible();
+    for (let n=0;n<8;n++) { if(n<6) await expect(id(`threads-filter-${n}`)).toBeEnabled(); else await expect(id(`threads-filter-${n}`)).toBeDisabled(); }
     await expect(id('threads-pinned-team')).toHaveAttribute('aria-disabled', 'true');
-    await expect(id('threads-empty')).toContainText('not available yet'); await noOverflow('home'); await shot('home');
+    await expect(id('threads-empty')).toContainText('No threads match'); await noOverflow('home'); await shot('home');
     await page.getByRole('button', { name: 'Account and settings', exact: true }).click(); await expect(heading('Account')).toBeVisible();
     await expect(id('account-passkeys-none')).toBeVisible(); await id('account-action-switch').click();
     await page.getByRole('button', { name: new RegExp(b.organisationName) }).click();
@@ -103,6 +105,7 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
     // Retain deeper read-only timeline and revocation UI regression checks at phone widths.
     if (width < 500) {
      await require('./mobile-shell-push-check.cjs')({ browser, production, base, shots, width });
+     await require('./mobile-shell-threads-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-passkeys-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-revocation-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
      await require('./mobile-shell-equipment-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
