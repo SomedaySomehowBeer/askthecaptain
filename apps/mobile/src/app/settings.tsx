@@ -39,6 +39,7 @@ export default function Settings() {
 				<Actions actions={[{ kind: 'sign-out', id: 'sign-out', label: 'Sign out', primary: false }]} account={account} />
 				<RevokeOthers account={account} />
 				<Button testID="account-members" label="Members and invitations" disabled={!membership || membership.role === 'member'} reason="Choose an organisation you own or administer." onPress={() => router.push('/members')} />
+				<Button testID="account-notifications" label="Notifications" onPress={() => router.push('/settings/notifications')} />
 				<Passkeys key={view.person.epoch} web={account.web} now={account.now} />
 			</View>
 		</PlainScreen>

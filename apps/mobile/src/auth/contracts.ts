@@ -105,7 +105,7 @@ export type Parse<T> = (value: unknown) => T;
  *  passed per request by the account runner, so the client holds none. No request is retried automatically. */
 export type ApiClient = {
 	patch<T>(path: ApiPath, token: string | null, body: unknown, parse: Parse<T>): Promise<ApiOutcome<T>>;
-	delete<T>(path: ApiPath, token: string | null, parse: Parse<T>): Promise<ApiOutcome<T>>;
+	delete<T>(path: ApiPath, token: string | null, parse: Parse<T>, body?: unknown): Promise<ApiOutcome<T>>;
 	get<T>(path: ApiPath, token: string | null, parse: Parse<T>): Promise<ApiOutcome<T>>;
 	post<T>(path: ApiPath, token: string | null, body: unknown, parse: Parse<T>): Promise<ApiOutcome<T>>;
 };
