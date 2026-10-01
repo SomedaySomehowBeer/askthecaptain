@@ -327,3 +327,41 @@ it('access: a removed member sees 404; a non-participant sees nothing of a priva
  assert.equal((await request('GET', b.threads, b.member)).status, 404);
  assert.equal((await request('POST', `${b.threads}/${record}/messages`, b.member, { id: randomUUID(), body: 'Still here?' })).status, 404);
 });
+
+it('the Expo client parses real list, card, message, pin and change payloads for every R2 thread kind', async () => {
+ const { parseList, parseDetail, parseMessage, parseMessages, parseChanges, parseChangedPin, parseRead, parseStar } = await import('../../../mobile/src/threads/parse.ts');
+ const b = await business('Expo wire contract');
+ const task = await b.task('Packaging', { body: 'Pack the cans', ownerId: b.member.user.id, due: '2031-05-01' });
+ const tank = (await json<{ id: string }>(request('POST', `${b.base}/equipment`, b.owner, { name: 'Tank' }), 201)).id;
+ await json(request('POST', `${b.base}/equipment/${tank}/reservations`, b.owner,
+  { id: randomUUID(), title: 'Clean tank', kind: 'maintenance', startsAt: '2031-05-01T08:00:00Z', endsAt: '2031-05-01T09:00:00Z' }), 201);
+ await json(request('POST', `${b.base}/stock`, b.owner, { name: 'Cans', location: 'Store', unitLabel: 'each', notes: 'Keep dry' }), 201);
+ const topic = parseDetail(await json(b.topic(b.member, 'Plan the packaging run'), 201));
+ const privateThread = parseDetail(await json(request('POST', b.threads, b.member,
+  { id: randomUUID(), kind: 'private', title: 'Costs', participantIds: [b.owner.user.id], message: { id: randomUUID(), body: 'Check privately' } }), 201));
+ const tag = await b.tag('Launch', { ownerId: b.member.user.id, startsOn: '2031-05-01', endsOn: '2031-05-02' });
+ parseDetail(await json(b.addTag(b.member, topic.thread.id, tag.id, 1)));
+ const list = parseList(await json(request('GET', `${b.threads}?filter=all&limit=50`, b.member)));
+ assert.equal(list.threads.length, 5);
+ assert.deepEqual(new Set(list.threads.map(row => row.record?.kind ?? row.kind)), new Set(['task', 'booking', 'stock', 'topic', 'private']));
+ assert.equal(list.groups.find(group => group.key === tag.id)?.owner?.id, b.member.user.id);
+ for (const row of list.threads) {
+  const detail = parseDetail(await json(request('GET', `${b.threads}/${row.id}`, b.member)));
+  assert.equal(detail.thread.id, row.id);
+ }
+ const thread = `${b.threads}/${topic.thread.id}`;
+ const sent = parseMessage(await json(request('POST', `${thread}/messages`, b.member, { id: randomUUID(), body: 'Ready' }), 201));
+ const edited = parseMessage(await json(request('PATCH', `${thread}/messages/${sent.id}`, b.member, { body: 'Ready now', expectedRevision: sent.revision })));
+ const pin = parseChangedPin(await json(request('POST', `${thread}/pin`, b.owner, { messageId: sent.id }), 201));
+ assert.equal(parseDetail(await json(request('GET', thread, b.member))).pin?.id, pin.id);
+ parseChangedPin(await json(request('DELETE', `${thread}/pin`, b.owner)));
+ parseMessages(await json(request('GET', `${thread}/messages?latest=50`, b.member)));
+ parseChanges(await json(request('GET', `${thread}/changes?after=0&limit=100`, b.member)));
+ parseRead(await json(request('POST', `${thread}/read`, b.member, { seq: sent.seq })));
+ parseStar(await json(request('POST', `${thread}/star`, b.member)));
+ const deleted = parseMessage(await json(request('DELETE', `${thread}/messages/${sent.id}?expectedRevision=${edited.revision}`, b.member)));
+ assert.equal(deleted.body, null);
+ assert.equal((await request('GET', `${b.threads}/${privateThread.thread.id}`, b.other)).status, 404);
+ assert.equal(parseList(await json(request('GET', `${b.threads}?filter=all`, b.other))).threads.some(row => row.id === privateThread.thread.id), false);
+ assert.ok(task);
+});

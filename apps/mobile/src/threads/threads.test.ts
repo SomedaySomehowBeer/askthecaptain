@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { threadFixture,tid,tagId } from '../../harness/thread-fixtures.ts';
-import { parseList,parseDetail,parseMessage,parseMessages,parseChanges,parseRead } from './parse.ts';
+import { parseList,parseDetail,parseMessage,parseMessages,parseChanges,parseRead,parseCard } from './parse.ts';
 import { firstName,firstUnread,groupedRows,hasGap,initialMessages,mergeMessages,messagePowers,recordRoute,validBody } from './derive.ts';
 import { createDraftStorage,type WebStorage } from './storage.ts';
 import { createComposer } from './composer.ts';
@@ -101,3 +101,5 @@ test('poll requests coalesce; incomplete feed progress and newer versions conver
  const calls:ThreadCalls={...f.calls,async changes(){await new Promise<void>(r=>{release=r;});return {kind:'ok',value:{thread:{id:tid,revision:1,lastSeq:65,highWater:67},changes:[{changeSeq:66,kind:'message',message:m}],next:66,complete:false}};}};
  const c=createThreadControls(calls,scope,tid,f.now,()=>{},()=>{});await c.load();const one=c.poll();await c.poll();release();await one;assert.equal(c.snapshot().cursor,66);assert.equal(c.snapshot().complete,false);assert.equal(c.snapshot().messages.find(v=>v.id===m.id)?.body,'Edited');
 });
+
+test('card folds reject unknown fields and old card shapes',()=>{const d=threadFixture().detail;assert.throws(()=>parseCard({...d.card,body:'retired'}));assert.throws(()=>parseCard({...d.card,fold:{...d.card.fold,token:'secret'}}));assert.throws(()=>parseDetail({...d,pins:null}));});

@@ -8,9 +8,10 @@ module.exports = async ({ browser, production, base, shots, width }) => {
   const user=uuid(1),org=uuid(2),thread=uuid(11),tag=uuid(12),otherTag=uuid(13),author=uuid(99);
   const instant='2026-10-01T02:00:00.000Z';let readPosition=3,revision=1,starred=false,pin=null,mode='ok',listMode='ok',release;
   let messages=Array.from({length:65},(_,i)=>({id:uuid(i+100),threadId:thread,kind:'message',seq:i+1,changeSeq:i+1,authorId:author,authorName:'Pat Crew',body:`Message ${i+1}: check the packaging plan.`,createdAt:instant,editedAt:null,deletedAt:null,deletedBy:null,revision:1}));
-  let lastChange=65;
+  let lastChange=65,recordMode=false;
   const calls=[],writes=[],reads=[],errors=[],outside=[];
-  const detail=()=>({thread:{id:thread,kind:'topic',title:'Packaging plan',revision,lastSeq:messages.length,lastChange,readPosition,unread:Math.min(51,messages.filter(m=>m.seq>readPosition&&m.authorId!==user&&!m.deletedAt).length),starred,createdAt:instant},card:{record:null,title:'Packaging plan',status:null,facts:['Pat Crew',''],fold:{createdBy:author,open:null}},tags:[{id:tag,name:'Summer lager'}],pin:pin});
+  const topicDetail=()=>({thread:{id:thread,kind:'topic',title:'Packaging plan',revision,lastSeq:messages.length,lastChange,readPosition,unread:Math.min(51,messages.filter(m=>m.seq>readPosition&&m.authorId!==user&&!m.deletedAt).length),starred,createdAt:instant},card:{record:null,title:'Packaging plan',status:null,facts:['Pat Crew',''],fold:{createdBy:author,open:null}},tags:[{id:tag,name:'Summer lager'}],pin:pin});
+  const detail=()=>{const d=topicDetail();if(recordMode){d.thread.kind='record';d.card.record={kind:'task',id:user};d.card.fold={body:'Pack the cans carefully.',status:'open',ownerId:user,ownerName:'Sam Skipper',due:'2026-10-10',evidenceRequired:true,seriesId:null,open:null};}return d;};
   const row=id=>({id,kind:'topic',title:id===thread?'Packaging plan':'Other topic',record:null,status:null,facts:['Pat Crew',''],lastMessageAt:instant,lastMessage:{authorName:'Pat Crew',excerpt:'Check the packaging plan.'},unread:51,needsYou:true,starred:false,tags:[{id:tag,name:'Summer lager'},{id:otherTag,name:'Production'}]});
   await context.route('**/*',async route=>{
    const req=route.request(),url=new URL(req.url());if(![production.origin,base.origin].includes(url.origin)){outside.push(url.origin);return route.abort();}
@@ -66,6 +67,7 @@ module.exports = async ({ browser, production, base, shots, width }) => {
   await id('thread-star').click();await expect(id('thread-star')).toHaveText('Unstar thread');
   await page.getByRole('button',{name:'Pin message',exact:true}).click();await expect(id('thread-pin')).toContainText('Packaging is ready');await id('thread-pin').click();
   await id(`message-menu-${own.id}`).click();await page.getByRole('button',{name:'Delete message',exact:true}).click();await expect(id(`message-${own.id}`)).toContainText('Message deleted');await expect(id('thread-pin')).toHaveCount(0);
+  recordMode=true;await id('thread-refresh').click();await id('thread-card-fold').click();await expect(id('thread-details')).toContainText('Pack the cans carefully.');await expect(id('thread-details')).toContainText('Evidence required');await id('thread-card-fold').click();recordMode=false;await id('thread-refresh').click();
   mode='unknown';await id('thread-composer').fill('Keep this exact message');await id('thread-send').click();await expect(id('composer-status')).toContainText('may have been sent');await expect(id('thread-composer')).toHaveAttribute('readonly','');const pending=writes.at(-1).body;await page.clock.fastForward(5100);
   mode='ok';await page.reload();await expect(id('thread-send')).toHaveText('Retry same message');await id('thread-send').click();await expect(id('thread-composer')).toHaveValue('');expect(writes.filter(w=>w.path.endsWith('/messages')).at(-1).body).toEqual(pending);
   const stored=await page.evaluate(()=>({local:{...localStorage},session:{...sessionStorage}}));expect(JSON.stringify(stored)).not.toContain('Keep this exact');expect(JSON.stringify(stored)).not.toContain(thread);expect(JSON.stringify(stored)).not.toContain('Packaging plan');
