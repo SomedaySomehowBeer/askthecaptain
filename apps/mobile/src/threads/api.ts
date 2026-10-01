@@ -2,7 +2,7 @@ import type { ApiClient, ApiOutcome, Parse } from '../auth/contracts.ts';
 import { organisationPath, type OrganisationPath } from '../api/paths.ts';
 import type { ReadScope } from '../account/contracts.ts';
 import type { Changes, Detail, Filter, Message, MessagePage, ThreadList } from './contracts.ts';
-import { parseChanges, parseDetail, parseList, parseMessage, parseMessages, parsePin, parseRead, parseStar, uuid } from './parse.ts';
+import { parseChanges, parseDetail, parseList, parseMessage, parseMessages, parseChangedPin, parseRead, parseStar, uuid } from './parse.ts';
 export type Result<T> = { kind: 'ok'; value: T } | { kind: 'stale' } | { kind: 'error'; status: number; code: string; retryAfter: number; uncertain: boolean };
 export type MessageQuery = { latest: number } | { after: number; limit?: number } | { before: number; limit?: number };
 export type Mutation = { kind: 'edit'; message: Message; body: string } | { kind: 'delete'; message: Message } | { kind: 'pin'; message: Message } | { kind: 'unpin' } | { kind: 'star'; value: boolean } | { kind: 'tag'; tagId:string; attached:boolean; expectedRevision:number };
@@ -41,8 +41,8 @@ export function createThreadCalls(client: ApiClient, hooks: { scope(): ReadScope
   mutate(s,id,a){
    if(a.kind==='tag')return request(s,a.attached?'POST':'DELETE',a.attached?threadPath(s,id,'tags',uuid(a.tagId)):queryPath(threadPath(s,id,'tags',uuid(a.tagId)),{expectedRevision:a.expectedRevision}),{expectedRevision:a.expectedRevision},parseDetail);
    if(a.kind==='star')return request(s,a.value?'POST':'DELETE',threadPath(s,id,'star'),{},parseStar);
-   if(a.kind==='pin')return request(s,'POST',threadPath(s,id,'pin'),{messageId:a.message.id},parsePin);
-   if(a.kind==='unpin')return request(s,'DELETE',threadPath(s,id,'pin'),undefined,v=>v===null?null:parsePin(v));
+   if(a.kind==='pin')return request(s,'POST',threadPath(s,id,'pin'),{messageId:a.message.id},parseChangedPin);
+   if(a.kind==='unpin')return request(s,'DELETE',threadPath(s,id,'pin'),undefined,parseChangedPin);
    if(a.kind==='edit')return request(s,'PATCH',threadPath(s,id,'messages',a.message.id),{body:a.body,expectedRevision:a.message.revision},parseMessage);
    return request(s,'DELETE',queryPath(threadPath(s,id,'messages',a.message.id),{expectedRevision:a.message.revision}),undefined,parseMessage);
   },

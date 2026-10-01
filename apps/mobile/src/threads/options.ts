@@ -8,8 +8,8 @@ import type { Tag } from './contracts.ts';
 export type TagPage={tags:Tag[];nextOffset:number|null};
 export function parseTagPage(raw:unknown):TagPage{
  const x=object(raw);keys(x,['tags','nextOffset']);
- const tags=array(x.tags,raw=>{const t=object(raw);keys(t,['id','name','createdAt','updatedAt'],['ownerId','startsOn','endsOn','createdBy','revision','archivedAt']);
-  for(const k of ['createdAt','updatedAt','archivedAt'])if(t[k]!==undefined&&t[k]!==null&&!isCanonicalInstant(t[k]))throw new TypeError('invalid tag time');
+ const tags=array(x.tags,raw=>{const t=object(raw);keys(t,['id','name','createdAt','updatedAt','ownerId','startsOn','endsOn','createdBy','revision','archivedAt']);
+  for(const k of ['createdAt','updatedAt','archivedAt'])if((k!=='archivedAt'||t[k]!==null)&&!isCanonicalInstant(t[k]))throw new TypeError('invalid tag time');
   for(const k of ['ownerId','createdBy'])if(t[k]!==undefined&&t[k]!==null)uuid(t[k]);
   for(const k of ['startsOn','endsOn'])if(t[k]!==undefined&&t[k]!==null&&(typeof t[k]!=='string'||!isCanonicalInstant(`${t[k]}T00:00:00.000Z`)))throw new TypeError('invalid tag date');
   if(t.revision!==undefined)integer(t.revision,1);

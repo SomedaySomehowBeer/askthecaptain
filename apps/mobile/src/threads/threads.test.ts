@@ -48,7 +48,7 @@ test('row/card and first-unread derivation follows the contract rather than fabr
  const f=threadFixture(),d=parseDetail(f.detail),m=f.messages.map(parseMessage);
  assert.deepEqual(initialMessages(d),{after:2,limit:50});assert.equal(firstUnread(m,3,user)?.seq,4);
  assert.deepEqual(initialMessages({...d,thread:{...d.thread,unread:50}}),{latest:50});assert.equal(firstUnread(m,65,user),null);
- assert.equal(firstName(' Pat  Crew '),'Pat');assert.equal(firstName(null),'Former member');assert.equal(recordRoute(d),null);assert.equal(recordRoute({...d,card:{...d.card,kind:'booking'}}),'/equipment');
+ assert.equal(firstName(' Pat  Crew '),'Pat');assert.equal(firstName(null),'Former member');assert.equal(recordRoute(d),null);assert.equal(recordRoute({...d,card:{...d.card,record:{kind:'booking',id:user}}}),'/equipment');
 });
 test('upserts retain higher change sequence, tombstones, and detect sequence gaps only',()=>{
  const m=parseMessage(threadFixture().messages[0]),edited={...m,body:'Edited',changeSeq:20,revision:2};assert.equal(mergeMessages([edited],[m])[0]?.body,'Edited');

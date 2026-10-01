@@ -7,7 +7,7 @@ module.exports=async({browser,production,base,shots,width})=>{
   const uuid=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
   const user=uuid(1),second=uuid(4),member=uuid(3),org=uuid(2),tag=uuid(12),instant='2026-10-01T00:00:00.000Z';
   let actor=user,mode='ok',tagConflict=false;const threads=new Map(),writes=[],errors=[],outside=[];
-  const details=t=>({thread:{id:t.id,kind:t.kind,title:t.title,revision:t.revision,lastSeq:1,lastChange:1,readPosition:0,unread:0,starred:false,createdAt:instant},card:{kind:t.kind,id:null,title:t.title,status:null,facts:['Sam Skipper',t.kind==='private'?`${t.people.length} people`:''],body:null},tags:t.tags,pin:null,...(t.kind==='private'?{participants:t.people.map(userId=>({userId,name:userId===user?'Sam Skipper':'Pat Crew',addedAt:instant}))}:{})});
+  const details=t=>({thread:{id:t.id,kind:t.kind,title:t.title,revision:t.revision,lastSeq:1,lastChange:1,readPosition:0,unread:0,starred:false,createdAt:instant},card:{record:null,title:t.title,status:null,facts:['Sam Skipper',t.kind==='private'?`${t.people.length} people`:''],fold:{createdBy:user,open:null}},tags:t.tags,pin:null,...(t.kind==='private'?{participants:t.people.map(userId=>({userId,name:userId===user?'Sam Skipper':'Pat Crew',addedAt:instant}))}:{})});
   const msg=t=>({id:t.message.id,threadId:t.id,kind:'message',seq:1,changeSeq:1,authorId:user,authorName:'Sam Skipper',body:t.message.body,createdAt:instant,editedAt:null,deletedAt:null,deletedBy:null,revision:1});
   const visible=t=>t.kind==='topic'||t.people.includes(actor);
   await context.route('**/*',async route=>{

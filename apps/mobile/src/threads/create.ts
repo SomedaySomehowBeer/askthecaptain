@@ -7,7 +7,7 @@ import type { WebStorage } from './storage.ts';
 import { copy } from './copy.ts';
 export type CreateDraft={id:string;messageId:string;body:string;private:boolean;title:string;participantIds:string[];locked:boolean;refused:boolean;waitUntil:number};
 export type CreateStorage={load(s:ReadScope):CreateDraft|null;save(s:ReadScope,d:CreateDraft):boolean;clear(s:ReadScope):void};
-export const validTitle=(s:string)=>s.trim().length>0&&[...s.trim()].length<=80;
+export const validTitle=(s:string)=>s.trim().length>0&&s.trim().length<=80;
 export const validCreate=(d:CreateDraft)=>validBody(d.body)&&(!d.private||validTitle(d.title))&&d.participantIds.length<=49;
 export function parseCreateDraft(raw:unknown):CreateDraft{
  const x=object(raw);keys(x,['id','messageId','body','private','title','participantIds','locked','refused','waitUntil']);

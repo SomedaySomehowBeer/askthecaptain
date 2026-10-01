@@ -37,7 +37,7 @@ function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>n
    <Pressable testID="new-thread-private" role="switch" aria-checked={d.private} disabled={locked} onPress={()=>controls.edit({private:!d.private})} style={styles.toggle}><Text style={styles.label}>Private</Text><Text style={styles.label}>{d.private?'On':'Off'}</Text></Pressable>
    {d.private?<View testID="new-thread-private-fields" style={{gap:10}}>
     <Text style={styles.hint}>{copy.privacy}</Text>
-    <TextInput testID="new-thread-title" accessibilityLabel="Private thread title" placeholder="Private thread title" value={d.title} onChangeText={title=>controls.edit({title})} editable={!locked} maxLength={160} style={styles.input}/>
+    <TextInput testID="new-thread-title" accessibilityLabel="Private thread title" placeholder="Private thread title" value={d.title} onChangeText={title=>controls.edit({title})} editable={!locked} maxLength={80} style={styles.input}/>
     <Text style={styles.label}>People · {d.participantIds.length} selected</Text><Text style={styles.hint}>You are included. Choose up to 49 other members.</Text>
     {choices.busy?<Text testID="new-members-loading" style={styles.hint}>Loading members…</Text>:null}
     {choices.message?<Text testID="new-members-status" role="status" style={styles.hint}>{choices.message}</Text>:null}
