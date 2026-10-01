@@ -206,7 +206,7 @@ export function createApiClient(transport: Transport): ApiClient {
 	return {
 		get: (path, token, parse) => call('GET', path, token, undefined, parse),
 		patch: (path, token, body, parse) => call('PATCH', path, token, body, parse),
-		delete: (path, token, parse) => call('DELETE', path, token, undefined, parse),
+		delete: (path, token, parse, body) => call('DELETE', path, token, body, parse),
 		post: (path, token, body, parse) => call('POST', path, token, body, parse)
 	};
 }

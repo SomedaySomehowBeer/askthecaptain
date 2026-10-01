@@ -50,6 +50,7 @@ export function RootStack() {
 			<Stack.Protected guard={signedIn || checking}>
 				<Stack.Screen name="settings" />
 				<Stack.Screen name="members" />
+				<Stack.Screen name="settings/notifications" />
 				<Stack.Screen name="equipment" />
 			</Stack.Protected>
 			<Stack.Screen name="auth/passkey" />

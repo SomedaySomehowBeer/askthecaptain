@@ -4,6 +4,7 @@
 
 /** The fixed routes the client calls, by name. */
 export const apiPaths = {
+	pushConfig: '/v1/push/config',
 	/** Identity and memberships (GET, bearer). */
 	me: '/v1/me',
 	/** Spends a native handoff for a session (POST, no bearer). */

@@ -51,9 +51,12 @@ relying-party host do not change.
 
 ## Rollback
 
-Revert the DNS pull request (tofu applies), move the three certificates back to `askthecaptain-web-staging`, and
-`flyctl scale count 1 -a askthecaptain-web-staging`. The API image can stay: it serves the export only when asked and
-answers its routes as before. Nothing in the database changes in this cutover.
+**Superseded on 1 October 2026:** `askthecaptain-web-staging` was destroyed at the owner's instruction after the
+cutover held, so there is no Next.js app to return to. A web regression is fixed forward, or rolled back by redeploying
+an earlier `askthecaptain-api-staging` image (`flyctl releases -a askthecaptain-api-staging`, then
+`flyctl deploy --image <earlier image>`). The original rollback, kept for the record, was: revert the DNS pull request,
+move the three certificates back to the web app and scale it to one machine. Nothing in the database changed in this
+cutover.
 
 ## Not covered
 
