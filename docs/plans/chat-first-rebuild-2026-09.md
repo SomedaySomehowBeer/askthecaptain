@@ -72,10 +72,9 @@ The owner decided items 1 to 4 on 30 September 2026 as recommended. Items 5 to 7
 3. **Threads.** The 0042/0043 chat tables enforce participant-only privacy with about a thousand lines of triggers and
    definer functions. Record threads need audience-by-record. Options: bend the guards, or one new thread model
    (`threads` of kind record, topic or private; `thread_messages`) with private threads keeping the participant rules
-   and `chat_audit_events`, and the small staging chat data migrated. **Decided: the new model.** Retire 0042/0043
-   after migration; two message stores would be a carry-over. Shared pins and personal stars carry into the new
-   model; the item panel read API does not. Existing participant-only chats remain private even
-   when linked to shared records. A private thread bypasses classification except for explicit
+   and `chat_audit_events`. **Decided: the new model.** The staging chat data is demo data and is dropped, not migrated (owner, 1 October). Drop 0042/0043;
+   two message stores would be a carry-over. Shared pins and personal stars carry into the new
+   model; the item panel read API does not. No existing chat is carried over. A private thread bypasses classification except for explicit
    agent mentions, which expose only the calling message and never grant history access.
 4. **Saved views.** Retire, per the proposal's fixed filters, or keep as private filters over the thread list.
    **Decided: retire.**

@@ -30,15 +30,16 @@ silent, the earlier rule does not carry over.
 - Messages oldest to newest; a thread opens at the first unread, or at the newest (D28).
 - The card is small: title, status, two facts side by side; everything else behind a fold-out.
 - A new thread is an empty composer: the first message creates the topic (D33).
-- Private threads never enter classification, summaries or agent routing; the migration never
-  broadens an existing conversation's audience (D25, amendment §1). R2 ships no inference at all,
-  and proves the boundary structurally (§9).
+- Private threads never enter classification, summaries or agent routing (D25, amendment §1).
+  R2 ships no inference at all, and proves the boundary structurally (§9).
 - Pins, stars and read positions carry over (D25), with pins narrowed (owner's review, 1 October):
   a pin is visible to everyone who can see the thread, so only an owner or admin sets one, and a
   thread has at most one. A star is visible only to the person who set it. The latest-six item
   panel and its "conversations for this task" reads do not carry over.
-- Retire the 0042/0043 tables after migrating staging data; two message stores would be a
-  carry-over (rebuild plan decision 3).
+- **The existing staging chats are demo data and are not kept** (owner's decision, 1 October 2026).
+  0046 drops the 0042/0043 tables without copying them; two message stores would be a carry-over
+  (rebuild plan decision 3), and so would a copy step for rows nobody needs. Nothing in the
+  0042/0043 tables is production data: production has never run them.
 
 ## 2. Scope and non-goals
 
@@ -46,8 +47,8 @@ In R2:
 
 - Migration `0046_threads.sql`: projects become tags; tags move onto threads; the thread tables,
   their policies and guards; backfilled record threads for existing tasks, bookings and stock
-  items; the private conversations copied across; and the 0042/0043 tables, `projects`,
-  `task_tags` and every `project_id` column dropped in the same transaction.
+  items; and the 0042/0043 tables, `projects`, `task_tags` and every `project_id` column dropped
+  in the same transaction.
 - API: `/v1/organisations/:id/threads…` replacing `…/conversations…`; `/tags` gaining owner and
   dates; task, series and booking payloads losing `projectId`; the list with
   filters and tag groups; thread detail with its card; messages, sends, edits, deletes, pins, stars, read
@@ -118,7 +119,7 @@ transitions as `conversation_participants` in 0042/0043, including `read_start_s
 **`thread_links`** — a private or topic thread may point at one or more records (`task_id`,
 `reservation_id`, `stock_item_id`, exactly one per row). It is shown as a chip on the
 thread's row and card and never makes the thread visible from the record. Record threads have no
-rows here. Existing `conversation_links` are copied across.
+rows here.
 
 **`thread_messages`** — as `messages` in 0042/0043 plus `kind text not null default 'message'
 check (kind in ('message', 'change', 'approval'))`. The R2 guard refuses any insert whose kind is
@@ -302,22 +303,18 @@ longer available.
    `equipment_reservations.project_id` becomes a `thread_tags` row on that record's thread;
    every `task_series.project_id` becomes a `task_series_tags` row. Each source count must equal
    the rows written (a task tagged with its own project twice counts once).
-5. Copy conversations → threads (`kind = 'private'`, ids, titles, fingerprints, counters,
-   timestamps kept), participants, links, messages (all `kind = 'message'`), stars, reads, and
-   `chat_audit_events` rows (re-pointed). Pins: a conversation with several live pins keeps only
-   the newest as its thread's pin; the others are copied as unpinned (`unpinned_at` = migration
-   time, `unpinned_by` null), so nothing is lost and the one-pin rule holds. Counts before and after
-   must match per table, or the migration raises and nothing is dropped.
-6. Drop the 0042/0043 tables and functions, `task_tags`, the three `project_id` columns with
-   their constraints and indexes, and `projects`. No cascade. The migration invents no records.
+5. Drop the 0042/0043 tables and functions with their rows (`raise notice` with the row counts
+   first, so the migration log records what went), `task_tags`, the three `project_id` columns
+   with their constraints and indexes, and `projects`. No cascade. The migration invents no
+   records. `chat_audit_events` is recreated empty with the new shape rather than altered.
 
-Rollback is an image at or before the current main plus a restore of the 0042 data from the
-pre-migration snapshot; the release record names the Neon branch or dump taken first. The release
+Rollback is an image at or before the current main plus the Neon branch taken before the release,
+which the release record names (it matters for the projects and tags, not the chats). The release
 runs with HTTP stopped, as 0045 did.
 
-**Gate before release (rebuild plan decision 7):** a read-only count of the five 0042/0043 tables,
-`projects` (and how many have a non-empty description), `task_tags` and the rows holding a
-`project_id` in tasks, series and reservations, on the staging machine, printed as status only (no bodies, no titles), recorded in the validation
+**Gate before release (rebuild plan decision 7):** a read-only count of `projects` (and how many
+have a non-empty description), `task_tags` and the rows holding a `project_id` in tasks, series
+and reservations, on the staging machine, printed as status only (no bodies, no titles), recorded in the validation
 folder. Ryan or root runs it; the increment is not released until it is recorded.
 
 The rate-limit policy `chat changes` keys on the new path prefix; its limit and window do not
@@ -331,10 +328,8 @@ Real Postgres, no skipped database test:
 - Access: a member sees a record and topic thread and its messages; a removed member sees 404; a
   non-participant sees 404 for a private thread, its messages, pins, links, tags, audit rows and
   change feed; the record's own screen never reveals a private thread linked to it.
-- Migration: fixture rows in the 0042/0043 tables (two private conversations, one linked to a
-  task, with pins, stars, reads and audit) survive 0046 with the same ids, seqs, audience and
-  read baselines; a non-participant still cannot see them; counts match; a deliberate count
-  mismatch aborts with nothing dropped.
+- Migration: fixture rows in the 0042/0043 tables are gone after 0046 and the tables do not
+  exist; the five tables' absence and the new tables' presence are asserted by name.
 - Record threads: inserting a task, reservation and stock item creates exactly one thread each; a
   tag and a step create none; deleting the record deletes the thread.
 - Projects to tags: fixture projects (one sharing a name with an existing tag, one archived),
@@ -348,12 +343,11 @@ Real Postgres, no skipped database test:
 - List: filters, cursor stability across a new message, `groups` counts versus rows, the
   100-heading cap, `needsYou` rules, unread cap, excerpt exclusion for a private thread.
 - Pins: a member's pin is refused and an owner's accepted; a second live pin is 409; unpin then
-  pin works; deleting the pinned message unpins it in the same transaction; a conversation with
-  three live pins migrates to one live and two unpinned.
+  pin works; deleting the pinned message unpins it in the same transaction.
 - Counters, retries, edits, deletes, stars, reads and the change feed: the existing chat tests
   moved to the new paths, not rewritten.
 - Boundary: a script test asserts that `thread_messages`, `thread_participants` and
-  `chat_audit_events` are referenced only from `apps/api/src/threads/` and the migration test, so
+  `chat_audit_events` are referenced only from `apps/api/src/threads/`, so
   no other module can read private messages; R4 builds its inference boundary on this.
 
 Client: pure tests for row and card derivation, grouping, first-unread positioning and the
