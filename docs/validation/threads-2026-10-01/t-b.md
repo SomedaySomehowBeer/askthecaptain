@@ -1,7 +1,7 @@
 # T-B — thread list and thread screen (1 October 2026)
 
 Outcome: **discuss work**. Implements the client portion of the
-[threads contract](../../plans/threads-2026-09.md) §§5–7 on main `ce7fe46` (rebased after #226), with the
+[threads contract](../../plans/threads-2026-09.md) §§5–7 on main `b9b09fb` (merged after #226 and #229), with the
 [reviewed prototype](../../proposals/assets/captain-chat-first-2026-09-30/README.md) frames 1 and 3
 inspected in Chromium. New-thread creation and tag editing follow in T-C.
 
@@ -64,11 +64,13 @@ Heavy work uses `flock /tmp/atc-build.lock`; validation/export/browser chains ga
 - **402 mobile pure tests + 20 boundary/config tests**, no skips.
 - SDK compatibility, Android backup configuration, fresh web/iOS/Android/harness exports,
   bundle boundary and canary guards: passed.
-- **9 cookie-session tests** against disposable real Postgres, no skips.
+- **48 real-Postgres thread/list/session tests**, including actual API/client-parser integration, no skips.
 - Playwright on the fresh export at **360/390/430 px**: grouped/folded/paged list, fixed filters,
   first unread, read to the end, fixed card, editable 429 draft, send/edit/delete/pin/star,
   persisted uncertain send, storage clearing, lost access and harness states passed.
-  Existing account/passkey/member/equipment regressions run in the same suite.
+  The full account/passkey/member/push/equipment suite passed after the #226 rebase.
+  Focused thread checks and fresh exports then passed again at all three widths after #229
+  payload reconciliation, including the actual task fold fields.
   No page errors, overflow or unexpected external requests.
 
 Screenshots: [360 list](t-b-360-list.png), [360 unread](t-b-360-unread.png),
@@ -76,7 +78,9 @@ Screenshots: [360 list](t-b-360-list.png), [360 unread](t-b-360-unread.png),
 [430 list](t-b-430-list.png), [430 unread](t-b-430-unread.png).
 
 Full logs: [checks](t-b-checks.log), [Postgres](t-b-postgres.log),
-[exports](t-b-exports.log), [browser](t-b-browser.log).
+[initial exports](t-b-exports.log), [initial browser](t-b-browser.log),
+[rebased full browser suite](t-b-rebase-browser.log), [real API](t-b-real-api.log),
+[final exports and browser](t-b-wire-browser.log).
 
 ## Not covered
 
