@@ -56,15 +56,12 @@ what carries over and the order of work are in
   exchanges, and agent hand-offs in particular, read backwards.
 
 ### Projects are tags
-- A project is a tag with more on it: an owner, dates, a thread and a planning task. Any thread can carry several
-  tags, so one booking can belong to two projects and to Production at once. The thread is the unit; projects and
-  areas are ways of grouping it.
-- A project has its own thread, and a new project starts with a planning task. They do different jobs.
-- **The planning task** is where setting up happens: agreeing dates, listing tasks, booking equipment, checking stock.
-  It has an owner, a due date and steps, and it finishes. Its steps come from a template in code.
-- **The project thread** is the project's record: changes to the project itself, decisions that span tasks, and a
-  weekly summary. It is quiet by design.
-- A message in the project thread that is about one task can be moved to that task's thread.
+- A project is a tag: a name, and optionally an owner and dates. Nothing else is declared. Any thread can carry
+  several tags, so one booking can belong to two projects and to Production at once. The thread is the unit;
+  projects and areas are ways of grouping it.
+- A tag has no thread of its own and no planning task (amended 30 September 2026 by the owner: fewer things to
+  declare). Planning a project happens in the threads of its tasks and bookings; a topic thread tagged with the
+  project serves for anything that spans them.
 
 ### Captain reads shared messages; private calls are explicit
 - Captain is an agent like the others, with its own key. Its job is to read and to route.
@@ -225,7 +222,7 @@ Slices 1 to 4 are useful without any agent.
 - An agent can own a task.
 - The first agents are Scheduler, Stock keeper, Records and Bookkeeper.
 - A chain of agent hand-offs has a shared budget of time and inference as a backstop.
-- A planning task's steps come from a template, and a message can be moved from a project thread to a task's thread.
+- A message in one thread can be moved to another thread (a topic to a task, for instance).
 - An approving agent cannot approve what it drafted itself.
 
 ## Prior art reviewed

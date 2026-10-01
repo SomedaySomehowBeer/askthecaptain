@@ -9,8 +9,7 @@ other people's edits**. This refines D25, D29 and D33; it does not claim impleme
 Private threads are participant-only. They do not enter background classification, summaries,
 agent routing or agent memory. The same exclusion applies to their titles, pins, attachments,
 read positions and other metadata. Linking a private thread to a shared record, tagging it, or
-migrating existing chat never broadens its audience. Existing participant-only conversations
-remain private even when they already link to a task or project.
+migrating a thread never broadens its audience.
 
 A participant may explicitly `@` mention a named agent in a message. Code resolves the authored
 mention to an available agent; plain quoted text, a pasted transcript or a model-generated
@@ -126,7 +125,7 @@ message produces no inference; an explicit mention exposes only the calling mess
 links, retries, conflict reads and delegation never add history; agents cannot read private
 messages through other endpoints; edited calls/access removal stop queued effects; and a
 nonparticipant cannot discover private sources through audit, versions, exports or run activity.
-Migration tests must preserve the audience of existing linked conversations.
+No existing conversation is migrated (the staging chats were demo data; owner, 1 October 2026), so there is no audience to preserve.
 
 R3 must prove independent-field and stable-item reversal, same-field conflicts (including a
 value changed away and back), multiple selected changes, coupled dependencies, atomic failure,

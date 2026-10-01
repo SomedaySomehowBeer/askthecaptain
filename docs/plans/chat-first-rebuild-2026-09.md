@@ -72,10 +72,9 @@ The owner decided items 1 to 4 on 30 September 2026 as recommended. Items 5 to 7
 3. **Threads.** The 0042/0043 chat tables enforce participant-only privacy with about a thousand lines of triggers and
    definer functions. Record threads need audience-by-record. Options: bend the guards, or one new thread model
    (`threads` of kind record, topic or private; `thread_messages`) with private threads keeping the participant rules
-   and `chat_audit_events`, and the small staging chat data migrated. **Decided: the new model.** Retire 0042/0043
-   after migration; two message stores would be a carry-over. Shared pins and personal stars carry into the new
-   model; the item panel read API does not. Existing participant-only chats remain private even
-   when linked to shared records. A private thread bypasses classification except for explicit
+   and `chat_audit_events`. **Decided: the new model.** The staging chat data is demo data and is dropped, not migrated (owner, 1 October). Drop 0042/0043;
+   two message stores would be a carry-over. Shared pins and personal stars carry into the new
+   model; the item panel read API does not. No existing chat is carried over. A private thread bypasses classification except for explicit
    agent mentions, which expose only the calling message and never grant history access.
 4. **Saved views.** Retire, per the proposal's fixed filters, or keep as private filters over the thread list.
    **Decided: retire.**
@@ -95,9 +94,9 @@ while the new one becomes usable; nothing deploys to production.
 |---|---|---|---|
 | R0 | Adopt | Plan amendment (D27–D38 and edits), AGENTS.md, this document | The client-proof asset and workflow, one-off workflows, engine fixture, `packages/retrieval`, validation records for retired screens |
 | R1 | Web session and shell | API serves the web export and cookie sessions; Expo web signs in; an empty thread list; passkey step-up and push re-proved | `apps/web` and its CI, `packages/ui` (assets moved), `webPaths` |
-| R2 | Threads | The thread model (decision 3); the thread list grouped by tag; a record thread with the small card, oldest-first, folded earlier messages, open at first unread; the composer | 0042/0043 after migration; item panels; three-tab navigation |
+| R2 | Threads | [Contract](threads-2026-09.md). Projects become tags (D7); the thread model (decision 3); the thread list grouped by tag; a record thread with the small card, oldest-first, folded earlier messages, open at first unread; the composer | 0042/0043 after migration; `projects`, `task_tags` and `project_id`; item panels; three-tab navigation |
 | R3 | Versions and selective undo | Snapshots plus typed before/after changes, change sets and causes; selection/preview, dependency and conflict checks, atomic retry-safe inverse operations; see the privacy/undo contract | The audit log as a state store (stocktake idempotency, Xero sync state move to their own tables) |
-| R4 | Captain reads | Agents as users with keys; the Captain agent; the classifier as an `infer` step for shared messages; private mentions expose only the calling message; tags and kind applied as plain changes; mention routing | `commitments` naming, legacy work fields, the six-job field |
+| R4 | Captain reads | Agents as users with keys; the Captain agent; the classifier as an `infer` step for shared messages; private mentions expose only the calling message; tags and kind applied as plain changes; mention routing | `commitments` naming, the remaining legacy work fields, the six-job field |
 | R5 | Pending and approval | `pending` bookings holding the slot; approval cards; take-ownership privilege; the equipment schedule as a pinned view with buttons only | Saved views |
 | R6 | First agents | Scheduler and Stock keeper doing internal work; hand-off chains with loop stop and budget; agent approval limits | `chase-due` and `stocktake` definitions |
 | R7 | Files | Drive connector; marker files; change notices in the thread | — |
