@@ -160,28 +160,6 @@ create table thread_participants (
 );
 create index thread_participants_active_by_user on thread_participants (organisation_id, user_id, thread_id) where state = 'active';
 
--- A topic or private thread may point at records. Shown as a chip; it never makes the thread visible from the record.
-create table thread_links (
-	id uuid primary key default uuidv7(),
-	organisation_id uuid not null references organisations(id) on delete cascade,
-	thread_id uuid not null,
-	task_id uuid,
-	reservation_id uuid,
-	stock_item_id uuid,
-	linked_by uuid,
-	created_at timestamptz not null default now(),
-	foreign key (organisation_id, thread_id) references threads(organisation_id, id) on delete cascade,
-	foreign key (organisation_id, task_id) references tasks(organisation_id, id) on delete cascade,
-	foreign key (organisation_id, reservation_id) references equipment_reservations(organisation_id, id) on delete cascade,
-	foreign key (organisation_id, stock_item_id) references stock_items(organisation_id, id) on delete cascade,
-	foreign key (organisation_id, linked_by) references memberships(organisation_id, user_id) on delete set null (linked_by),
-	constraint thread_links_target_check check (num_nonnulls(task_id, reservation_id, stock_item_id) = 1)
-);
-create unique index thread_links_target on thread_links (thread_id, coalesce(task_id, reservation_id, stock_item_id));
-create index thread_links_by_task on thread_links (organisation_id, task_id) where task_id is not null;
-create index thread_links_by_reservation on thread_links (organisation_id, reservation_id) where reservation_id is not null;
-create index thread_links_by_stock_item on thread_links (organisation_id, stock_item_id) where stock_item_id is not null;
-
 -- The one place a tag is attached to anything. Deleting a tag removes its attachments; archiving keeps them.
 create table thread_tags (
 	organisation_id uuid not null references organisations(id) on delete cascade,
@@ -295,11 +273,11 @@ create table chat_audit_events (
 	created_at timestamptz not null default now(),
 	foreign key (organisation_id, thread_id) references threads(organisation_id, id) on delete cascade,
 	foreign key (organisation_id, actor_id) references memberships(organisation_id, user_id) on delete set null (actor_id),
-	constraint chat_audit_events_action_check check (action in ('chat.thread_created', 'chat.conversation_created', 'chat.conversation_updated',
+	constraint chat_audit_events_action_check check (action in ('chat.thread_created', 'chat.thread_updated',
 		'chat.participant_added', 'chat.participant_removed', 'chat.participant_left', 'chat.link_added', 'chat.link_removed',
 		'chat.tag_added', 'chat.tag_removed', 'chat.message_sent', 'chat.message_edited', 'chat.message_deleted', 'chat.pin_added', 'chat.pin_removed',
 		'chat.star_set', 'chat.star_cleared', 'chat.read_advanced')),
-	constraint chat_audit_events_subject_check check (subject_kind in ('thread', 'conversation', 'participant', 'link', 'tag', 'message', 'pin', 'star', 'read')),
+	constraint chat_audit_events_subject_check check (subject_kind in ('thread', 'participant', 'link', 'tag', 'message', 'pin', 'star', 'read')),
 	constraint chat_audit_events_personal_check check (personal = (action in ('chat.star_set', 'chat.star_cleared', 'chat.read_advanced'))),
 	constraint chat_audit_events_detail_check check (jsonb_typeof(detail) = 'object')
 );
@@ -681,31 +659,6 @@ begin
 	raise exception 'that participant change is not allowed' using errcode = 'check_violation';
 end $$;
 
-create function thread_links_guard() returns trigger
-	language plpgsql security invoker set search_path = pg_catalog, public, pg_temp as $$
-declare me uuid := current_user_id(); thread_kind text;
-begin
-	if tg_op = 'INSERT' then
-		select t.kind into thread_kind from threads t where t.id = new.thread_id and t.organisation_id = new.organisation_id;
-		if not found then
-			return new; -- invisible or absent: row security refuses it
-		end if;
-		if thread_kind = 'record' then
-			raise exception 'a record thread links nothing: it is its record''s' using errcode = 'check_violation';
-		end if;
-		if me is null or new.linked_by is distinct from me or not thread_visible(new.thread_id) then
-			raise exception 'only someone who can see the thread links work, as themselves' using errcode = 'check_violation';
-		end if;
-		new.created_at := now();
-		return new;
-	end if;
-	if (to_jsonb(new) - 'linked_by') = (to_jsonb(old) - 'linked_by') and new.linked_by is null and old.linked_by is not null
-		and not exists (select 1 from memberships m where m.organisation_id = old.organisation_id and m.user_id = old.linked_by) then
-		return new;
-	end if;
-	raise exception 'a link is created, never changed' using errcode = 'check_violation';
-end $$;
-
 create function thread_tags_guard() returns trigger
 	language plpgsql security invoker set search_path = pg_catalog, public, pg_temp as $$
 declare me uuid := current_user_id(); thread_kind text;
@@ -956,7 +909,6 @@ create constraint trigger threads_seq_has_message after update on threads
 	when (new.last_seq is distinct from old.last_seq)
 	execute function thread_seq_check();
 create trigger thread_participants_guard before insert or update on thread_participants for each row execute function thread_participants_guard();
-create trigger thread_links_guard before insert or update on thread_links for each row execute function thread_links_guard();
 create trigger thread_tags_guard before insert or update on thread_tags for each row execute function thread_tags_guard();
 create trigger thread_messages_guard before insert or update on thread_messages for each row execute function thread_messages_guard();
 create trigger thread_pins_guard before insert or update on thread_pins for each row execute function thread_pins_guard();
@@ -997,13 +949,6 @@ create policy thread_participants_insert on thread_participants for insert to ap
 create policy thread_participants_update on thread_participants for update to app, captain_runtime
 	using (organisation_id = current_organisation_id() and thread_visible(thread_id))
 	with check (organisation_id = current_organisation_id());
-
-alter table thread_links enable row level security;
-alter table thread_links force row level security;
-create policy thread_links_select on thread_links for select to app, captain_runtime
-	using (organisation_id = current_organisation_id() and thread_visible(thread_id));
-create policy thread_links_insert on thread_links for insert to app, captain_runtime
-	with check (organisation_id = current_organisation_id() and thread_visible(thread_id) and linked_by = current_user_id());
 
 alter table thread_tags enable row level security;
 alter table thread_tags force row level security;
@@ -1070,10 +1015,9 @@ create policy chat_audit_events_insert on chat_audit_events for insert to app, c
 	with check (organisation_id = current_organisation_id() and thread_visible(thread_id) and actor_id = current_user_id());
 
 -- Grants: nothing is deleted but stars and thread tags (tag removal is a delete); threads are inserted only as record
--- threads; links are created, never removed; audit is append-only.
+-- threads; audit is append-only.
 grant select, insert, update on threads to app, captain_runtime;
 grant select, insert, update on thread_participants to app, captain_runtime;
-grant select, insert on thread_links to app, captain_runtime;
 grant select, insert, delete on thread_tags to app, captain_runtime;
 grant select, insert, delete on task_series_tags to app, captain_runtime;
 grant select, insert, update on thread_messages to app, captain_runtime;
@@ -1083,6 +1027,6 @@ grant select, insert, update on thread_reads to app, captain_runtime;
 grant select, insert on chat_audit_events to app, captain_runtime;
 
 revoke all on function thread_visible(uuid), thread_create(uuid, text, text, bytea), thread_end_membership(uuid), thread_for_record(),
-	thread_guard(), thread_participants_guard(), thread_links_guard(), thread_tags_guard(), thread_messages_guard(), thread_pins_guard(),
+	thread_guard(), thread_participants_guard(), thread_tags_guard(), thread_messages_guard(), thread_pins_guard(),
 	thread_stars_guard(), thread_reads_guard(), thread_audit_guard(), thread_seq_check() from public;
 grant execute on function thread_visible(uuid), thread_create(uuid, text, text, bytea), thread_end_membership(uuid) to app, captain_runtime;

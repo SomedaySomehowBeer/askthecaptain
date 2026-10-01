@@ -16,7 +16,7 @@ const RLS = /row-level security/;
 const DENIED = /permission denied/;
 const REFUSED = { code: '23514' }; // check_violation, raised by the transition triggers and CHECK constraints
 const fp = (value: string) => createHash('sha256').update(value).digest();
-const tables = ['threads', 'thread_participants', 'thread_links', 'thread_messages', 'chat_audit_events'] as const;
+const tables = ['threads', 'thread_participants', 'thread_tags', 'thread_messages', 'chat_audit_events'] as const;
 
 before(async () => { if (databaseUrl) db = await freshDatabase(); });
 after(async () => { await db?.close(); });
@@ -117,23 +117,23 @@ it('the suite really runs as captain_runtime, which bypasses nothing', async () 
 });
 
 it('thread tables force row security, grant no deletes but stars and tags, and expose only three definer functions', async () => {
-	for (const table of [...tables, 'thread_tags', 'thread_pins', 'thread_stars', 'thread_reads', 'task_series_tags']) {
+	for (const table of [...tables, 'thread_pins', 'thread_stars', 'thread_reads', 'task_series_tags']) {
 		const [flags] = await db.owner<{ rls: boolean; forced: boolean }[]>`select relrowsecurity as rls, relforcerowsecurity as forced from pg_class where relname = ${table}`;
 		assert.deepEqual(flags, { rls: true, forced: true }, table);
 	}
 	// Both runtime roles hold the same privileges (D6): captain_runtime, which the API uses, and legacy `app`.
 	for (const role of ['captain_runtime', 'app']) {
 		const privilege = async (table: string, kind: string) => (await db.owner<{ ok: boolean }[]>`select has_table_privilege(${role}, ${table}, ${kind}) as ok`)[0]!.ok;
-		for (const table of ['threads', 'thread_participants', 'thread_links', 'thread_messages', 'thread_pins', 'thread_reads', 'chat_audit_events'])
+		for (const table of ['threads', 'thread_participants', 'thread_messages', 'thread_pins', 'thread_reads', 'chat_audit_events'])
 			assert.equal(await privilege(table, 'DELETE'), false, `${role} ${table}`);
 		for (const table of ['thread_stars', 'thread_tags']) assert.equal(await privilege(table, 'DELETE'), true, `${role} ${table}`);
 		// Threads are inserted directly only as record threads (row security); topic and private ones come from thread_create.
 		assert.equal(await privilege('threads', 'INSERT'), true, role);
-		for (const table of ['thread_links', 'thread_tags', 'chat_audit_events']) assert.equal(await privilege(table, 'UPDATE'), false, `${role} ${table}`);
+		for (const table of ['thread_tags', 'chat_audit_events']) assert.equal(await privilege(table, 'UPDATE'), false, `${role} ${table}`);
 	}
 	const policies = await db.owner<{ name: string; roles: string[] }[]>`select policyname as name, roles::text[] as roles from pg_policies
 		where tablename in ${db.owner([...tables])} order by policyname`;
-	assert.equal(policies.length, 13);
+	assert.equal(policies.length, 14);
 	for (const policy of policies) assert.deepEqual([...policy.roles].sort(), ['app', 'captain_runtime'], policy.name);
 	const functions = await db.owner<{ name: string; definer: boolean; callable: boolean; legacyCallable: boolean; config: string[] | null }[]>`
 		select p.proname as name, p.prosecdef as definer, has_function_privilege('captain_runtime', p.oid, 'EXECUTE') as callable,
@@ -147,10 +147,9 @@ it('thread tables force row security, grant no deletes but stars and tags, and e
 	// past row security so a caller who then leaves cannot evade it.
 	assert.deepEqual(functions.filter((f) => !f.callable && f.definer).map((f) => f.name), ['thread_seq_check']);
 	assert.ok(functions.every((f) => (f.config ?? []).includes('search_path=pg_catalog, public, pg_temp')), 'every thread function pins its search_path');
-	const names = (await db.owner<{ name: string }[]>`select conname as name from pg_constraint where conrelid in ('threads'::regclass, 'thread_messages'::regclass)
-		union select indexname from pg_indexes where tablename = 'thread_links'`).map((r) => r.name);
+	const names = (await db.owner<{ name: string }[]>`select conname as name from pg_constraint where conrelid in ('threads'::regclass, 'thread_messages'::regclass)`).map((r) => r.name);
 	for (const name of ['threads_pkey', 'threads_organisation_id_id_key', 'thread_messages_pkey', 'thread_messages_organisation_id_id_key',
-		'thread_messages_thread_seq', 'thread_messages_thread_change', 'thread_links_target']) assert.ok(names.includes(name), name);
+		'thread_messages_thread_seq', 'thread_messages_thread_change']) assert.ok(names.includes(name), name);
 });
 
 it('0046 checks captain_runtime, never legacy app, and refuses any runtime role that could gain more', async () => {
@@ -217,20 +216,20 @@ it('the bootstrap creates one caller row and matches only its own creator’s id
 	assert.equal((await create(org, alice, [bob], id)).result, 'unavailable', 'a creator who left has no lasting power');
 });
 
-it('nobody but an active participant sees a conversation, its links, messages or audit — owners and admins included', async () => {
+it('nobody but an active participant sees a private thread, its tags, messages or audit — owners and admins included', async () => {
 	const org = await organisation(), other = await organisation();
 	const owner = await person(org, 'owner'), admin = await person(org, 'admin'), alice = await person(org), bob = await person(org), carol = await person(org);
 	const outsider = await person(other, 'owner');
-	const [task] = await db.owner<{ id: string }[]>`insert into tasks (organisation_id, title) values (${org}, 'Book the canning line') returning id`;
+	const [tag] = await db.owner<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Canning') returning id`;
 	const { id } = await create(org, alice, [bob]);
 	await send(org, alice, id);
 	await as(org, alice, async (tx) => {
-		await tx`insert into thread_links (organisation_id, thread_id, task_id, linked_by) values (${org}, ${id}, ${task!.id}, ${alice})`;
+		await tx`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by) values (${org}, ${id}, ${tag!.id}, ${alice})`;
 		await tx`update threads set revision = revision + 1 where id = ${id}`;
-		await audit(tx, org, id, alice, 'chat.link_added', 'link', null);
+		await audit(tx, org, id, alice, 'chat.tag_added', 'tag', tag!.id);
 	});
-	// Audit: created, participant added, message sent, link added.
-	assert.deepEqual(await counts(org, alice), { threads: 1, thread_participants: 2, thread_links: 1, thread_messages: 1, chat_audit_events: 4 });
+	// Audit: created, participant added, message sent, tag added.
+	assert.deepEqual(await counts(org, alice), { threads: 1, thread_participants: 2, thread_tags: 1, thread_messages: 1, chat_audit_events: 4 });
 	for (const user of [owner, admin, carol]) assert.deepEqual(Object.values(await counts(org, user)), [0, 0, 0, 0, 0], user);
 	assert.deepEqual(Object.values(await counts(other, outsider)), [0, 0, 0, 0, 0]);
 	assert.deepEqual(Object.values(await counts(org, bob)).slice(0, 4), [1, 2, 1, 1]);
@@ -244,12 +243,12 @@ it('an insert naming an inaccessible conversation fails exactly like one naming 
 	const org = await organisation();
 	const alice = await person(org), carol = await person(org);
 	const { id } = await create(org, alice);
-	const [task] = await db.owner<{ id: string }[]>`insert into tasks (organisation_id, title) values (${org}, 'Trade pack') returning id`;
+	const [tag] = await db.owner<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Trade pack') returning id`;
 	const attempts = (conversation: string) => [
 		(tx: TransactionSql) => tx`insert into thread_messages (id, organisation_id, thread_id, seq, change_seq, author_id, body, sent_body_sha256)
 			values (${randomUUID()}, ${org}, ${conversation}, 1, 1, ${carol}, 'Hi', ${fp('Hi')})`,
-		(tx: TransactionSql) => tx`insert into thread_links (organisation_id, thread_id, task_id, linked_by)
-			values (${org}, ${conversation}, ${task!.id}, ${carol})`,
+		(tx: TransactionSql) => tx`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by)
+			values (${org}, ${conversation}, ${tag!.id}, ${carol})`,
 		(tx: TransactionSql) => tx`insert into thread_participants (organisation_id, thread_id, user_id, added_by) values (${org}, ${conversation}, ${carol}, ${carol})`,
 		(tx: TransactionSql) => audit(tx, org, conversation, carol, 'chat.message_sent', 'message', null),
 	];
@@ -421,15 +420,15 @@ it('every advanced seq has its message by commit — a bare bump fails, even whe
 it('chat timestamps are the server’s: caller-chosen times are ignored on every insert and transition', async () => {
 	const org = await organisation();
 	const admin = await person(org, 'admin'), alice = await person(org), bob = await person(org), carol = await person(org);
-	const [task] = await db.owner<{ id: string }[]>`insert into tasks (organisation_id, title) values (${org}, 'Pallet labels') returning id`;
+	const [tag] = await db.owner<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Pallet labels') returning id`;
 	const { id } = await create(org, alice, [bob, admin]);
 	const past = new Date('2001-01-01T00:00:00Z'), future = new Date('2099-01-01T00:00:00Z');
 	const serverTime = (value: Date | null | undefined) => value instanceof Date && value.getTime() > Date.parse('2020-01-01') && value.getTime() < Date.parse('2090-01-01');
 	const message = randomUUID();
 	await as(org, alice, async (tx) => {
 		await tx`insert into thread_participants (organisation_id, thread_id, user_id, added_by, added_at) values (${org}, ${id}, ${carol}, ${alice}, ${past})`;
-		await tx`insert into thread_links (organisation_id, thread_id, task_id, linked_by, created_at) values (${org}, ${id}, ${task!.id}, ${alice}, ${past})`;
-		await tx`insert into chat_audit_events (organisation_id, thread_id, actor_id, action, subject_kind, created_at) values (${org}, ${id}, ${alice}, 'chat.link_added', 'link', ${past})`;
+		await tx`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by, attached_at) values (${org}, ${id}, ${tag!.id}, ${alice}, ${past})`;
+		await tx`insert into chat_audit_events (organisation_id, thread_id, actor_id, action, subject_kind, created_at) values (${org}, ${id}, ${alice}, 'chat.tag_added', 'tag', ${past})`;
 		const [c] = await tx<{ lastSeq: number; lastChange: number }[]>`update threads set last_seq = last_seq + 1, last_change = last_change + 1, last_message_at = ${future}
 			where id = ${id} returning last_seq, last_change`;
 		await tx`insert into thread_messages (id, organisation_id, thread_id, seq, change_seq, author_id, body, sent_body_sha256, created_at)
@@ -440,7 +439,7 @@ it('chat timestamps are the server’s: caller-chosen times are ignored on every
 	const [sent] = await db.owner<{ createdAt: Date }[]>`select created_at from thread_messages where id = ${message}`;
 	assert.equal(sent!.createdAt.getTime(), conversation!.lastMessageAt.getTime(), 'a message takes its send’s time');
 	assert.ok(serverTime((await db.owner<{ addedAt: Date }[]>`select added_at from thread_participants where thread_id = ${id} and user_id = ${carol}`)[0]!.addedAt));
-	assert.ok(serverTime((await db.owner<{ createdAt: Date }[]>`select created_at from thread_links where thread_id = ${id}`)[0]!.createdAt));
+	assert.ok(serverTime((await db.owner<{ createdAt: Date }[]>`select attached_at as created_at from thread_tags where thread_id = ${id}`)[0]!.createdAt));
 	const audits = await db.owner<{ createdAt: Date }[]>`select created_at from chat_audit_events where thread_id = ${id}`;
 	assert.ok(audits.length > 0 && audits.every((row) => serverTime(row.createdAt)), 'no back-dated audit');
 
@@ -476,26 +475,6 @@ it('conversation counters move by at most one, and revision never moves with mes
 	await assert.rejects(change(`create_fingerprint = '\\x00'::bytea`), REFUSED);
 	const [row] = await db.owner`select title, revision, last_seq, last_change from threads where id = ${id}`;
 	assert.deepEqual(row, { title: 'Renamed', revision: 2, lastSeq: 1, lastChange: 1 });
-});
-
-it('links are created by those who see the thread only, stay in the tenant, never change and are never deleted', async () => {
-	const org = await organisation(), other = await organisation();
-	const alice = await person(org), bob = await person(org), carol = await person(org);
-	const [task] = await db.owner<{ id: string }[]>`insert into tasks (organisation_id, title) values (${org}, 'Can artwork') returning id`;
-	const [foreignTask] = await db.owner<{ id: string }[]>`insert into tasks (organisation_id, title) values (${other}, 'Elsewhere') returning id`;
-	const { id } = await create(org, alice, [bob]);
-	const link = (actor: string, taskId: string, by = actor, thread = id) => as(org, actor, (tx) =>
-		tx<{ id: string }[]>`insert into thread_links (organisation_id, thread_id, task_id, linked_by) values (${org}, ${thread}, ${taskId}, ${by}) returning id`);
-	const [created] = await link(alice, task!.id);
-	await assert.rejects(link(alice, task!.id, bob), REFUSED, 'linked_by is the person linking');
-	try { await link(bob, task!.id); assert.fail('duplicate link'); } catch (error) { assert.equal((error as { constraint_name?: string }).constraint_name, 'thread_links_target'); }
-	await assert.rejects(link(alice, foreignTask!.id), /foreign key/, 'another tenant’s task');
-	await assert.rejects(link(carol, task!.id), RLS, 'a non-participant links nothing');
-	await assert.rejects(as(org, alice, (tx) => tx`update thread_links set task_id = ${task!.id} where id = ${created!.id}`), DENIED);
-	await assert.rejects(as(org, bob, (tx) => tx`delete from thread_links where id = ${created!.id}`), DENIED);
-	// A record thread is its record's: it links nothing.
-	const [record] = await db.owner<{ id: string }[]>`select id from threads where task_id = ${task!.id}`;
-	await assert.rejects(link(alice, task!.id, alice, record!.id), REFUSED);
 });
 
 it('chat audit is participant-scoped and append-only; personal rows are the actor’s alone', async () => {
@@ -594,10 +573,10 @@ it('the same client ID from different people at once: exactly one wins, the othe
 it('account and organisation deletion null attribution on live rows, tombstones and audit without bumps, then cascade', async () => {
 	const org = await organisation();
 	const alice = await person(org), bob = await person(org), carol = await person(org);
-	const [task] = await db.owner<{ id: string }[]>`insert into tasks (organisation_id, title) values (${org}, 'Launch') returning id`;
+	const [tag] = await db.owner<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Launch') returning id`;
 	const { id } = await create(org, alice, [bob]);
 	await as(org, bob, (tx) => addIn(tx, org, id, bob, carol));
-	await as(org, bob, (tx) => tx`insert into thread_links (organisation_id, thread_id, task_id, linked_by) values (${org}, ${id}, ${task!.id}, ${bob})`);
+	await as(org, bob, (tx) => tx`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by) values (${org}, ${id}, ${tag!.id}, ${bob})`);
 	const bobs = await send(org, bob, id, 'Bob wrote this');
 	const alices = await send(org, alice, id, 'Alice wrote this');
 	await tombstone(org, bob, id, bobs);
@@ -615,7 +594,7 @@ it('account and organisation deletion null attribution on live rows, tombstones 
 	assert.equal(after.messages.find((m) => m.id === alices)!.authorId, alice);
 	assert.equal((await db.owner`select 1 from thread_participants where user_id = ${bob}`).length, 0, 'participation cascades');
 	assert.equal((await db.owner<{ addedBy: string | null }[]>`select added_by from thread_participants where user_id = ${carol}`)[0]!.addedBy, null);
-	assert.equal((await db.owner<{ linkedBy: string | null }[]>`select linked_by from thread_links where thread_id = ${id}`)[0]!.linkedBy, null);
+	assert.equal((await db.owner<{ attachedBy: string | null }[]>`select attached_by from thread_tags where thread_id = ${id}`)[0]!.attachedBy, null);
 	assert.equal((await db.owner`select 1 from chat_audit_events where thread_id = ${id} and actor_id is null`).length > 0, true);
 
 	await db.owner`delete from memberships where organisation_id = ${org} and user_id = ${alice}`; // membership deletion alone

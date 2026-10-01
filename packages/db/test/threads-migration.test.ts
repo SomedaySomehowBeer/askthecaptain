@@ -14,7 +14,7 @@ const before0046 = '0045_drop_assistant_storage.sql';
 const migration = '0046_threads.sql';
 const retiredTables = ['conversations', 'conversation_participants', 'conversation_links', 'messages', 'message_pins', 'conversation_stars', 'conversation_reads',
 	'projects', 'task_tags'];
-const newTables = ['threads', 'thread_participants', 'thread_links', 'thread_tags', 'task_series_tags', 'thread_messages', 'thread_pins', 'thread_stars', 'thread_reads', 'chat_audit_events'];
+const newTables = ['threads', 'thread_participants', 'thread_tags', 'task_series_tags', 'thread_messages', 'thread_pins', 'thread_stars', 'thread_reads', 'chat_audit_events'];
 const fp = (value: string) => createHash('sha256').update(value).digest();
 
 let latest: Harness;
@@ -105,7 +105,7 @@ it('projects become tags, tags move onto threads, records get threads, and the o
 		assert.deepEqual(await tablesPresent(owner, retiredTables), [], 'the 0042/0043 tables, projects and task_tags are dropped');
 		assert.deepEqual(await tablesPresent(owner, newTables), newTables);
 		assert.deepEqual(await projectColumns(owner), [], 'no project_id column remains on tasks, series or bookings');
-		for (const table of ['thread_participants', 'thread_links', 'thread_messages', 'thread_pins', 'thread_stars', 'thread_reads', 'chat_audit_events'])
+		for (const table of ['thread_participants', 'thread_messages', 'thread_pins', 'thread_stars', 'thread_reads', 'chat_audit_events'])
 			assert.equal((await owner.unsafe(`select count(*)::int as n from ${table}`))[0]!.n, 0, `${table} starts empty`);
 		assert.equal((await owner`select count(*)::int as n from threads where kind <> 'record'`)[0]!.n, 0, 'no topic or private thread is invented');
 

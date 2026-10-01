@@ -20,12 +20,12 @@ type Person = { token: string; user: { id: string } };
 type Chip = { id: string; name: string };
 type Row = { id: string; kind: string; title: string; record: { kind: string; id: string } | null; facts: [string, string]; status: string | null;
  lastMessageAt: string | null; lastMessage: { authorName: string | null; excerpt: string } | null; unread: number; needsYou: boolean; starred: boolean;
- tags: Chip[]; links: { kind: string; id: string; title: string }[] };
+ tags: Chip[] };
 type Group = { key: string; label: string; threads: number; needsYou: number; owner: { id: string; name: string | null } | null; startsOn: string | null; endsOn: string | null };
 type List = { filter: string; available: boolean; threads: Row[]; nextCursor: string | null; groups: Group[] };
 type Detail = { thread: { id: string; kind: string; title: string; revision: number; lastSeq: number; readPosition: number; unread: number };
  card: { record: { kind: string; id: string } | null; title: string; status: string | null; facts: [string, string]; fold: Record<string, unknown> };
- tags: Chip[]; links: Row['links']; participants?: { userId: string }[]; pin: { id: string; messageId: string } | null };
+ tags: Chip[]; participants?: { userId: string }[]; pin: { id: string; messageId: string } | null };
 type Message = { id: string; seq: number; body: string | null };
 type Failure = { code: string };
 const google: IdentityProvider & { next: { subject: string; email: string; name: string } } = {
@@ -102,7 +102,7 @@ it('a topic is created by its first message in one transaction: seq 1, a derived
  const retried = await json<Detail>(b.topic(b.member, body, id, messageId), 200);
  assert.equal(retried.thread.title, 'Canning line, Thursday', 'the current thread; any member renamed it');
  assert.equal(retried.thread.lastSeq, 1);
- assert.deepEqual(await audit(), ['chat.thread_created', 'chat.message_sent', 'chat.conversation_updated']);
+ assert.deepEqual(await audit(), ['chat.thread_created', 'chat.message_sent', 'chat.thread_updated']);
  // Anything else under that id is the generic 409: another first line, another message id, another person.
  for (const response of [b.topic(b.member, 'Something else', id, messageId), b.topic(b.member, body, id, randomUUID()), b.topic(b.owner, body, id, messageId)])
   assert.equal((await json<Failure>(response, 409)).code, 'thread_id_unavailable');
@@ -297,7 +297,7 @@ it('pins on record and topic threads are an owner’s or admin’s, one at a tim
  assert.equal((await b.detail(b.other, topic)).pin, null);
 });
 
-it('access: a removed member sees 404; a non-participant sees nothing of a private thread; a record never reveals one linked to it', async () => {
+it('access: a removed member sees 404; a non-participant sees nothing of a private thread, by any path', async () => {
  const b = await business('Access');
  const task = await b.task('Supplier contract');
  const record = await b.threadOf('task_id', task);
@@ -308,23 +308,18 @@ it('access: a removed member sees 404; a non-participant sees nothing of a priva
  await json(b.addTag(b.owner, secret, tag.id, 1));
  const said = (await json<{ messages: Message[] }>(request('GET', `${b.threads}/${secret}/messages?latest=1`, b.owner))).messages[0]!;
  await json(request('POST', `${b.threads}/${secret}/pin`, b.owner, { messageId: said.id }), 201);
- // The private thread points at the task (written as its participant; R2 has no link route).
- await withTenant(db.app, { organisationId: b.org, userId: b.owner.user.id }, tx => tx`insert into thread_links (organisation_id, thread_id, task_id, linked_by)
-  values (${b.org}, ${secret}, ${task}, ${b.owner.user.id})`);
- assert.deepEqual((await b.detail(b.admin, secret)).links, [{ kind: 'task', id: task, title: 'Supplier contract' }]);
- assert.deepEqual((await b.list(b.admin)).threads.find(t => t.id === secret)!.links.map(l => l.id), [task], 'shown as a chip on its row');
+ // Rows and detail carry no links: R2 has no way to write one.
+ assert.ok(!('links' in (await b.detail(b.admin, secret))) && !('links' in (await b.list(b.admin)).threads.find(t => t.id === secret)!));
  // The member: the record thread is theirs to see, the private thread is not, by any path.
  assert.equal((await b.detail(b.member, record)).thread.lastSeq, 1);
  for (const path of ['', '/messages?latest=5', '/changes?after=0']) assert.equal((await request('GET', `${b.threads}/${secret}${path}`, b.member)).status, 404, path || 'detail');
  for (const response of [request('POST', `${b.threads}/${secret}/pin`, b.owner.user.id === b.member.user.id ? b.owner : b.member, { messageId: said.id }),
   b.addTag(b.member, secret, tag.id, 2), request('POST', `${b.threads}/${secret}/star`, b.member)]) assert.equal((await response).status, 404);
- const recordDetail = await b.detail(b.member, record);
- assert.deepEqual(recordDetail.links, [], 'a record thread never lists the private threads pointing at it');
  const taskDetail = await json<Record<string, unknown>>(request('GET', `${b.base}/tasks/${task}`, b.member));
  assert.ok(!JSON.stringify(taskDetail).includes(secret), 'nor does the record’s own screen');
  assert.ok(!JSON.stringify(await b.list(b.member, 'filter=tasks')).includes(secret));
  const asMember = <T>(work: Parameters<typeof withTenant<T>>[2]) => withTenant<T>(db.app, { organisationId: b.org, userId: b.member.user.id }, work);
- for (const table of ['thread_links', 'thread_tags', 'thread_pins', 'thread_messages', 'chat_audit_events'])
+ for (const table of ['thread_tags', 'thread_pins', 'thread_messages', 'chat_audit_events'])
   assert.equal((await asMember(tx => tx.unsafe(`select 1 from ${table} where thread_id = $1`, [secret]))).length, 0, table);
  // A removed member sees nothing at all, record threads included.
  await json(request('DELETE', `${b.base}/members/${b.member.user.id}`, b.owner));

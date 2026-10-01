@@ -141,7 +141,7 @@ it('lists pages by most recent activity with an opaque cursor, and refuses craft
  assert.equal((await request('GET', `${chats(shop)}?limit=1&limit=2`, pager)).status, 400);
 });
 
-it('the conversation, link and work-to-chat routes are retired; nothing answers there', async () => {
+it('the conversation and work-to-chat routes are retired, and threads have no links; nothing answers there', async () => {
  const task = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Retired reads' }), 201)).id;
  for (const [method, path] of [['GET', 'conversations'], ['POST', 'conversations'], ['GET', `tasks/${task}/conversations`], ['GET', `projects/${randomUUID()}/conversations`],
   ['GET', `threads/${randomUUID()}/pins`]] as const)
@@ -207,7 +207,7 @@ it('creates a private thread, sends and reads messages, and shows it only to its
  assert.ok(!(await listOf(third)).threads.some(c => c.id === id));
  assert.ok((await listOf(member)).threads.some(c => c.id === id));
  // Direct SQL as app: a non-participant sees zero rows of this thread in every thread table.
- for (const [table, column] of [['threads', 'id'], ['thread_participants', 'thread_id'], ['thread_links', 'thread_id'], ['thread_messages', 'thread_id'], ['chat_audit_events', 'thread_id']] as const)
+ for (const [table, column] of [['threads', 'id'], ['thread_participants', 'thread_id'], ['thread_tags', 'thread_id'], ['thread_messages', 'thread_id'], ['chat_audit_events', 'thread_id']] as const)
   assert.equal((await asApp(third, tx => tx.unsafe(`select 1 from ${table} where ${column} = $1`, [id]))).length, 0, table);
 
  // Audit: nothing in the tenant-wide log; IDs and counters only in chat audit.
@@ -497,7 +497,7 @@ it('export includes only the exporter’s private threads and says so; deletion 
  assert.equal(lines.filter(l => l.table === 'thread_pins').length, 1, 'pins in the exporter’s threads are exported');
  assert.ok(!JSON.stringify(lines).includes(theirsId), 'no trace of another member’s private thread, including its audit');
  const deleted = await json<{ rowCounts: Record<string, number> }>(request('DELETE', base(exportOrg), lead, { name: 'Export Brewing' }));
- for (const table of ['threads', 'thread_participants', 'thread_links', 'thread_tags', 'thread_messages', 'chat_audit_events', 'thread_pins', 'thread_stars', 'thread_reads'])
+ for (const table of ['threads', 'thread_participants', 'thread_tags', 'thread_messages', 'chat_audit_events', 'thread_pins', 'thread_stars', 'thread_reads'])
   assert.ok(!(table in deleted.rowCounts), table);
  assert.equal((await db.owner`select 1 from threads where organisation_id = ${exportOrg}`).length, 0, 'the cascade removed every member’s threads');
 });

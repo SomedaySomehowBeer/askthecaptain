@@ -75,16 +75,6 @@ export const threadParticipants = pgTable('thread_participants', {
 	check('thread_participants_ended_check', sql`(${t.state} = 'active') = (${t.endedAt} is null)`),
 	check('thread_participants_read_start_check', sql`${t.readStartSeq} >= 0`)]);
 
-/** A topic or private thread pointing at records; never makes the thread visible from the record. */
-export const threadLinks = pgTable('thread_links', {
-	id: uuid('id').primaryKey().default(sql`uuidv7()`), organisationId: tenant(), threadId: uuid('thread_id').notNull(),
-	taskId: uuid('task_id'), reservationId: uuid('reservation_id'), stockItemId: uuid('stock_item_id'), linkedBy: uuid('linked_by'), createdAt: at('created_at'),
-}, (t) => [...records(t),
-	foreignKey({ columns: [t.organisationId, t.threadId], foreignColumns: [threads.organisationId, threads.id] }).onDelete('cascade'),
-	member(t.organisationId, t.linkedBy), // on delete set null (linked_by)
-	uniqueIndex('thread_links_target').on(t.threadId, sql`coalesce(${t.taskId}, ${t.reservationId}, ${t.stockItemId})`),
-	check('thread_links_target_check', sql`num_nonnulls(${t.taskId}, ${t.reservationId}, ${t.stockItemId}) = 1`)]);
-
 /** The one place a tag is attached to anything, on every thread kind. */
 export const threadTags = pgTable('thread_tags', {
 	organisationId: tenant(), threadId: uuid('thread_id').notNull(), tagId: uuid('tag_id').notNull(), attachedBy: uuid('attached_by'), attachedAt: at('attached_at'),
@@ -163,10 +153,10 @@ export const chatAuditEvents = pgTable('chat_audit_events', {
 	foreignKey({ columns: [t.organisationId, t.threadId], foreignColumns: [threads.organisationId, threads.id] }).onDelete('cascade'),
 	member(t.organisationId, t.actorId), // on delete set null (actor_id)
 	index('chat_audit_events_by_thread').on(t.organisationId, t.threadId, t.createdAt, t.id),
-	check('chat_audit_events_action_check', sql`${t.action} in ('chat.thread_created', 'chat.conversation_created', 'chat.conversation_updated',
+	check('chat_audit_events_action_check', sql`${t.action} in ('chat.thread_created', 'chat.thread_updated',
 		'chat.participant_added', 'chat.participant_removed', 'chat.participant_left', 'chat.link_added', 'chat.link_removed',
 		'chat.tag_added', 'chat.tag_removed', 'chat.message_sent', 'chat.message_edited', 'chat.message_deleted', 'chat.pin_added', 'chat.pin_removed',
 		'chat.star_set', 'chat.star_cleared', 'chat.read_advanced')`),
-	check('chat_audit_events_subject_check', sql`${t.subjectKind} in ('thread', 'conversation', 'participant', 'link', 'tag', 'message', 'pin', 'star', 'read')`),
+	check('chat_audit_events_subject_check', sql`${t.subjectKind} in ('thread', 'participant', 'link', 'tag', 'message', 'pin', 'star', 'read')`),
 	check('chat_audit_events_personal_check', sql`${t.personal} = (${t.action} in ('chat.star_set', 'chat.star_cleared', 'chat.read_advanced'))`),
 	check('chat_audit_events_detail_check', sql`jsonb_typeof(${t.detail}) = 'object'`)]);

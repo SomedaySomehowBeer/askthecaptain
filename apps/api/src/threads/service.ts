@@ -56,7 +56,6 @@ export const readPosition = z.object({ seq: z.number().int().min(0).max(2_147_48
 export type ThreadKind = 'record' | 'topic' | 'private';
 export type RecordRef = { kind: RecordKind; id: string };
 export type TagChip = { id: string; name: string };
-export type LinkChip = { kind: RecordKind; id: string; title: string };
 /** A message as the API returns it. A tombstone keeps its identity and order with `body: null`. `authorName` is null
  *  only when the author attribution was deleted ("Former member"). */
 export type Message = { id: string; threadId: string; kind: 'message' | 'change' | 'approval'; seq: number; changeSeq: number; authorId: string | null; authorName: string | null;
@@ -68,14 +67,14 @@ export type Participant = { userId: string; name: string; addedAt: Date };
 /** A list row (§6). `facts` are the card's two facts (§6 card table); `lastMessage` is the latest live message. */
 export type ThreadRow = { id: string; kind: ThreadKind; title: string; record: RecordRef | null; facts: [string, string]; status: string | null;
  lastMessageAt: Date | null; lastMessage: { authorName: string | null; excerpt: string } | null; unread: number; needsYou: boolean; starred: boolean;
- tags: TagChip[]; links: LinkChip[] };
+ tags: TagChip[] };
 export type Group = { key: string; label: string; threads: number; needsYou: number; owner: { id: string; name: string | null } | null; startsOn: string | null; endsOn: string | null };
 export type ThreadList = { filter: Filter; available: boolean; threads: ThreadRow[]; nextCursor: string | null; groups: Group[] };
 /** The card on top of a thread (§6): small, computed by code from the record row, with the rest behind a fold-out. */
 export type Card = { record: RecordRef | null; title: string; status: string | null; facts: [string, string]; fold: Record<string, unknown> };
 export type ThreadDetail = {
  thread: { id: string; kind: ThreadKind; title: string; revision: number; lastSeq: number; lastChange: number; readPosition: number; unread: number; starred: boolean; createdAt: Date };
- card: Card; tags: TagChip[]; links: LinkChip[]; participants?: Participant[]; pin: { id: string; messageId: string; pinnedBy: string | null; pinnedAt: Date } | null;
+ card: Card; tags: TagChip[]; participants?: Participant[]; pin: { id: string; messageId: string; pinnedBy: string | null; pinnedAt: Date } | null;
 };
 type MessageRow = Message & { sentBodySha256?: Buffer | null };
 type Locked = { id: string; kind: ThreadKind; title: string | null; revision: number; lastSeq: number; lastChange: number };
@@ -305,25 +304,10 @@ export class ThreadsService {
   return byThread;
  }
 
- private async linksOf(tx: TransactionSql, threadIds: string[]): Promise<Map<string, LinkChip[]>> {
-  const byThread = new Map<string, LinkChip[]>();
-  if (!threadIds.length) return byThread;
-  const rows = await tx<(LinkChip & { threadId: string })[]>`select l.thread_id,
-    case when l.task_id is not null then 'task' when l.reservation_id is not null then 'booking' else 'stock' end as kind,
-    coalesce(l.task_id, l.reservation_id, l.stock_item_id) as id, coalesce(lt.title, lr.title, ls.name) as title
-   from thread_links l
-   left join tasks lt on lt.organisation_id = l.organisation_id and lt.id = l.task_id
-   left join equipment_reservations lr on lr.organisation_id = l.organisation_id and lr.id = l.reservation_id
-   left join stock_items ls on ls.organisation_id = l.organisation_id and ls.id = l.stock_item_id
-   where l.thread_id in ${tx(threadIds)} order by l.created_at, l.id`;
-  for (const { threadId, ...chip } of rows) byThread.set(threadId, [...(byThread.get(threadId) ?? []), chip]);
-  return byThread;
- }
-
  private async detailIn(tx: TransactionSql, organisationId: string, threadId: string, me: string): Promise<ThreadDetail> {
   const [row] = await tx<Visible[]>`select * from (${visible(tx, organisationId, me)}) v where v.id = ${threadId}`;
   if (!row) throw notFound();
-  const [tags, links] = [(await this.tagsOf(tx, [threadId])).get(threadId) ?? [], (await this.linksOf(tx, [threadId])).get(threadId) ?? []];
+  const tags = (await this.tagsOf(tx, [threadId])).get(threadId) ?? [];
   const [pin] = await tx<{ id: string; messageId: string; pinnedBy: string | null; pinnedAt: Date }[]>`select id, message_id, pinned_by, pinned_at from thread_pins
    where organisation_id = ${organisationId} and thread_id = ${threadId} and unpinned_at is null`;
   const detail: ThreadDetail = {
@@ -331,7 +315,7 @@ export class ThreadsService {
     unread: row.unread, starred: row.starred, createdAt: row.createdAt },
    card: { record: row.recordKind ? { kind: row.recordKind, id: row.recordId! } : null, title: row.title, status: row.status, facts: row.facts,
     fold: await this.fold(tx, organisationId, row) },
-   tags, links, pin: pin ?? null,
+   tags, pin: pin ?? null,
   };
   if (row.kind === 'private') detail.participants = await tx<Participant[]>`select p.user_id, u.name, p.added_at from thread_participants p join users u on u.id = p.user_id
    where p.thread_id = ${threadId} and p.state = 'active' order by lower(u.name), p.user_id`;
@@ -376,7 +360,7 @@ export class ThreadsService {
     order by f.last_message_at desc nulls last, f.id desc limit ${query.limit + 1}`;
    const shown = rows.slice(0, query.limit);
    const ids = shown.map(row => row.id);
-   const [tags, links] = [await this.tagsOf(tx, ids), await this.linksOf(tx, ids)];
+   const tags = await this.tagsOf(tx, ids);
    const latest = ids.length ? await tx<{ threadId: string; authorName: string | null; excerpt: string }[]>`select distinct on (m.thread_id) m.thread_id, u.name as author_name,
      left(m.body, ${excerptLength}) as excerpt
     from thread_messages m left join users u on u.id = m.author_id
@@ -398,7 +382,7 @@ export class ThreadsService {
     filter: query.filter, available: true,
     threads: shown.map(row => ({ id: row.id, kind: row.kind, title: row.title, record: row.recordKind ? { kind: row.recordKind, id: row.recordId! } : null,
      facts: row.facts, status: row.status, lastMessageAt: row.lastMessageAt, lastMessage: lastMessage.get(row.id) ?? null, unread: row.unread,
-     needsYou: row.needsYou, starred: row.starred, tags: tags.get(row.id) ?? [], links: links.get(row.id) ?? [] })),
+     needsYou: row.needsYou, starred: row.starred, tags: tags.get(row.id) ?? [] })),
     nextCursor: rows.length > query.limit && last ? encodeCursor(last.activityKey, last.id, query.filter) : null,
     groups: groups.map(({ ownerId, ownerName, ...group }) => ({ ...group, owner: ownerId ? { id: ownerId, name: ownerName } : null })),
    };
@@ -448,7 +432,7 @@ export class ThreadsService {
    if (thread.revision !== input.expectedRevision) throw staleThread();
    if (thread.title !== input.title) {
     const next = await this.bumpRevision(tx, threadId, input.title);
-    await this.audit(tx, organisationId, actor, threadId, 'chat.conversation_updated', { kind: 'thread', id: threadId }, { threadId, revision: next });
+    await this.audit(tx, organisationId, actor, threadId, 'chat.thread_updated', { kind: 'thread', id: threadId }, { threadId, revision: next });
    }
    return this.detailIn(tx, organisationId, threadId, actor.userId.toLowerCase());
   });
