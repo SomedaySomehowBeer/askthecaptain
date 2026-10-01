@@ -1,0 +1,64 @@
+TAP version 13
+# Subtest: the callback spends the code, sets the HttpOnly session cookie and returns to the checked path
+ok 1 - the callback spends the code, sets the HttpOnly session cookie and returns to the checked path
+  ---
+  duration_ms: 1127.763734
+  type: 'test'
+  ...
+# Subtest: a spent, missing or refused code and a repeated Google error each go to the welcome page with its own code
+ok 2 - a spent, missing or refused code and a repeated Google error each go to the welcome page with its own code
+  ---
+  duration_ms: 74.375185
+  type: 'test'
+  ...
+# Subtest: the cookie is refused without the web client header, and bearer requests are unchanged
+ok 3 - the cookie is refused without the web client header, and bearer requests are unchanged
+  ---
+  duration_ms: 60.017281
+  type: 'test'
+  ...
+# Subtest: a passkey steps up through the step-up cookie, and verify moves the session into the session cookie
+ok 4 - a passkey steps up through the step-up cookie, and verify moves the session into the session cookie
+  ---
+  duration_ms: 115.051976
+  type: 'test'
+  ...
+# Subtest: sign-out with the cookie ends the session and clears both cookies
+ok 5 - sign-out with the cookie ends the session and clears both cookies
+  ---
+  duration_ms: 23.995135
+  type: 'test'
+  ...
+# Subtest: a native sign-in is handed to the app's fixed callback with no cookie
+ok 6 - a native sign-in is handed to the app's fixed callback with no cookie
+  ---
+  duration_ms: 69.158678
+  type: 'test'
+  ...
+# Subtest: the export is served at the root with the page as the fallback, and the API's paths are never shadowed
+ok 7 - the export is served at the root with the page as the fallback, and the API's paths are never shadowed
+  ---
+  duration_ms: 27.823488
+  type: 'test'
+  ...
+# Subtest: without the export the API still answers and the page says the web build is missing
+ok 8 - without the export the API still answers and the page says the web build is missing
+  ---
+  duration_ms: 34.782682
+  type: 'test'
+  ...
+# Subtest: cookie member controls retain CSRF, tenant, owner/admin and last-owner rules
+ok 9 - cookie member controls retain CSRF, tenant, owner/admin and last-owner rules
+  ---
+  duration_ms: 253.474708
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2920.036454

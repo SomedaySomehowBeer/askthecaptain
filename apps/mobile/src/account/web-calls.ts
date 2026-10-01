@@ -1,4 +1,5 @@
 import { createPushCalls, type PushCalls } from './push.ts';
+import { createThreadCalls, type ThreadCalls } from '../threads/api.ts';
 import { createMembersCalls, type MemberScope, type MembersCalls } from './members.ts';
 /** The web-only requests the account source makes for its screens (docs/plans/expo-web-session-2026-09.md §B.2):
  *  the passkey step-up, passkey management and accepting an invitation. Pure over the injected API client (no session
@@ -92,6 +93,7 @@ const parseRemoved = (value: unknown): true => {
 export type WebCalls = {
 	readonly members: MembersCalls;
 	readonly push: PushCalls;
+	readonly threads: ThreadCalls;
 	/** The one sign-in link (§B.2): `{origin}/auth/google/start?return_to={path}`, a plain navigation in the same tab.
 	 *  `returnTo` is kept only as a same-origin path that is not a sign-in page; otherwise `/`. */
 	signInUrl(returnTo: string | null): string;
@@ -132,6 +134,7 @@ export function createWebCalls(client: ApiClient, origin: string, hooks: WebCall
 	};
 	return Object.freeze({
 		push: createPushCalls(client, { scope: hooks.memberScope ?? (() => null), sessionEnded: hooks.sessionEnded, reconcile: hooks.reconcileMemberships ?? (() => {}) }),
+		threads: createThreadCalls(client, { scope: hooks.memberScope ?? (() => null), sessionEnded: hooks.sessionEnded, reconcile: hooks.reconcileMemberships ?? (() => {}) }),
 		members: createMembersCalls(client, origin, { scope: hooks.memberScope ?? (() => null), sessionEnded: hooks.sessionEnded, reconcile: hooks.reconcileMemberships ?? (() => {}) }),
 		async addPasskey(name: string, create: (options: unknown) => Promise<unknown>, active: () => boolean): Promise<PasskeyMutation> {
 			const epoch = hooks.accountEpoch();

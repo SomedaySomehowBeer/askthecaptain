@@ -51,6 +51,7 @@ export function RootStack() {
 				<Stack.Screen name="settings" />
 				<Stack.Screen name="members" />
 				<Stack.Screen name="settings/notifications" />
+				<Stack.Screen name="threads/[id]" />
 				<Stack.Screen name="equipment" />
 			</Stack.Protected>
 			<Stack.Screen name="auth/passkey" />

@@ -5,9 +5,11 @@ R1b replaces the three-tab client with the chat-first shell proposed in
 cookie-session and static-export support in R1a (#217). Production and staging deployment
 remain separate R1c work.
 
-The root opens Threads with disabled filters, a read-only Equipment schedule link and an
-unavailable Team row. Threads are not read yet, so the screen makes no claim about actual
-thread counts. Account provides organisation switching, sign out, sign out everywhere else,
+The root opens Threads with six fixed filters, grouped cursor pages, a read-only Equipment
+schedule link and an unavailable Team row. Thread screens show the fixed record card,
+oldest-first messages, first unread, pending-send recovery, message actions, pins and stars.
+Files and People remain unavailable. Thread responses currently follow the R2 contract using
+strict client parsers; integration with the parallel T-A API is still pending. Account provides organisation switching, sign out, sign out everywhere else,
 and web passkey listing, naming at registration, and removal. The invitation page accepts an invitation once and reports an
 uncertain response without replaying the write. Owners and admins can open Members from Settings to create and revoke invitation links, change roles and remove members. These controls currently use the web cookie session; native shows an unavailable notice. Notifications in Settings lists and removes personal devices, registers this browser and sends the displayed test notification. Native push and organisation export/deletion controls are later work.
 

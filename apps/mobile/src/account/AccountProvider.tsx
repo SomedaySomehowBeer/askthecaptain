@@ -1,3 +1,4 @@
+import { browserDrafts } from '../threads/storage.ts';
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import type { AccountSource } from './account-source.ts';
@@ -18,7 +19,11 @@ import type { WebCalls } from './web-calls.ts';
 const AccountContext = createContext<AccountSource | null>(null);
 
 export function AccountProvider({ source, children }: { source: AccountSource; children: ReactNode }) {
-	// Foreground refresh: the source paces it (30 s spacing, the server's wait, coalescing), so repeated transitions
+	useEffect(() => {
+  const changed=()=>{const view=source.snapshot().account;if(view.kind==='signed-in')browserDrafts.person(view.user.id);else if(view.kind==='releasing'&&view.reason==='sign-out')browserDrafts.person(null);};
+  changed();return source.subscribe(changed);
+ },[source]);
+ // Foreground refresh: the source paces it (30 s spacing, the server's wait, coalescing), so repeated transitions
 	// cannot bypass it and nothing is timed here. On the web React Native's AppState follows the page's visibility.
 	useEffect(() => {
 		const subscription = AppState.addEventListener('change', (state) => { if (state === 'active') source.send({ type: 'refresh' }); });
