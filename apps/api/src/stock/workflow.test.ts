@@ -115,12 +115,13 @@ it('cross-tenant counts cannot wake or reorder another organisation; removed ena
   await f.stock.count(f.member, f.org, a.id, { count: '1' }); await state(f, runId, 'paused'); assert.equal((await f.tx(tx => tx`select * from tasks`)).length, 0);
  } finally { await f.engine.close(); }
 });
-it('ambiguous Purchasing projects pause safely and resume once repaired; oversize locations are never truncated', async () => {
+it('the Purchasing project is a tag: an existing one is reused case-insensitively on the reorder task’s thread; oversize locations are never truncated', async () => {
  const f = await stocktakeFixture(db); try {
-  const a = await item(f); const projects = await f.tx(tx => tx`insert into projects (organisation_id, name) values (${f.org}, 'Purchasing'), (${f.org}, 'Purchasing') returning id`);
-  const { runId } = await f.startStocktake(); await state(f, runId, 'waiting'); await f.stock.count(f.member, f.org, a.id, { count: '1' });
-  const paused = await state(f, runId, 'paused'); assert.match(paused[0]!.reason, /distinct names/); assert.equal((await f.tx(tx => tx`select * from tasks`)).length, 0);
-  await f.tx(tx => tx`update projects set name = 'Other work' where id = ${projects[1]!.id}`); await f.workflows.control(f.actor, f.org, runId, 'resume'); await state(f, runId, 'succeeded');
+  const a = await item(f); const [tag] = await f.tx(tx => tx`insert into tags (organisation_id, name) values (${f.org}, 'purchasing') returning id`);
+  const { runId } = await f.startStocktake(); await state(f, runId, 'waiting'); await f.stock.count(f.member, f.org, a.id, { count: '1' }); await state(f, runId, 'succeeded');
+  const [task] = await f.tx(tx => tx`select id from tasks`);
+  assert.deepEqual((await f.tx(tx => tx`select tt.tag_id from threads th join thread_tags tt on tt.thread_id = th.id where th.task_id = ${task!.id}`)).map(r => r.tagId), [tag!.id]);
+  assert.equal((await f.tx(tx => tx`select * from tags where lower(name) = 'purchasing'`)).length, 1, 'no second tag');
   await f.tx(tx => tx`insert into stock_items (organisation_id, name, location, unit_label) select ${f.org}, 'Extra ' || n, 'Store', 'bags' from generate_series(1, 100) n`);
   const oversized = await f.startStocktake(); const result = await state(f, oversized.runId, 'paused'); assert.match(result[0]!.reason, /100 items/);
  } finally { await f.engine.close(); }

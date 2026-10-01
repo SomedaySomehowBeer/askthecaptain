@@ -14,8 +14,8 @@ it('independent task waits do not block reminders ; owner routing, fresh status 
   assert.deepEqual(requirementsOf(definitionByKey('chase-due')!).sort(), ['push']);
   await f.push.subscribe(f.member, f.org, { endpoint: 'https://push.example.test/member', keys: { p256dh: 'fixture', auth: 'fixture' } });
   await f.tx(tx => tx`update tasks set owner_id = ${f.member.userId} where id = ${f.overdue.id}`);
-  const [future] = await f.tx(tx => tx`insert into tasks (organisation_id, project_id, title, status, due, source_kind, created_by)
-   select organisation_id, project_id, 'Future delivery', 'open', ${f.clock.today}::date + 5, 'person', ${f.userId} from tasks where id = ${f.due.id} returning id`);
+  const [future] = await f.tx(tx => tx`insert into tasks (organisation_id, title, status, due, source_kind, created_by)
+   select organisation_id, 'Future delivery', 'open', ${f.clock.today}::date + 5, 'person', ${f.userId} from tasks where id = ${f.due.id} returning id`);
   await f.enable(); const run = await f.start();
   // The run turns 'waiting' at the first parked item while later independent items still execute; wait for both parks.
   await until(() => f.workflows.run(f.actor, f.org, run), r => r.state === 'waiting' && r.steps.filter(s => s.state === 'waiting').length === 2);

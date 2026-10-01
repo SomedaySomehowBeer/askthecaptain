@@ -25,6 +25,7 @@ export function equipmentRoutes(service: EquipmentService) {
  });
  routes.patch(`${base}/:equipmentId/reservations/:reservationId`, async c => c.json(await service.replaceBooking(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('equipmentId')), uuid.parse(c.req.param('reservationId')), await readJson(c.req))));
  routes.post(`${base}/:equipmentId/reservations/:reservationId/cancel`, async c => c.json(await service.cancelBooking(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('equipmentId')), uuid.parse(c.req.param('reservationId')), await readJson(c.req))));
- routes.get('/v1/organisations/:id/projects/:projectId/reservations', async c => c.json(await service.projectReservations(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('projectId')), c.req.query())));
+ // A tag's bookings: replaces …/projects/:projectId/reservations with the same query and shape (threads contract §5).
+ routes.get('/v1/organisations/:id/tags/:tagId/reservations', async c => c.json(await service.tagReservations(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('tagId')), c.req.query())));
  return routes;
 }

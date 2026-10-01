@@ -3,7 +3,7 @@ import { withTenant, withUser, type Sql, type TransactionSql } from '@captain/db
 import { audit } from '../audit.ts';
 import { HttpError, badRequest, forbidden, notFound } from '../errors.ts';
 import { roleOf } from '../tenant.ts';
-import { lockMemberships, type MembershipLock } from '../chat/locks.ts';
+import { lockMemberships, type MembershipLock } from '../threads/locks.ts';
 
 export type Role = 'owner' | 'admin' | 'member';
 export type Organisation = { id: string; name: string; timezone: string; locale: string; createdAt: Date };
@@ -90,7 +90,7 @@ export class OrganisationService {
 		});
 	}
 
-	/** Removal also ends the person's chat participation in the same transaction (`chat_end_membership`, which returns
+	/** Removal also ends the person's chat participation in the same transaction (`thread_end_membership`, which returns
 	 *  nothing to a caller who may not be a participant). The `membership.removed` audit row carries no chat data. */
 	async remove(actor: Actor, organisationId: string, userId: string): Promise<void> {
 		const actorRole = await this.#roleOf(actor.userId, organisationId);
@@ -105,7 +105,7 @@ export class OrganisationService {
 				if (otherOwners === 0) throw lastOwner();
 			}
 			await tx`update memberships set status = 'removed' where organisation_id = ${organisationId} and user_id = ${userId}`;
-			await tx`select chat_end_membership(${userId}::uuid)`;
+			await tx`select thread_end_membership(${userId}::uuid)`;
 			await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, action: 'membership.removed', subjectType: 'membership', subjectId: userId, requestId: actor.requestId });
 		});
 	}
