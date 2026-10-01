@@ -35,7 +35,7 @@ export function createThreadControls(calls:ThreadCalls,scope:ReadScope,id:string
    const incoming=changes.changes.filter(c=>c.kind==='message').map(c=>c.message);onMessages(incoming);
    // Changes below the display window are reconciled, but cannot punch holes in its visible sequence.
    const start=state.messages[0]?.seq??1,messages=mergeMessages(state.messages,incoming.filter(m=>m.seq>=start));
-   const pin=detail.pins; if(pin&&incoming.some(m=>m.id===pin.messageId&&m.deletedAt!==null))detail={...detail,pins:null};
+   const pin=detail.pin; if(pin&&incoming.some(m=>m.id===pin.messageId&&m.deletedAt!==null))detail={...detail,pin:null};
    failures=0;set({...state,detail:{...detail,thread:{...detail.thread,lastSeq:Math.max(detail.thread.lastSeq,changes.thread.lastSeq)}},messages,busy:false,cursor:changes.next,complete:changes.complete,message:hasGap(messages)?copy.gap:changes.complete?'':copy.catching,waitUntil:0});
   },
   async mutate(action:Mutation){
@@ -48,7 +48,7 @@ export function createThreadControls(calls:ThreadCalls,scope:ReadScope,id:string
    let messages=state.messages;
    if(action.kind==='edit'||action.kind==='delete'){const p=await calls.messages(scope,id,{after:action.message.seq-1,limit:1});if(!active()||p.kind==='stale')return;if(p.kind==='error'){fail(p,true);return;}messages=mergeMessages(messages,p.value.messages);onMessages(p.value.messages);}
    const target=('message'in action)?messages.find(m=>m.id===action.message.id):null;
-   const holds=action.kind==='star'?d.value.thread.starred===action.value:action.kind==='pin'?d.value.pins?.messageId===action.message.id:action.kind==='unpin'?d.value.pins===null:action.kind==='delete'?target?.deletedAt!==null&&target!==undefined:target?.body===action.body.trim();
+   const holds=action.kind==='tag'?d.value.tags.some(t=>t.id===action.tagId)===action.attached:action.kind==='star'?d.value.thread.starred===action.value:action.kind==='pin'?d.value.pin?.messageId===action.message.id:action.kind==='unpin'?d.value.pin===null:action.kind==='delete'?target?.deletedAt!==null&&target!==undefined:target?.body===action.body.trim();
    set({...state,busy:false,detail:d.value,messages,needsRefresh:false,message:holds?'Change confirmed.':result.kind==='error'&&result.status===409?copy.conflict:'Current state loaded. The requested change was not confirmed; choose again.'});
   },
   async displayed(seq:number){
@@ -60,7 +60,7 @@ export function createThreadControls(calls:ThreadCalls,scope:ReadScope,id:string
    else if(result.status===404)fail(result);else{readWait=now()+result.retryAfter*1000;set({...state,message:'Your read position was not confirmed. New displayed messages can advance it later.'});}
   },
   async jumpPin(){
-   if(!allowed()||!state.detail?.pins)return;const target=state.detail.pins.messageId;if(pinTarget!==target){pinTarget=target;pinSearch=0;}const known=state.messages.find(m=>m.id===target&&m.deletedAt===null);
+   if(!allowed()||!state.detail?.pin)return;const target=state.detail.pin.messageId;if(pinTarget!==target){pinTarget=target;pinSearch=0;}const known=state.messages.find(m=>m.id===target&&m.deletedAt===null);
    if(known){set({...state,jumpSeq:known.seq});return;}
    // The contract's pin has an ID but no message sequence. Resolve it through bounded change pages.
    set({...state,busy:true,message:'Finding the pinned message…'});const changes=await calls.changes(scope,id,pinSearch);

@@ -1,4 +1,10 @@
 export const copy={
+ createUnknown:'This thread may have been created. Its first message and choices are locked. Retry with the same IDs to confirm.',
+ createRefused:'Captain refused this thread. Review your text and choices, then start again with new IDs or discard it.',
+ createIdUnavailable:'This thread ID cannot be used. Your text and choices are kept; start again with new IDs or discard it.',
+ createNewIds:'Review your text and choices, then send to start a new thread.',
+ createDiscard:'Draft discarded. Any thread already created remains available to its participants.',
+ creating:'Creating the thread…',created:'Thread confirmed.',
  loading:'Loading threads…',empty:'No threads match this filter.',failed:'Could not load threads. Check the connection and try again.',
  unavailable:'Threads are not available in this client yet.',lost:'This thread is no longer available.',wait:'Captain asked you to wait before trying again.',
  threadLoading:'Loading the thread…',threadFailed:'Could not load the thread. Check the connection and try again.',emptyMessages:'No messages yet.',

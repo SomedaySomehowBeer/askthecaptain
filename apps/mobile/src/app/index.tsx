@@ -38,7 +38,7 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
  const paused=useThreadPoll(()=>controls.load(),now),waiting=useDeadline(state.waitUntil,now);
  const busy=state.phase==='loading';
  const toggle=(key:string)=>{const next=new Set(folds);if(next.has(key))next.delete(key);else next.add(key);setFolds(next);saveFolds(next);};
- return <Screen title={threadsCopy.heading} list={({heading,contentContainerStyle})=><View style={{flex:1}}><ScrollView testID="threads-list" contentContainerStyle={contentContainerStyle}>
+ return <Screen title={threadsCopy.heading} list={({heading,contentContainerStyle})=><View style={{flex:1}}><ScrollView testID="threads-list" contentContainerStyle={[contentContainerStyle,{paddingBottom:80}]}>
   {heading}
   <View role="radiogroup" aria-label={threadsCopy.filterGroup} style={styles.filters}>
    {threadsCopy.filters.map((filter,index)=><Pressable key={filter} testID={`threads-filter-${index}`} disabled={index>5||busy||waiting} aria-disabled={index>5||busy||waiting} role="radio" aria-checked={state.filter===filters[index]} aria-label={filter} onPress={()=>{void controls.filter(filters[index]!);}} style={[styles.filter,state.filter===filters[index]&&styles.filterOn]}><Text style={[styles.filterText,state.filter===filters[index]&&styles.filterTextOn]}>{filter}</Text></Pressable>)}
@@ -61,7 +61,7 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
    {!folds.has(group.key)&&rows.length===0?<Text style={styles.detail}>Load more threads to see this group.</Text>:null}
   </View>):null}
   {state.data?.nextCursor?<Button testID="threads-more" label="Show more" disabled={busy||waiting} onPress={()=>{void controls.load(true);}}/>:null}
- </ScrollView></View>}/>;
+ </ScrollView><View style={{position:'absolute',right:16,bottom:16}}><Button testID="threads-new" label="New thread" primary disabled={state.phase==='lost'} onPress={()=>router.push('/threads/new')}/></View></View>}/>;
 }
 function ThreadRow({row}:{row:Row}){
  return <Pressable testID={`thread-row-${row.id}`} onPress={()=>router.push(`/threads/${row.id}`)} role="link" style={[styles.threadRow,row.needsYou&&styles.needs]}>
