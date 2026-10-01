@@ -39,7 +39,7 @@ export type Policy = { name: string; limit: number; windowMs: number; key: (c: C
 export function policies(): Record<'ip' | 'auth' | 'webhook' | 'user' | 'organisation' | 'trigger' | 'chatWrites' | 'sessionRevocations', Policy> {
 	const minute = 60_000;
 	const organisationOf = (c: Context) => /^\/v1\/organisations\/([0-9a-f-]{36})(\/|$)/.exec(c.req.path)?.[1] ?? null;
-	const chatWrite = /^\/v1\/organisations\/([0-9a-f-]{36})\/conversations(\/|$)/;
+	const chatWrite = /^\/v1\/organisations\/([0-9a-f-]{36})\/threads(\/|$)/;
 	const trigger = /\/(mail|calendar|xero|shopify)\/sync$|\/connections\/[a-z]+\/start$|\/push\/test$|\/mail\/watch$|\/inference\/runtime(\/verify)?$|\/workflows\/[a-z0-9-]+\/run$/;
 	return {
 		ip: { name: 'requests', limit: 300, windowMs: minute, key: (c) => `ip:${clientIp(c)}` },
@@ -48,7 +48,8 @@ export function policies(): Record<'ip' | 'auth' | 'webhook' | 'user' | 'organis
 		user: { name: 'requests', limit: 600, windowMs: minute, key: (c) => { const user = (c.get('session') as { userId?: string } | undefined)?.userId; return user ? `user:${user}` : null; } },
 		organisation: { name: 'requests for this organisation', limit: 1200, windowMs: minute, key: (c) => { const org = organisationOf(c); return org ? `org:${org}` : null; } },
 		trigger: { name: 'syncs and connection attempts', limit: 12, windowMs: minute, key: (c) => { const org = organisationOf(c); return org && c.req.method === 'POST' && trigger.test(c.req.path) ? `trigger:${org}` : null; } },
-		// Linked chat (contract §14): a tightening for writes only; reads and polling stay under the existing limits.
+		// Threads (threads contract §8, linked-chat §14): a tightening for writes only, keyed on the /threads prefix; reads and
+		// polling stay under the existing limits.
 		chatWrites: { name: 'chat changes', limit: 30, windowMs: minute, key: (c) => {
 			if (c.req.method !== 'POST' && c.req.method !== 'PATCH' && c.req.method !== 'DELETE') return null;
 			const org = chatWrite.exec(c.req.path)?.[1]; const user = (c.get('session') as { userId?: string } | undefined)?.userId;
