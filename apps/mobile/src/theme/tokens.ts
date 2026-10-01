@@ -12,6 +12,9 @@ export const colors = {
 	actionText: '#ffffff',
 	line: '#d8e0d3', // card and control borders
 	rowLine: '#e6ece2', // lines between rows
+	needsYou: '#e9f2e4', // prototype frame 1 row tint; keeps the sage icon tile distinct
+	needsYouLine: '#bfd4b8',
+	pinned: '#e3ebdd', // prototype frame 1 pinned-view surface
 	sage: '#dbe6d4', // the selected row, filter or chip
 	sageText: '#2d4c36' // text on sage
 } as const;

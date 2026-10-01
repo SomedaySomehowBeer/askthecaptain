@@ -31,9 +31,9 @@ function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>n
  useEffect(()=>{if(d.private)void members.load();},[d.private,members]);
  const waiting=useDeadline(state.waitUntil,now),memberWaiting=useDeadline(choices.waitUntil,now),locked=state.busy||d.locked||state.lost;
  const toggle=(id:string)=>controls.edit({participantIds:d.participantIds.includes(id)?d.participantIds.filter(p=>p!==id):[...d.participantIds,id]});
- return <Screen back={back} list={()=> <View style={styles.frame}>
-  <ScrollView contentContainerStyle={{gap:12,paddingBottom:12}} keyboardShouldPersistTaps="handled">
-   <View style={styles.composerRow}><ComposerInput testID="new-thread-body" accessibilityLabel="First message" autoFocus multiline placeholder="What's the work?" value={d.body} onChangeText={body=>controls.edit({body})} editable={!locked} maxLength={8000}/><ThreadAction testID="new-thread-send" label={d.locked?'Retry same thread':'Send'} display={d.locked?'Retry':'Send'} primary disabled={state.busy||state.lost||waiting||d.refused||!validCreate(d)||(!d.locked&&d.private&&(!choices.loaded||choices.busy||d.participantIds.some(id=>!choices.rows.some(m=>m.userId===id))))} onPress={()=>{void controls.send();}}/></View>
+ return <Screen title="New thread" back={back} list={({heading})=> <View style={styles.frame}>{heading}
+  <ScrollView style={{flex:1}} contentContainerStyle={{flexGrow:1,gap:12,paddingBottom:12}} keyboardShouldPersistTaps="handled">
+
    <Pressable testID="new-thread-private" role="switch" aria-checked={d.private} disabled={locked} onPress={()=>controls.edit({private:!d.private})} style={styles.toggle}><Text style={styles.label}>Private</Text><Text style={styles.label}>{d.private?'On':'Off'}</Text></Pressable>
    {d.private?<View testID="new-thread-private-fields" style={{gap:10}}>
     <Text style={styles.hint}>{copy.privacy}</Text>
@@ -47,13 +47,15 @@ function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>n
     {!d.locked&&d.participantIds.length?<ThreadAction label="Clear selected people" disabled={state.busy} onPress={()=>controls.edit({participantIds:[]})}/>:null}
     <ThreadAction testID="new-members-refresh" label="Refresh members" disabled={locked||choices.busy||memberWaiting} onPress={()=>{void members.load();}}/>
    </View>:null}
+   <View style={styles.startHint}><Text testID="new-thread-hint" style={[styles.hint,{textAlign:'center'}]}>Just write. Your first message starts the thread.</Text></View>
   </ScrollView>
   {state.message?<Text testID="new-thread-status" role="status" style={styles.hint}>{state.message}</Text>:null}
   {waiting?<Text style={styles.hint}>{copy.wait}</Text>:null}
-  <View style={styles.actions}>
+   <View style={styles.composerRow}><ComposerInput testID="new-thread-body" accessibilityLabel="First message" autoFocus multiline placeholder="What's the work?" value={d.body} onChangeText={body=>controls.edit({body})} editable={!locked} maxLength={8000}/><ThreadAction testID="new-thread-send" label={d.locked?'Retry same thread':'Send'} display={d.locked?'Retry':'Send'} primary disabled={state.busy||state.lost||waiting||d.refused||!validCreate(d)||(!d.locked&&d.private&&(!choices.loaded||choices.busy||d.participantIds.some(id=>!choices.rows.some(m=>m.userId===id))))} onPress={()=>{void controls.send();}}/></View>
+  {state.pending||d.refused?<View style={styles.actions}>
    {state.pending?<ThreadAction testID="new-thread-discard" label="Discard draft" disabled={state.busy} onPress={controls.discard}/>:null}
    {d.refused?<ThreadAction testID="new-thread-new-ids" label="Start again with new IDs" disabled={state.busy||waiting} onPress={controls.newIds}/>:null}
-  </View>
+  </View>:null}
  </View>}/>;
 }
-const styles=StyleSheet.create({frame:{flex:1,maxWidth:space.maxContentWidth,width:'100%',alignSelf:'center',padding:16,gap:12},composerRow:{flexDirection:'row',alignItems:'flex-end',gap:4,padding:6,backgroundColor:colors.card,borderWidth:1,borderColor:colors.line,borderRadius:14},input:{fontSize:16,minHeight:48,color:colors.body,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:10,backgroundColor:colors.card},toggle:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderBottomWidth:1,borderColor:colors.line},label:{fontSize:15,color:colors.heading},hint:{fontSize:13,lineHeight:19,color:colors.muted},member:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:10,borderWidth:1,borderColor:colors.line,borderRadius:10},actions:{flexDirection:'row',flexWrap:'wrap',gap:8}});
+const styles=StyleSheet.create({frame:{flex:1,maxWidth:space.maxContentWidth,width:'100%',alignSelf:'center',paddingHorizontal:16,paddingBottom:12,gap:12},startHint:{flex:1,minHeight:100,justifyContent:'center',paddingHorizontal:20},composerRow:{flexDirection:'row',alignItems:'flex-end',gap:4,padding:6,backgroundColor:colors.card,borderWidth:1,borderColor:colors.line,borderRadius:14},input:{fontSize:16,minHeight:48,color:colors.body,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:10,backgroundColor:colors.card},toggle:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderBottomWidth:1,borderColor:colors.line},label:{fontSize:15,color:colors.heading},hint:{fontSize:13,lineHeight:19,color:colors.muted},member:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:10,borderWidth:1,borderColor:colors.line,borderRadius:10},actions:{flexDirection:'row',flexWrap:'wrap',gap:8}});

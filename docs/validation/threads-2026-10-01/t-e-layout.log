@@ -1,3 +1,6 @@
-PASS 360px: dense grouped rows, readable dates, compact card/facts/header star, white messages, hidden scrollbar, inline composers and screenshots
-PASS 390px: dense grouped rows, readable dates, compact card/facts/header star, white messages, hidden scrollbar, inline composers and screenshots
-PASS 430px: dense grouped rows, readable dates, compact card/facts/header star, white messages, hidden scrollbar, inline composers and screenshots
+PASS 360px: grouped/folded/paged threads, filters, first unread, visible reads, fixed card, send/edit/delete/pin/star, persisted uncertain send, lost access and harness states
+PASS 360px: individual sage/white cards, single-row filters, side-by-side pinned views, compact group metadata, labelled facts, avatars/day dividers, dashed earlier row, green Send and bottom new-thread composer
+PASS 390px: grouped/folded/paged threads, filters, first unread, visible reads, fixed card, send/edit/delete/pin/star, persisted uncertain send, lost access and harness states
+PASS 390px: individual sage/white cards, single-row filters, side-by-side pinned views, compact group metadata, labelled facts, avatars/day dividers, dashed earlier row, green Send and bottom new-thread composer
+PASS 430px: grouped/folded/paged threads, filters, first unread, visible reads, fixed card, send/edit/delete/pin/star, persisted uncertain send, lost access and harness states
+PASS 430px: individual sage/white cards, single-row filters, side-by-side pinned views, compact group metadata, labelled facts, avatars/day dividers, dashed earlier row, green Send and bottom new-thread composer

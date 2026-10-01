@@ -8,11 +8,9 @@ Using src/app as the root directory for Expo Router.
 Expo Autolinking module resolution enabled
 Starting Metro Bundler
 
-| (node:2320705) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (node:2351633) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 | (Use `node --trace-warnings ...` to show where the warning was created)
-| (node:2320705) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
-| (Use `node --trace-warnings ...` to show where the warning was created)
-Web Bundled 2568ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (901 modules)
+Web Bundled 2140ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (898 modules)
 
 › Assets (18):
 ../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/arrow_down.017bc6ba3fc25503e5eb5e53826d48a8.png (9.5KB)
@@ -29,7 +27,7 @@ Web Bundled 2568ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6a
 ../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/unmatched.20e71bdf79e3a97bf55fd9e164041578.png (4.8KB)
 
 › web bundles (2):
-_expo/static/js/web/entry-5885882800b3258f4d8926ffb8a371e2.js (1.4MB)
+_expo/static/js/web/entry-96825866f6b6ba8f68b1f8ce2ceb059b.js (1.4MB)
 _expo/static/js/web/index-e0e820de5b580ab4a4a42680d4e32f39.js (20KB)
 
 › Files (3):
@@ -42,11 +40,9 @@ Using src/app as the root directory for Expo Router.
 Expo Autolinking module resolution enabled
 Starting Metro Bundler
 
-| (node:2320782) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (node:2351703) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 | (Use `node --trace-warnings ...` to show where the warning was created)
-| (node:2320782) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
-| (Use `node --trace-warnings ...` to show where the warning was created)
-iOS Bundled 10784ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (1226 modules)
+iOS Bundled 9820ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (1226 modules)
 
 › Assets (23):
 ../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/arrow_down.png (9.5KB)
@@ -63,7 +59,7 @@ iOS Bundled 10784ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6
 ../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/unmatched.png (4.8KB)
 
 › ios bundles (1):
-_expo/static/js/ios/entry-9036490133e53487dc7f6d056633548d.hbc (2.9MB)
+_expo/static/js/ios/entry-e176744fb354d97dc562862561bfbb7f.hbc (2.9MB)
 
 › Files (1):
 metadata.json (1.6KB)
@@ -73,11 +69,9 @@ Using src/app as the root directory for Expo Router.
 Expo Autolinking module resolution enabled
 Starting Metro Bundler
 
-| (node:2320944) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (node:2351785) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 | (Use `node --trace-warnings ...` to show where the warning was created)
-| (node:2320944) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
-| (Use `node --trace-warnings ...` to show where the warning was created)
-Android Bundled 11013ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (1361 modules)
+Android Bundled 10687ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (1361 modules)
 
 › Assets (27):
 ../../node_modules/.pnpm/@expo-google-fonts+material-symbols@0.4.48/node_modules/@expo-google-fonts/material-symbols/400Regular/MaterialSymbols_400Regular.ttf (967KB)
@@ -97,7 +91,7 @@ Android Bundled 11013ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c7
 ../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/unmatched.png (4.8KB)
 
 › android bundles (1):
-_expo/static/js/android/entry-3882b2660f5270717219d1b71e5b1f99.hbc (3.2MB)
+_expo/static/js/android/entry-6e34195aec852b275cf22ca20f98e3ef.hbc (3.2MB)
 
 › Files (1):
 metadata.json (1.9KB)
@@ -106,9 +100,9 @@ Exported: dist/android
 Expo Autolinking module resolution enabled
 Starting Metro Bundler
 
-| (node:2321032) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+| (node:2351867) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
 | (Use `node --trace-warnings ...` to show where the warning was created)
-Web Bundled 3015ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (890 modules)
+Web Bundled 2263ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/entry.js (887 modules)
 
 › Assets (18):
 ../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/arrow_down.017bc6ba3fc25503e5eb5e53826d48a8.png (9.5KB)
@@ -125,7 +119,7 @@ Web Bundled 3015ms node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6a
 ../../node_modules/.pnpm/expo-router@57.0.24_c1e02d6c0d49957c791c6ad0aa2df564/node_modules/expo-router/assets/unmatched.20e71bdf79e3a97bf55fd9e164041578.png (4.8KB)
 
 › web bundles (2):
-_expo/static/js/web/entry-d41289cdebba99f3c9388703c679e892.js (1.4MB)
+_expo/static/js/web/entry-82d4d081745e367068ce5312e3b3b734.js (1.4MB)
 _expo/static/js/web/index-8b2068a62c8224ebcf9104435e746af3.js (20KB)
 
 › Files (3):
