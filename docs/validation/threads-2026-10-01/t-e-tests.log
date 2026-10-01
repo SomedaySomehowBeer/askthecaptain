@@ -1,0 +1,2623 @@
+
+> @captain/mobile@ check /tmp/captain-r2-design-2026-10-01/apps/mobile
+> tsc --noEmit -p tsconfig.json && node scripts/check-boundary.mjs
+
+boundary: apps/mobile manifest and sources are within the client boundary
+TAP version 13
+# Subtest: before composition answers: starting, slow after ten seconds on its own timer, one composition only
+ok 1 - before composition answers: starting, slow after ten seconds on its own timer, one composition only
+  ---
+  duration_ms: 7.826315
+  type: 'test'
+  ...
+# Subtest: misconfigured is a fixed frozen snapshot; the timer is cleared
+ok 2 - misconfigured is a fixed frozen snapshot; the timer is cleared
+  ---
+  duration_ms: 3.964021
+  type: 'test'
+  ...
+# Subtest: a rejected or throwing composition gives the fixed startup-failed snapshot and no second attempt
+ok 3 - a rejected or throwing composition gives the fixed startup-failed snapshot and no second attempt
+  ---
+  duration_ms: 1.353785
+  type: 'test'
+  ...
+# Subtest: with a runner: its snapshot and commands pass through; a slow notice already shown stays slow while starting
+ok 4 - with a runner: its snapshot and commands pass through; a slow notice already shown stays slow while starting
+  ---
+  duration_ms: 1.38435
+  type: 'test'
+  ...
+# Subtest: read: with no runner it answers superseded and builds nothing; with a runner it delegates unchanged
+ok 5 - read: with no runner it answers superseded and builds nothing; with a runner it delegates unchanged
+  ---
+  duration_ms: 1.758284
+  type: 'test'
+  ...
+# Subtest: sign out everywhere else: with no runner it answers stale and shows the shared idle view; with a runner it delegates unchanged
+ok 6 - sign out everywhere else: with no runner it answers stale and shows the shared idle view; with a runner it delegates unchanged
+  ---
+  duration_ms: 1.689889
+  type: 'test'
+  ...
+# Subtest: instance: one source per holder; a development re-evaluation reuses it; release and development are isolated
+ok 7 - instance: one source per holder; a development re-evaluation reuses it; release and development are isolated
+  ---
+  duration_ms: 0.630883
+  type: 'test'
+  ...
+# Subtest: instance: a platform that throws while resolving gives startup-failed, not a render error
+ok 8 - instance: a platform that throws while resolving gives startup-failed, not a render error
+  ---
+  duration_ms: 1.330552
+  type: 'test'
+  ...
+# Subtest: the clamped clock never goes backwards and ignores readings that are not finite numbers
+ok 9 - the clamped clock never goes backwards and ignores readings that are not finite numbers
+  ---
+  duration_ms: 1.864723
+  type: 'test'
+  ...
+# Subtest: a wait is fixed on the clamped clock when the answer arrives; its wall-clock "about" is wording only
+ok 10 - a wait is fixed on the clamped clock when the answer arrives; its wall-clock "about" is wording only
+  ---
+  duration_ms: 0.893018
+  type: 'test'
+  ...
+# Subtest: the later wait always wins; remaining time ends exactly at the deadline
+ok 11 - the later wait always wins; remaining time ends exactly at the deadline
+  ---
+  duration_ms: 0.285862
+  type: 'test'
+  ...
+# Subtest: missing native auth adapter is misconfigured without opening storage
+ok 12 - missing native auth adapter is misconfigured without opening storage
+  ---
+  duration_ms: 2.070451
+  type: 'test'
+  ...
+# Subtest: misconfigured: a refused API address builds nothing and repeats no value
+ok 13 - misconfigured: a refused API address builds nothing and repeats no value
+  ---
+  duration_ms: 0.481549
+  type: 'test'
+  ...
+# Subtest: ready: storage opened once, two distinct cleanups on one clamped clock, the runner started once
+ok 14 - ready: storage opened once, two distinct cleanups on one clamped clock, the runner started once
+  ---
+  duration_ms: 0.667631
+  type: 'test'
+  ...
+# Subtest: storage unavailable: a runner with no store, so no sign-in
+ok 15 - storage unavailable: a runner with no store, so no sign-in
+  ---
+  duration_ms: 0.29976
+  type: 'test'
+  ...
+# Subtest: compose throws when both cleanups are one object
+ok 16 - compose throws when both cleanups are one object
+  ---
+  duration_ms: 0.873161
+  type: 'test'
+  ...
+# Subtest: equipment schedule: fixed wording has no digits and never calls time free or available
+ok 17 - equipment schedule: fixed wording has no digits and never calls time free or available
+  ---
+  duration_ms: 2.606026
+  type: 'test'
+  ...
+# Subtest: equipment schedule: a bar label always starts with the equipment name, then title, kind, actual time and buffers
+ok 18 - equipment schedule: a bar label always starts with the equipment name, then title, kind, actual time and buffers
+  ---
+  duration_ms: 0.51646
+  type: 'test'
+  ...
+# Subtest: sign out everywhere else: exact wording with grammatical plurals; a 429 says why, with or without a time; never "nothing changed"
+ok 19 - sign out everywhere else: exact wording with grammatical plurals; a 429 says why, with or without a time; never "nothing changed"
+  ---
+  duration_ms: 1.888707
+  type: 'test'
+  ...
+# Subtest: sign out everywhere else: disabled while in flight and until a wait ends (exactly at its end it is enabled)
+ok 20 - sign out everywhere else: disabled while in flight and until a wait ends (exactly at its end it is enabled)
+  ---
+  duration_ms: 0.335033
+  type: 'test'
+  ...
+# Subtest: copy: every state has a heading; no wording states an expiry date or infers from the phone clock
+ok 21 - copy: every state has a heading; no wording states an expiry date or infers from the phone clock
+  ---
+  duration_ms: 2.515425
+  type: 'test'
+  ...
+# Subtest: copy: sign-in notices, the gate and busy
+ok 22 - copy: sign-in notices, the gate and busy
+  ---
+  duration_ms: 0.602545
+  type: 'test'
+  ...
+# Subtest: copy: unverified Try again is disabled before the wait and enabled exactly at it; Sign out is always offered
+ok 23 - copy: unverified Try again is disabled before the wait and enabled exactly at it; Sign out is always offered
+  ---
+  duration_ms: 3.263931
+  type: 'test'
+  ...
+# Subtest: releasing heading: "Ending the session…" only while a revocation is under way
+ok 24 - releasing heading: "Ending the session…" only while a revocation is under way
+  ---
+  duration_ms: 0.699711
+  type: 'test'
+  ...
+# Subtest: copy: sign-out wording by result, with the close-app warning and reason prefixes
+ok 25 - copy: sign-out wording by result, with the close-app warning and reason prefixes
+  ---
+  duration_ms: 0.57666
+  type: 'test'
+  ...
+# Subtest: fault copy: never "ending" unless a revocation has begun
+ok 26 - fault copy: never "ending" unless a revocation has begun
+  ---
+  duration_ms: 0.82738
+  type: 'test'
+  ...
+# Subtest: wait timer: the remaining time on the monotonic deadline; nothing when no wait is in force
+ok 27 - wait timer: the remaining time on the monotonic deadline; nothing when no wait is in force
+  ---
+  duration_ms: 0.373512
+  type: 'test'
+  ...
+# Subtest: copy: misconfigured says so plainly, with no website link and no repeated value
+ok 28 - copy: misconfigured says so plainly, with no website link and no repeated value
+  ---
+  duration_ms: 0.19857
+  type: 'test'
+  ...
+# Subtest: web welcome: checking, signed out (with a released notice), unavailable with the paced Try again, signing out and its failure
+ok 29 - web welcome: checking, signed out (with a released notice), unavailable with the paced Try again, signing out and its failure
+  ---
+  duration_ms: 0.876579
+  type: 'test'
+  ...
+# Subtest: web welcome: the ?error= code picks its wording, an unknown code the fallback, and the code is never shown
+ok 30 - web welcome: the ?error= code picks its wording, an unknown code the fallback, and the code is never shown
+  ---
+  duration_ms: 0.247282
+  type: 'test'
+  ...
+# Subtest: passkeys and invitations: a passkey line names its kind, when it was added and last used; refusals have their own lines
+ok 31 - passkeys and invitations: a passkey line names its kind, when it was added and last used; refusals have their own lines
+  ---
+  duration_ms: 0.24932
+  type: 'test'
+  ...
+# Subtest: threads shell: the filter row is All, Needs you, Tasks, Bookings, Stock, Records, Files, People; the unavailable state makes no data claim
+ok 32 - threads shell: the filter row is All, Needs you, Tasks, Bookings, Stock, Records, Files, People; the unavailable state makes no data claim
+  ---
+  duration_ms: 0.213568
+  type: 'test'
+  ...
+# Subtest: a saved session is only checking until /v1/me answers; unavailable is unverified, never signed in, and Try again respects Retry-After
+ok 33 - a saved session is only checking until /v1/me answers; unavailable is unverified, never signed in, and Try again respects Retry-After
+  ---
+  duration_ms: 5.505953
+  type: 'test'
+  ...
+# Subtest: the destination waits for verified identity and a chosen organisation, and only an app route is kept
+ok 34 - the destination waits for verified identity and a chosen organisation, and only an app route is kept
+  ---
+  duration_ms: 1.448912
+  type: 'test'
+  ...
+# Subtest: a single membership is chosen and saved; none leaves no organisation; a stored choice that is not a membership is forgotten
+ok 35 - a single membership is chosen and saved; none leaves no organisation; a stored choice that is not a membership is forgotten
+  ---
+  duration_ms: 0.876003
+  type: 'test'
+  ...
+# Subtest: a 403/404 only asks for a fresh membership list; only that list removes the organisation
+ok 36 - a 403/404 only asks for a fresh membership list; only that list removes the organisation
+  ---
+  duration_ms: 0.659433
+  type: 'test'
+  ...
+# Subtest: a slow save of an older organisation choice is stale; a failed current save is reported, not blocking
+ok 37 - a slow save of an older organisation choice is stale; a failed current save is reported, not blocking
+  ---
+  duration_ms: 0.423582
+  type: 'test'
+  ...
+# Subtest: a 401 for the current session ends it without revocation; a late 401 for another handle changes nothing
+ok 38 - a 401 for the current session ends it without revocation; a late 401 for another handle changes nothing
+  ---
+  duration_ms: 0.50074
+  type: 'test'
+  ...
+# Subtest: a failed save is compare-deleted and revoked, and sign-in stays blocked until the handle is released
+ok 39 - a failed save is compare-deleted and revoked, and sign-in stays blocked until the handle is released
+  ---
+  duration_ms: 0.681763
+  type: 'test'
+  ...
+# Subtest: sign-out with a copy that may remain and a revocation pending warns about closing the app; Try again retries both
+ok 40 - sign-out with a copy that may remain and a revocation pending warns about closing the app; Try again retries both
+  ---
+  duration_ms: 0.616991
+  type: 'test'
+  ...
+# Subtest: unreadable storage offers Try reading again first; a deliberate sign-in may replace it; unavailable storage offers nothing
+ok 41 - unreadable storage offers Try reading again first; a deliberate sign-in may replace it; unavailable storage offers nothing
+  ---
+  duration_ms: 0.454115
+  type: 'test'
+  ...
+# Subtest: the gate: a blocked or slow settle leaves sign-in busy with Try again, and starts no attempt
+ok 42 - the gate: a blocked or slow settle leaves sign-in busy with Try again, and starts no attempt
+  ---
+  duration_ms: 0.632761
+  type: 'test'
+  ...
+# Subtest: a second live credential (a sign-in result outside signing-in) is kept, released to the end, and reported as a fault
+ok 43 - a second live credential (a sign-in result outside signing-in) is kept, released to the end, and reported as a fault
+  ---
+  duration_ms: 0.819883
+  type: 'test'
+  ...
+# Subtest: a refused revocation (the cleanup slot held another session) is retried only deliberately and never counted as ended by accident
+ok 44 - a refused revocation (the cleanup slot held another session) is retried only deliberately and never counted as ended by accident
+  ---
+  duration_ms: 0.368163
+  type: 'test'
+  ...
+# Subtest: pacing: a later, shorter server wait never moves the deadline earlier, even from an answer no longer current
+ok 45 - pacing: a later, shorter server wait never moves the deadline earlier, even from an answer no longer current
+  ---
+  duration_ms: 0.406134
+  type: 'test'
+  ...
+# Subtest: pacing: a refusal waits 30 s after the latest /v1/me load of any kind (the launch check here), exactly at the boundary, and is coalesced
+ok 46 - pacing: a refusal waits 30 s after the latest /v1/me load of any kind (the launch check here), exactly at the boundary, and is coalesced
+  ---
+  duration_ms: 0.458973
+  type: 'test'
+  ...
+# Subtest: pacing: a refusal within 30 s of a person's Try again sends nothing; Try again and the post-sign-in check are still not spaced
+ok 47 - pacing: a refusal within 30 s of a person's Try again sends nothing; Try again and the post-sign-in check are still not spaced
+  ---
+  duration_ms: 0.479882
+  type: 'test'
+  ...
+# Subtest: read scope: present exactly when ready, token-free, from the verified user and the chosen organisation
+ok 48 - read scope: present exactly when ready, token-free, from the verified user and the chosen organisation
+  ---
+  duration_ms: 0.411166
+  type: 'test'
+  ...
+# Subtest: read scope: the epoch survives a membership refresh that keeps the organisation, and other non-scope changes
+ok 49 - read scope: the epoch survives a membership refresh that keeps the organisation, and other non-scope changes
+  ---
+  duration_ms: 0.426679
+  type: 'test'
+  ...
+# Subtest: read scope: a switch, a loss that auto-chooses, and a new session each give a new epoch; A → B → A never repeats one
+ok 50 - read scope: a switch, a loss that auto-chooses, and a new session each give a new epoch; A → B → A never repeats one
+  ---
+  duration_ms: 0.58527
+  type: 'test'
+  ...
+# Subtest: person scope: whenever signed in, token-free, and the same object as the view shows
+ok 51 - person scope: whenever signed in, token-free, and the same object as the view shows
+  ---
+  duration_ms: 0.369699
+  type: 'test'
+  ...
+# Subtest: person scope: a refresh and an organisation switch keep it; sign-out and a new sign-in as the same person change it (ABA)
+ok 52 - person scope: a refresh and an organisation switch keep it; sign-out and a new sign-in as the same person change it (ABA)
+  ---
+  duration_ms: 0.648065
+  type: 'test'
+  ...
+# Subtest: organisation loss: the chosen one is named; a person choosing clears it; the only remaining membership keeps it
+ok 53 - organisation loss: the chosen one is named; a person choosing clears it; the only remaining membership keeps it
+  ---
+  duration_ms: 2.463086
+  type: 'test'
+  ...
+# Subtest: boot reads the saved sign-in once
+ok 54 - boot reads the saved sign-in once
+  ---
+  duration_ms: 0.167996
+  type: 'test'
+  ...
+# Subtest: slow operations change wording only; cancel waits for the browser call to settle
+ok 55 - slow operations change wording only; cancel waits for the browser call to settle
+  ---
+  duration_ms: 0.299754
+  type: 'test'
+  ...
+# Subtest: the API answer is accepted exactly, frozen, with status dropped
+ok 56 - the API answer is accepted exactly, frozen, with status dropped
+  ---
+  duration_ms: 2.420736
+  type: 'test'
+  ...
+# Subtest: anything else is refused with a fixed message that never repeats a value
+ok 57 - anything else is refused with a fixed message that never repeats a value
+  ---
+  duration_ms: 7.834098
+  type: 'test'
+  ...
+# Subtest: strict list parsing rejects duplicates, removed members, extra data and over-budget lists
+ok 58 - strict list parsing rejects duplicates, removed members, extra data and over-budget lists
+  ---
+  duration_ms: 3.499235
+  type: 'test'
+  ...
+# Subtest: member calls use one tenant, null bearer, PATCH/DELETE and the returned one-time invitation token
+ok 59 - member calls use one tenant, null bearer, PATCH/DELETE and the returned one-time invitation token
+  ---
+  duration_ms: 2.786578
+  type: 'test'
+  ...
+# Subtest: owner/admin rules preserve the last owner and prevent admins granting or changing ownership
+ok 60 - owner/admin rules preserve the last owner and prevent admins granting or changing ownership
+  ---
+  duration_ms: 0.490907
+  type: 'test'
+  ...
+# Subtest: no API reads or writes for a member or stale organisation
+ok 61 - no API reads or writes for a member or stale organisation
+  ---
+  duration_ms: 1.670254
+  type: 'test'
+  ...
+# Subtest: scope change during member read prevents invitation read
+ok 62 - scope change during member read prevents invitation read
+  ---
+  duration_ms: 0.512667
+  type: 'test'
+  ...
+# Subtest: a late invitation link cannot enter a new scope or a disposed screen
+ok 63 - a late invitation link cannot enter a new scope or a disposed screen
+  ---
+  duration_ms: 1.102746
+  type: 'test'
+  ...
+# Subtest: a late 401 cannot end a newer person session; a current 401 ends this one
+ok 64 - a late 401 cannot end a newer person session; a current 401 ends this one
+  ---
+  duration_ms: 0.389492
+  type: 'test'
+  ...
+# Subtest: demotion found in the member list blocks invitation reads and reconciles identity
+ok 65 - demotion found in the member list blocks invitation reads and reconciles identity
+  ---
+  duration_ms: 0.621502
+  type: 'test'
+  ...
+# Subtest: uncertain invitations are not replayed, respect Retry-After and require successful reconciliation
+ok 66 - uncertain invitations are not replayed, respect Retry-After and require successful reconciliation
+  ---
+  duration_ms: 0.905751
+  type: 'test'
+  ...
+# Subtest: pending write prevents double submissions, list refresh and another mutation
+ok 67 - pending write prevents double submissions, list refresh and another mutation
+  ---
+  duration_ms: 0.979801
+  type: 'test'
+  ...
+# Subtest: API refusal last_owner is explicit and never success
+ok 68 - API refusal last_owner is explicit and never success
+  ---
+  duration_ms: 2.499758
+  type: 'test'
+  ...
+# Subtest: API refusal membership_changed is explicit and never success
+ok 69 - API refusal membership_changed is explicit and never success
+  ---
+  duration_ms: 1.186563
+  type: 'test'
+  ...
+# Subtest: API refusal already_member is explicit and never success
+ok 70 - API refusal already_member is explicit and never success
+  ---
+  duration_ms: 0.299395
+  type: 'test'
+  ...
+# Subtest: API refusal forbidden is explicit and never success
+ok 71 - API refusal forbidden is explicit and never success
+  ---
+  duration_ms: 0.203863
+  type: 'test'
+  ...
+# Subtest: API refusal not_found is explicit and never success
+ok 72 - API refusal not_found is explicit and never success
+  ---
+  duration_ms: 0.266549
+  type: 'test'
+  ...
+# Subtest: invalid email, unknown member and known last owner never send writes
+ok 73 - invalid email, unknown member and known last owner never send writes
+  ---
+  duration_ms: 0.799749
+  type: 'test'
+  ...
+# Subtest: self-role writes reconcile memberships, and failed reads clear invitation links
+ok 74 - self-role writes reconcile memberships, and failed reads clear invitation links
+  ---
+  duration_ms: 0.609929
+  type: 'test'
+  ...
+# Subtest: registration parser refuses bearer tokens, malformed challenges and extra fields; removal IDs cannot escape their path
+ok 75 - registration parser refuses bearer tokens, malformed challenges and extra fields; removal IDs cannot escape their path
+  ---
+  duration_ms: 2.57045
+  type: 'test'
+  ...
+# Subtest: registration holds challenge privately, sends cookies through null bearer, then refreshes; removal uses DELETE
+ok 76 - registration holds challenge privately, sends cookies through null bearer, then refreshes; removal uses DELETE
+  ---
+  duration_ms: 3.356857
+  type: 'test'
+  ...
+# Subtest: only one ceremony is admitted, and leaving during the browser prompt prevents registration
+ok 77 - only one ceremony is admitted, and leaving during the browser prompt prevents registration
+  ---
+  duration_ms: 0.585054
+  type: 'test'
+  ...
+# Subtest: person change while options or browser is pending prevents the next leg
+ok 78 - person change while options or browser is pending prevents the next leg
+  ---
+  duration_ms: 0.907178
+  type: 'test'
+  ...
+# Subtest: a late 401 from an old person does not sign out the new person
+ok 79 - a late 401 from an old person does not sign out the new person
+  ---
+  duration_ms: 0.343265
+  type: 'test'
+  ...
+# Subtest: a current 401 ends the account; signed-out mutation sends nothing
+ok 80 - a current 401 ends the account; signed-out mutation sends nothing
+  ---
+  duration_ms: 0.317915
+  type: 'test'
+  ...
+# Subtest: browser NotAllowedError is bounded copy, never submits an assertion or repeats the error
+ok 81 - browser NotAllowedError is bounded copy, never submits an assertion or repeats the error
+  ---
+  duration_ms: 0.533895
+  type: 'test'
+  ...
+# Subtest: browser InvalidStateError is bounded copy, never submits an assertion or repeats the error
+ok 82 - browser InvalidStateError is bounded copy, never submits an assertion or repeats the error
+  ---
+  duration_ms: 0.337243
+  type: 'test'
+  ...
+# Subtest: browser UnknownError is bounded copy, never submits an assertion or repeats the error
+ok 83 - browser UnknownError is bounded copy, never submits an assertion or repeats the error
+  ---
+  duration_ms: 0.63677
+  type: 'test'
+  ...
+# Subtest: uncertain writes do not retry and require a successful refresh; Retry-After gates reads and writes
+ok 84 - uncertain writes do not retry and require a successful refresh; Retry-After gates reads and writes
+  ---
+  duration_ms: 1.239122
+  type: 'test'
+  ...
+# Subtest: failed, unavailable and empty are distinct, and failed refresh hides stale list controls
+ok 85 - failed, unavailable and empty are distinct, and failed refresh hides stale list controls
+  ---
+  duration_ms: 0.569113
+  type: 'test'
+  ...
+# Subtest: registration refusal is not success and an expired challenge allows a fresh attempt
+ok 86 - registration refusal is not success and an expired challenge allows a fresh attempt
+  ---
+  duration_ms: 0.602214
+  type: 'test'
+  ...
+# Subtest: push parsers reject malformed config, duplicate devices and extra credential fields
+ok 87 - push parsers reject malformed config, duplicate devices and extra credential fields
+  ---
+  duration_ms: 5.289798
+  type: 'test'
+  ...
+# Subtest: register/delete/test bind to one organisation and use a DELETE body without bearer
+ok 88 - register/delete/test bind to one organisation and use a DELETE body without bearer
+  ---
+  duration_ms: 4.759728
+  type: 'test'
+  ...
+# Subtest: permission prompt completion after disposal or scope change cannot post a subscription
+ok 89 - permission prompt completion after disposal or scope change cannot post a subscription
+  ---
+  duration_ms: 1.243675
+  type: 'test'
+  ...
+# Subtest: scope loss between config and subscriptions suppresses the second read
+ok 90 - scope loss between config and subscriptions suppresses the second read
+  ---
+  duration_ms: 0.455587
+  type: 'test'
+  ...
+# Subtest: stale 401 does not sign out another person; current 401 does
+ok 91 - stale 401 does not sign out another person; current 401 does
+  ---
+  duration_ms: 0.66705
+  type: 'test'
+  ...
+# Subtest: unknown test sends are not replayed, honour Retry-After, and require refresh
+ok 92 - unknown test sends are not replayed, honour Retry-After, and require refresh
+  ---
+  duration_ms: 1.20699
+  type: 'test'
+  ...
+# Subtest: one pending write blocks all other operations
+ok 93 - one pending write blocks all other operations
+  ---
+  duration_ms: 0.947207
+  type: 'test'
+  ...
+# Subtest: failed list hides previous devices and cannot enable mutation
+ok 94 - failed list hides previous devices and cannot enable mutation
+  ---
+  duration_ms: 0.550344
+  type: 'test'
+  ...
+# Subtest: delivery counts distinguish acceptance, failure, expiry and missing results
+ok 95 - delivery counts distinguish acceptance, failure, expiry and missing results
+  ---
+  duration_ms: 0.475505
+  type: 'test'
+  ...
+# Subtest: worker bounds malformed payloads, caches nothing, and refuses external/auth notification destinations
+ok 96 - worker bounds malformed payloads, caches nothing, and refuses external/auth notification destinations
+  ---
+  duration_ms: 4.281856
+  type: 'test'
+  ...
+# Subtest: a list is bound to its first ready scope: any other scope makes it inert, before navigation resets
+ok 97 - a list is bound to its first ready scope: any other scope makes it inert, before navigation resets
+  ---
+  duration_ms: 1.592788
+  type: 'test'
+  ...
+# Subtest: person scopes: equal only with the same epoch and person; no scope is never equal
+ok 98 - person scopes: equal only with the same epoch and person; no scope is never equal
+  ---
+  duration_ms: 1.119821
+  type: 'test'
+  ...
+# Subtest: parse: exactly { ended } with a non-negative safe integer; anything else throws (the client reports it as unavailable)
+ok 99 - parse: exactly { ended } with a non-negative safe integer; anything else throws (the client reports it as unavailable)
+  ---
+  duration_ms: 1.748098
+  type: 'test'
+  ...
+# Subtest: admit: in flight refuses; a wait refuses until exactly its end; otherwise a send may go
+ok 100 - admit: in flight refuses; a wait refuses until exactly its end; otherwise a send may go
+  ---
+  duration_ms: 0.29347
+  type: 'test'
+  ...
+# Subtest: views: frozen; sending clears the last result (C4); slow flips once and only while in flight; settling clears slow
+ok 101 - views: frozen; sending clears the last result (C4); slow flips once and only while in flight; settling clears slow
+  ---
+  duration_ms: 0.502144
+  type: 'test'
+  ...
+# Subtest: results: the status is kept (C2); a 401 is for the caller to end the session; no server text is carried
+ok 102 - results: the status is kept (C2); a 401 is for the caller to end the session; no server text is carried
+  ---
+  duration_ms: 0.345844
+  type: 'test'
+  ...
+# Subtest: launch: a saved session is checked with /v1/me before anything is shown as signed in
+ok 103 - launch: a saved session is checked with /v1/me before anything is shown as signed in
+  ---
+  duration_ms: 16.366583
+  type: 'test'
+  ...
+# Subtest: launch: /v1/me unavailable is unverified with Retry-After pacing; Sign out releases the saved session
+ok 104 - launch: /v1/me unavailable is unverified with Retry-After pacing; Sign out releases the saved session
+  ---
+  duration_ms: 3.775565
+  type: 'test'
+  ...
+# Subtest: storage unavailable: native sign-in is never offered and nothing is read
+ok 105 - storage unavailable: native sign-in is never offered and nothing is read
+  ---
+  duration_ms: 1.043494
+  type: 'test'
+  ...
+# Subtest: unreadable storage: Try reading again reads again; a failed read never becomes "nothing stored"
+ok 106 - unreadable storage: Try reading again reads again; a failed read never becomes "nothing stored"
+  ---
+  duration_ms: 2.548918
+  type: 'test'
+  ...
+# Subtest: sign-in: gate, attempt, save, verify, then the destination; the save uses the advanced account generation
+ok 107 - sign-in: gate, attempt, save, verify, then the destination; the save uses the advanced account generation
+  ---
+  duration_ms: 2.897223
+  type: 'test'
+  ...
+# Subtest: a failed save that may have written is compare-deleted and revoked; sign-in waits until both have results
+ok 108 - a failed save that may have written is compare-deleted and revoked; sign-in waits until both have results
+  ---
+  duration_ms: 2.810162
+  type: 'test'
+  ...
+# Subtest: sign-out: a copy that may remain with revocation pending warns about closing the app; Try again retries both
+ok 109 - sign-out: a copy that may remain with revocation pending warns about closing the app; Try again retries both
+  ---
+  duration_ms: 4.362694
+  type: 'test'
+  ...
+# Subtest: a 401 from /v1/me ends the session: compare-delete only, no revocation
+ok 110 - a 401 from /v1/me ends the session: compare-delete only, no revocation
+  ---
+  duration_ms: 4.091029
+  type: 'test'
+  ...
+# Subtest: a malformed /v1/me answer is unavailable, never a sign-out
+ok 111 - a malformed /v1/me answer is unavailable, never a sign-out
+  ---
+  duration_ms: 4.076073
+  type: 'test'
+  ...
+# Subtest: the gate refuses while a cleanup is held or the attempt core is busy, and says busy
+ok 112 - the gate refuses while a cleanup is held or the attempt core is busy, and says busy
+  ---
+  duration_ms: 1.961627
+  type: 'test'
+  ...
+# Subtest: cancel: closing until the browser call settles, slow wording after ten seconds, then a neutral cancelled notice
+ok 113 - cancel: closing until the browser call settles, slow wording after ten seconds, then a neutral cancelled notice
+  ---
+  duration_ms: 3.468206
+  type: 'test'
+  ...
+# Subtest: a revocation refused because the cleanup slot holds another session is a fault; the handle is kept and only a Try again with the slot free begins it
+ok 114 - a revocation refused because the cleanup slot holds another session is a fault; the handle is kept and only a Try again with the slot free begins it
+  ---
+  duration_ms: 2.260541
+  type: 'test'
+  ...
+# Subtest: scoped reads: nothing is sent before ready; the path is built from the runner's own scope; a 403 only refreshes membership, 30 s after the launch check
+ok 115 - scoped reads: nothing is sent before ready; the path is built from the runner's own scope; a 403 only refreshes membership, 30 s after the launch check
+  ---
+  duration_ms: 2.72972
+  type: 'test'
+  ...
+# Subtest: scoped reads: a 403 within 30 s of the launch check refreshes nothing; a 400 never refreshes; each read is sent once
+ok 116 - scoped reads: a 403 within 30 s of the launch check refreshes nothing; a 400 never refreshes; each read is sent once
+  ---
+  duration_ms: 1.492064
+  type: 'test'
+  ...
+# Subtest: scoped reads: an expected scope that is not the current one sends nothing (a screen rendered before a change)
+ok 117 - scoped reads: an expected scope that is not the current one sends nothing (a screen rendered before a change)
+  ---
+  duration_ms: 7.212955
+  type: 'test'
+  ...
+# Subtest: scoped reads: an answer that arrives after a switch, or after A → B → A, is superseded, never applied to the new scope
+ok 118 - scoped reads: an answer that arrives after a switch, or after A → B → A, is superseded, never applied to the new scope
+  ---
+  duration_ms: 3.466352
+  type: 'test'
+  ...
+# Subtest: scoped reads: a membership refresh that keeps the organisation keeps the epoch, so a read in flight still applies
+ok 119 - scoped reads: a membership refresh that keeps the organisation keeps the epoch, so a read in flight still applies
+  ---
+  duration_ms: 3.136305
+  type: 'test'
+  ...
+# Subtest: scoped reads: a 401 ends the current session and is superseded; a late 401 from an old session's read changes nothing
+ok 120 - scoped reads: a 401 ends the current session and is superseded; a late 401 from an old session's read changes nothing
+  ---
+  duration_ms: 3.285667
+  type: 'test'
+  ...
+# Subtest: scoped reads: a path function that throws is a client bug, and nothing is sent
+ok 121 - scoped reads: a path function that throws is a client bug, and nothing is sent
+  ---
+  duration_ms: 8.114934
+  type: 'test'
+  ...
+# Subtest: scoped reads never reject: a client that rejects or throws is a client bug, with no account effect; after a switch it is superseded
+ok 122 - scoped reads never reject: a client that rejects or throws is a client bug, with no account effect; after a switch it is superseded
+  ---
+  duration_ms: 1.856966
+  type: 'test'
+  ...
+# Subtest: scoped reads: a read's Retry-After is its own wait, separate from the account's /v1/me wait, in both directions
+ok 123 - scoped reads: a read's Retry-After is its own wait, separate from the account's /v1/me wait, in both directions
+  ---
+  duration_ms: 1.463413
+  type: 'test'
+  ...
+# Subtest: start reads the saved sign-in once
+ok 124 - start reads the saved sign-in once
+  ---
+  duration_ms: 0.692853
+  type: 'test'
+  ...
+# Subtest: a stored organisation choice that is no longer a membership is forgotten and the chooser is shown
+ok 125 - a stored organisation choice that is no longer a membership is forgotten and the chooser is shown
+  ---
+  duration_ms: 3.872587
+  type: 'test'
+  ...
+# Subtest: snapshot: the same object until the machine changes; an ignored event neither allocates nor notifies
+ok 126 - snapshot: the same object until the machine changes; an ignored event neither allocates nor notifies
+  ---
+  duration_ms: 3.145313
+  type: 'test'
+  ...
+# Subtest: pacing: the launch check counts as a load start; a foreground refresh waits 30 s after it, exactly at the boundary
+ok 127 - pacing: the launch check counts as a load start; a foreground refresh waits 30 s after it, exactly at the boundary
+  ---
+  duration_ms: 3.715643
+  type: 'test'
+  ...
+# Subtest: pacing: a burst of 20 foreground transitions sends one load, coalesced with the one in flight
+ok 128 - pacing: a burst of 20 foreground transitions sends one load, coalesced with the one in flight
+  ---
+  duration_ms: 1.29465
+  type: 'test'
+  ...
+# Subtest: pacing: a server wait from a refresh blocks every trigger until exactly its end; success clears it
+ok 129 - pacing: a server wait from a refresh blocks every trigger until exactly its end; success clears it
+  ---
+  duration_ms: 4.996688
+  type: 'test'
+  ...
+# Subtest: pacing: a clock reading that goes backwards is clamped, so a wait never ends early
+ok 130 - pacing: a clock reading that goes backwards is clamped, so a wait never ends early
+  ---
+  duration_ms: 3.191134
+  type: 'test'
+  ...
+# Subtest: pacing: a wait survives sign-out; the next session's first check shows unverified with it, never a silent check
+ok 131 - pacing: a wait survives sign-out; the next session's first check shows unverified with it, never a silent check
+  ---
+  duration_ms: 2.588517
+  type: 'test'
+  ...
+# Subtest: pacing: a full restart (a new runner) starts with no wait
+ok 132 - pacing: a full restart (a new runner) starts with no wait
+  ---
+  duration_ms: 1.025273
+  type: 'test'
+  ...
+# Subtest: refresh: loss of the chosen organisation names it, forgets the stored choice and makes the tabs not ready
+ok 133 - refresh: loss of the chosen organisation names it, forgets the stored choice and makes the tabs not ready
+  ---
+  duration_ms: 1.54089
+  type: 'test'
+  ...
+# Subtest: refresh: a 401 releases the session
+ok 134 - refresh: a 401 releases the session
+  ---
+  duration_ms: 4.10739
+  type: 'test'
+  ...
+# Subtest: byte budget: an oversized scoped read is unavailable, never a client bug; the account is untouched
+ok 135 - byte budget: an oversized scoped read is unavailable, never a client bug; the account is untouched
+  ---
+  duration_ms: 12.21297
+  type: 'test'
+  ...
+# Subtest: revocation: one request for the current person, a count as the result, one notification per change, no /v1/me refresh
+ok 136 - revocation: one request for the current person, a count as the result, one notification per change, no /v1/me refresh
+  ---
+  duration_ms: 3.384551
+  type: 'test'
+  ...
+# Subtest: revocation C4: a new send clears the last result in the same change; a refused press changes nothing and notifies nobody
+ok 137 - revocation C4: a new send clears the last result in the same change; a refused press changes nothing and notifies nobody
+  ---
+  duration_ms: 1.158454
+  type: 'test'
+  ...
+# Subtest: revocation: a 429 keeps its status and its own wait (C2); the wait cannot be bypassed, even after the screen remounts; /v1/me pacing is untouched
+ok 138 - revocation: a 429 keeps its status and its own wait (C2); the wait cannot be bypassed, even after the screen remounts; /v1/me pacing is untouched
+  ---
+  duration_ms: 2.491833
+  type: 'test'
+  ...
+# Subtest: revocation: other 4xx are refusals with no organisation effect; malformed and oversized answers are unknown; a broken client is a client bug
+ok 139 - revocation: other 4xx are refusals with no organisation effect; malformed and oversized answers are unknown; a broken client is a client bug
+  ---
+  duration_ms: 2.465797
+  type: 'test'
+  ...
+# Subtest: revocation: a client that resolves something unusable, or a timer that throws, never leaves the view in flight; an old request's failure has no effect
+ok 140 - revocation: a client that resolves something unusable, or a timer that throws, never leaves the view in flight; an old request's failure has no effect
+  ---
+  duration_ms: 1.608717
+  type: 'test'
+  ...
+# Subtest: revocation: a 401 on the current handle ends the session through the existing event
+ok 141 - revocation: a 401 on the current handle ends the session through the existing event
+  ---
+  duration_ms: 0.890102
+  type: 'test'
+  ...
+# Subtest: revocation C1: sign out and back in as the same person: the old control is stale, and the old answer changes nothing and notifies nobody
+ok 142 - revocation C1: sign out and back in as the same person: the old control is stale, and the old answer changes nothing and notifies nobody
+  ---
+  duration_ms: 1.520453
+  type: 'test'
+  ...
+# Subtest: revocation C1: a 429 or a 401 that arrives after the account changed records nothing and dispatches nothing
+ok 143 - revocation C1: a 429 or a 401 that arrives after the account changed records nothing and dispatches nothing
+  ---
+  duration_ms: 1.683335
+  type: 'test'
+  ...
+# Subtest: revocation: a membership refresh and an organisation switch in flight keep the person scope, so the answer still applies
+ok 144 - revocation: a membership refresh and an organisation switch in flight keep the person scope, so the answer still applies
+  ---
+  duration_ms: 0.982067
+  type: 'test'
+  ...
+# Subtest: revocation C3: slow after the injected delay, one notification per flip, and the timer cleared on every settle
+ok 145 - revocation C3: slow after the injected delay, one notification per flip, and the timer cleared on every settle
+  ---
+  duration_ms: 1.06408
+  type: 'test'
+  ...
+# Subtest: revocation: the default slow delay is the account's ten seconds; with no person, nothing is sent
+ok 146 - revocation: the default slow delay is the account's ten seconds; with no person, nothing is sent
+  ---
+  duration_ms: 0.918655
+  type: 'test'
+  ...
+# Subtest: byte budget: an oversized 200 from "Sign out everywhere else" is unknown, never a count
+ok 147 - byte budget: an oversized 200 from "Sign out everywhere else" is unknown, never a count
+  ---
+  duration_ms: 4.789048
+  type: 'test'
+  ...
+# Subtest: byte budget: an oversized 429 keeps its Retry-After as the read's own wait
+ok 148 - byte budget: an oversized 429 keeps its Retry-After as the read's own wait
+  ---
+  duration_ms: 3.60237
+  type: 'test'
+  ...
+# Subtest: a stored session round-trips exactly, as a frozen copy holding only its three fields
+ok 149 - a stored session round-trips exactly, as a frozen copy holding only its three fields
+  ---
+  duration_ms: 3.339729
+  type: 'test'
+  ...
+# Subtest: anything outside the exact session schema is unreadable, and the failure never repeats the value
+ok 150 - anything outside the exact session schema is unreadable, and the failure never repeats the value
+  ---
+  duration_ms: 6.90287
+  type: 'test'
+  ...
+# Subtest: an organisation choice is exactly a canonical lower-case UUID
+ok 151 - an organisation choice is exactly a canonical lower-case UUID
+  ---
+  duration_ms: 0.365989
+  type: 'test'
+  ...
+# Subtest: reads what was installed, and null when nothing is stored
+ok 152 - reads what was installed, and null when nothing is stored
+  ---
+  duration_ms: 12.708941
+  type: 'test'
+  ...
+# Subtest: operations run strictly one at a time, first in, first out, each starting only when the one before has finished
+ok 153 - operations run strictly one at a time, first in, first out, each starting only when the one before has finished
+  ---
+  duration_ms: 2.433314
+  type: 'test'
+  ...
+# Subtest: install checks the account generation when it runs, not when it was queued: a stale sign-in writes nothing
+ok 154 - install checks the account generation when it runs, not when it was queued: a stale sign-in writes nothing
+  ---
+  duration_ms: 1.0694
+  type: 'test'
+  ...
+# Subtest: an organisation change alone never makes a valid sign-in stale
+ok 155 - an organisation change alone never makes a valid sign-in stale
+  ---
+  duration_ms: 0.771777
+  type: 'test'
+  ...
+# Subtest: setOrg is stale after either an account or an organisation change, and then writes nothing
+ok 156 - setOrg is stale after either an account or an organisation change, and then writes nothing
+  ---
+  duration_ms: 1.186695
+  type: 'test'
+  ...
+# Subtest: a slow removal for an old session never erases a newer one
+ok 157 - a slow removal for an old session never erases a newer one
+  ---
+  duration_ms: 1.192898
+  type: 'test'
+  ...
+# Subtest: removeIf deletes the matching session, and answers absent when nothing is stored
+ok 158 - removeIf deletes the matching session, and answers absent when nothing is stored
+  ---
+  duration_ms: 1.374131
+  type: 'test'
+  ...
+# Subtest: a removal that cannot read or cannot delete throws, so the copy is never reported gone
+ok 159 - a removal that cannot read or cannot delete throws, so the copy is never reported gone
+  ---
+  duration_ms: 3.676447
+  type: 'test'
+  ...
+# Subtest: an unreadable stored value fails closed: never parsed, compared as absent, repaired or deleted, until a new save replaces it
+ok 160 - an unreadable stored value fails closed: never parsed, compared as absent, repaired or deleted, until a new save replaces it
+  ---
+  duration_ms: 7.584468
+  type: 'test'
+  ...
+# Subtest: organisation choices: read, compare-and-delete, keep another choice, and fail closed when unreadable
+ok 161 - organisation choices: read, compare-and-delete, keep another choice, and fail closed when unreadable
+  ---
+  duration_ms: 2.369844
+  type: 'test'
+  ...
+# Subtest: a failure rejects only its own operation; the ones queued behind it still run
+ok 162 - a failure rejects only its own operation; the ones queued behind it still run
+  ---
+  duration_ms: 1.23488
+  type: 'test'
+  ...
+# Subtest: a storage call that throws synchronously is contained like any other failure
+ok 163 - a storage call that throws synchronously is contained like any other failure
+  ---
+  duration_ms: 1.172402
+  type: 'test'
+  ...
+# Subtest: settled waits for exactly the operations queued before the call
+ok 164 - settled waits for exactly the operations queued before the call
+  ---
+  duration_ms: 1.849093
+  type: 'test'
+  ...
+# Subtest: a hung operation times settled out without cancelling it or letting anything overtake it
+ok 165 - a hung operation times settled out without cancelling it or letting anything overtake it
+  ---
+  duration_ms: 6.048632
+  type: 'test'
+  ...
+# Subtest: invalid arguments are refused before anything is queued, without repeating the value
+ok 166 - invalid arguments are refused before anything is queued, without repeating the value
+  ---
+  duration_ms: 2.399962
+  type: 'test'
+  ...
+# Subtest: web step-up requires the cookie-session response; native handoffs and bearer responses are never treated as web sessions
+ok 167 - web step-up requires the cookie-session response; native handoffs and bearer responses are never treated as web sessions
+  ---
+  duration_ms: 3.376856
+  type: 'test'
+  ...
+# Subtest: sign-in keeps safe destinations and discards external or sign-in destinations
+ok 168 - sign-in keeps safe destinations and discards external or sign-in destinations
+  ---
+  duration_ms: 0.363699
+  type: 'test'
+  ...
+# Subtest: invitation writes never retry an uncertain single-use response and discard results after the person changes
+ok 169 - invitation writes never retry an uncertain single-use response and discard results after the person changes
+  ---
+  duration_ms: 0.999605
+  type: 'test'
+  ...
+# Subtest: native passkey step-up preserves only the fixed PKCE handoff, never a web session or a supplied URL
+ok 170 - native passkey step-up preserves only the fixed PKCE handoff, never a web session or a supplied URL
+  ---
+  duration_ms: 0.603076
+  type: 'test'
+  ...
+# Subtest: cookie identity is checked once; remembers only a per-person organisation, with no bearer
+ok 171 - cookie identity is checked once; remembers only a per-person organisation, with no bearer
+  ---
+  duration_ms: 4.475907
+  type: 'test'
+  ...
+# Subtest: only 401 means signed out; malformed identity and network failures pace retries and honour Retry-After
+ok 172 - only 401 means signed out; malformed identity and network failures pace retries and honour Retry-After
+  ---
+  duration_ms: 1.722953
+  type: 'test'
+  ...
+# Subtest: a late identity refresh cannot restore the account after sign-out starts, even when sign-out fails
+ok 173 - a late identity refresh cannot restore the account after sign-out starts, even when sign-out fails
+  ---
+  duration_ms: 3.06518
+  type: 'test'
+  ...
+# Subtest: failed foreground refresh keeps verified identity and says the check failed; success clears that notice
+ok 174 - failed foreground refresh keeps verified identity and says the check failed; success clears that notice
+  ---
+  duration_ms: 0.909227
+  type: 'test'
+  ...
+# Subtest: accepted invitation supersedes an older membership refresh and reconciles after it settles
+ok 175 - accepted invitation supersedes an older membership refresh and reconciles after it settles
+  ---
+  duration_ms: 1.0199
+  type: 'test'
+  ...
+# Subtest: late organisation data is discarded across a switch; a same-person 401 still ends the session
+ok 176 - late organisation data is discarded across a switch; a same-person 401 still ends the session
+  ---
+  duration_ms: 1.066891
+  type: 'test'
+  ...
+# Subtest: passkey reads are person-scoped and expire the session on 401
+ok 177 - passkey reads are person-scoped and expire the session on 401
+  ---
+  duration_ms: 1.069462
+  type: 'test'
+  ...
+# Subtest: an uncertain invitation reconciles memberships without replaying the write
+ok 178 - an uncertain invitation reconciles memberships without replaying the write
+  ---
+  duration_ms: 0.549397
+  type: 'test'
+  ...
+# Subtest: an old revocation cannot cancel the next person’s slow timer or overwrite their result
+ok 179 - an old revocation cannot cancel the next person’s slow timer or overwrite their result
+  ---
+  duration_ms: 1.170274
+  type: 'test'
+  ...
+# Subtest: the API origin: https, or loopback http in development only; canonical, with nothing after the host
+ok 180 - the API origin: https, or loopback http in development only; canonical, with nothing after the host
+  ---
+  duration_ms: 12.011886
+  type: 'test'
+  ...
+# Subtest: every request goes to origin plus path, with redirect: error, the bearer only when given, and JSON only when there is a body
+ok 181 - every request goes to origin plus path, with redirect: error, the bearer only when given, and JSON only when there is a body
+  ---
+  duration_ms: 4.661789
+  type: 'test'
+  ...
+# Subtest: a malformed token is never sent: the transport throws before sending, the client answers unauthorised
+ok 182 - a malformed token is never sent: the transport throws before sending, the client answers unauthorised
+  ---
+  duration_ms: 2.048249
+  type: 'test'
+  ...
+# Subtest: a redirected, 3xx or foreign-URL response is no answer, and its body is never read
+ok 183 - a redirected, 3xx or foreign-URL response is no answer, and its body is never read
+  ---
+  duration_ms: 2.563022
+  type: 'test'
+  ...
+# Subtest: network failure and timeout are no answer; the timeout aborts the request, including a hung body read
+ok 184 - network failure and timeout are no answer; the timeout aborts the request, including a hung body read
+  ---
+  duration_ms: 43.189337
+  type: 'test'
+  ...
+# Subtest: ApiOutcome: ok only for a 2xx that parses; confirmed 401; 429/5xx/no answer unavailable; other 4xx refused by code
+ok 185 - ApiOutcome: ok only for a 2xx that parses; confirmed 401; 429/5xx/no answer unavailable; other 4xx refused by code
+  ---
+  duration_ms: 2.395819
+  type: 'test'
+  ...
+# Subtest: the client wires the transport to the mapping, and retry-after is read only as whole seconds
+ok 186 - the client wires the transport to the mapping, and retry-after is read only as whole seconds
+  ---
+  duration_ms: 1.740798
+  type: 'test'
+  ...
+# Subtest: exchange mapping (root review): every status has an outcome, and only a strictly parsed 2xx signs in
+ok 187 - exchange mapping (root review): every status has an outcome, and only a strictly parsed 2xx signs in
+  ---
+  duration_ms: 1.431657
+  type: 'test'
+  ...
+# Subtest: budget: an ordinary multi-chunk body parses; the end is handled before its undefined value; the lock is released once; nothing is cancelled or aborted
+ok 188 - budget: an ordinary multi-chunk body parses; the end is handled before its undefined value; the lock is released once; nothing is cancelled or aborted
+  ---
+  duration_ms: 1.476604
+  type: 'test'
+  ...
+# Subtest: budget: exactly maxResponseBytes parses; one byte more is unreadable, cancelled then aborted, and the crossing chunk is never decoded or followed
+ok 189 - budget: exactly maxResponseBytes parses; one byte more is unreadable, cancelled then aborted, and the crossing chunk is never decoded or followed
+  ---
+  duration_ms: 11.494452
+  type: 'test'
+  ...
+# Subtest: budget: one chunk larger than the limit is refused without being decoded
+ok 190 - budget: one chunk larger than the limit is refused without being decoded
+  ---
+  duration_ms: 3.019098
+  type: 'test'
+  ...
+# Subtest: budget: 2-, 3- and 4-byte characters split at every byte across chunks decode exactly
+ok 191 - budget: 2-, 3- and 4-byte characters split at every byte across chunks decode exactly
+  ---
+  duration_ms: 4.35812
+  type: 'test'
+  ...
+# Subtest: budget: a chunk that is not a Uint8Array is unreadable and never coerced
+ok 192 - budget: a chunk that is not a Uint8Array is unreadable and never coerced
+  ---
+  duration_ms: 1.867106
+  type: 'test'
+  ...
+# Subtest: budget: content-length over the limit refuses before the body is touched, by length first; anything else changes nothing
+ok 193 - budget: content-length over the limit refuses before the body is touched, by length first; anything else changes nothing
+  ---
+  duration_ms: 13.930364
+  type: 'test'
+  ...
+# Subtest: budget: invalid UTF-8 is unreadable (an intended change from text()); a BOM is removed; empty and null bodies are unreadable
+ok 194 - budget: invalid UTF-8 is unreadable (an intended change from text()); a BOM is removed; empty and null bodies are unreadable
+  ---
+  duration_ms: 8.008481
+  type: 'test'
+  ...
+# Subtest: budget: a first read that never settles ends at the timer, aborted; a later settlement or rejection is harmless
+ok 195 - budget: a first read that never settles ends at the timer, aborted; a later settlement or rejection is harmless
+  ---
+  duration_ms: 41.373515
+  type: 'test'
+  ...
+# Subtest: budget: a cancel that throws or rejects, on the budget and timeout paths, changes nothing, and the abort still runs once after it
+ok 196 - budget: a cancel that throws or rejects, on the budget and timeout paths, changes nothing, and the abort still runs once after it
+  ---
+  duration_ms: 69.646077
+  type: 'test'
+  ...
+# Subtest: budget: one timer covers headers and body; a body stalled after late headers ends at that same timer
+ok 197 - budget: one timer covers headers and body; a body stalled after late headers ends at that same timer
+  ---
+  duration_ms: 37.55049
+  type: 'test'
+  ...
+# Subtest: budget (stop state): after a timeout or a budget stop, a late read does no decode, no further read and no parse
+ok 198 - budget (stop state): after a timeout or a budget stop, a late read does no decode, no further read and no parse
+  ---
+  duration_ms: 66.859117
+  type: 'test'
+  ...
+# Subtest: budget: an abort that throws synchronously never changes the outcome or leaves the request unsettled
+ok 199 - budget: an abort that throws synchronously never changes the outcome or leaves the request unsettled
+  ---
+  duration_ms: 45.188762
+  type: 'test'
+  ...
+# Subtest: budget: the timer settles the request before it aborts, so a send that rejects inside its abort listener still reports a timeout
+ok 200 - budget: the timer settles the request before it aborts, so a send that rejects inside its abort listener still reports a timeout
+  ---
+  duration_ms: 20.79868
+  type: 'test'
+  ...
+# Subtest: budget: a 429 keeps its retry-after when its body times out, is oversized or is not valid UTF-8
+ok 201 - budget: a 429 keeps its retry-after when its body times out, is oversized or is not valid UTF-8
+  ---
+  duration_ms: 29.031742
+  type: 'test'
+  ...
+# Subtest: budget: an oversized body keeps every existing mapping; it is never ok and never a client bug
+ok 202 - budget: an oversized body keeps every existing mapping; it is never ok and never a client bug
+  ---
+  duration_ms: 27.46204
+  type: 'test'
+  ...
+# Subtest: budget: a body getter or getReader that throws after headers is an unreadable body with the status and retry-after, never no answer
+ok 203 - budget: a body getter or getReader that throws after headers is an unreadable body with the status and retry-after, never no answer
+  ---
+  duration_ms: 2.434121
+  type: 'test'
+  ...
+# Subtest: passkey DELETE uses the bounded transport once, without a body, and rejects redirects
+ok 204 - passkey DELETE uses the bounded transport once, without a body, and rejects redirects
+  ---
+  duration_ms: 2.067173
+  type: 'test'
+  ...
+# Subtest: membership PATCH sends the role body once through the bounded transport
+ok 205 - membership PATCH sends the role body once through the bounded transport
+  ---
+  duration_ms: 0.999122
+  type: 'test'
+  ...
+# Subtest: push DELETE sends its endpoint body once, without bearer and with redirect refusal
+ok 206 - push DELETE sends its endpoint body once, without bearer and with redirect refusal
+  ---
+  duration_ms: 3.510815
+  type: 'test'
+  ...
+# Subtest: the fixed paths are the routes the app calls, and the start path is separate
+ok 207 - the fixed paths are the routes the app calls, and the start path is separate
+  ---
+  duration_ms: 2.000066
+  type: 'test'
+  ...
+# Subtest: organisation paths: the organisation itself, and each segment kept inside its own path segment
+ok 208 - organisation paths: the organisation itself, and each segment kept inside its own path segment
+  ---
+  duration_ms: 0.713247
+  type: 'test'
+  ...
+# Subtest: organisation paths refuse a non-canonical ID and empty, dot or overlong segments, without repeating the value
+ok 209 - organisation paths refuse a non-canonical ID and empty, dot or overlong segments, without repeating the value
+  ---
+  duration_ms: 0.920668
+  type: 'test'
+  ...
+# Subtest: canonical API instants: exactly toISOString output, nothing looser
+ok 210 - canonical API instants: exactly toISOString output, nothing looser
+  ---
+  duration_ms: 11.638776
+  type: 'test'
+  ...
+# Subtest: equipment catalogue pages: limit=100 then offset, active only, at API page boundaries
+ok 211 - equipment catalogue pages: limit=100 then offset, active only, at API page boundaries
+  ---
+  duration_ms: 3.07053
+  type: 'test'
+  ...
+# Subtest: occupancy path: one equipment, exact canonical window, fixed key order, the API maximum rows
+ok 212 - occupancy path: one equipment, exact canonical window, fixed key order, the API maximum rows
+  ---
+  duration_ms: 3.525766
+  type: 'test'
+  ...
+# Subtest: production: without exactly CAPTAIN_MOBILE_HARNESS=1 the configuration is app.json, unchanged and not copied
+ok 213 - production: without exactly CAPTAIN_MOBILE_HARNESS=1 the configuration is app.json, unchanged and not copied
+  ---
+  duration_ms: 3.627508
+  type: 'test'
+  ...
+# Subtest: the harness: CAPTAIN_MOBILE_HARNESS=1 on the web export points the router root at harness/app and changes nothing else
+ok 214 - the harness: CAPTAIN_MOBILE_HARNESS=1 on the web export points the router root at harness/app and changes nothing else
+  ---
+  duration_ms: 0.623628
+  type: 'test'
+  ...
+# Subtest: the harness refuses every native build signal it can see (best effort), and never falls back to a silent production config
+ok 215 - the harness refuses every native build signal it can see (best effort), and never falls back to a silent production config
+  ---
+  duration_ms: 1.624297
+  type: 'test'
+  ...
+# Subtest: the start URL: origin, fixed path, the native parameters, and return_to only for an unchanged app path
+ok 216 - the start URL: origin, fixed path, the native parameters, and return_to only for an unchanged app path
+  ---
+  duration_ms: 2.383396
+  type: 'test'
+  ...
+# Subtest: a full attempt: one browser session with this attempt’s challenge, then one exchange with the matching verifier
+ok 217 - a full attempt: one browser session with this attempt’s challenge, then one exchange with the matching verifier
+  ---
+  duration_ms: 10.623847
+  type: 'test'
+  ...
+# Subtest: one attempt at a time: start is refused while opening, awaiting the callback and exchanging
+ok 218 - one attempt at a time: start is refused while opening, awaiting the callback and exchanging
+  ---
+  duration_ms: 2.185223
+  type: 'test'
+  ...
+# Subtest: cancel while the crypto is still running: closing until it settles, no second start meanwhile, and the browser never opens
+ok 219 - cancel while the crypto is still running: closing until it settles, no second start meanwhile, and the browser never opens
+  ---
+  duration_ms: 3.708607
+  type: 'test'
+  ...
+# Subtest: cancel while the browser is open: closing until the browser call returns, no overlapping browser, the late callback is not delivered
+ok 220 - cancel while the browser is open: closing until the browser call returns, no overlapping browser, the late callback is not delivered
+  ---
+  duration_ms: 3.788367
+  type: 'test'
+  ...
+# Subtest: a browser call that never settles after cancel leaves the state honestly closing, and start stays refused
+ok 221 - a browser call that never settles after cancel leaves the state honestly closing, and start stays refused
+  ---
+  duration_ms: 1.311598
+  type: 'test'
+  ...
+# Subtest: every browser result other than success, and a browser that fails to open, is cancelled with nothing sent
+ok 222 - every browser result other than success, and a browser that fails to open, is cancelled with nothing sent
+  ---
+  duration_ms: 2.295692
+  type: 'test'
+  ...
+# Subtest: a callback that is not this attempt’s exact callback is callback-invalid, with nothing sent
+ok 223 - a callback that is not this attempt’s exact callback is callback-invalid, with nothing sent
+  ---
+  duration_ms: 2.549133
+  type: 'test'
+  ...
+# Subtest: the exchange through the core: each answer maps as reviewed, and the exchange is sent exactly once for every outcome
+ok 224 - the exchange through the core: each answer maps as reviewed, and the exchange is sent exactly once for every outcome
+  ---
+  duration_ms: 6.106443
+  type: 'test'
+  ...
+# Subtest: the platform’s crypto failing is cannot-finish, before any browser or request
+ok 225 - the platform’s crypto failing is cannot-finish, before any browser or request
+  ---
+  duration_ms: 1.137433
+  type: 'test'
+  ...
+# Subtest: the success body is parsed strictly
+ok 226 - the success body is parsed strictly
+  ---
+  duration_ms: 1.109072
+  type: 'test'
+  ...
+# Subtest: cleanup: a confirmed revoke or 401 drops the token; otherwise three sends over the schedule, then pending until the person retries
+ok 227 - cleanup: a confirmed revoke or 401 drops the token; otherwise three sends over the schedule, then pending until the person retries
+  ---
+  duration_ms: 1.239633
+  type: 'test'
+  ...
+# Subtest: cleanup waits out a retry-after within the schedule, and a transport that throws is just another failure
+ok 228 - cleanup waits out a retry-after within the schedule, and a transport that throws is just another failure
+  ---
+  duration_ms: 0.512236
+  type: 'test'
+  ...
+# Subtest: a retry-after beyond the schedule is never cut short: the cleanup goes pending, and an explicit retry sends nothing until that time
+ok 229 - a retry-after beyond the schedule is never cut short: the cleanup goes pending, and an explicit retry sends nothing until that time
+  ---
+  duration_ms: 0.540539
+  type: 'test'
+  ...
+# Subtest: the cleanup is paced only by its injected monotonic clock: a reading near zero works, and no wall time is involved
+ok 230 - the cleanup is paced only by its injected monotonic clock: a reading near zero works, and no wall time is involved
+  ---
+  duration_ms: 0.367109
+  type: 'test'
+  ...
+# Subtest: the device clock passing the session’s expiry is not revocation: the token stays held until the server confirms
+ok 231 - the device clock passing the session’s expiry is not revocation: the token stays held until the server confirms
+  ---
+  duration_ms: 0.345664
+  type: 'test'
+  ...
+# Subtest: drift guard: every session the exchange accepts is one the credential store can save, and nothing more
+ok 232 - drift guard: every session the exchange accepts is one the credential store can save, and nothing more
+  ---
+  duration_ms: 3.579049
+  type: 'test'
+  ...
+# Subtest: a retry-after that is due is not waited for twice, and a timer that fires early never sends early
+ok 233 - a retry-after that is due is not waited for twice, and a timer that fires early never sends early
+  ---
+  duration_ms: 0.421766
+  type: 'test'
+  ...
+# Subtest: no secret leaks: outcomes, states, errors and cleanup wording never carry the code, verifier, attempt or a held token
+ok 234 - no secret leaks: outcomes, states, errors and cleanup wording never carry the code, verifier, attempt or a held token
+  ---
+  duration_ms: 24.274323
+  type: 'test'
+  ...
+# Subtest: the exact callback is accepted in either parameter order, and only the code comes back
+ok 235 - the exact callback is accepted in either parameter order, and only the code comes back
+  ---
+  duration_ms: 1.940206
+  type: 'test'
+  ...
+# Subtest: every other return value is refused before anything is sent
+ok 236 - every other return value is refused before anything is sent
+  ---
+  duration_ms: 0.604618
+  type: 'test'
+  ...
+# Subtest: base64url matches Node for every length and byte pattern, with no padding
+ok 237 - base64url matches Node for every length and byte pattern, with no padding
+  ---
+  duration_ms: 2.679501
+  type: 'test'
+  ...
+# Subtest: RFC 7636 appendix B: the verifier from its bytes, and its S256 challenge
+ok 238 - RFC 7636 appendix B: the verifier from its bytes, and its S256 challenge
+  ---
+  duration_ms: 0.433833
+  type: 'test'
+  ...
+# Subtest: each attempt has a fresh 43-character verifier and attempt, and the challenge is the verifier’s S256
+ok 239 - each attempt has a fresh 43-character verifier and attempt, and the challenge is the verifier’s S256
+  ---
+  duration_ms: 0.81983
+  type: 'test'
+  ...
+# Subtest: a platform that returns the wrong number of bytes or a wrong digest is refused
+ok 240 - a platform that returns the wrong number of bytes or a wrong digest is refused
+  ---
+  duration_ms: 0.892817
+  type: 'test'
+  ...
+# Subtest: the API origin uses the transport rule: https, or loopback http only in development; a refused value is null
+ok 241 - the API origin uses the transport rule: https, or loopback http only in development; a refused value is null
+  ---
+  duration_ms: 4.05522
+  type: 'test'
+  ...
+# Subtest: a refused value is never repeated: the result holds only null, and nothing throws
+ok 242 - a refused value is never repeated: the result holds only null, and nothing throws
+  ---
+  duration_ms: 0.43145
+  type: 'test'
+  ...
+# Subtest: outside Metro there is no development allowance: the bound configuration is the production reading of the value
+ok 243 - outside Metro there is no development allowance: the bound configuration is the production reading of the value
+  ---
+  duration_ms: 0.231802
+  type: 'test'
+  ...
+# Subtest: the return-path rule is the API and web rule: same-origin paths kept exactly, every escape refused
+ok 244 - the return-path rule is the API and web rule: same-origin paths kept exactly, every escape refused
+  ---
+  duration_ms: 1.602984
+  type: 'test'
+  ...
+# Subtest: app routes open from a bare path or this build’s scheme with no host; queries and fragments are dropped
+ok 245 - app routes open from a bare path or this build’s scheme with no host; queries and fragments are dropped
+  ---
+  duration_ms: 0.671453
+  type: 'test'
+  ...
+# Subtest: every sign-in callback is refused, in every form: this hook never accepts one
+ok 246 - every sign-in callback is refused, in every form: this hook never accepts one
+  ---
+  duration_ms: 0.562714
+  type: 'test'
+  ...
+# Subtest: a system link that is exactly this build’s sign-in callback causes no navigation; lookalikes are still refused
+ok 247 - a system link that is exactly this build’s sign-in callback causes no navigation; lookalikes are still refused
+  ---
+  duration_ms: 1.047343
+  type: 'test'
+  ...
+# Subtest: other schemes, hosts, unknown or not-yet-built routes and malformed links are refused
+ok 248 - other schemes, hosts, unknown or not-yet-built routes and malformed links are refused
+  ---
+  duration_ms: 0.460995
+  type: 'test'
+  ...
+# Subtest: every linkable route is one the link rule itself accepts
+ok 249 - every linkable route is one the link rule itself accepts
+  ---
+  duration_ms: 0.276446
+  type: 'test'
+  ...
+# Subtest: native only: iOS and Android get a platform, web and anything else get none
+ok 250 - native only: iOS and Android get a platform, web and anything else get none
+  ---
+  duration_ms: 1.36822
+  type: 'test'
+  ...
+# Subtest: random bytes come only from the asynchronous native generator, and wrong or all-zero output is refused
+ok 251 - random bytes come only from the asynchronous native generator, and wrong or all-zero output is refused
+  ---
+  duration_ms: 2.293123
+  type: 'test'
+  ...
+# Subtest: SHA-256 runs the RFC 7636 known-answer check first, through the injected crypto, with the SHA-256 algorithm
+ok 252 - SHA-256 runs the RFC 7636 known-answer check first, through the injected crypto, with the SHA-256 algorithm
+  ---
+  duration_ms: 2.276407
+  type: 'test'
+  ...
+# Subtest: a digest that fails the known-answer check, has the wrong length or is not an ArrayBuffer is refused, and the check reruns
+ok 253 - a digest that fails the known-answer check, has the wrong length or is not an ArrayBuffer is refused, and the check reruns
+  ---
+  duration_ms: 0.93588
+  type: 'test'
+  ...
+# Subtest: the attempt core turns a failing crypto adapter into cannot-finish, with no browser opened and nothing sent
+ok 254 - the attempt core turns a failing crypto adapter into cannot-finish, with no browser opened and nothing sent
+  ---
+  duration_ms: 1.219519
+  type: 'test'
+  ...
+# Subtest: the auth session always asks for an ephemeral session with the exact prefix, and passes through only type and a success URL
+ok 255 - the auth session always asks for an ephemeral session with the exact prefix, and passes through only type and a success URL
+  ---
+  duration_ms: 0.727214
+  type: 'test'
+  ...
+# Subtest: dismiss passes through; an Android dismiss that throws is caught by the attempt core, which still closes
+ok 256 - dismiss passes through; an Android dismiss that throws is caught by the attempt core, which still closes
+  ---
+  duration_ms: 7.5775
+  type: 'test'
+  ...
+# Subtest: redirect: error and credentials: omit are always sent, and a caller cannot loosen them
+ok 257 - redirect: error and credentials: omit are always sent, and a caller cannot loosen them
+  ---
+  duration_ms: 2.154795
+  type: 'test'
+  ...
+# Subtest: through the fixed-origin transport: every request reaches the underlying fetch with both forced options
+ok 258 - through the fixed-origin transport: every request reaches the underlying fetch with both forced options
+  ---
+  duration_ms: 1.274028
+  type: 'test'
+  ...
+# Subtest: a refused redirect from the native layer (it throws) is no answer, never a response
+ok 259 - a refused redirect from the native layer (it throws) is no answer, never a response
+  ---
+  duration_ms: 0.567813
+  type: 'test'
+  ...
+# Subtest: storage is native only: web and other platforms are refused before the module is touched
+ok 260 - storage is native only: web and other platforms are refused before the module is touched
+  ---
+  duration_ms: 3.095223
+  type: 'test'
+  ...
+# Subtest: a module that reports itself unavailable, fails that check, or lacks the accessibility constant is refused
+ok 261 - a module that reports itself unavailable, fails that check, or lacks the accessibility constant is refused
+  ---
+  duration_ms: 0.940121
+  type: 'test'
+  ...
+# Subtest: every call passes the same options: WHEN_UNLOCKED_THIS_DEVICE_ONLY, the default service, no authentication prompt
+ok 262 - every call passes the same options: WHEN_UNLOCKED_THIS_DEVICE_ONLY, the default service, no authentication prompt
+  ---
+  duration_ms: 0.837908
+  type: 'test'
+  ...
+# Subtest: strings pass through exactly, and null means no usable value was returned
+ok 263 - strings pass through exactly, and null means no usable value was returned
+  ---
+  duration_ms: 0.283795
+  type: 'test'
+  ...
+# Subtest: a delete is confirmed by reading back: a silent iOS failure or a lock before the read-back is not a deletion
+ok 264 - a delete is confirmed by reading back: a silent iOS failure or a lock before the read-back is not a deletion
+  ---
+  duration_ms: 1.14673
+  type: 'test'
+  ...
+# Subtest: with the credential store: an unconfirmed delete is reported as StorageUnwritable, never as deleted
+ok 265 - with the credential store: an unconfirmed delete is reported as StorageUnwritable, never as deleted
+  ---
+  duration_ms: 2.61088
+  type: 'test'
+  ...
+# Subtest: cookies are included, the web client header is set and redirects refused; a caller cannot loosen any of them
+ok 266 - cookies are included, the web client header is set and redirects refused; a caller cannot loosen any of them
+  ---
+  duration_ms: 2.272294
+  type: 'test'
+  ...
+# Subtest: never a bearer: an authorization header is dropped whatever its spelling, and nothing else is
+ok 267 - never a bearer: an authorization header is dropped whatever its spelling, and nothing else is
+  ---
+  duration_ms: 0.438027
+  type: 'test'
+  ...
+# Subtest: through the fixed-origin transport with no token: every request carries the cookie options and the header
+ok 268 - through the fixed-origin transport with no token: every request carries the cookie options and the header
+  ---
+  duration_ms: 1.899301
+  type: 'test'
+  ...
+# Subtest: a refused redirect (the browser throws for redirect: error) is no answer, never a response
+ok 269 - a refused redirect (the browser throws for redirect: error) is no answer, never a response
+  ---
+  duration_ms: 0.778557
+  type: 'test'
+  ...
+# Subtest: the choice is kept under the user id, read back exactly, and forgotten on request
+ok 270 - the choice is kept under the user id, read back exactly, and forgotten on request
+  ---
+  duration_ms: 2.123702
+  type: 'test'
+  ...
+# Subtest: an unusable stored value, a bad id, a missing storage or a throwing one never throws and never writes
+ok 271 - an unusable stored value, a bad id, a missing storage or a throwing one never throws and never writes
+  ---
+  duration_ms: 0.455871
+  type: 'test'
+  ...
+# Subtest: mount reads page 0 with limit 100, once, and shows nothing until it answers
+ok 272 - mount reads page 0 with limit 100, once, and shows nothing until it answers
+  ---
+  duration_ms: 2.788662
+  type: 'test'
+  ...
+# Subtest: columns keep the API order and are never re-sorted
+ok 273 - columns keep the API order and are never re-sorted
+  ---
+  duration_ms: 1.057941
+  type: 'test'
+  ...
+# Subtest: More is explicit, reads the next offset, appends in order, and ends at the last page
+ok 274 - More is explicit, reads the next offset, appends in order, and ends at the last page
+  ---
+  duration_ms: 1.142048
+  type: 'test'
+  ...
+# Subtest: only a successful empty first page is empty
+ok 275 - only a successful empty first page is empty
+  ---
+  duration_ms: 0.64415
+  type: 'test'
+  ...
+# Subtest: an ID already shown is dropped from a later page, with the list-changed notice
+ok 276 - an ID already shown is dropped from a later page, with the list-changed notice
+  ---
+  duration_ms: 2.468476
+  type: 'test'
+  ...
+# Subtest: a failed first page fails the catalogue; Try again repeats page 0
+ok 277 - a failed first page fails the catalogue; Try again repeats page 0
+  ---
+  duration_ms: 0.272041
+  type: 'test'
+  ...
+# Subtest: a refused first page shows the access wording and only Refresh reads again
+ok 278 - a refused first page shows the access wording and only Refresh reads again
+  ---
+  duration_ms: 0.329164
+  type: 'test'
+  ...
+# Subtest: a failed later page keeps the loaded columns, labelled incomplete, with its own Try again
+ok 279 - a failed later page keeps the loaded columns, labelled incomplete, with its own Try again
+  ---
+  duration_ms: 0.800108
+  type: 'test'
+  ...
+# Subtest: the only stop is the API maximum offset, and it is worded
+ok 280 - the only stop is the API maximum offset, and it is worded
+  ---
+  duration_ms: 0.809666
+  type: 'test'
+  ...
+# Subtest: Refresh replaces the list from page 0 and drops a More answer still in flight
+ok 281 - Refresh replaces the list from page 0 and drops a More answer still in flight
+  ---
+  duration_ms: 1.40591
+  type: 'test'
+  ...
+# Subtest: a failed Refresh keeps the columns shown, labelled stale, with Try again
+ok 282 - a failed Refresh keeps the columns shown, labelled stale, with Try again
+  ---
+  duration_ms: 0.842806
+  type: 'test'
+  ...
+# Subtest: Refresh during the first page drops it and owes page 0 again
+ok 283 - Refresh during the first page drops it and owes page 0 again
+  ---
+  duration_ms: 0.209835
+  type: 'test'
+  ...
+# Subtest: an answer applies only once, and only to its own outstanding request
+ok 284 - an answer applies only once, and only to its own outstanding request
+  ---
+  duration_ms: 0.488219
+  type: 'test'
+  ...
+# Subtest: a page that does not fit its request is refused like any unusable answer
+ok 285 - a page that does not fit its request is refused like any unusable answer
+  ---
+  duration_ms: 0.316195
+  type: 'test'
+  ...
+# Subtest: runner outcomes map to catalogue answers; superseded applies nothing
+ok 286 - runner outcomes map to catalogue answers; superseded applies nothing
+  ---
+  duration_ms: 0.347697
+  type: 'test'
+  ...
+# Subtest: transitions never mutate the state they are given
+ok 287 - transitions never mutate the state they are given
+  ---
+  duration_ms: 2.593677
+  type: 'test'
+  ...
+# Subtest: an answer the gate drops (a re-anchor while it was in flight) is abandoned, and the same read is planned again (K1)
+ok 288 - an answer the gate drops (a re-anchor while it was in flight) is abandoned, and the same read is planned again (K1)
+  ---
+  duration_ms: 0.833476
+  type: 'test'
+  ...
+# Subtest: Try again of a failed Refresh replaces the list exactly as the Refresh would have
+ok 289 - Try again of a failed Refresh replaces the list exactly as the Refresh would have
+  ---
+  duration_ms: 0.94098
+  type: 'test'
+  ...
+# Subtest: catalogueReplaced is true only when a page-0 answer replaced the list
+ok 290 - catalogueReplaced is true only when a page-0 answer replaced the list
+  ---
+  duration_ms: 0.375032
+  type: 'test'
+  ...
+# Subtest: a refused later page is cleared by Refresh, which reads and replaces the list
+ok 291 - a refused later page is cleared by Refresh, which reads and replaces the list
+  ---
+  duration_ms: 0.807252
+  type: 'test'
+  ...
+# Subtest: a 429 with a server wait is only unavailable to the catalogue; the wait belongs to the gate
+ok 292 - a 429 with a server wait is only unavailable to the catalogue; the wait belongs to the gate
+  ---
+  duration_ms: 0.654527
+  type: 'test'
+  ...
+# Subtest: cells are keyed by equipment and exact instants, never a chunk index
+ok 293 - cells are keyed by equipment and exact instants, never a chunk index
+  ---
+  duration_ms: 2.757408
+  type: 'test'
+  ...
+# Subtest: wanted cells: visible columns and the partly visible next one, visible chunks then either side, nearest the centre first
+ok 294 - wanted cells: visible columns and the partly visible next one, visible chunks then either side, nearest the centre first
+  ---
+  duration_ms: 1.271006
+  type: 'test'
+  ...
+# Subtest: reads go one at a time to the first wanted cell never read; failed, partial and loading cells are not read again
+ok 295 - reads go one at a time to the first wanted cell never read; failed, partial and loading cells are not read again
+  ---
+  duration_ms: 0.616646
+  type: 'test'
+  ...
+# Subtest: an answer applies only to the cell still waiting on that exact request
+ok 296 - an answer applies only to the cell still waiting on that exact request
+  ---
+  duration_ms: 0.405771
+  type: 'test'
+  ...
+# Subtest: failures keep their reason and wait; no failure can show free time
+ok 297 - failures keep their reason and wait; no failure can show free time
+  ---
+  duration_ms: 1.907275
+  type: 'test'
+  ...
+# Subtest: Try again reopens only failed cells; partial, conflict, complete, access and unread cells are not retried
+ok 298 - Try again reopens only failed cells; partial, conflict, complete, access and unread cells are not retried
+  ---
+  duration_ms: 0.64214
+  type: 'test'
+  ...
+# Subtest: the same reservation at the same revision with different details is never chosen silently
+ok 299 - the same reservation at the same revision with different details is never chosen silently
+  ---
+  duration_ms: 13.442566
+  type: 'test'
+  ...
+# Subtest: no cell holding a contradicted reservation can show free time under it (A's B1)
+ok 300 - no cell holding a contradicted reservation can show free time under it (A's B1)
+  ---
+  duration_ms: 1.372944
+  type: 'test'
+  ...
+# Subtest: a zone change applies nothing: every payload becomes stale and the queue must stop
+ok 301 - a zone change applies nothing: every payload becomes stale and the queue must stop
+  ---
+  duration_ms: 0.746563
+  type: 'test'
+  ...
+# Subtest: Refresh: payloads become stale, markers and failures clear, a failed re-read keeps the stale rows
+ok 302 - Refresh: payloads become stale, markers and failures clear, a failed re-read keeps the stale rows
+  ---
+  duration_ms: 1.275746
+  type: 'test'
+  ...
+# Subtest: retained payloads are bounded; only complete cells return to unread, others leave markers never read again
+ok 303 - retained payloads are bounded; only complete cells return to unread, others leave markers never read again
+  ---
+  duration_ms: 10.86674
+  type: 'test'
+  ...
+# Subtest: only complete coverage across every cell is complete
+ok 304 - only complete coverage across every cell is complete
+  ---
+  duration_ms: 0.792815
+  type: 'test'
+  ...
+# Subtest: reservations across chunk reads are deduplicated at their newest revision and clipped to the window
+ok 305 - reservations across chunk reads are deduplicated at their newest revision and clipped to the window
+  ---
+  duration_ms: 0.577141
+  type: 'test'
+  ...
+# Subtest: the way out of a stop: Try again while a shown cell offers it, otherwise Refresh (A's C3)
+ok 306 - the way out of a stop: Try again while a shown cell offers it, otherwise Refresh (A's C3)
+  ---
+  duration_ms: 0.641347
+  type: 'test'
+  ...
+# Subtest: cells for equipment no longer listed are dropped
+ok 307 - cells for equipment no longer listed are dropped
+  ---
+  duration_ms: 0.465932
+  type: 'test'
+  ...
+# Subtest: organisation, catalogue and occupancy share one flight and the rolling budget
+ok 308 - organisation, catalogue and occupancy share one flight and the rolling budget
+  ---
+  duration_ms: 2.605428
+  type: 'test'
+  ...
+# Subtest: a wait from any read blocks every kind; Refresh cannot erase it or the rolling log
+ok 309 - a wait from any read blocks every kind; Refresh cannot erase it or the rolling log
+  ---
+  duration_ms: 2.440514
+  type: 'test'
+  ...
+# Subtest: network failure requires explicit retry and only its success resumes automatic reads
+ok 310 - network failure requires explicit retry and only its success resumes automatic reads
+  ---
+  duration_ms: 0.284247
+  type: 'test'
+  ...
+# Subtest: access stop needs checked membership and Refresh, not retry or re-anchoring
+ok 311 - access stop needs checked membership and Refresh, not retry or re-anchoring
+  ---
+  duration_ms: 0.188709
+  type: 'test'
+  ...
+# Subtest: conflict and zone stops survive re-anchoring and cannot be lifted by another retry
+ok 312 - conflict and zone stops survive re-anchoring and cannot be lifted by another retry
+  ---
+  duration_ms: 0.391007
+  type: 'test'
+  ...
+# Subtest: scope epochs prevent A to B to A reuse; superseded results apply nothing and cannot resume
+ok 313 - scope epochs prevent A to B to A reuse; superseded results apply nothing and cannot resume
+  ---
+  duration_ms: 0.220574
+  type: 'test'
+  ...
+# Subtest: a late failure cannot weaken a conflict stop into a retryable stop
+ok 314 - a late failure cannot weaken a conflict stop into a retryable stop
+  ---
+  duration_ms: 0.280896
+  type: 'test'
+  ...
+# Subtest: old and duplicate tickets cannot overwrite a new generation or release its request
+ok 315 - old and duplicate tickets cannot overwrite a new generation or release its request
+  ---
+  duration_ms: 0.201171
+  type: 'test'
+  ...
+# Subtest: Refresh and re-anchor while a read is in flight drop its answer but keep the single flight occupied
+ok 316 - Refresh and re-anchor while a read is in flight drop its answer but keep the single flight occupied
+  ---
+  duration_ms: 0.563154
+  type: 'test'
+  ...
+# Subtest: a dropped previous-generation answer still honours a server wait and a superseded scope
+ok 317 - a dropped previous-generation answer still honours a server wait and a superseded scope
+  ---
+  duration_ms: 0.628237
+  type: 'test'
+  ...
+# Subtest: conflict and zone stops block occupancy only; retry, access and superseded block every kind
+ok 318 - conflict and zone stops block occupancy only; retry, access and superseded block every kind
+  ---
+  duration_ms: 0.363864
+  type: 'test'
+  ...
+# Subtest: a single start expires exactly at its 60-second boundary
+ok 319 - a single start expires exactly at its 60-second boundary
+  ---
+  duration_ms: 0.484561
+  type: 'test'
+  ...
+# Subtest: a 400 or a client bug sets a retry stop; a first 429 with a wait only pauses and resumes at the deadline
+ok 320 - a 400 or a client bug sets a retry stop; a first 429 with a wait only pauses and resumes at the deadline
+  ---
+  duration_ms: 0.262718
+  type: 'test'
+  ...
+# Subtest: 403/404 under a conflict becomes access; a retry success does not clear a conflict; stopSchedule is inert under access or superseded
+ok 321 - 403/404 under a conflict becomes access; a retry success does not clear a conflict; stopSchedule is inert under access or superseded
+  ---
+  duration_ms: 0.233895
+  type: 'test'
+  ...
+# Subtest: organisation zone: only the timezone of the organisation asked for is kept
+ok 322 - organisation zone: only the timezone of the organisation asked for is kept
+  ---
+  duration_ms: 3.163244
+  type: 'test'
+  ...
+# Subtest: equipment page: active equipment in API order, id and raw name only, frozen
+ok 323 - equipment page: active equipment in API order, id and raw name only, frozen
+  ---
+  duration_ms: 1.191186
+  type: 'test'
+  ...
+# Subtest: equipment page: nextOffset is null or exactly offset + limit with the page full
+ok 324 - equipment page: nextOffset is null or exactly offset + limit with the page full
+  ---
+  duration_ms: 2.568829
+  type: 'test'
+  ...
+# Subtest: equipment page: one bad item refuses the page
+ok 325 - equipment page: one bad item refuses the page
+  ---
+  duration_ms: 0.853788
+  type: 'test'
+  ...
+# Subtest: occupancy: a complete read keeps only the drawn fields, frozen, in API order; no person or project data
+ok 326 - occupancy: a complete read keeps only the drawn fields, frozen, in API order; no person or project data
+  ---
+  duration_ms: 2.282017
+  type: 'test'
+  ...
+# Subtest: occupancy page facts: exactly two valid combinations; anything else is refused, never partial
+ok 327 - occupancy page facts: exactly two valid combinations; anything else is refused, never partial
+  ---
+  duration_ms: 10.30724
+  type: 'test'
+  ...
+# Subtest: occupancy answers must echo the exact window asked for
+ok 328 - occupancy answers must echo the exact window asked for
+  ---
+  duration_ms: 0.509839
+  type: 'test'
+  ...
+# Subtest: timestamps: every instant is exactly the API serialisation
+ok 329 - timestamps: every instant is exactly the API serialisation
+  ---
+  duration_ms: 0.984059
+  type: 'test'
+  ...
+# Subtest: actual time is inside 1900–2200 and at most 366 days; occupied buffers may extend beyond the bounds
+ok 330 - actual time is inside 1900–2200 and at most 366 days; occupied buffers may extend beyond the bounds
+  ---
+  duration_ms: 0.964453
+  type: 'test'
+  ...
+# Subtest: occupied time equals actual time widened by exactly its buffers, and intersects the window
+ok 331 - occupied time equals actual time widened by exactly its buffers, and intersects the window
+  ---
+  duration_ms: 1.104267
+  type: 'test'
+  ...
+# Subtest: one bad reservation refuses the whole answer
+ok 332 - one bad reservation refuses the whole answer
+  ---
+  duration_ms: 0.986352
+  type: 'test'
+  ...
+# Subtest: a well-formed answer in another zone is zone-changed, carries no rows, and is distinguishable from invalid
+ok 333 - a well-formed answer in another zone is zone-changed, carries no rows, and is distinguishable from invalid
+  ---
+  duration_ms: 2.637686
+  type: 'test'
+  ...
+# Subtest: a bad request is a client bug: the answer is refused rather than trusted
+ok 334 - a bad request is a client bug: the answer is refused rather than trusted
+  ---
+  duration_ms: 0.383241
+  type: 'test'
+  ...
+# Subtest: the scales match the web, and Days is the default
+ok 335 - the scales match the web, and Days is the default
+  ---
+  duration_ms: 2.287328
+  type: 'test'
+  ...
+# Subtest: continuous elapsed intervals clip at loaded boundaries without enlarging short occupancy
+ok 336 - continuous elapsed intervals clip at loaded boundaries without enlarging short occupancy
+  ---
+  duration_ms: 0.442652
+  type: 'test'
+  ...
+# Subtest: a clock-change day is drawn at its true length
+ok 337 - a clock-change day is drawn at its true length
+  ---
+  duration_ms: 0.231116
+  type: 'test'
+  ...
+# Subtest: a bar across a day boundary is one continuous interval
+ok 338 - a bar across a day boundary is one continuous interval
+  ---
+  duration_ms: 0.228476
+  type: 'test'
+  ...
+# Subtest: instants and pixels convert both ways
+ok 339 - instants and pixels convert both ways
+  ---
+  duration_ms: 0.242487
+  type: 'test'
+  ...
+# Subtest: zoom keeps the instant under the focal point, and round-trips
+ok 340 - zoom keeps the instant under the focal point, and round-trips
+  ---
+  duration_ms: 0.283879
+  type: 'test'
+  ...
+# Subtest: scroll offsets stay inside the content
+ok 341 - scroll offsets stay inside the content
+  ---
+  duration_ms: 0.207907
+  type: 'test'
+  ...
+# Subtest: calendar months clamp to the last day and wrap years
+ok 342 - calendar months clamp to the last day and wrap years
+  ---
+  duration_ms: 2.024992
+  type: 'test'
+  ...
+# Subtest: the range covers one month back and six months forward in contiguous bounded reads
+ok 343 - the range covers one month back and six months forward in contiguous bounded reads
+  ---
+  duration_ms: 29.104103
+  type: 'test'
+  ...
+# Subtest: clock changes and skipped dates keep chunk boundaries exact
+ok 344 - clock changes and skipped dates keep chunk boundaries exact
+  ---
+  duration_ms: 48.651714
+  type: 'test'
+  ...
+# Subtest: the range stays inside the API time limits
+ok 345 - the range stays inside the API time limits
+  ---
+  duration_ms: 4.472574
+  type: 'test'
+  ...
+# Subtest: re-anchoring uses the selected edge date and stops at the limits
+ok 346 - re-anchoring uses the selected edge date and stops at the limits
+  ---
+  duration_ms: 9.453314
+  type: 'test'
+  ...
+# Subtest: now is inside or outside the range
+ok 347 - now is inside or outside the range
+  ---
+  duration_ms: 2.488675
+  type: 'test'
+  ...
+# Subtest: wanted reads are nearest the view first
+ok 348 - wanted reads are nearest the view first
+  ---
+  duration_ms: 2.217616
+  type: 'test'
+  ...
+# Subtest: the rendered window changes only when the view nears its edge
+ok 349 - the rendered window changes only when the view nears its edge
+  ---
+  duration_ms: 0.472259
+  type: 'test'
+  ...
+# Subtest: axis ticks are bounded to the rendered window and follow civil time
+ok 350 - axis ticks are bounded to the rendered window and follow civil time
+  ---
+  duration_ms: 7.67061
+  type: 'test'
+  ...
+# Subtest: mount order: the organisation read alone first, a page only after the zone gate, occupancy only after page 0 and a settle
+ok 351 - mount order: the organisation read alone first, a page only after the zone gate, occupancy only after page 0 and a settle
+  ---
+  duration_ms: 12.64309
+  type: 'test'
+  ...
+# Subtest: an unsupported zone reads no catalogue or occupancy; Refresh bootstraps again and a passing zone continues
+ok 352 - an unsupported zone reads no catalogue or occupancy; Refresh bootstraps again and a passing zone continues
+  ---
+  duration_ms: 6.686533
+  type: 'test'
+  ...
+# Subtest: settle maths: the body top excludes the body itself, and the sticky row hides the first pixels (review N1)
+ok 353 - settle maths: the body top excludes the body itself, and the sticky row hides the first pixels (review N1)
+  ---
+  duration_ms: 1.212488
+  type: 'test'
+  ...
+# Subtest: first focus is order-independent: nothing settles before the body is placed, and a focus waits for laid-out content
+ok 354 - first focus is order-independent: nothing settles before the body is placed, and a focus waits for laid-out content
+  ---
+  duration_ms: 0.376719
+  type: 'test'
+  ...
+# Subtest: focus offsets: now centred below the sticky row, an edge date at the top or bottom, clamped to the content
+ok 355 - focus offsets: now centred below the sticky row, an edge date at the top or bottom, clamped to the content
+  ---
+  duration_ms: 1.03445
+  type: 'test'
+  ...
+# Subtest: one flight across every kind; a press made while busy is queued and sent before occupancy
+ok 356 - one flight across every kind; a press made while busy is queued and sent before occupancy
+  ---
+  duration_ms: 7.065426
+  type: 'test'
+  ...
+# Subtest: the rolling budget: the 31st start in a minute waits, and the wake sends it exactly at the boundary
+ok 357 - the rolling budget: the 31st start in a minute waits, and the wake sends it exactly at the boundary
+  ---
+  duration_ms: 11.793099
+  type: 'test'
+  ...
+# Subtest: a wait from a catalogue page blocks occupancy and Refresh; Refresh after it keeps the wait and the rate log
+ok 358 - a wait from a catalogue page blocks occupancy and Refresh; Refresh after it keeps the wait and the rate log
+  ---
+  duration_ms: 6.190397
+  type: 'test'
+  ...
+# Subtest: Refresh drops equipment no longer listed, and no read is ever sent for it (design E1)
+ok 359 - Refresh drops equipment no longer listed, and no read is ever sent for it (design E1)
+  ---
+  duration_ms: 15.017861
+  type: 'test'
+  ...
+# Subtest: an access refusal stops everything; Refresh waits for the account check (design E2)
+ok 360 - an access refusal stops everything; Refresh waits for the account check (design E2)
+  ---
+  duration_ms: 5.458988
+  type: 'test'
+  ...
+# Subtest: "Try again for the dates shown" offline sends exactly one read; a success continues one at a time (design E3)
+ok 361 - "Try again for the dates shown" offline sends exactly one read; a success continues one at a time (design E3)
+  ---
+  duration_ms: 6.938984
+  type: 'test'
+  ...
+# Subtest: a failed batch read clears only that batch: a More pressed meanwhile is still sent (review N2)
+ok 362 - a failed batch read clears only that batch: a More pressed meanwhile is still sent (review N2)
+  ---
+  duration_ms: 4.690775
+  type: 'test'
+  ...
+# Subtest: the latest press wins; a press with nothing to send, or refused as stopped, is dropped
+ok 363 - the latest press wins; a press with nothing to send, or refused as stopped, is dropped
+  ---
+  duration_ms: 7.385567
+  type: 'test'
+  ...
+# Subtest: a zone change applies nothing, stops occupancy only, and asks for Refresh
+ok 364 - a zone change applies nothing, stops occupancy only, and asks for Refresh
+  ---
+  duration_ms: 4.389817
+  type: 'test'
+  ...
+# Subtest: contradictory details for one reservation stop occupancy with the conflict wording
+ok 365 - contradictory details for one reservation stop occupancy with the conflict wording
+  ---
+  duration_ms: 4.665706
+  type: 'test'
+  ...
+# Subtest: the detail panel shows only a reservation still drawn for its equipment, and closes once it is contradicted (review S2)
+ok 366 - the detail panel shows only a reservation still drawn for its equipment, and closes once it is contradicted (review S2)
+  ---
+  duration_ms: 4.587272
+  type: 'test'
+  ...
+# Subtest: a re-anchor abandons an in-flight catalogue answer, so More is offered again (K1)
+ok 367 - a re-anchor abandons an in-flight catalogue answer, so More is offered again (K1)
+  ---
+  duration_ms: 9.097226
+  type: 'test'
+  ...
+# Subtest: a retry stop whose failed cell was re-anchored away offers Refresh (C3)
+ok 368 - a retry stop whose failed cell was re-anchored away offers Refresh (C3)
+  ---
+  duration_ms: 6.621739
+  type: 'test'
+  ...
+# Subtest: screen states: a failed bootstrap offers its own Try again; an empty first page says so; a failed first page fails
+ok 369 - screen states: a failed bootstrap offers its own Try again; an empty first page says so; a failed first page fails
+  ---
+  duration_ms: 10.272088
+  type: 'test'
+  ...
+# Subtest: Perth instants use the organisation zone, never the device zone
+ok 370 - Perth instants use the organisation zone, never the device zone
+  ---
+  duration_ms: 33.445957
+  type: 'test'
+  ...
+# Subtest: Sydney gaps have no instant, repeated hours have two, and civil days last 23 or 25 hours
+ok 371 - Sydney gaps have no instant, repeated hours have two, and civil days last 23 or 25 hours
+  ---
+  duration_ms: 4.291617
+  type: 'test'
+  ...
+# Subtest: non-hour transitions, days that begin after midnight and skipped dates stay explicit
+ok 372 - non-hour transitions, days that begin after midnight and skipped dates stay explicit
+  ---
+  duration_ms: 30.523178
+  type: 'test'
+  ...
+# Subtest: invalid dates and zones are refused without normalising into another day or repeating the input
+ok 373 - invalid dates and zones are refused without normalising into another day or repeating the input
+  ---
+  duration_ms: 1.187915
+  type: 'test'
+  ...
+# Subtest: civil dates shift exactly and stay inside 1900–2200
+ok 374 - civil dates shift exactly and stay inside 1900–2200
+  ---
+  duration_ms: 0.531514
+  type: 'test'
+  ...
+# Subtest: the zone gate accepts supported zones, including half-hour, three-quarter-hour and date-line zones
+ok 375 - the zone gate accepts supported zones, including half-hour, three-quarter-hour and date-line zones
+  ---
+  duration_ms: 30.407898
+  type: 'test'
+  ...
+# Subtest: the zone gate refuses a zone the engine cannot format, without repeating it
+ok 376 - the zone gate refuses a zone the engine cannot format, without repeating it
+  ---
+  duration_ms: 0.776325
+  type: 'test'
+  ...
+# Subtest: the gate refuses an engine whose zone answers are wrong
+ok 377 - the gate refuses an engine whose zone answers are wrong
+  ---
+  duration_ms: 4.748311
+  type: 'test'
+  ...
+# Subtest: the fixed vectors apply whatever the organisation zone is
+ok 378 - the fixed vectors apply whatever the organisation zone is
+  ---
+  duration_ms: 4.387757
+  type: 'test'
+  ...
+# Subtest: the gate refuses an organisation zone that does not round-trip
+ok 379 - the gate refuses an organisation zone that does not round-trip
+  ---
+  duration_ms: 17.81583
+  type: 'test'
+  ...
+# Subtest: the gate refuses an engine that omits civil parts or cannot construct formatters
+ok 380 - the gate refuses an engine that omits civil parts or cannot construct formatters
+  ---
+  duration_ms: 9.362604
+  type: 'test'
+  ...
+# Subtest: the palette is the reviewed green-grey set: background, surface, text, action and lines
+ok 381 - the palette is the reviewed green-grey set: background, surface, text, action and lines
+  ---
+  duration_ms: 2.106496
+  type: 'test'
+  ...
+# Subtest: headings are 26 pt, targets at least 44 pt, the gutter 16 pt, and wide screens keep a readable column
+ok 382 - headings are 26 pt, targets at least 44 pt, the gutter 16 pt, and wide screens keep a readable column
+  ---
+  duration_ms: 0.405774
+  type: 'test'
+  ...
+# Subtest: topic creation sends exactly one atomic first-message request without private fields
+ok 383 - topic creation sends exactly one atomic first-message request without private fields
+  ---
+  duration_ms: 7.70192
+  type: 'test'
+  ...
+# Subtest: unknown private creation locks all choices and remount retries both original IDs and payload
+ok 384 - unknown private creation locks all choices and remount retries both original IDs and payload
+  ---
+  duration_ms: 1.513248
+  type: 'test'
+  ...
+# Subtest: 429 preserves IDs while edits remain recoverable, including empty text; never automatically retries
+ok 385 - 429 preserves IDs while edits remain recoverable, including empty text; never automatically retries
+  ---
+  duration_ms: 0.845447
+  type: 'test'
+  ...
+# Subtest: thread_id_unavailable survives remount and requires explicit replacement IDs
+ok 386 - thread_id_unavailable survives remount and requires explicit replacement IDs
+  ---
+  duration_ms: 0.756087
+  type: 'test'
+  ...
+# Subtest: storage refusal prevents creation; malformed drafts and other people are cleared
+ok 387 - storage refusal prevents creation; malformed drafts and other people are cleared
+  ---
+  duration_ms: 1.333005
+  type: 'test'
+  ...
+# Subtest: scope switches hide late creates, 404 clears pending data, and signout clears creates
+ok 388 - scope switches hide late creates, 404 clears pending data, and signout clears creates
+  ---
+  duration_ms: 1.056369
+  type: 'test'
+  ...
+# Subtest: private input is bounded to 49 distinct other members and 80 UTF-16-unit title
+ok 389 - private input is bounded to 49 distinct other members and 80 UTF-16-unit title
+  ---
+  duration_ms: 0.895279
+  type: 'test'
+  ...
+# Subtest: member choices are readable for a member, exclude self, and stale choices never enter a new scope
+ok 390 - member choices are readable for a member, exclude self, and stale choices never enter a new scope
+  ---
+  duration_ms: 1.356111
+  type: 'test'
+  ...
+# Subtest: tag pages reject extras and duplicates, exclude archived choices and preserve bounded cursor
+ok 391 - tag pages reject extras and duplicates, exclude archived choices and preserve bounded cursor
+  ---
+  duration_ms: 0.925547
+  type: 'test'
+  ...
+# Subtest: tag changes use current thread revision and reconcile detail
+ok 392 - tag changes use current thread revision and reconcile detail
+  ---
+  duration_ms: 3.712817
+  type: 'test'
+  ...
+# Subtest: stale tag revision reads current state and requires another explicit choice
+ok 393 - stale tag revision reads current state and requires another explicit choice
+  ---
+  duration_ms: 1.290084
+  type: 'test'
+  ...
+# Subtest: strict list/detail/message parsers reject extra fields, wrong identities, malformed tombstones and bounds
+ok 394 - strict list/detail/message parsers reject extra fields, wrong identities, malformed tombstones and bounds
+  ---
+  duration_ms: 5.180291
+  type: 'test'
+  ...
+# Subtest: retired links, tag kind and read wire names are rejected
+ok 395 - retired links, tag kind and read wire names are rejected
+  ---
+  duration_ms: 1.39032
+  type: 'test'
+  ...
+# Subtest: groups preserve whole-set counts and show a multi-tag row under every heading
+ok 396 - groups preserve whole-set counts and show a multi-tag row under every heading
+  ---
+  duration_ms: 0.534301
+  type: 'test'
+  ...
+# Subtest: row/card and first-unread derivation follows the contract rather than fabricating record screens
+ok 397 - row/card and first-unread derivation follows the contract rather than fabricating record screens
+  ---
+  duration_ms: 1.321587
+  type: 'test'
+  ...
+# Subtest: upserts retain higher change sequence, tombstones, and detect sequence gaps only
+ok 398 - upserts retain higher change sequence, tombstones, and detect sequence gaps only
+  ---
+  duration_ms: 0.501594
+  type: 'test'
+  ...
+# Subtest: message menu powers distinguish author editing from moderation and hide tombstone actions
+ok 399 - message menu powers distinguish author editing from moderation and hide tombstone actions
+  ---
+  duration_ms: 0.562647
+  type: 'test'
+  ...
+# Subtest: body bounds use code points and UTF-8 bytes
+ok 400 - body bounds use code points and UTF-8 bytes
+  ---
+  duration_ms: 1.95035
+  type: 'test'
+  ...
+# Subtest: drafts are scoped, clear on a different person/signout, and malformed records are discarded
+ok 401 - drafts are scoped, clear on a different person/signout, and malformed records are discarded
+  ---
+  duration_ms: 0.897969
+  type: 'test'
+  ...
+# Subtest: failed session storage prevents the first send
+ok 402 - failed session storage prevents the first send
+  ---
+  duration_ms: 1.517874
+  type: 'test'
+  ...
+# Subtest: uncertain sends lock body and preserve ID through remount, never automatically replay
+ok 403 - uncertain sends lock body and preserve ID through remount, never automatically replay
+  ---
+  duration_ms: 1.802173
+  type: 'test'
+  ...
+# Subtest: 429 keeps a draft editable with its ID, paces retry, and cannot fabricate success
+ok 404 - 429 keeps a draft editable with its ID, paces retry, and cannot fabricate success
+  ---
+  duration_ms: 0.805874
+  type: 'test'
+  ...
+# Subtest: ID conflict retains text for explicit new-ID retry; a send only reconciles the same author and thread
+ok 405 - ID conflict retains text for explicit new-ID retry; a send only reconciles the same author and thread
+  ---
+  duration_ms: 0.879756
+  type: 'test'
+  ...
+# Subtest: pending sends coalesce and stale responses cannot enter a new scope
+ok 406 - pending sends coalesce and stale responses cannot enter a new scope
+  ---
+  duration_ms: 0.907704
+  type: 'test'
+  ...
+# Subtest: late 401 does not end a new person; current 401 does
+ok 407 - late 401 does not end a new person; current 401 does
+  ---
+  duration_ms: 1.120478
+  type: 'test'
+  ...
+# Subtest: list responses stay scoped, filter changes reset pages and failed reads back off
+ok 408 - list responses stay scoped, filter changes reset pages and failed reads back off
+  ---
+  duration_ms: 1.729939
+  type: 'test'
+  ...
+# Subtest: thread opening uses first-unread fetch and displayed messages alone advance reads with a throttle
+ok 409 - thread opening uses first-unread fetch and displayed messages alone advance reads with a throttle
+  ---
+  duration_ms: 2.158785
+  type: 'test'
+  ...
+# Subtest: lost access hides thread data and clears its pending draft
+ok 410 - lost access hides thread data and clears its pending draft
+  ---
+  duration_ms: 1.380338
+  type: 'test'
+  ...
+# Subtest: stars reconcile through detail without reissuing the mutation
+ok 411 - stars reconcile through detail without reissuing the mutation
+  ---
+  duration_ms: 1.756874
+  type: 'test'
+  ...
+# Subtest: poll requests coalesce; incomplete feed progress and newer versions converge
+ok 412 - poll requests coalesce; incomplete feed progress and newer versions converge
+  ---
+  duration_ms: 1.172451
+  type: 'test'
+  ...
+# Subtest: card folds reject unknown fields and old card shapes
+ok 413 - card folds reject unknown fields and old card shapes
+  ---
+  duration_ms: 0.619187
+  type: 'test'
+  ...
+1..413
+# tests 413
+# suites 0
+# pass 413
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 15631.568925
+TAP version 13
+# Subtest: the checked-in allowlist names no @captain/* package and holds the contract’s runtime set
+ok 1 - the checked-in allowlist names no @captain/* package and holds the contract’s runtime set
+  ---
+  duration_ms: 1.710028
+  type: 'test'
+  ...
+# Subtest: a clean manifest and app pass
+ok 2 - a clean manifest and app pass
+  ---
+  duration_ms: 38.945298
+  type: 'test'
+  ...
+# Subtest: the manifest refuses @captain/*, unlisted packages, non-registry specs and extra dependency fields
+ok 3 - the manifest refuses @captain/*, unlisted packages, non-registry specs and extra dependency fields
+  ---
+  duration_ms: 0.874021
+  type: 'test'
+  ...
+# Subtest: app source may not import Node built-ins, @captain/*, undeclared packages, or paths outside apps/mobile
+ok 4 - app source may not import Node built-ins, @captain/*, undeclared packages, or paths outside apps/mobile
+  ---
+  duration_ms: 8.504642
+  type: 'test'
+  ...
+# Subtest: a dev-only package is refused in app code but allowed in tests; tests and config still may not escape or use @captain/*
+ok 5 - a dev-only package is refused in app code but allowed in tests; tests and config still may not escape or use @captain/*
+  ---
+  duration_ms: 11.229324
+  type: 'test'
+  ...
+# Subtest: only the API public variable may be read from the environment, anywhere outside scripts/
+ok 6 - only the API public variable may be read from the environment, anywhere outside scripts/
+  ---
+  duration_ms: 12.320831
+  type: 'test'
+  ...
+# Subtest: process cannot be reached through brackets, aliases, destructuring or globals; words in strings are not uses
+ok 7 - process cannot be reached through brackets, aliases, destructuring or globals; words in strings are not uses
+  ---
+  duration_ms: 6.235197
+  type: 'test'
+  ...
+# Subtest: generated directories are skipped only at the mobile root; the same names deeper down are scanned; node_modules is skipped everywhere
+ok 8 - generated directories are skipped only at the mobile root; the same names deeper down are scanned; node_modules is skipped everywhere
+  ---
+  duration_ms: 12.191913
+  type: 'test'
+  ...
+# Subtest: harness allowance: only the root app.config.* may read CAPTAIN_MOBILE_HARNESS, EAS_BUILD and process.argv
+ok 9 - harness allowance: only the root app.config.* may read CAPTAIN_MOBILE_HARNESS, EAS_BUILD and process.argv
+  ---
+  duration_ms: 19.155815
+  type: 'test'
+  ...
+# Subtest: harness variable: never in eas.json; in scripts and workflows only unset, or =1 on one web-only expo export line
+ok 10 - harness variable: never in eas.json; in scripts and workflows only unset, or =1 on one web-only expo export line
+  ---
+  duration_ms: 12.932037
+  type: 'test'
+  ...
+# Subtest: harness exclusion: production exports may hold neither the marker nor a harness/app path; the harness export must hold the marker
+ok 11 - harness exclusion: production exports may hold neither the marker nor a harness/app path; the harness export must hold the marker
+  ---
+  duration_ms: 26.040687
+  type: 'test'
+  ...
+# Subtest: bundle arguments: production directories, at most one --harness-export, and unknown options refused
+ok 12 - bundle arguments: production directories, at most one --harness-export, and unknown options refused
+  ---
+  duration_ms: 0.78798
+  type: 'test'
+  ...
+# Subtest: network: the transport, its injected send and the one expo/fetch binding pass
+ok 13 - network: the transport, its injected send and the one expo/fetch binding pass
+  ---
+  duration_ms: 10.700192
+  type: 'test'
+  ...
+# Subtest: network: expo/fetch may be imported only by src/platform/fetch.ts, and that file must import it
+ok 14 - network: expo/fetch may be imported only by src/platform/fetch.ts, and that file must import it
+  ---
+  duration_ms: 16.643448
+  type: 'test'
+  ...
+# Subtest: network: the forced options are a tripwire in src/platform/native-send.ts
+ok 15 - network: the forced options are a tripwire in src/platform/native-send.ts
+  ---
+  duration_ms: 19.016168
+  type: 'test'
+  ...
+# Subtest: network: no global fetch, other network entry point or synchronous random bytes anywhere in app source
+ok 16 - network: no global fetch, other network entry point or synchronous random bytes anywhere in app source
+  ---
+  duration_ms: 23.738686
+  type: 'test'
+  ...
+# Subtest: network: names in comments and strings, methods of other objects and getRandomBytesAsync are not findings; tests may fake fetch
+ok 17 - network: names in comments and strings, methods of other objects and getRandomBytesAsync are not findings; tests may fake fetch
+  ---
+  duration_ms: 7.647398
+  type: 'test'
+  ...
+# Subtest: comments are removed without disturbing strings
+ok 18 - comments are removed without disturbing strings
+  ---
+  duration_ms: 0.308138
+  type: 'test'
+  ...
+# Subtest: an apostrophe in JSX text does not turn a later comment into a finding
+ok 19 - an apostrophe in JSX text does not turn a later comment into a finding
+  ---
+  duration_ms: 8.465292
+  type: 'test'
+  ...
+# Subtest: exported bundles are refused for server secret names, postgres URLs and canary values; public names and clean bundles pass
+ok 20 - exported bundles are refused for server secret names, postgres URLs and canary values; public names and clean bundles pass
+  ---
+  duration_ms: 7.237008
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 339.767252

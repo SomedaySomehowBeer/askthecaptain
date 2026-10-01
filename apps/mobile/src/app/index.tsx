@@ -1,3 +1,4 @@
+import { groupDates, ThreadAction } from '../threads/Presentation.tsx';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { createListControls } from '../threads/list-controls.ts';
 import { filters, type Row } from '../threads/contracts.ts';
@@ -48,24 +49,23 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
    <PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>} last/>
   </View>
   {busy?<Text testID="threads-loading" style={styles.body}>{copy.loading}</Text>:null}
-  {state.message?<Text testID="threads-status" role="status" style={styles.body}>{state.message}</Text>:null}
+  {state.message?<View style={styles.statusRow}><Text testID="threads-status" role="status" style={[styles.body,{flex:1}]}>{state.message}</Text>{state.phase==='failed'?<ThreadAction testID="threads-refresh" label="Try again" disabled={busy||waiting} onPress={()=>{void controls.load();}}/>:null}</View>:null}
   {paused?<Text style={styles.body}>{copy.paused}</Text>:null}
-  <Button testID="threads-refresh" label="Refresh threads" disabled={busy||waiting||state.phase==='lost'} onPress={()=>{void controls.load();}}/>
   {state.data?.available&&state.data.threads.length===0?<Text testID="threads-empty" style={styles.body}>{copy.empty}</Text>:null}
   {state.data?groupedRows(state.data).map(({group,rows})=><View key={group.key} style={{marginTop:16}}>
    <Pressable testID={`thread-group-${group.key}`} role="button" aria-expanded={!folds.has(group.key)} onPress={()=>toggle(group.key)} style={styles.group}>
     <Text style={styles.groupLabel} numberOfLines={1}>{folds.has(group.key)?'›':'⌄'} {group.label}</Text><Text style={styles.detail}>{group.threads} threads · {group.needsYou} need you</Text>
    </Pressable>
-   {group.owner||group.startsOn||group.endsOn?<Text style={styles.detail}>{[group.owner?.name,group.startsOn,group.endsOn].filter(Boolean).join(' · ')}</Text>:null}
-   {!folds.has(group.key)?rows.map(row=><ThreadRow key={row.id} row={row}/>):null}
+   {group.owner||group.startsOn||group.endsOn?<Text style={styles.detail}>{[group.owner?.name,groupDates(group.startsOn,group.endsOn)].filter(Boolean).join(' · ')}</Text>:null}
+   {!folds.has(group.key)&&rows.length?<View style={styles.groupCard}>{rows.map((row,i)=><ThreadRow key={row.id} row={row} last={i===rows.length-1}/>)}</View>:null}
    {!folds.has(group.key)&&rows.length===0?<Text style={styles.detail}>Load more threads to see this group.</Text>:null}
   </View>):null}
-  {state.data?.nextCursor?<Button testID="threads-more" label="Show more" disabled={busy||waiting} onPress={()=>{void controls.load(true);}}/>:null}
+  {state.data?.nextCursor?<ThreadAction testID="threads-more" label="Show more" disabled={busy||waiting} onPress={()=>{void controls.load(true);}}/>:null}
  </ScrollView><View style={{position:'absolute',right:16,bottom:16}}><Button testID="threads-new" label="New thread" primary disabled={state.phase==='lost'} onPress={()=>router.push('/threads/new')}/></View></View>}/>;
 }
-function ThreadRow({row}:{row:Row}){
- return <Pressable testID={`thread-row-${row.id}`} onPress={()=>router.push(`/threads/${row.id}`)} role="link" style={[styles.threadRow,row.needsYou&&styles.needs]}>
-  <View style={styles.line}><Text style={styles.threadTitle} numberOfLines={1}>{row.title}</Text><Text style={styles.time}>{row.lastMessageAt?new Date(row.lastMessageAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'No messages'}</Text></View>
+function ThreadRow({row,last}:{row:Row;last:boolean}){
+ return <Pressable testID={`thread-row-${row.id}`} onPress={()=>router.push(`/threads/${row.id}`)} role="link" style={[styles.threadRow,last&&{borderBottomWidth:0}]}>
+  <View style={styles.line}><Text style={[styles.threadTitle,row.needsYou&&{fontWeight:'700'}]} numberOfLines={1}>{row.title}</Text><Text style={styles.time}>{row.lastMessageAt?new Date(row.lastMessageAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'No messages'}</Text></View>
   <Text style={styles.facts} numberOfLines={1}>{[row.status,...row.facts].filter(Boolean).join(' · ')}</Text>
   <View style={styles.line}><Text style={styles.preview} numberOfLines={1}>{row.lastMessage?`${firstName(row.lastMessage.authorName)}: ${row.lastMessage.excerpt}`:'No messages yet'}</Text>{row.needsYou?<Text testID={`thread-unread-${row.id}`} accessibilityLabel={row.unread?`${unreadLabel(row.unread)} unread`:'Needs you'} style={styles.pip}>{row.unread?unreadLabel(row.unread):'•'}</Text>:null}</View>
  </Pressable>;
@@ -89,7 +89,7 @@ function PinnedRow({ testID, label, detail, icon, onPress, last = false }: { tes
 }
 
 const styles = StyleSheet.create({
- group:{minHeight:44,flexDirection:'row',alignItems:'center',gap:8},groupLabel:{flex:1,fontSize:16,fontWeight:'600',color:colors.heading},threadRow:{borderWidth:1,borderColor:colors.line,borderRadius:12,padding:10,marginTop:5,backgroundColor:colors.card},needs:{backgroundColor:colors.sage},line:{flexDirection:'row',alignItems:'center',gap:8},threadTitle:{flex:1,minWidth:0,fontSize:15,fontWeight:'600',color:colors.heading},time:{fontSize:11,color:colors.muted},facts:{fontSize:12,color:colors.sageText,marginTop:3},preview:{flex:1,minWidth:0,fontSize:13,color:colors.muted,marginTop:4},pip:{fontSize:12,borderRadius:10,paddingHorizontal:5,backgroundColor:colors.sageText,color:colors.card},
+ statusRow:{flexDirection:'row',alignItems:'center',gap:8},group:{minHeight:36,flexDirection:'row',alignItems:'center',gap:8},groupLabel:{flex:1,fontSize:15,fontWeight:'600',color:colors.heading},groupCard:{borderWidth:1,borderColor:colors.rowLine,borderRadius:12,overflow:'hidden',marginTop:6,backgroundColor:colors.card},threadRow:{borderBottomWidth:1,borderColor:colors.rowLine,paddingHorizontal:12,paddingVertical:8,backgroundColor:colors.card},line:{flexDirection:'row',alignItems:'center',gap:8},threadTitle:{flex:1,minWidth:0,fontSize:14,fontWeight:'500',color:colors.heading},time:{fontSize:11,color:colors.muted},facts:{fontSize:12,color:colors.sageText,marginTop:3},preview:{flex:1,minWidth:0,fontSize:13,color:colors.muted,marginTop:3},pip:{fontSize:11,fontWeight:'600',minWidth:17,textAlign:'center',borderRadius:9,paddingHorizontal:4,backgroundColor:colors.sageText,color:colors.card},
 	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
 	filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },
 	filter: { minHeight: space.minTarget, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },

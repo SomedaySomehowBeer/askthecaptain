@@ -13,7 +13,7 @@ import { Chevron, Magnifier } from './Icons.tsx';
 export type ScreenListFrame = { readonly heading: ReactNode; readonly contentContainerStyle: StyleProp<ViewStyle> };
 
 type Back = { readonly label: string; readonly onPress: () => void };
-type ScreenProps = { title?: string; back?: Back } & (
+type ScreenProps = { title?: string; back?: Back; headerAction?: ReactNode } & (
 	| { children: ReactNode; list?: undefined }
 	/** A page whose content is one virtualised or self-scrolling view (the equipment timeline): `Screen` renders the
 	 *  header, then a bounded, non-scrolling container holding what `list` returns. */
@@ -24,7 +24,7 @@ type ScreenProps = { title?: string; back?: Back } & (
  *  or the organisation's name, and on the right search and the account avatar, which opens `/settings`; then an
  *  optional 26 pt heading and the page. Content keeps a 16 pt gutter and a readable column on wide screens.
  *  Accessibility uses React Native's `role` and `aria-*` props, which iOS, Android and React Native Web all map. */
-export function Screen({ title, back, children, list }: ScreenProps) {
+export function Screen({ title, back, children, list, headerAction }: ScreenProps) {
 	const insets = useSafeAreaInsets();
 	const { snapshot } = useAccount();
 	const account = snapshot.account;
@@ -43,6 +43,7 @@ export function Screen({ title, back, children, list }: ScreenProps) {
 					<View style={styles.crumb}>{organisation === null ? null : <Text testID="shell-organisation" style={styles.crumbText} numberOfLines={1}>{organisation}</Text>}</View>
 				)}
 				<View style={styles.actions}>
+					{headerAction}
 					<Pressable disabled role="button" aria-label={threadsCopy.search} aria-disabled accessibilityHint={threadsCopy.searchHint} style={[styles.round, styles.dim]}>
 						<Magnifier color={colors.muted} />
 					</Pressable>

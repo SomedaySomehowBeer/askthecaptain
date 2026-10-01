@@ -1,3 +1,4 @@
+import { ComposerInput, ThreadAction } from '../../threads/Presentation.tsx';
 import { router } from 'expo-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -10,7 +11,6 @@ import { browserCreates, createNewThread, validCreate } from '../../threads/crea
 import { createOptions } from '../../threads/options.ts';
 import { useDeadline } from '../../threads/use-poll.ts';
 import { copy } from '../../threads/copy.ts';
-import { Button } from '../../components/AccountPage.tsx';
 import { Screen } from '../../components/Screen.tsx';
 import { colors, space } from '../../theme/tokens.ts';
 import Welcome from '../welcome.tsx';
@@ -33,27 +33,27 @@ function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>n
  const toggle=(id:string)=>controls.edit({participantIds:d.participantIds.includes(id)?d.participantIds.filter(p=>p!==id):[...d.participantIds,id]});
  return <Screen back={back} list={()=> <View style={styles.frame}>
   <ScrollView contentContainerStyle={{gap:12,paddingBottom:12}} keyboardShouldPersistTaps="handled">
-   <TextInput testID="new-thread-body" accessibilityLabel="First message" autoFocus multiline placeholder="What's the work?" value={d.body} onChangeText={body=>controls.edit({body})} editable={!locked} maxLength={8000} style={styles.bodyInput}/>
+   <View style={styles.composerRow}><ComposerInput testID="new-thread-body" accessibilityLabel="First message" autoFocus multiline placeholder="What's the work?" value={d.body} onChangeText={body=>controls.edit({body})} editable={!locked} maxLength={8000}/><ThreadAction testID="new-thread-send" label={d.locked?'Retry same thread':'Send'} display={d.locked?'Retry':'Send'} primary disabled={state.busy||state.lost||waiting||d.refused||!validCreate(d)||(!d.locked&&d.private&&(!choices.loaded||choices.busy||d.participantIds.some(id=>!choices.rows.some(m=>m.userId===id))))} onPress={()=>{void controls.send();}}/></View>
    <Pressable testID="new-thread-private" role="switch" aria-checked={d.private} disabled={locked} onPress={()=>controls.edit({private:!d.private})} style={styles.toggle}><Text style={styles.label}>Private</Text><Text style={styles.label}>{d.private?'On':'Off'}</Text></Pressable>
    {d.private?<View testID="new-thread-private-fields" style={{gap:10}}>
     <Text style={styles.hint}>{copy.privacy}</Text>
-    <TextInput testID="new-thread-title" accessibilityLabel="Private thread title" placeholder="Private thread title" value={d.title} onChangeText={title=>controls.edit({title})} editable={!locked} maxLength={80} style={styles.input}/>
+    <TextInput testID="new-thread-title" accessibilityLabel="Private thread title" placeholder="Private thread title" placeholderTextColor={colors.muted} value={d.title} onChangeText={title=>controls.edit({title})} editable={!locked} maxLength={80} style={styles.input}/>
     <Text style={styles.label}>People · {d.participantIds.length} selected</Text><Text style={styles.hint}>You are included. Choose up to 49 other members.</Text>
     {choices.busy?<Text testID="new-members-loading" style={styles.hint}>Loading members…</Text>:null}
     {choices.message?<Text testID="new-members-status" role="status" style={styles.hint}>{choices.message}</Text>:null}
     {choices.loaded&&choices.rows.length===0?<Text testID="new-members-empty" style={styles.hint}>No other members are available. Only you will see this thread.</Text>:null}
     {choices.rows.map(m=><Pressable key={m.userId} testID={`new-member-${m.userId}`} role="checkbox" aria-checked={d.participantIds.includes(m.userId)} disabled={locked||(!d.participantIds.includes(m.userId)&&d.participantIds.length>=49)} onPress={()=>toggle(m.userId)} style={styles.member}><Text style={styles.label}>{m.name||m.email}</Text><Text>{d.participantIds.includes(m.userId)?'✓':'○'}</Text></Pressable>)}
     {d.participantIds.some(id=>!choices.rows.some(m=>m.userId===id))?<Text style={styles.hint}>Some saved selections are not in this member list. {d.locked?'Retry the exact saved request to confirm its outcome.':'Refresh members or clear these selections before sending.'}</Text>:null}
-    {!d.locked&&d.participantIds.length?<Button label="Clear selected people" disabled={state.busy} onPress={()=>controls.edit({participantIds:[]})}/>:null}
-    <Button testID="new-members-refresh" label="Refresh members" disabled={locked||choices.busy||memberWaiting} onPress={()=>{void members.load();}}/>
+    {!d.locked&&d.participantIds.length?<ThreadAction label="Clear selected people" disabled={state.busy} onPress={()=>controls.edit({participantIds:[]})}/>:null}
+    <ThreadAction testID="new-members-refresh" label="Refresh members" disabled={locked||choices.busy||memberWaiting} onPress={()=>{void members.load();}}/>
    </View>:null}
   </ScrollView>
   {state.message?<Text testID="new-thread-status" role="status" style={styles.hint}>{state.message}</Text>:null}
   {waiting?<Text style={styles.hint}>{copy.wait}</Text>:null}
-  <View style={styles.actions}><Button testID="new-thread-send" label={d.locked?'Retry same thread':'Send'} primary disabled={state.busy||state.lost||waiting||d.refused||!validCreate(d)||(!d.locked&&d.private&&(!choices.loaded||choices.busy||d.participantIds.some(id=>!choices.rows.some(m=>m.userId===id))))} onPress={()=>{void controls.send();}}/>
-   {state.pending?<Button testID="new-thread-discard" label="Discard draft" disabled={state.busy} onPress={controls.discard}/>:null}
-   {d.refused?<Button testID="new-thread-new-ids" label="Start again with new IDs" disabled={state.busy||waiting} onPress={controls.newIds}/>:null}
+  <View style={styles.actions}>
+   {state.pending?<ThreadAction testID="new-thread-discard" label="Discard draft" disabled={state.busy} onPress={controls.discard}/>:null}
+   {d.refused?<ThreadAction testID="new-thread-new-ids" label="Start again with new IDs" disabled={state.busy||waiting} onPress={controls.newIds}/>:null}
   </View>
  </View>}/>;
 }
-const styles=StyleSheet.create({frame:{flex:1,maxWidth:space.maxContentWidth,width:'100%',alignSelf:'center',padding:16,gap:12},bodyInput:{minHeight:160,fontSize:18,lineHeight:26,color:colors.body,padding:12,backgroundColor:colors.card,borderWidth:1,borderColor:colors.line,borderRadius:14,textAlignVertical:'top'},input:{fontSize:16,minHeight:48,color:colors.body,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:10,backgroundColor:colors.card},toggle:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderBottomWidth:1,borderColor:colors.line},label:{fontSize:15,color:colors.heading},hint:{fontSize:13,lineHeight:19,color:colors.muted},member:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:10,borderWidth:1,borderColor:colors.line,borderRadius:10},actions:{flexDirection:'row',flexWrap:'wrap',gap:8}});
+const styles=StyleSheet.create({frame:{flex:1,maxWidth:space.maxContentWidth,width:'100%',alignSelf:'center',padding:16,gap:12},composerRow:{flexDirection:'row',alignItems:'flex-end',gap:4,padding:6,backgroundColor:colors.card,borderWidth:1,borderColor:colors.line,borderRadius:14},input:{fontSize:16,minHeight:48,color:colors.body,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:10,backgroundColor:colors.card},toggle:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderBottomWidth:1,borderColor:colors.line},label:{fontSize:15,color:colors.heading},hint:{fontSize:13,lineHeight:19,color:colors.muted},member:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:10,borderWidth:1,borderColor:colors.line,borderRadius:10},actions:{flexDirection:'row',flexWrap:'wrap',gap:8}});
