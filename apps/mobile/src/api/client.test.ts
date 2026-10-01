@@ -510,3 +510,10 @@ test('passkey DELETE uses the bounded transport once, without a body, and reject
  const redirected = fakeSend({ status: 302 });
  assert.deepEqual(await createApiClient(createTransport({ origin, send: redirected.send })).delete(path, null, value => value), { ok: false, kind: 'unavailable', status: 0 });
 });
+
+test('membership PATCH sends the role body once through the bounded transport', async () => {
+ const f = fakeSend({ text: json({ ok: true }) }); const client = createApiClient(createTransport({ origin, send: f.send }));
+ const path = organisationPath('00000000-0000-4000-8000-000000000003', 'members', '00000000-0000-4000-8000-000000000002');
+ assert.deepEqual(await client.patch(path, null, { role: 'admin' }, value => value), { ok: true, value: { ok: true } });
+ assert.equal(f.calls.length, 1); assert.equal(f.calls[0]!.init.method, 'PATCH'); assert.equal(f.calls[0]!.init.body, '{"role":"admin"}'); assert.equal(f.calls[0]!.init.redirect, 'error'); assert.equal(f.calls[0]!.init.headers.authorization, undefined);
+});

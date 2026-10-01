@@ -9,7 +9,7 @@ The root opens Threads with disabled filters, a read-only Equipment schedule lin
 unavailable Team row. Threads are not read yet, so the screen makes no claim about actual
 thread counts. Account provides organisation switching, sign out, sign out everywhere else,
 and web passkey listing, naming at registration, and removal. The invitation page accepts an invitation once and reports an
-uncertain response without replaying the write. Members, push devices and organisation export/deletion controls are later work.
+uncertain response without replaying the write. Owners and admins can open Members from Settings to create and revoke invitation links, change roles and remove members. These controls currently use the web cookie session; native shows an unavailable notice. Push devices and organisation export/deletion controls are later work.
 
 ## Sessions
 
@@ -51,7 +51,7 @@ The browser suite exercises the production session source against synthetic API 
 360, 390, 430 and 1280 pixels, plus the retained equipment and session-revocation harness at
 phone widths. It covers route retention, organisation memory, sign-out failure, invitations,
 passkey listing, browser WebAuthn registration and an assertion with the new credential,
-removal, failures and uncertain-write reconciliation. Registration and verify responses are mocked; API cookie,
+removal, failures and uncertain-write reconciliation. Members checks cover invitations, roles, removals, permissions and organisation changes. Registration and verify responses are mocked; API cookie,
 CSRF, revocation and step-up tests in `apps/api/src/web/session.test.ts` require real throwaway
 Postgres and provide separate server evidence.
 

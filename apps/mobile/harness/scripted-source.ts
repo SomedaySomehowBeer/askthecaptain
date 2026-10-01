@@ -1,3 +1,4 @@
+import { memberHarness } from './member-fixtures.ts';
 import { passkeyHarness } from './passkey-fixtures.ts';
 import type { AccountSource } from '../src/account/account-source.ts';
 import { outsideSnapshots } from '../src/account/account-source.ts';
@@ -33,7 +34,7 @@ export const harnessOrgC: Membership = Object.freeze({ organisationId: 'feedface
 export const timedWaitMs = 5_000;
 
 export const scenarioNames = [
-	'passkeys-empty', 'passkeys-loaded', 'passkeys-unavailable', 'passkeys-failed', 'ready', 'ready-destination', 'misconfigured', 'starting', 'starting-slow', 'startup-failed',
+	'members-owner', 'members-admin', 'members-empty', 'members-failed', 'members-refused', 'members-denied', 'members-none', 'passkeys-empty', 'passkeys-loaded', 'passkeys-unavailable', 'passkeys-failed', 'ready', 'ready-destination', 'misconfigured', 'starting', 'starting-slow', 'startup-failed',
 	'storage-unavailable', 'storage-unreadable', 'signed-out', 'signed-out-busy', 'signed-out-cancelled', 'signed-out-released',
 	'signing-in', 'closing', 'saving', 'checking', 'unverified', 'unverified-retry-at', 'releasing', 'releasing-warning',
 	'releasing-retry-at', 'choose', 'none', 'lost-named', 'lost-unnamed', 'not-remembered', 'refreshing', 'fault',
@@ -68,7 +69,11 @@ const signedIn = (overrides: Partial<Extract<AccountView, { kind: 'signed-in' }>
 
 function scenario(name: ScenarioName, wait: Wait): AccountSnapshot {
 	switch (name) {
+		case 'members-admin': return snap(signedIn({ org: { kind: 'chosen', membership: { ...harnessOrgA, role: 'admin' } } }));
+		case 'members-denied': return snap(signedIn({ org: { kind: 'chosen', membership: { ...harnessOrgA, role: 'member' } } }));
+		case 'members-none': return snap(signedIn({ org: { kind: 'none' }, memberships: [] }));
 		case 'passkeys-empty': case 'passkeys-loaded': case 'passkeys-unavailable': case 'passkeys-failed':
+		case 'members-owner': case 'members-empty': case 'members-failed': case 'members-refused':
 		case 'ready': return snap(signedIn());
 		case 'ready-destination': return snap(signedIn({ destination: '/equipment' }));
 		case 'misconfigured': return outsideSnapshots.misconfigured;
@@ -264,7 +269,7 @@ export function createScriptedSource(name: ScenarioName, options: {
 
 
 	return Object.freeze({
-		web: name.startsWith('passkeys-') ? passkeyHarness(name, () => currentPerson()?.epoch ?? null) : null,
+		web: name.startsWith('members-') ? memberHarness(name, () => { const account = current.account; return account.kind === 'signed-in' && account.scope && account.org.kind === 'chosen' ? { ...account.scope, role: account.org.membership.role } : null; }) : name.startsWith('passkeys-') ? passkeyHarness(name, () => currentPerson()?.epoch ?? null) : null,
 		revokeOthers,
 		revocationView,
 		revocations: () => revocationSent,

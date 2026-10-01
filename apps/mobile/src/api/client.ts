@@ -38,7 +38,7 @@ export type BodyReader = {
  *  stream (`expo/fetch`, browser and Node responses all have one). In the app it is `nativeSend` (src/platform/fetch.ts);
  *  tests pass fakes. */
 export type Send = (url: string, init: {
-	method: 'GET' | 'POST' | 'DELETE'; headers: Record<string, string>; body?: string; redirect: 'error'; signal: AbortSignal
+	method: 'GET' | 'POST' | 'DELETE' | 'PATCH'; headers: Record<string, string>; body?: string; redirect: 'error'; signal: AbortSignal
 }) => Promise<{
 	status: number; redirected: boolean; url: string; headers: { get(name: string): string | null };
 	readonly body: { getReader(): BodyReader } | null
@@ -59,7 +59,7 @@ export type Transport = {
 	readonly origin: string;
 	/** Sends one request, once. `token` must be a well-formed session token or null (anything else throws before
 	 *  sending); `body`, when given, is sent as JSON. */
-	request(method: 'GET' | 'POST' | 'DELETE', path: ApiPath, token: string | null, body?: unknown): Promise<Answer>;
+	request(method: 'GET' | 'POST' | 'DELETE' | 'PATCH', path: ApiPath, token: string | null, body?: unknown): Promise<Answer>;
 };
 
 /** The shape of every session token the API issues: `sess_` and 32 random bytes in base64url (apps/api/src/auth/
@@ -198,13 +198,14 @@ export function createTransport(options: { origin: string; send: Send; timeoutMs
 /** The ApiClient the account runner uses. A malformed token is never sent: it answers `unauthorised`. The native
  *  exchange is not reachable through it; the attempt core owns that single request. */
 export function createApiClient(transport: Transport): ApiClient {
-	const call = async <T>(method: 'GET' | 'POST' | 'DELETE', path: ApiPath, token: string | null, body: unknown, parse: Parse<T>): Promise<ApiOutcome<T>> => {
+	const call = async <T>(method: 'GET' | 'POST' | 'DELETE' | 'PATCH', path: ApiPath, token: string | null, body: unknown, parse: Parse<T>): Promise<ApiOutcome<T>> => {
 		if (path === apiPaths.nativeExchange) throw new TypeError('client: the native exchange belongs to the attempt core');
 		if (token !== null && !sessionToken.test(token)) return { ok: false, kind: 'unauthorised' };
 		return apiOutcome(await transport.request(method, path, token, body), parse);
 	};
 	return {
 		get: (path, token, parse) => call('GET', path, token, undefined, parse),
+		patch: (path, token, body, parse) => call('PATCH', path, token, body, parse),
 		delete: (path, token, parse) => call('DELETE', path, token, undefined, parse),
 		post: (path, token, body, parse) => call('POST', path, token, body, parse)
 	};

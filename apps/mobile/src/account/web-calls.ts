@@ -1,3 +1,4 @@
+import { createMembersCalls, type MemberScope, type MembersCalls } from './members.ts';
 /** The web-only requests the account source makes for its screens (docs/plans/expo-web-session-2026-09.md §B.2):
  *  the passkey step-up, passkey management and accepting an invitation. Pure over the injected API client (no session
  *  token: on the web the cookie is the session), so node tests use fakes; src/account/web-session.ts builds it with its own
@@ -88,6 +89,7 @@ const parseRemoved = (value: unknown): true => {
 	return true;
 };
 export type WebCalls = {
+	readonly members: MembersCalls;
 	/** The one sign-in link (§B.2): `{origin}/auth/google/start?return_to={path}`, a plain navigation in the same tab.
 	 *  `returnTo` is kept only as a same-origin path that is not a sign-in page; otherwise `/`. */
 	signInUrl(returnTo: string | null): string;
@@ -104,6 +106,7 @@ export type WebCalls = {
 export type WebCallHooks = {
 	/** An opaque account epoch, or null when not signed in. */
 	readonly accountEpoch: () => string | null;
+	readonly memberScope?: () => MemberScope | null;
 	readonly accepted: (membership: Membership) => void;
 	readonly sessionEnded: () => void;
 	readonly reconcileMemberships?: () => void;
@@ -126,6 +129,7 @@ export function createWebCalls(client: ApiClient, origin: string, hooks: WebCall
 		return { kind: 'failed', uncertain: write && answer.kind === 'unavailable', retryAfter: answer.kind === 'unavailable' ? answer.retryAfter ?? 0 : 0, code: answer.kind === 'refused' ? answer.code : 'unavailable' };
 	};
 	return Object.freeze({
+		members: createMembersCalls(client, origin, { scope: hooks.memberScope ?? (() => null), sessionEnded: hooks.sessionEnded, reconcile: hooks.reconcileMemberships ?? (() => {}) }),
 		async addPasskey(name: string, create: (options: unknown) => Promise<unknown>, active: () => boolean): Promise<PasskeyMutation> {
 			const epoch = hooks.accountEpoch();
 			const current = () => epoch !== null && hooks.accountEpoch() === epoch && active();

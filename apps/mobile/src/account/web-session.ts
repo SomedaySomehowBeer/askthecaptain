@@ -261,7 +261,7 @@ export function createWebSession(deps: WebSessionDeps): WebAccountSource {
 		}
 	};
 
-	const web: WebCalls = createWebCalls(client, deps.origin, { accountEpoch, accepted, sessionEnded, reconcileMemberships: () => { meRevision += 1; loadMe(true); } });
+	const web: WebCalls = createWebCalls(client, deps.origin, { accountEpoch, accepted, sessionEnded, memberScope: () => { const current = scope(); return current && state.kind === 'signed-in' && state.org.kind === 'chosen' ? { ...current, role: state.org.membership.role } : null; }, reconcileMemberships: () => { meRevision += 1; loadMe(true); } });
 
 	return Object.freeze({
 		start() { if (!started) { started = true; loadMe(true); } },

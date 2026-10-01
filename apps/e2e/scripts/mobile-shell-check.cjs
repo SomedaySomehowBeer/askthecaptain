@@ -99,6 +99,7 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
     const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
     await cdp.send('WebAuthn.addCredential', { authenticatorId, credential: { credentialId: Buffer.from('synthetic credential').toString('base64'), isResidentCredential: false, rpId: production.hostname, privateKey: privateKey.export({ type: 'pkcs8', format: 'der' }).toString('base64'), signCount: 0 } });
     identity = 'signed-out'; await go('/auth/passkey'); await expect(heading('Account')).toBeVisible(); expect(assertion?.response?.signature).toBeTruthy(); await cdp.send('WebAuthn.removeVirtualAuthenticator', { authenticatorId }); await cdp.detach();
+    await require('./mobile-shell-members-check.cjs')({ browser, production, base, shots, width });
     // Retain deeper read-only timeline and revocation UI regression checks at phone widths.
     if (width < 500) {
      await require('./mobile-shell-passkeys-check.cjs')({ browser, production, base, shots, width });
