@@ -5,7 +5,7 @@ import { createApp } from './app.ts';
 import type { IdentityProvider } from './auth/google.ts';
 import { AuthService } from './auth/service.ts';
 import { SeriesRoutine, startSeriesSchedule } from './commitments/routine.ts';
-import { CommitmentsService, type Project, type Series, type Task } from './commitments/service.ts';
+import { CommitmentsService, type Series, type Task } from './commitments/service.ts';
 import { todayIn } from './commitments/series.ts';
 import { OrganisationService } from './organisations/service.ts';
 
@@ -37,24 +37,25 @@ before(async () => {
 });
 after(async () => { await db?.close(); });
 
-type Detail = { task: Task; project: Project | null; checklist: { tasks: Task[]; nextOffset: number | null }; evidenceNextOffset: number | null; today: string; timezone: string };
+type Detail = { task: Task; tags: { items: { id: string; name: string }[] }; checklist: { tasks: Task[]; nextOffset: number | null }; evidenceNextOffset: number | null; today: string; timezone: string };
 type WorkRow = { id: string; seriesId: string | null; periodStart?: string; title: string; revision: number };
 const detail = (id: string, token = owner.token) => json('GET', `/v1/organisations/${orgId}/tasks/${id}`, token);
 const occurrencesOf = async (seriesId: string) => (await body<{ tasks: WorkRow[] }>(await json('GET', `/v1/organisations/${orgId}/tasks?seriesId=${seriesId}&limit=100`, owner.token), 200)).tasks;
 const revisionOf = async (id: string) => (await body<Detail>(await detail(id), 200)).task.revision;
 
-it('a new organisation has no project, the retired overview is gone, and reading creates nothing', async () => {
-	assert.deepEqual((await body<{ projects: Project[] }>(await json('GET', `/v1/organisations/${orgId}/projects`, owner.token), 200)).projects, []);
+it('a new organisation has no tag, the retired overview and project routes are gone, and reading creates nothing', async () => {
+	assert.equal((await json('GET', `/v1/organisations/${orgId}/projects`, owner.token)).status, 404, 'projects are tags since 0046');
 	const retired = await json('GET', `/v1/organisations/${orgId}/commitments`, owner.token);
 	assert.equal(retired.status, 410); assert.equal(((await retired.json()) as { code: string }).code, 'legacy_feature_retired');
-	assert.equal((await db.owner`select count(*)::int as n from projects where organisation_id = ${orgId}`)[0]!.n, 0);
+	assert.equal((await db.owner`select count(*)::int as n from tags where organisation_id = ${orgId}`)[0]!.n, 0);
 	assert.deepEqual((await body<{ series: Series[] }>(await json('GET', `/v1/organisations/${orgId}/series`, owner.token), 200)).series, []);
 });
 
-it('a task without a project stands alone, is completed with who and when, and is audited', async () => {
+it('a task stands alone with its own thread, is completed with who and when, and is audited', async () => {
 	const task = await body<Task>(await json('POST', `/v1/organisations/${orgId}/tasks`, owner.token, { title: '  Send updated price list ', due: '2026-10-01' }), 201);
-	assert.equal(task.projectId, null); assert.equal(task.revision, 1);
-	assert.equal((await db.owner`select count(*)::int as n from projects where organisation_id = ${orgId}`)[0]!.n, 0, 'no project is created for it');
+	assert.ok(!('projectId' in task), 'a task has no project'); assert.equal(task.revision, 1);
+	assert.equal((await db.owner`select count(*)::int as n from threads where task_id = ${task.id}`)[0]!.n, 1, 'its record thread');
+	assert.equal((await json('POST', `/v1/organisations/${orgId}/tasks`, owner.token, { title: 'With a project', projectId: task.id })).status, 400, 'projectId is retired');
 	assert.equal(task.title, 'Send updated price list'); assert.equal(task.due, '2026-10-01'); assert.equal(task.status, 'open'); assert.equal(task.sourceKind, 'person');
 	assert.equal(task.ownerName, null);
 	const done = await body<Task>(await json('PATCH', `/v1/organisations/${orgId}/tasks/${task.id}`, owner.token, { expectedRevision: 1, status: 'done', ownerId: owner.user.id }), 200);
@@ -69,22 +70,6 @@ it('a task without a project stands alone, is completed with who and when, and i
 	assert.equal((await json('PATCH', `/v1/organisations/${orgId}/tasks/${task.id}`, owner.token, { title: 'No precondition' })).status, 400, 'an edit must name its revision');
 });
 
-it('projects are created, edited, archived and restored with revisions, listed by state, and none is special', async () => {
-	const project = await body<Project>(await json('POST', `/v1/organisations/${orgId}/projects`, owner.token, { name: 'Production', stages: ['Planned', ' Brewing ', ''] }), 201);
-	assert.deepEqual(project.stages, ['Planned', 'Brewing']); assert.equal(project.revision, 1);
-	const archived = await body<Project>(await json('PATCH', `/v1/organisations/${orgId}/projects/${project.id}`, owner.token, { expectedRevision: 1, description: 'Brew days', archived: true }), 200);
-	assert.ok(archived.archivedAt); assert.equal(archived.description, 'Brew days'); assert.equal(archived.revision, 2);
-	assert.equal((await json('PATCH', `/v1/organisations/${orgId}/projects/${project.id}`, owner.token, { expectedRevision: 1, archived: false })).status, 409, 'a stale edit is refused');
-	assert.equal((await json('POST', `/v1/organisations/${orgId}/tasks`, owner.token, { title: 'Package batch 42', projectId: project.id })).status, 400, 'no tasks in an archived project');
-	const list = async (state: string) => (await body<{ projects: Project[] }>(await json('GET', `/v1/organisations/${orgId}/projects?state=${state}`, owner.token), 200)).projects.map((p) => p.name);
-	assert.deepEqual([await list('active'), await list('archived')], [[], ['Production']]);
-	const restored = await body<Project>(await json('PATCH', `/v1/organisations/${orgId}/projects/${project.id}`, owner.token, { expectedRevision: 2, archived: false }), 200);
-	assert.equal(restored.archivedAt, null);
-	const one = await body<Project>(await json('GET', `/v1/organisations/${orgId}/projects/${project.id}`, owner.token), 200);
-	assert.equal(one.revision, 3); assert.ok(!('systemKind' in one), 'projects no longer carry a system kind');
-	assert.deepEqual(await list('active'), ['Production']);
-});
-
 it('a series materialises its current occurrence once, and editing it changes future occurrences only', async () => {
 	const series = await body<Series>(await json('POST', `/v1/organisations/${orgId}/series`, owner.token, { title: 'Excise return', recurrence: 'monthly', anchor: '2026-01-01', dueOffsetDays: 21, evidenceRequired: true }), 201);
 	const today = todayIn('Australia/Perth');
@@ -93,7 +78,7 @@ it('a series materialises its current occurrence once, and editing it changes fu
 	assert.equal(occurrences.length, 1, 'exactly one occurrence after creation and a read');
 	const occurrence = (await body<Detail>(await detail(occurrences[0]!.id), 200)).task;
 	assert.equal(occurrence.sourceKind, 'series'); assert.equal(occurrence.periodStart, `${today.slice(0, 7)}-01`); assert.match(occurrence.title, /^Excise return — /);
-	assert.equal(occurrence.projectId, null, 'a series without a project makes standalone occurrences');
+	assert.deepEqual((await body<Detail>(await detail(occurrence.id), 200)).tags.items, [], 'a series without tags makes untagged occurrences');
 	const renamed = await body<Series>(await json('PATCH', `/v1/organisations/${orgId}/series/${series.id}`, owner.token, { expectedRevision: 1, title: 'Excise duty return' }), 200);
 	assert.equal(renamed.title, 'Excise duty return'); assert.equal(renamed.revision, 2);
 	assert.equal((await body<Series>(await json('GET', `/v1/organisations/${orgId}/series/${series.id}`, owner.token), 200)).title, 'Excise duty return');
@@ -134,14 +119,37 @@ it('evidence is attached and removed against the task revision, and a retried re
 	assert.equal(await revisionOf(task.id), 3);
 });
 
-it('work options take projectId as absent (all), none (standalone) or a UUID, and refuse anything else', async () => {
+it('work options list top-level tasks and take no project', async () => {
 	const options = (query: string) => json('GET', `/v1/organisations/${orgId}/work/options?${query}`, owner.token);
-	const labels = async (query: string) => (await body<{ tasks: { items: { label: string; projectId: string | null }[] } }>(await options(query), 200)).tasks.items;
-	assert.ok((await labels('projectId=none')).every((t) => t.projectId === null));
-	const [project] = await db.owner`select id from projects where organisation_id = ${orgId} and state = 'active' limit 1`;
-	assert.ok((await labels(`projectId=${String(project!.id).toUpperCase()}`)).every((t) => t.projectId === project!.id), 'a UUID in any case');
-	assert.ok((await labels('')).length >= (await labels('projectId=none')).length);
-	for (const bad of ['projectId=', 'projectId=null', 'projectId=abc']) assert.equal((await options(bad)).status, 400, bad);
+	const labels = async (query: string) => (await body<{ tasks: { items: { label: string }[] } }>(await options(query), 200)).tasks.items;
+	assert.ok((await labels('')).length > 0);
+	assert.ok((await labels('q=price')).every((t) => /price/i.test(t.label)));
+	for (const bad of ['projectId=none', 'projectOffset=0']) assert.equal((await options(bad)).status, 400, bad);
+});
+
+it('a series carries tags, and each occurrence receives them on its thread in the same transaction', async () => {
+	const tag = await body<{ id: string }>(await json('POST', `/v1/organisations/${orgId}/tags`, owner.token, { name: 'Compliance' }), 201);
+	const series = await body<Series>(await json('POST', `/v1/organisations/${orgId}/series`, owner.token, { title: 'BAS', recurrence: 'quarterly', anchor: '2026-01-01', tagIds: [tag.id] }), 201);
+	assert.deepEqual(series.tagIds, [tag.id]); assert.ok(!('projectId' in series));
+	const [occurrence] = await occurrencesOf(series.id);
+	assert.deepEqual((await body<Detail>(await detail(occurrence!.id), 200)).tags.items.map((t) => t.id), [tag.id], 'the occurrence’s thread carries the series’ tags');
+	const thread = (await db.owner`select id from threads where task_id = ${occurrence!.id}`)[0]!.id;
+	assert.deepEqual((await db.owner`select action from chat_audit_events where thread_id = ${thread}`).map((r) => r.action), ['chat.tag_added'], 'a person’s thread write');
+	// The routine (no person) does the same and records the tag ids on the occurrence's own audit row.
+	const routine = new SeriesRoutine(db.app, commitments);
+	assert.ok(await routine.run(orgId, '2099-04-15') >= 1);
+	const later = (await occurrencesOf(series.id)).find((t) => t.id !== occurrence!.id)!;
+	assert.deepEqual((await body<Detail>(await detail(later.id), 200)).tags.items.map((t) => t.id), [tag.id]);
+	const [materialised] = await db.owner`select detail from audit_events where subject_id = ${later.id} and action = 'task.materialised'`;
+	assert.deepEqual(materialised!.detail.tagIds, [tag.id]);
+	// Editing the series' tags changes future occurrences only.
+	const other = await body<{ id: string }>(await json('POST', `/v1/organisations/${orgId}/tags`, owner.token, { name: 'Tax' }), 201);
+	const edited = await body<Series>(await json('PATCH', `/v1/organisations/${orgId}/series/${series.id}`, owner.token, { expectedRevision: series.revision, tagIds: [other.id] }), 200);
+	assert.deepEqual(edited.tagIds, [other.id]);
+	assert.deepEqual((await body<Detail>(await detail(later.id), 200)).tags.items.map((t) => t.id), [tag.id]);
+	await body(await json('PATCH', `/v1/organisations/${orgId}/series/${series.id}`, owner.token, { expectedRevision: edited.revision, paused: true }), 200);
+	assert.equal((await json('POST', `/v1/organisations/${orgId}/series`, owner.token, { title: 'Odd', recurrence: 'monthly', anchor: '2026-01-01', tagIds: ['00000000-0000-4000-8000-000000000000'] })).status, 404);
+	assert.equal((await json('POST', `/v1/organisations/${orgId}/series`, owner.token, { title: 'Odd', recurrence: 'monthly', anchor: '2026-01-01', projectId: tag.id })).status, 400, 'projectId is retired');
 });
 
 it('a stranger cannot see or touch another organisation\'s work', async () => {

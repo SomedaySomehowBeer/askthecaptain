@@ -104,8 +104,9 @@ export class SavedViewsService {
   return row;
  }
 
- /** At save time every referenced tag and project must exist in this organisation. A project may be archived or
-  *  proposed: naming a project in Work is an explicit request for its tasks. */
+ /** At save time every referenced tag and project must exist in this organisation. Since 0046 a project is a tag, so
+  *  `projectId` names a tag (0046 moved merged projects' ids to their namesake tags); it may be archived. Saved views
+  *  are retired with R5 (D26); the filter keeps its stored shape until then. */
  private async checkReferences(tx: TransactionSql, filter: WorkFilter) {
   if (filter.tagIds.length) {
    const found = await tx<{ id: string }[]>`select id from tags where id in ${tx(filter.tagIds)}`;
@@ -113,7 +114,7 @@ export class SavedViewsService {
     throw new HttpError(400, 'filter_reference_unavailable', 'A tag in this filter does not exist in this organisation. Remove it and save again.', 'tagIds');
   }
   if (filter.projectId) {
-   const [project] = await tx`select id from projects where id = ${filter.projectId}`;
+   const [project] = await tx`select id from tags where id = ${filter.projectId}`;
    if (!project) throw new HttpError(400, 'filter_reference_unavailable', 'The project in this filter does not exist in this organisation. Choose another project and save again.', 'projectId');
   }
  }
@@ -165,8 +166,8 @@ export class SavedViewsService {
  }
  private async projectReference(actor: Actor, organisationId: string, projectId: string): Promise<ProjectReference> {
   try {
-   const [project] = await this.referenceRead(actor, organisationId, tx => tx<{ id: string; name: string; state: 'active' | 'proposed' | 'archived' }[]>`
-    select id, name, state from projects where id = ${projectId}`);
+   const [project] = await this.referenceRead(actor, organisationId, tx => tx<{ id: string; name: string; state: 'active' | 'archived' }[]>`
+    select id, name, case when archived_at is null then 'active' else 'archived' end as state from tags where id = ${projectId}`);
    return project ? { id: projectId, state: 'available', name: project.name, projectState: project.state } : { id: projectId, state: 'missing' };
   } catch (error) {
    console.error(`[${actor.requestId}] saved view project name could not be read`, error instanceof Error ? error.message : error);

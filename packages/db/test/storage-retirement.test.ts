@@ -21,7 +21,8 @@ const retiredFunctions = ['gmail_sync_organisations()', 'calendar_sync_organisat
 const fp = (value: string) => createHash('sha256').update(value).digest();
 
 let latest: Harness;
-before(async () => { if (databaseUrl) latest = await freshDatabase(); });
+// 0046 drops projects and the 0042/0043 tables this file checks were retained, so every case stops at 0045.
+before(async () => { if (databaseUrl) latest = await freshDatabase({ through: migration }); });
 after(async () => { await latest?.close(); });
 
 async function present(owner: Sql) {
@@ -45,7 +46,7 @@ async function organisation(owner: Sql, name: string) {
 it('the latest schema has none of the retired storage, keeps what the plan retains, and migrating again changes nothing', async () => {
 	assert.deepEqual(await present(latest.owner), { tables: [], columns: [], functions: [] });
 	assert.equal((await applied(latest.owner)).at(-1), migration);
-	assert.deepEqual(await applyMigrations(latest.owner), [], 'a second run applies nothing');
+	assert.deepEqual(await applyMigrations(latest.owner, undefined, migration), [], 'a second run applies nothing');
 	// Retained on purpose (plan R5b step 5).
 	assert.equal((await latest.owner`select 1 from pg_extension where extname = 'vector'`).length, 1, 'the vector extension stays (0030 needs it)');
 	const projectColumns = (await latest.owner<{ name: string }[]>`select column_name as name from information_schema.columns where table_schema = 'public' and table_name = 'projects'`).map((r) => r.name);
@@ -71,7 +72,7 @@ it('a legacy table with a row stops the migration; nothing is dropped, deleted o
 	try {
 		const { org } = await organisation(db.owner, 'Unknown writer');
 		await db.owner`insert into mail_senders (organisation_id, email) values (${org}, 'sender@example.test')`;
-		await assert.rejects(applyMigrations(db.owner), /migration 0045 refused: mail_senders has rows; nothing was dropped/);
+		await assert.rejects(applyMigrations(db.owner, undefined, migration), /migration 0045 refused: mail_senders has rows; nothing was dropped/);
 		assert.equal((await applied(db.owner)).at(-1), before0045, '0045 is not recorded');
 		assert.deepEqual(await present(db.owner), { tables: retiredTables, columns: retiredColumns.map(([t, c]) => `${t}.${c}`).sort(), functions: retiredFunctions }, 'nothing dropped');
 		assert.equal((await db.owner`select 1 from mail_senders where organisation_id = ${org}`).length, 1, 'the row is kept, not deleted');
@@ -86,17 +87,17 @@ it('a set retained column stops the migration even with every legacy table empty
 			values ('r5b-probe', 1, 'Probe', 'A retained enablement', 5, '[]', '{}', '[]', 'probe')`;
 		const [enablement] = await db.owner<{ id: string }[]>`insert into workflow_enablements (organisation_id, definition_key, definition_version, enabled, parameters, mail_cursor)
 			values (${org}, 'r5b-probe', 1, true, ${db.owner.json({ keep: 'me' })}, ${randomUUID()}) returning id`;
-		await assert.rejects(applyMigrations(db.owner), /migration 0045 refused: workflow_enablements\.mail_cursor or sent_cursor is set/);
+		await assert.rejects(applyMigrations(db.owner, undefined, migration), /migration 0045 refused: workflow_enablements\.mail_cursor or sent_cursor is set/);
 		await db.owner`update workflow_enablements set mail_cursor = null, sent_cursor = ${randomUUID()} where id = ${enablement!.id}`;
-		await assert.rejects(applyMigrations(db.owner), /migration 0045 refused: workflow_enablements\.mail_cursor or sent_cursor is set/, 'sent_cursor alone also stops it');
+		await assert.rejects(applyMigrations(db.owner, undefined, migration), /migration 0045 refused: workflow_enablements\.mail_cursor or sent_cursor is set/, 'sent_cursor alone also stops it');
 		assert.equal((await applied(db.owner)).at(-1), before0045);
 		assert.equal((await present(db.owner)).tables.length, retiredTables.length, 'nothing dropped');
 		await db.owner`update workflow_enablements set sent_cursor = null where id = ${enablement!.id}`;
-		assert.deepEqual(await applyMigrations(db.owner), [migration]);
+		assert.deepEqual(await applyMigrations(db.owner, undefined, migration), [migration]);
 		assert.deepEqual(await present(db.owner), { tables: [], columns: [], functions: [] });
 		const [kept] = await db.owner`select organisation_id, definition_key, enabled, parameters from workflow_enablements where id = ${enablement!.id}`;
 		assert.deepEqual({ ...kept }, { organisationId: org, definitionKey: 'r5b-probe', enabled: true, parameters: { keep: 'me' } });
-		assert.deepEqual(await applyMigrations(db.owner), [], 'a second run applies nothing');
+		assert.deepEqual(await applyMigrations(db.owner, undefined, migration), [], 'a second run applies nothing');
 	} finally { await db.close(); }
 });
 
@@ -108,7 +109,7 @@ it('a set contacts.last_thread_id stops the migration with every legacy table em
 		// it here lets the column guard be reached on its own; the column still exists, so the migration still drops it.
 		await db.owner`alter table contacts drop constraint contacts_organisation_id_last_thread_id_fkey`;
 		await db.owner`insert into contacts (organisation_id, email, source, last_thread_id) values (${org}, 'linked@example.test', 'mail', ${randomUUID()})`;
-		await assert.rejects(applyMigrations(db.owner), /migration 0045 refused: contacts\.last_thread_id is set; nothing was dropped/);
+		await assert.rejects(applyMigrations(db.owner, undefined, migration), /migration 0045 refused: contacts\.last_thread_id is set; nothing was dropped/);
 		assert.equal((await applied(db.owner)).at(-1), before0045);
 		assert.deepEqual(await present(db.owner), { tables: retiredTables, columns: retiredColumns.map(([t, c]) => `${t}.${c}`).sort(), functions: retiredFunctions });
 	} finally { await db.close(); }
@@ -120,7 +121,7 @@ it('an unknown dependency on a legacy table fails the migration and rolls back e
 		// Something outside the plan depends on `answers`, which is dropped late: by then both columns and most tables are
 		// already gone inside the transaction. Without CASCADE the drop fails, and the whole migration must roll back.
 		await db.owner`create view r5b_unknown_reader as select organisation_id, question from answers`;
-		await assert.rejects(applyMigrations(db.owner), /cannot drop table answers because other objects depend on it/);
+		await assert.rejects(applyMigrations(db.owner, undefined, migration), /cannot drop table answers because other objects depend on it/);
 		assert.equal((await applied(db.owner)).at(-1), before0045, '0045 is not recorded');
 		assert.deepEqual(await present(db.owner), { tables: retiredTables, columns: retiredColumns.map(([t, c]) => `${t}.${c}`).sort(), functions: retiredFunctions },
 			'the columns and the tables dropped before answers are all back');
@@ -129,7 +130,7 @@ it('an unknown dependency on a legacy table fails the migration and rolls back e
 		assert.equal((await db.owner`select 1 from pg_views where viewname = 'r5b_unknown_reader'`).length, 1, 'nothing was dropped to make room');
 		// Once the unknown dependency is resolved deliberately, the migration applies.
 		await db.owner`drop view r5b_unknown_reader`;
-		assert.deepEqual(await applyMigrations(db.owner), [migration]);
+		assert.deepEqual(await applyMigrations(db.owner, undefined, migration), [migration]);
 		assert.deepEqual(await present(db.owner), { tables: [], columns: [], functions: [] });
 	} finally { await db.close(); }
 });
@@ -173,7 +174,7 @@ it('Work, contacts, provenance and chat survive the migration unchanged and stay
 			memberships: (await db.owner`select count(*)::int as n from memberships where organisation_id in (${org}, ${other.org})`)[0]!.n
 		});
 		const beforeRows = await snapshot();
-		assert.deepEqual(await applyMigrations(db.owner), [migration]);
+		assert.deepEqual(await applyMigrations(db.owner, undefined, migration), [migration]);
 		assert.deepEqual(await snapshot(), beforeRows, 'every retained row is unchanged');
 		// The runtime role still sees exactly its own tenant's Work and chat, and nothing of the other organisation.
 		const seen = await withTenant(db.app, { organisationId: other.org, userId: other.user }, async (tx: TransactionSql) => ({

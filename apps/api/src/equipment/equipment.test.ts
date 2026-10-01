@@ -19,16 +19,16 @@ type Person = { token: string; user: { id: string } };
 type Equipment = { id: string; name: string; archivedAt: string | null; revision: number; createdAt: string; updatedAt: string };
 type Reservation = { id: string; equipmentId: string; title: string; kind: 'booking' | 'maintenance'; status: 'confirmed' | 'cancelled';
 	startsAt: string; endsAt: string; setupMinutes: number; cleanupMinutes: number; occupiedStartsAt: string; occupiedEndsAt: string;
-	projectId: string | null; taskId: string | null; ownerId: string | null; createdBy: string; revision: number; createdAt: string; updatedAt: string };
+	tagIds: string[]; taskId: string | null; ownerId: string | null; createdBy: string; revision: number; createdAt: string; updatedAt: string };
 type Range = { reservations: Reservation[]; nextOffset: number | null; coverage: 'complete' | 'partial'; from: string; to: string; timezone: string };
 type Failure = { code: string; error: string };
-let owner: Person, member: Person, outsider: Person, org: string, otherOrg: string, project: string, task: string;
+let owner: Person, member: Person, outsider: Person, org: string, otherOrg: string, tag: string, task: string;
 const google: IdentityProvider & { next: { subject: string; email: string; name: string } } = {
 	next: { subject: 'owner', email: 'owner@example.test', name: 'Owner' },
 	authorizationUrl: ({ state }) => `https://google.test/auth?state=${state}`, async exchange() { return google.next; },
 };
 /** The stored revision, for requests that are not testing staleness. */
-const rev = async (table: 'tasks' | 'projects' | 'task_series', id: string) => Number((await db.owner.unsafe(`select revision from ${table} where id = $1`, [id]))[0]!.revision);
+const rev = async (table: 'tasks' | 'tags' | 'task_series', id: string) => Number((await db.owner.unsafe(`select revision from ${table} where id = $1`, [id]))[0]!.revision);
 const request = (method: string, path: string, person?: Person, data?: unknown) => app.request(path, { method,
 	headers: { 'content-type': 'application/json', ...(person ? { authorization: `Bearer ${person.token}` } : {}) },
 	body: data === undefined ? undefined : JSON.stringify(data) });
@@ -52,7 +52,7 @@ const book = (equipmentId: string, body: Record<string, unknown>, person = membe
 const edit = (r: Reservation, change: Record<string, unknown>, person = member) =>
 	request('PATCH', `${reservations(r.equipmentId)}/${r.id}`, person, { expectedRevision: r.revision, title: r.title, kind: r.kind,
 		startsAt: r.startsAt, endsAt: r.endsAt, setupMinutes: r.setupMinutes, cleanupMinutes: r.cleanupMinutes,
-		projectId: r.projectId, taskId: r.taskId, ownerId: r.ownerId, ...change });
+		tagIds: r.tagIds, taskId: r.taskId, ownerId: r.ownerId, ...change });
 const cancel = (r: Pick<Reservation, 'id' | 'equipmentId'>, expectedRevision: number, person = member) =>
 	request('POST', `${reservations(r.equipmentId)}/${r.id}/cancel`, person, { expectedRevision });
 const range = (equipmentId: string, from: string, to: string, extra = '') =>
@@ -74,8 +74,8 @@ before(async () => {
 	org = (await json<{ id: string }>(request('POST', '/v1/organisations', owner, { name: 'Brewery' }), 201)).id;
 	otherOrg = (await json<{ id: string }>(request('POST', '/v1/organisations', outsider, { name: 'Other business' }), 201)).id;
 	await db.owner`insert into memberships (organisation_id, user_id, role) values (${org}, ${member.user.id}, 'member')`;
-	project = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Autumn lager' }), 201)).id;
-	task = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Brew the lager', projectId: project }), 201)).id;
+	tag = (await json<{ id: string }>(request('POST', `${base()}/tags`, owner, { name: 'Autumn lager' }), 201)).id;
+	task = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Brew the lager' }), 201)).id;
 });
 after(async () => { await db?.close(); });
 
@@ -136,7 +136,7 @@ it('setup, cleanup and maintenance occupy time; half-open ranges let back-to-bac
 	const first = await json<Reservation>(book(line.id, { startsAt: '2030-04-01T10:00:00Z', endsAt: '2030-04-01T11:00:00Z', setupMinutes: 15, cleanupMinutes: 30 }), 201);
 	assert.equal(first.kind, 'booking'); assert.equal(first.status, 'confirmed'); assert.equal(first.revision, 1);
 	assert.equal(first.occupiedStartsAt, '2030-04-01T09:45:00.000Z'); assert.equal(first.occupiedEndsAt, '2030-04-01T11:30:00.000Z');
-	assert.equal(first.projectId, null); assert.equal(first.taskId, null); assert.equal(first.ownerId, null); assert.equal(first.createdBy, member.user.id);
+	assert.deepEqual(first.tagIds, []); assert.equal(first.taskId, null); assert.equal(first.ownerId, null); assert.equal(first.createdBy, member.user.id);
 	// Maintenance is exclusive too, and its own buffers count.
 	assert.equal((await book(line.id, { kind: 'maintenance', title: 'CIP', startsAt: '2030-04-01T11:29:00Z', endsAt: '2030-04-01T12:00:00Z' })).status, 409, 'inside cleanup');
 	assert.equal((await book(line.id, { kind: 'maintenance', title: 'CIP', startsAt: '2030-04-01T11:40:00Z', endsAt: '2030-04-01T12:00:00Z', setupMinutes: 11 })).status, 409, 'setup reaches back into cleanup');
@@ -172,7 +172,7 @@ it('replaying a create with the same client id returns the original once; any ot
 	assert.equal(created.startsAt, '2030-07-01T00:00:00.000Z');
 	// The same instants written another way, and defaults spelled out, are the same request.
 	const replay = await json<Reservation>(request('POST', reservations(tank.id), member,
-		{ ...body, startsAt: '2030-07-01T00:00:00Z', endsAt: '2030-07-01T04:00:00.000Z', kind: 'booking', setupMinutes: 0, cleanupMinutes: 0, projectId: null, taskId: null, ownerId: null }), 200);
+		{ ...body, startsAt: '2030-07-01T00:00:00Z', endsAt: '2030-07-01T04:00:00.000Z', kind: 'booking', setupMinutes: 0, cleanupMinutes: 0, tagIds: [], taskId: null, ownerId: null }), 200);
 	assert.deepEqual(replay, created);
 	assert.deepEqual((await audits(id)).map(a => a.action), ['equipment.reservation_created']);
 	for (const change of [{ title: 'Lager' }, { endsAt: '2030-07-01T05:00:00Z' }, { setupMinutes: 5 }])
@@ -229,7 +229,7 @@ it('edits are revision-checked and atomic: a conflicting or stale edit leaves th
 	// A reservation cannot move to other equipment by being edited through another resource's path.
 	const elsewhere = await makeEquipment('Fermenter 5');
 	assert.equal((await request('PATCH', `${reservations(elsewhere.id)}/${a.id}`, member,
-		{ expectedRevision: 1, title: 'A', kind: 'booking', startsAt: a.startsAt, endsAt: a.endsAt, setupMinutes: 0, cleanupMinutes: 0, projectId: null, taskId: null, ownerId: null })).status, 404);
+		{ expectedRevision: 1, title: 'A', kind: 'booking', startsAt: a.startsAt, endsAt: a.endsAt, setupMinutes: 0, cleanupMinutes: 0, taskId: null, ownerId: null })).status, 404);
 	assert.equal((await stored(a.id))[0]!.revision, 1);
 });
 
@@ -252,34 +252,41 @@ it('links must be eligible work in this tenant; owners must be active members', 
 	const tank = await makeEquipment('Fermenter 7');
 	let hour = 0;
 	const slot = () => { hour += 2; const at = new Date(Date.UTC(2030, 11, 1, hour)); return { startsAt: at.toISOString(), endsAt: new Date(at.getTime() + 3_600_000).toISOString() }; };
-	const linked = await json<Reservation>(book(tank.id, { ...slot(), projectId: project, taskId: task, ownerId: member.user.id }), 201);
-	assert.equal(linked.projectId, project); assert.equal(linked.taskId, task); assert.equal(linked.ownerId, member.user.id);
-	assert.equal((await book(tank.id, { ...slot(), projectId: project })).status, 201, 'a project alone is enough');
-	assert.equal((await book(tank.id, { ...slot(), taskId: task })).status, 404, "a task's project must be named with it");
-	// A standalone task links with no project, and not with one it does not belong to (D7).
-	const standalone = (await json<{ id: string; projectId: string | null }>(request('POST', `${base()}/tasks`, owner, { title: 'Clean the tank' }), 201));
-	assert.equal(standalone.projectId, null);
-	const loose = await json<Reservation>(book(tank.id, { ...slot(), taskId: standalone.id }), 201);
-	assert.deepEqual([loose.projectId, loose.taskId], [null, standalone.id]);
-	assert.equal((await book(tank.id, { ...slot(), projectId: project, taskId: standalone.id })).status, 404, 'a standalone task is not in that project');
-	const otherProject = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Winter stout' }), 201)).id;
+	const linked = await json<Reservation>(book(tank.id, { ...slot(), tagIds: [tag], taskId: task, ownerId: member.user.id }), 201);
+	assert.deepEqual([linked.tagIds, linked.taskId, linked.ownerId], [[tag], task, member.user.id]);
+	const thread = (await db.owner`select id from threads where reservation_id = ${linked.id}`)[0]!.id;
+	assert.deepEqual((await db.owner`select tag_id from thread_tags where thread_id = ${thread}`).map(r => r.tagId), [tag], 'the tags are on the booking’s thread');
+	assert.deepEqual((await db.owner`select action from chat_audit_events where thread_id = ${thread}`).map(r => r.action), ['chat.tag_added']);
+	assert.equal((await book(tank.id, { ...slot(), tagIds: [tag] })).status, 201, 'tags alone are enough');
+	// A booking may carry tags its task does not: the rule that a task's project equals the booking's is gone.
+	assert.deepEqual((await json<Reservation>(book(tank.id, { ...slot(), taskId: task }), 201)).tagIds, []);
+	const standalone = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Clean the tank' }), 201));
+	assert.deepEqual((await json<Reservation>(book(tank.id, { ...slot(), tagIds: [tag], taskId: standalone.id }), 201)).taskId, standalone.id);
 	const step = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Mill grain', parentId: task, expectedParentRevision: await rev('tasks', task) }), 201)).id;
-	const cancelledTask = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Dropped', projectId: project, status: 'cancelled' }), 201)).id;
-	const archivedProject = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Retired' }), 201)).id;
-	await json(request('PATCH', `${base()}/projects/${archivedProject}`, owner, { expectedRevision: await rev('projects', archivedProject), archived: true }));
-	const foreignProject = (await json<{ id: string }>(request('POST', `${base(otherOrg)}/projects`, outsider, { name: 'Theirs' }), 201)).id;
-	for (const links of [{ projectId: otherProject, taskId: task }, { projectId: project, taskId: step }, { projectId: project, taskId: cancelledTask },
-		{ projectId: archivedProject }, { projectId: foreignProject }, { projectId: randomUUID() }, { ownerId: outsider.user.id }, { ownerId: randomUUID() }])
+	const cancelledTask = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Dropped', status: 'cancelled' }), 201)).id;
+	const archivedTag = (await json<{ id: string }>(request('POST', `${base()}/tags`, owner, { name: 'Retired' }), 201)).id;
+	await json(request('PATCH', `${base()}/tags/${archivedTag}`, owner, { expectedRevision: await rev('tags', archivedTag), archived: true }));
+	const foreignTag = (await json<{ id: string }>(request('POST', `${base(otherOrg)}/tags`, outsider, { name: 'Theirs' }), 201)).id;
+	for (const links of [{ taskId: step }, { taskId: cancelledTask }, { tagIds: [archivedTag] }, { tagIds: [foreignTag] }, { tagIds: [tag, randomUUID()] },
+		{ ownerId: outsider.user.id }, { ownerId: randomUUID() }])
 		assert.equal((await book(tank.id, { ...slot(), ...links })).status, 404, JSON.stringify(links));
-	for (const links of [{ projectId: 'nope' }, { ownerId: 42 }, { kind: 'party' }, { setupMinutes: -1 }, { cleanupMinutes: 10081 }, { setupMinutes: 1.5 }])
+	for (const links of [{ projectId: tag }, { tagIds: ['nope'] }, { tagIds: tag }, { ownerId: 42 }, { kind: 'party' }, { setupMinutes: -1 }, { cleanupMinutes: 10081 }, { setupMinutes: 1.5 }])
 		assert.equal((await book(tank.id, { ...slot(), ...links })).status, 400, JSON.stringify(links));
+	// Replacing a booking with tagIds sets its thread's tags exactly; without them it keeps them.
+	const other = (await json<{ id: string }>(request('POST', `${base()}/tags`, owner, { name: 'Other tag' }), 201)).id;
+	const retagged = await json<Reservation>(edit(linked, { tagIds: [other, tag, other] }));
+	assert.deepEqual(retagged.tagIds, [other, tag].sort());
+	const kept = await json<Reservation>(edit(retagged, { title: 'Renamed', tagIds: undefined }));
+	assert.deepEqual(kept.tagIds, [other, tag].sort());
+	assert.deepEqual((await json<Reservation>(edit(kept, { tagIds: [] }))).tagIds, []);
+	assert.equal((await db.owner`select count(*)::int as n from thread_tags where thread_id = ${thread}`)[0]!.n, 0);
 	// A removed owner blocks new bookings for them but not cancelling existing ones.
 	await setMembership(member.user.id, 'removed');
 	try {
 		assert.equal((await book(tank.id, { ...slot(), ownerId: member.user.id }, owner)).status, 404);
 		assert.equal((await book(tank.id, slot(), member)).status, 404, 'a removed member cannot book');
 		assert.equal((await request('GET', `${base()}/equipment/${tank.id}`, member)).status, 404);
-		assert.equal((await json<Reservation>(cancel(linked, 1, owner))).status, 'cancelled');
+		assert.equal((await json<Reservation>(cancel(linked, await db.owner`select revision from equipment_reservations where id = ${linked.id}`.then(([r]) => Number(r!.revision)), owner))).status, 'cancelled');
 	} finally { await setMembership(member.user.id, 'active'); }
 });
 
@@ -331,7 +338,7 @@ it('range reads return confirmed occupancy overlapping [from, to), say when cove
 	assert.equal(first.reservations.length, 1); assert.equal(first.coverage, 'partial'); assert.equal(first.nextOffset, 1);
 	const second = await json<Range>(range(tank.id, '2031-03-01T00:00:00Z', '2031-03-02T00:00:00Z', '&limit=1&offset=1'));
 	assert.equal(second.reservations.length, 1); assert.equal(second.coverage, 'partial', 'a later page never claims the whole range'); assert.equal(second.nextOffset, null);
-	for (const extra of ['&projectId=' + project, '&ownerId=' + member.user.id, '&tagId=' + randomUUID(), '&limit=201', '&limit=0', '&offset=-1'])
+	for (const extra of ['&projectId=' + tag, '&ownerId=' + member.user.id, '&tagId=' + randomUUID(), '&limit=201', '&limit=0', '&offset=-1'])
 		assert.equal((await range(tank.id, '2031-03-01T00:00:00Z', '2031-03-02T00:00:00Z', extra)).status, 400, extra);
 	const windows: [string, string][] = [['2031-03-01T00:00:00Z', '2031-03-01T00:00:00Z'], ['2031-03-02T00:00:00Z', '2031-03-01T00:00:00Z'],
 		['2031-01-01T00:00:00Z', '2031-04-04T00:00:01Z'], ['2031-03-01T00:00:00', '2031-03-02T00:00:00Z']];
@@ -455,20 +462,22 @@ it('the same client id sent twice at once creates one booking and one audit even
 	assert.deepEqual((await audits(body.id)).map(x => x.action), ['equipment.reservation_created']);
 });
 
-it('bookings keep occupying the equipment after their project is archived or task cancelled', async () => {
+it('bookings keep occupying the equipment after their tag is archived or task cancelled', async () => {
 	const tank = await makeEquipment('Fermenter 16');
-	const launch = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Spring bock' }), 201)).id;
-	const step = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Brew the bock', projectId: launch }), 201)).id;
-	const linked = await json<Reservation>(book(tank.id, { startsAt: '2031-12-01T00:00:00Z', endsAt: '2031-12-01T04:00:00Z', projectId: launch, taskId: step }), 201);
+	const launch = (await json<{ id: string }>(request('POST', `${base()}/tags`, owner, { name: 'Spring bock' }), 201)).id;
+	const step = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Brew the bock' }), 201)).id;
+	const linked = await json<Reservation>(book(tank.id, { startsAt: '2031-12-01T00:00:00Z', endsAt: '2031-12-01T04:00:00Z', tagIds: [launch], taskId: step }), 201);
 	await json(request('PATCH', `${base()}/tasks/${step}`, owner, { expectedRevision: await rev('tasks', step), status: 'cancelled' }));
-	await json(request('PATCH', `${base()}/projects/${launch}`, owner, { expectedRevision: await rev('projects', launch), archived: true }));
+	await json(request('PATCH', `${base()}/tags/${launch}`, owner, { expectedRevision: await rev('tags', launch), archived: true }));
 	const view = await json<Range>(range(tank.id, '2031-12-01T00:00:00Z', '2031-12-02T00:00:00Z'));
 	assert.deepEqual(view.reservations.map(r => r.id), [linked.id], 'archived work still holds the slot');
 	assert.equal((await book(tank.id, { startsAt: '2031-12-01T01:00:00Z', endsAt: '2031-12-01T02:00:00Z' })).status, 409);
-	// Changing it now means clearing the ineligible links; cancelling needs nothing.
-	assert.equal((await edit(linked, { title: 'Renamed' })).status, 404);
-	assert.equal((await json<Reservation>(edit(linked, { title: 'Renamed', projectId: null, taskId: null }))).revision, 2);
-	for (const startsAt of ['2031-12-01T00:00:00', 'soon']) assert.equal((await edit({ ...linked, revision: 2, projectId: null, taskId: null }, { startsAt })).status, 400, startsAt);
+	// Changing it now means clearing the cancelled task; an archived tag it already carries stays (tagIds absent).
+	assert.equal((await edit(linked, { title: 'Renamed', tagIds: undefined })).status, 404);
+	const renamed = await json<Reservation>(edit(linked, { title: 'Renamed', tagIds: undefined, taskId: null }));
+	assert.deepEqual([renamed.revision, renamed.tagIds], [2, [launch]]);
+	assert.equal((await edit({ ...linked, revision: 2, taskId: null }, {})).status, 404, 'but the archived tag is not newly named');
+	for (const startsAt of ['2031-12-01T00:00:00', 'soon']) assert.equal((await edit({ ...linked, revision: 2, taskId: null }, { startsAt, tagIds: undefined })).status, 400, startsAt);
 	assert.equal((await stored(linked.id))[0]!.revision, 2);
 });
 
@@ -490,16 +499,18 @@ it('a single reservation reads back, cancelled or not, only through its own equi
 });
 
 type ProjectRange = { reservations: (Reservation & { equipmentName: string; equipmentArchivedAt: string | null })[]; nextOffset: number | null; from: string; to: string; timezone: string };
-const projectRange = (projectId: string, query: string, person = member, organisation = org) =>
-	request('GET', `${base(organisation)}/projects/${projectId}/reservations?${query}`, person);
+/** A tag's schedule: …/tags/:tagId/reservations replaces …/projects/:projectId/reservations (threads contract §5). */
+const projectRange = (tagId: string, query: string, person = member, organisation = org) =>
+	request('GET', `${base(organisation)}/tags/${tagId}/reservations?${query}`, person);
+const makeTag = async (name: string, person = owner, organisation = org) => (await json<{ id: string }>(request('POST', `${base(organisation)}/tags`, person, { name }), 201)).id;
 const span = (from: string, to: string, extra = '') => `from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${extra}`;
 
-it("a project's schedule lists only its confirmed occupancy across all equipment, in stable pages, and claims no availability", async () => {
-	const planned = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Summer saison' }), 201)).id;
-	const elsewhere = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Summer pils' }), 201)).id;
+it("a tag's schedule lists only its confirmed occupancy across all equipment, in stable pages, and claims no availability", async () => {
+	const planned = await makeTag('Summer saison');
+	const elsewhere = await makeTag('Summer pils');
 	const kettle = await makeEquipment('Schedule kettle'), tank = await makeEquipment('Schedule tank'), tun = await makeEquipment('Schedule mash tun');
 	const at = (time: string) => `2025-06-01T${time}:00Z`;
-	const mine = (equipmentId: string, body: Record<string, unknown>) => json<Reservation>(book(equipmentId, { projectId: planned, ...body }), 201);
+	const mine = (equipmentId: string, body: Record<string, unknown>) => json<Reservation>(book(equipmentId, { tagIds: [planned], ...body }), 201);
 	// The window is [10:00, 14:00). Occupied time ending at `from` or starting at `to` is outside it.
 	await mine(tank.id, { startsAt: at('08:00'), endsAt: at('09:00'), cleanupMinutes: 60 });
 	const cleanupOnly = await mine(kettle.id, { startsAt: at('09:00'), endsAt: at('09:30'), cleanupMinutes: 45 });
@@ -509,16 +520,16 @@ it("a project's schedule lists only its confirmed occupancy across all equipment
 	const dropped = await mine(kettle.id, { startsAt: at('11:00'), endsAt: at('12:00') });
 	await json(cancel(dropped, 1));
 	await json(book(kettle.id, { startsAt: at('11:00'), endsAt: at('12:00') }), 201);
-	const theirs = await json<Reservation>(book(kettle.id, { startsAt: at('12:00'), endsAt: at('13:00'), projectId: elsewhere }), 201);
-	// Archived equipment keeps its history on the project's schedule.
+	const theirs = await json<Reservation>(book(kettle.id, { startsAt: at('12:00'), endsAt: at('13:00'), tagIds: [elsewhere] }), 201);
+	// Archived equipment keeps its history on the tag's schedule.
 	const archivedTank = await json<Equipment>(request('PATCH', `${base()}/equipment/${tank.id}`, member, { expectedRevision: 1, archived: true }));
 
 	const expected = [cleanupOnly, ...tied.sort((a, b) => a.id < b.id ? -1 : 1), setupOnly].map(r => r.id);
 	const full = await json<ProjectRange>(projectRange(planned, span('2025-06-01T18:00:00+08:00', at('14:00'))));
-	assert.deepEqual(full.reservations.map(r => r.id), expected, 'occupied start then id; cancelled, unlinked and other-project bookings excluded');
+	assert.deepEqual(full.reservations.map(r => r.id), expected, 'occupied start then id; cancelled, untagged and other-tag bookings excluded');
 	assert.equal(full.from, '2025-06-01T10:00:00.000Z'); assert.equal(full.to, '2025-06-01T14:00:00.000Z');
 	assert.equal(full.timezone, 'Australia/Perth'); assert.equal(full.nextOffset, null);
-	assert.ok(!('coverage' in full), 'a project schedule never claims to cover the equipment');
+	assert.ok(!('coverage' in full), 'a tag schedule never claims to cover the equipment');
 	const bySchedule = new Map(full.reservations.map(r => [r.id, r]));
 	assert.deepEqual([bySchedule.get(setupOnly.id)!.equipmentName, bySchedule.get(setupOnly.id)!.equipmentArchivedAt], ['Schedule tank', archivedTank.archivedAt]);
 	assert.deepEqual([bySchedule.get(cleanupOnly.id)!.equipmentName, bySchedule.get(cleanupOnly.id)!.equipmentArchivedAt], ['Schedule kettle', null]);
@@ -537,8 +548,8 @@ it("a project's schedule lists only its confirmed occupancy across all equipment
 	const first = await json<ProjectRange>(projectRange(planned, span(at('10:00'), at('14:00'), '&limit=2')));
 	assert.equal(first.nextOffset, 2); assert.deepEqual(first.reservations.map(r => r.id), expected.slice(0, 2));
 
-	// An archived project still shows its history; a missing one is not found.
-	await json(request('PATCH', `${base()}/projects/${planned}`, owner, { expectedRevision: await rev('projects', planned), archived: true }));
+	// An archived tag still shows its history; a missing one is not found.
+	await json(request('PATCH', `${base()}/tags/${planned}`, owner, { expectedRevision: await rev('tags', planned), archived: true }));
 	assert.deepEqual((await json<ProjectRange>(projectRange(planned, span(at('10:00'), at('14:00')), owner))).reservations.map(r => r.id), expected);
 	assert.equal((await json<Failure>(projectRange(randomUUID(), span(at('10:00'), at('14:00'))), 404)).code, 'not_found');
 
@@ -552,20 +563,21 @@ it("a project's schedule lists only its confirmed occupancy across all equipment
 	assert.equal((await projectRange(planned, span('2025-03-01T00:00:00Z', '2025-06-02T00:00:00Z', '&limit=200'))).status, 200, 'exactly 93 days, the largest page');
 });
 
-it("a project's schedule is invisible to other tenants, unauthenticated people and removed members", async () => {
-	const secret = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Secret collab' }), 201)).id;
+it("a tag's schedule is invisible to other tenants, unauthenticated people and removed members", async () => {
+	const secret = await makeTag('Secret collab');
 	const tank = await makeEquipment('Schedule tank 2');
-	await json(book(tank.id, { title: 'Secret brew', startsAt: '2025-07-01T00:00:00Z', endsAt: '2025-07-01T01:00:00Z', projectId: secret }), 201);
+	await json(book(tank.id, { title: 'Secret brew', startsAt: '2025-07-01T00:00:00Z', endsAt: '2025-07-01T01:00:00Z', tagIds: [secret] }), 201);
 	const query = span('2025-07-01T00:00:00Z', '2025-07-02T00:00:00Z');
 	assert.equal((await json<ProjectRange>(projectRange(secret, query))).reservations.length, 1);
-	assert.equal((await request('GET', `${base()}/projects/${secret}/reservations?${query}`)).status, 401);
+	assert.equal((await request('GET', `${base()}/tags/${secret}/reservations?${query}`)).status, 401);
+	assert.equal((await request('GET', `${base()}/projects/${secret}/reservations?${query}`, member)).status, 404, 'the project schedule route is retired');
 	const outside = [await projectRange(secret, query, outsider), await projectRange(secret, query, outsider, otherOrg)];
 	for (const response of outside) {
 		assert.equal(response.status, 404); const text = await response.text();
 		assert.ok(!text.includes('Secret') && !text.includes(tank.id), text);
 	}
-	// Their own project read through our tenant's path finds nothing, and ours through theirs neither.
-	const foreign = (await json<{ id: string }>(request('POST', `${base(otherOrg)}/projects`, outsider, { name: 'Theirs too' }), 201)).id;
+	// Their own tag read through our tenant's path finds nothing, and ours through theirs neither.
+	const foreign = await makeTag('Theirs too', outsider, otherOrg);
 	assert.equal((await projectRange(foreign, query)).status, 404);
 	assert.deepEqual((await json<ProjectRange>(projectRange(foreign, query, outsider, otherOrg))).reservations, []);
 	await setMembership(member.user.id, 'removed');
@@ -574,37 +586,15 @@ it("a project's schedule is invisible to other tenants, unauthenticated people a
 	assert.equal((await json<ProjectRange>(projectRange(secret, query))).reservations.length, 1);
 });
 
-it('a linked task that changes project takes its confirmed reservations with it, with a new revision; history stays', async () => {
+it('a booking keeps its own tags whatever happens to its task: nothing follows a task any more', async () => {
 	const vessel = await makeEquipment('Bright tank 3');
-	const autumn = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Autumn release' }), 201)).id;
-	const winter = (await json<{ id: string }>(request('POST', `${base()}/projects`, owner, { name: 'Winter release' }), 201)).id;
-	const moving = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Carbonate the release', projectId: autumn }), 201)).id;
-	const live = await json<Reservation>(book(vessel.id, { startsAt: '2032-03-01T00:00:00Z', endsAt: '2032-03-01T04:00:00Z', projectId: autumn, taskId: moving }), 201);
-	const past = await json<Reservation>(book(vessel.id, { startsAt: '2032-03-02T00:00:00Z', endsAt: '2032-03-02T04:00:00Z', projectId: autumn, taskId: moving }), 201);
-	await json(cancel(past, past.revision));
-	const read = async (id: string) => (await db.owner<{ projectId: string | null; taskId: string | null; revision: number }[]>`select project_id, task_id, revision from equipment_reservations where id = ${id}`)[0]!;
-
-	// Out of any project: the reservation keeps its task and now names no project either.
-	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { expectedRevision: await rev('tasks', moving), projectId: null }));
-	assert.deepEqual(await read(live.id), { projectId: null, taskId: moving, revision: live.revision + 1 });
-	assert.deepEqual(await read(past.id), { projectId: autumn, taskId: moving, revision: past.revision + 1 }, 'a cancelled reservation keeps its history (only its cancellation moved the revision)');
-	const [followed] = await db.owner`select actor_kind, detail from audit_events where subject_id = ${live.id} and action = 'equipment.reservation_updated' order by created_at desc limit 1`;
-	assert.equal(followed!.actorKind, 'person');
-	assert.deepEqual((followed!.detail as { cause: string; before: unknown; after: unknown }).before, { projectId: autumn });
-
-	// A client still holding the old revision cannot write the old project back.
-	assert.equal((await json<Failure>(edit(live, { title: 'Stale' }), 409)).code, 'stale_revision');
-	const current = { ...live, projectId: null, revision: live.revision + 1 };
-	assert.equal((await json<Reservation>(edit(current, { title: 'Carbonate' }))).projectId, null);
-
-	// Into another project: it follows again; an edit that names the task's old project is refused.
-	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { expectedRevision: await rev('tasks', moving), projectId: winter }));
-	const now = await read(live.id);
-	assert.equal(now.projectId, winter);
-	assert.equal((await edit({ ...current, revision: now.revision }, { projectId: null })).status, 404, "the reservation must name its task's project");
-	// Other fields only: no reservation moves, no revision bump.
+	const autumn = await makeTag('Autumn release');
+	const moving = (await json<{ id: string }>(request('POST', `${base()}/tasks`, owner, { title: 'Carbonate the release' }), 201)).id;
+	const live = await json<Reservation>(book(vessel.id, { startsAt: '2032-03-01T00:00:00Z', endsAt: '2032-03-01T04:00:00Z', tagIds: [autumn], taskId: moving }), 201);
 	await json(request('PATCH', `${base()}/tasks/${moving}`, owner, { expectedRevision: await rev('tasks', moving), title: 'Carbonate the winter release' }));
-	assert.equal((await read(live.id)).revision, now.revision);
+	const [row] = await db.owner<{ revision: number }[]>`select revision from equipment_reservations where id = ${live.id}`;
+	assert.equal(row!.revision, live.revision, 'no reservation moves with its task');
+	assert.deepEqual((await json<Reservation>(request('GET', `${reservations(vessel.id)}/${live.id}`, member))).tagIds, [autumn]);
 });
 
 // Runs last: it deletes the second tenant that the isolation tests above rely on.

@@ -26,7 +26,8 @@ export async function freshDatabase(options: { through?: string } = {}): Promise
 	const name = `captain_test_${randomBytes(6).toString('hex')}`;
 	const base = new URL(databaseUrl);
 	const ownerUrl = new URL(base); ownerUrl.pathname = `/${name}`;
-	const owner = postgres(ownerUrl.toString(), { max: 2, transform: postgres.camel });
+	// Migration notices (0046 reports its counts) are for release logs, not test output.
+	const owner = postgres(ownerUrl.toString(), { max: 2, transform: postgres.camel, onnotice: () => undefined });
 	let created = false;
 	try {
 		await admin.unsafe(`create database ${name}`);
