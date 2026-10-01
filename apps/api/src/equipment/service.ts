@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { audit } from '../audit.ts';
 import { HttpError, notFound } from '../errors.ts';
 import { roleOf, type Actor } from '../tenant.ts';
+import { recordThread, requireTags, tagsOfRecords, writeThreadTags } from '../threads/tags.ts';
 
 const day = 86_400_000;
 const instant = z.string().datetime({ offset: true }).refine(value => {
@@ -13,19 +14,22 @@ const name = z.string().trim().min(1).max(100);
 const revision = z.number().int().min(1).max(2_147_483_646);
 const uuid = z.string().uuid().transform(value => value.toLowerCase());
 const link = uuid.nullable().default(null);
+const tagIds = z.array(uuid).max(20).transform(ids => [...new Set(ids)].sort());
+/** A booking's tags replace its project (threads contract §5): they are attached to its thread in the same transaction. */
 const rangeFields = {
  title: z.string().trim().min(1).max(200), kind: z.enum(['booking', 'maintenance']).default('booking'),
  startsAt: instant, endsAt: instant, setupMinutes: z.number().int().min(0).max(10080).default(0),
- cleanupMinutes: z.number().int().min(0).max(10080).default(0), projectId: link, taskId: link, ownerId: link,
+ cleanupMinutes: z.number().int().min(0).max(10080).default(0), taskId: link, ownerId: link,
 };
 const validBooking = (value: { startsAt: Date; endsAt: Date }) => {
  // A failed field refinement can leave its raw input here. Preserve Zod's field error, not a TypeError.
  if (!(value.startsAt instanceof Date) || !(value.endsAt instanceof Date)) return true;
  return value.endsAt.getTime() > value.startsAt.getTime() && value.endsAt.getTime() - value.startsAt.getTime() <= 366 * day;
 };
-export const createReservation = z.object({ id: uuid, ...rangeFields }).strict().refine(validBooking,
+export const createReservation = z.object({ id: uuid, ...rangeFields, tagIds: tagIds.default([]) }).strict().refine(validBooking,
  'The end must follow the start within 366 days.');
-export const replaceReservation = z.object({ expectedRevision: revision, ...rangeFields }).strict().refine(validBooking,
+/** `tagIds` absent keeps the thread's tags; present, the thread carries exactly those. */
+export const replaceReservation = z.object({ expectedRevision: revision, ...rangeFields, tagIds: tagIds.optional() }).strict().refine(validBooking,
  'The end must follow the start within 366 days.');
 export const cancelReservation = z.object({ expectedRevision: revision }).strict();
 export const equipmentInput = z.object({ name }).strict();
@@ -42,23 +46,26 @@ export const reservationsQuery = z.object({
  (value.to.getTime() > value.from.getTime() && value.to.getTime() - value.from.getTime() <= 93 * day),
  'Request a positive time window of at most 93 days.');
 export type Equipment = { id: string; name: string; archivedAt: Date | null; revision: number; createdAt: Date; updatedAt: Date };
-type Schedule = Omit<z.infer<typeof createReservation>, 'id'>;
-export type Reservation = Schedule & { id: string; equipmentId: string; status: 'confirmed' | 'cancelled'; occupiedStartsAt: Date; occupiedEndsAt: Date;
+type Schedule = Omit<z.infer<typeof createReservation>, 'id' | 'tagIds'>;
+/** `tagIds` are the tags on the booking's thread. */
+export type Reservation = Schedule & { id: string; equipmentId: string; tagIds: string[]; status: 'confirmed' | 'cancelled'; occupiedStartsAt: Date; occupiedEndsAt: Date;
  createdBy: string; revision: number; createdAt: Date; updatedAt: Date };
 const equipmentColumns = 'id, name, archived_at, revision, created_at, updated_at';
-const reservationColumns = 'id, equipment_id, title, kind, status, starts_at, ends_at, setup_minutes, cleanup_minutes, occupied_starts_at, occupied_ends_at, project_id, task_id, owner_id, created_by, revision, created_at, updated_at';
+const reservationColumns = 'id, equipment_id, title, kind, status, starts_at, ends_at, setup_minutes, cleanup_minutes, occupied_starts_at, occupied_ends_at, task_id, owner_id, created_by, revision, created_at, updated_at';
 const joinedReservationColumns = reservationColumns.split(', ').map(column => `r.${column}`).join(', ');
-export type ProjectReservation = Reservation & { equipmentName: string; equipmentArchivedAt: Date | null };
+export type TagReservation = Reservation & { equipmentName: string; equipmentArchivedAt: Date | null };
 const conflict = (code: string, message: string) => new HttpError(409, code, message);
 const stale = () => conflict('stale_revision', 'This record changed. Refresh it before saving again.');
 const idExists = () => conflict('reservation_id_exists', 'That reservation request already exists with different details. Refresh before retrying.');
 const occupancy = (input: Schedule) => ({ occupiedStartsAt: new Date(input.startsAt.getTime() - input.setupMinutes * 60_000),
  occupiedEndsAt: new Date(input.endsAt.getTime() + input.cleanupMinutes * 60_000) });
-function sameRequest(row: Reservation, input: Schedule, actor: Actor) {
+function sameRequest(row: Reservation, input: Schedule & { tagIds: string[] }, actor: Actor) {
  return row.revision === 1 && row.status === 'confirmed' && row.createdBy === actor.userId &&
  row.title === input.title && row.kind === input.kind && row.startsAt.getTime() === input.startsAt.getTime() && row.endsAt.getTime() === input.endsAt.getTime() &&
- row.setupMinutes === input.setupMinutes && row.cleanupMinutes === input.cleanupMinutes && row.projectId === input.projectId && row.taskId === input.taskId && row.ownerId === input.ownerId;
+ row.setupMinutes === input.setupMinutes && row.cleanupMinutes === input.cleanupMinutes && row.taskId === input.taskId && row.ownerId === input.ownerId &&
+ row.tagIds.join() === input.tagIds.join();
 }
+type Stored = Omit<Reservation, 'tagIds'>;
 /** Shared bookings. Row locks coordinate catalogue state; the GiST constraint is the final overlap authority. */
 export class EquipmentService {
  readonly #db: Sql;
@@ -89,9 +96,14 @@ export class EquipmentService {
   if (!row) throw notFound(); return row;
  }
  private async reservation(tx: TransactionSql, equipmentId: string, id: string, lock = true) {
-  const [row] = await tx<Reservation[]>`select ${tx.unsafe(reservationColumns)} from equipment_reservations
+  const [row] = await tx<Stored[]>`select ${tx.unsafe(reservationColumns)} from equipment_reservations
    where id = ${id} and equipment_id = ${equipmentId} ${lock ? tx`for update` : tx``}`;
-  if (!row) throw notFound(); return row;
+  if (!row) throw notFound(); return (await this.withTags(tx, [row]))[0]!;
+ }
+ /** Each booking with the tag ids its thread carries, in id order. */
+ private async withTags<T extends Stored>(tx: TransactionSql, rows: T[]): Promise<(T & { tagIds: string[] })[]> {
+  const tags = await tagsOfRecords(tx, 'booking', rows.map(row => row.id));
+  return rows.map(row => ({ ...row, tagIds: (tags.get(row.id) ?? []).map(tag => tag.id).sort() }));
  }
  private async record(tx: TransactionSql, actor: Actor, organisationId: string, action: string, subjectType: string, id: string, before: Equipment | Reservation | null, after: Equipment | Reservation) {
   await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId,
@@ -102,15 +114,16 @@ export class EquipmentService {
    const [owner] = await tx`select user_id from memberships where user_id = ${input.ownerId} and organisation_id = current_organisation_id() and status = 'active' for share`;
    if (!owner) throw notFound();
   }
-  if (input.projectId) {
-   const [project] = await tx`select id from projects where id = ${input.projectId} and state = 'active' and archived_at is null for share`;
-   if (!project) throw notFound();
-  }
   if (input.taskId) {
-   // A linked task carries its own project, or none; the reservation must name the same one (D7: projects are optional).
-   const [task] = await tx`select id from tasks where id = ${input.taskId} and project_id is not distinct from ${input.projectId}::uuid and parent_id is null and status <> 'cancelled' for share`;
+   // A booking may carry tags its task does not (threads contract §5): only the task itself is checked.
+   const [task] = await tx`select id from tasks where id = ${input.taskId} and parent_id is null and status <> 'cancelled' for share`;
    if (!task) throw notFound();
   }
+ }
+ /** Every named tag must be this organisation's and not archived (an unknown one is the usual 404). */
+ private async tags(tx: TransactionSql, tagIds: string[]) {
+  try { await requireTags(tx, tagIds); }
+  catch (error) { if (error instanceof HttpError && error.status === 409) throw notFound(); throw error; }
  }
  list(actor: Actor, organisationId: string, raw: unknown) {
   const query = equipmentQuery.parse(raw);
@@ -155,28 +168,31 @@ export class EquipmentService {
    const [organisation] = await tx<{ timezone: string }[]>`select timezone from organisations where id = ${organisationId}`;
    if (!organisation) throw notFound();
    // Never join/filter work: archived work and other owners still occupy the equipment.
-   const rows = await tx<Reservation[]>`select ${tx.unsafe(reservationColumns)} from equipment_reservations where equipment_id = ${equipmentId}
+   const rows = await tx<Stored[]>`select ${tx.unsafe(reservationColumns)} from equipment_reservations where equipment_id = ${equipmentId}
     and status = 'confirmed' and occupied_starts_at < ${query.to} and occupied_ends_at > ${query.from}
     order by occupied_starts_at, id limit ${query.limit + 1} offset ${query.offset}`;
-   return { reservations: rows.slice(0, query.limit), nextOffset: rows.length > query.limit ? query.offset + query.limit : null,
+   return { reservations: await this.withTags(tx, rows.slice(0, query.limit)), nextOffset: rows.length > query.limit ? query.offset + query.limit : null,
     coverage: query.offset === 0 && rows.length <= query.limit ? 'complete' as const : 'partial' as const,
     from: query.from, to: query.to, timezone: organisation.timezone };
   });
  }
- /** One project's confirmed bookings across all equipment. Not availability: other work is deliberately absent. */
- projectReservations(actor: Actor, organisationId: string, projectId: string, raw: unknown) {
+ /** One tag's confirmed bookings across all equipment: those whose thread carries it (it replaces
+  *  `…/projects/:projectId/reservations` with the same query and shape). Not availability: other work is absent. */
+ tagReservations(actor: Actor, organisationId: string, tagId: string, raw: unknown) {
   const query = reservationsQuery.parse(raw);
   return this.tx(actor, organisationId, async tx => {
-   // Archived projects keep their history; any project row in this tenant is readable.
-   const [project] = await tx`select id from projects where id = ${projectId}`;
-   if (!project) throw notFound();
+   // Archived tags keep their history; any tag in this tenant is readable.
+   const [tag] = await tx`select id from tags where id = ${tagId}`;
+   if (!tag) throw notFound();
    const [organisation] = await tx<{ timezone: string }[]>`select timezone from organisations where id = ${organisationId}`;
    if (!organisation) throw notFound();
-   const rows = await tx<ProjectReservation[]>`select ${tx.unsafe(joinedReservationColumns)}, e.name as equipment_name, e.archived_at as equipment_archived_at
+   const rows = await tx<Omit<TagReservation, 'tagIds'>[]>`select ${tx.unsafe(joinedReservationColumns)}, e.name as equipment_name, e.archived_at as equipment_archived_at
     from equipment_reservations r join equipment e on e.organisation_id = r.organisation_id and e.id = r.equipment_id
-    where r.project_id = ${projectId} and r.status = 'confirmed' and r.occupied_starts_at < ${query.to} and r.occupied_ends_at > ${query.from}
+    where exists (select 1 from threads th join thread_tags tt on tt.thread_id = th.id
+      where th.organisation_id = r.organisation_id and th.reservation_id = r.id and tt.tag_id = ${tagId})
+     and r.status = 'confirmed' and r.occupied_starts_at < ${query.to} and r.occupied_ends_at > ${query.from}
     order by r.occupied_starts_at, r.id limit ${query.limit + 1} offset ${query.offset}`;
-   return { reservations: rows.slice(0, query.limit), nextOffset: rows.length > query.limit ? query.offset + query.limit : null,
+   return { reservations: await this.withTags(tx, rows.slice(0, query.limit)), nextOffset: rows.length > query.limit ? query.offset + query.limit : null,
     from: query.from, to: query.to, timezone: organisation.timezone };
   });
  }
@@ -184,21 +200,27 @@ export class EquipmentService {
   const input = createReservation.parse(raw);
   return this.tx(actor, organisationId, async tx => {
    const resource = await this.equipment(tx, equipmentId, true);
-   const [existing] = await tx<Reservation[]>`select ${tx.unsafe(reservationColumns)} from equipment_reservations where id = ${input.id}`;
-   if (existing) {
+   const [stored] = await tx<Stored[]>`select ${tx.unsafe(reservationColumns)} from equipment_reservations where id = ${input.id}`;
+   if (stored) {
+    const existing = (await this.withTags(tx, [stored]))[0]!;
     if (existing.equipmentId !== equipmentId || !sameRequest(existing, input, actor)) throw idExists();
     return { reservation: existing, created: false };
    }
    if (resource.archivedAt) throw conflict('equipment_archived', 'This equipment is archived. Restore it before making a reservation.');
    await this.links(tx, input);
+   await this.tags(tx, input.tagIds);
    const occupied = occupancy(input);
    const [row] = await tx<Reservation[]>`insert into equipment_reservations
-    (id, organisation_id, equipment_id, title, kind, starts_at, ends_at, setup_minutes, cleanup_minutes, occupied_starts_at, occupied_ends_at, project_id, task_id, owner_id, created_by)
+    (id, organisation_id, equipment_id, title, kind, starts_at, ends_at, setup_minutes, cleanup_minutes, occupied_starts_at, occupied_ends_at, task_id, owner_id, created_by)
     values (${input.id}, ${organisationId}, ${equipmentId}, ${input.title}, ${input.kind}, ${input.startsAt}, ${input.endsAt}, ${input.setupMinutes}, ${input.cleanupMinutes},
-     ${occupied.occupiedStartsAt}, ${occupied.occupiedEndsAt}, ${input.projectId}, ${input.taskId}, ${input.ownerId}, ${actor.userId}) returning ${tx.unsafe(reservationColumns)}`;
+     ${occupied.occupiedStartsAt}, ${occupied.occupiedEndsAt}, ${input.taskId}, ${input.ownerId}, ${actor.userId}) returning ${tx.unsafe(reservationColumns)}`;
    if (!row) throw notFound();
-   await this.record(tx, actor, organisationId, 'equipment.reservation_created', 'equipment_reservation', row.id, null, row);
-   return { reservation: row, created: true };
+   // The insert made the booking's thread (0046); its first tags belong to that creation, so no revision bump.
+   const thread = await recordThread(tx, organisationId, 'booking', row.id, true);
+   await writeThreadTags(tx, organisationId, actor, thread.id, input.tagIds, { mode: 'replace', bump: false });
+   const reservation = { ...row, tagIds: input.tagIds };
+   await this.record(tx, actor, organisationId, 'equipment.reservation_created', 'equipment_reservation', row.id, null, reservation);
+   return { reservation, created: true };
   });
  }
  replaceBooking(actor: Actor, organisationId: string, equipmentId: string, id: string, raw: unknown) {
@@ -210,13 +232,19 @@ export class EquipmentService {
    if (before.status === 'cancelled') throw conflict('reservation_cancelled', 'This reservation is cancelled. Create a new reservation to book again.');
    if (resource.archivedAt) throw conflict('equipment_archived', 'This equipment is archived. Restore it before changing a reservation.');
    await this.links(tx, input);
+   if (input.tagIds) await this.tags(tx, input.tagIds);
    const occupied = occupancy(input);
-   const [row] = await tx<Reservation[]>`update equipment_reservations set title = ${input.title}, kind = ${input.kind}, starts_at = ${input.startsAt}, ends_at = ${input.endsAt},
+   const [row] = await tx<Stored[]>`update equipment_reservations set title = ${input.title}, kind = ${input.kind}, starts_at = ${input.startsAt}, ends_at = ${input.endsAt},
     setup_minutes = ${input.setupMinutes}, cleanup_minutes = ${input.cleanupMinutes}, occupied_starts_at = ${occupied.occupiedStartsAt}, occupied_ends_at = ${occupied.occupiedEndsAt},
-    project_id = ${input.projectId}, task_id = ${input.taskId}, owner_id = ${input.ownerId}, revision = revision + 1, updated_at = now()
+    task_id = ${input.taskId}, owner_id = ${input.ownerId}, revision = revision + 1, updated_at = now()
     where id = ${id} and equipment_id = ${equipmentId} returning ${tx.unsafe(reservationColumns)}`;
    if (!row) throw notFound();
-   await this.record(tx, actor, organisationId, 'equipment.reservation_updated', 'equipment_reservation', id, before, row); return row;
+   if (input.tagIds) {
+    const thread = await recordThread(tx, organisationId, 'booking', id, true);
+    await writeThreadTags(tx, organisationId, actor, thread.id, input.tagIds, { mode: 'replace', bump: true });
+   }
+   const after = { ...row, tagIds: input.tagIds ?? before.tagIds };
+   await this.record(tx, actor, organisationId, 'equipment.reservation_updated', 'equipment_reservation', id, before, after); return after;
   });
  }
  cancelBooking(actor: Actor, organisationId: string, equipmentId: string, id: string, raw: unknown) {
@@ -226,10 +254,11 @@ export class EquipmentService {
    const before = await this.reservation(tx, equipmentId, id);
    if (before.revision !== input.expectedRevision) throw stale();
    if (before.status === 'cancelled') return before;
-   const [row] = await tx<Reservation[]>`update equipment_reservations set status = 'cancelled', revision = revision + 1, updated_at = now()
+   const [row] = await tx<Stored[]>`update equipment_reservations set status = 'cancelled', revision = revision + 1, updated_at = now()
     where id = ${id} and equipment_id = ${equipmentId} returning ${tx.unsafe(reservationColumns)}`;
    if (!row) throw notFound();
-   await this.record(tx, actor, organisationId, 'equipment.reservation_cancelled', 'equipment_reservation', id, before, row); return row;
+   const after = { ...row, tagIds: before.tagIds };
+   await this.record(tx, actor, organisationId, 'equipment.reservation_cancelled', 'equipment_reservation', id, before, after); return after;
   });
  }
 }

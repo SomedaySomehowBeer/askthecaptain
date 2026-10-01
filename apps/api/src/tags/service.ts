@@ -1,22 +1,35 @@
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { z } from 'zod';
 import { audit } from '../audit.ts';
-import { HttpError, notFound } from '../errors.ts';
+import { HttpError, badRequest, notFound } from '../errors.ts';
 import { roleOf, type Actor } from '../tenant.ts';
-export type Tag = { id: string; name: string; createdAt: Date; updatedAt: Date };
-export const tagInput = z.object({ name: z.string().trim().min(1).max(60) }).strict();
+import { tagsOfRecords } from '../threads/tags.ts';
+
+/** A tag (D7, amended; threads contract §3): a name, and optionally an owner and dates. That is the whole difference
+ *  between "Production" and "Summer lager launch". It has no kind, no thread of its own and no planning task. */
+export type Tag = { id: string; name: string; ownerId: string | null; startsOn: string | null; endsOn: string | null; archivedAt: Date | null;
+ revision: number; createdBy: string | null; createdAt: Date; updatedAt: Date };
+const uuid = z.string().uuid().transform(value => value.toLowerCase());
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').refine(value => !Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+ && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value), 'A real calendar date.');
+const name = z.string().trim().min(1).max(120);
+export const tagInput = z.object({ name, ownerId: uuid.nullable().optional(), startsOn: date.nullable().optional(), endsOn: date.nullable().optional() }).strict();
+export const tagPatch = z.object({ expectedRevision: z.number().int().min(1).max(2_147_483_646), name: name.optional(), ownerId: uuid.nullable().optional(),
+ startsOn: date.nullable().optional(), endsOn: date.nullable().optional(), archived: z.boolean().optional() }).strict()
+ .refine(value => Object.keys(value).length > 1, 'Supply at least one change.');
 export const workQuery = z.object({
- tagIds: z.array(z.string().uuid()).max(20).default([]), ownerId: z.string().uuid().optional(), projectId: z.string().uuid().optional(), seriesId: z.string().uuid().optional(),
+ tagIds: z.array(z.string().uuid()).max(20).default([]), ownerId: z.string().uuid().optional(), seriesId: z.string().uuid().optional(),
  status: z.enum(['suggested', 'open', 'in_progress', 'done', 'cancelled']).optional(),
  offset: z.coerce.number().int().min(0).max(1_000_000).default(0), limit: z.coerce.number().int().min(1).max(100).default(50),
-});
+}).strict();
 export type WorkQuery = z.infer<typeof workQuery>;
-export type WorkTask = { id: string; projectId: string | null; seriesId: string | null; title: string; ownerId: string | null; status: string; due: string | null; revision: number; tags: { id: string; name: string }[] };
-const tagColumns = 'id, name, created_at, updated_at';
-/** Shared organisation labels and task links. The existing task remains the only work record. A top-level task is
- *  eligible when it has no project, or its project is active (not archived or proposed). */
-const eligible = 'from tasks t left join projects p on p.organisation_id = t.organisation_id and p.id = t.project_id';
-const eligibleWhere = '(t.project_id is null or (p.archived_at is null and p.state = \'active\'))';
+export type WorkTask = { id: string; seriesId: string | null; title: string; ownerId: string | null; status: string; due: string | null; revision: number; tags: { id: string; name: string }[] };
+const tagColumns = 'id, name, owner_id, starts_on::text as starts_on, ends_on::text as ends_on, archived_at, revision, created_by, created_at, updated_at';
+const stale = () => new HttpError(409, 'stale_revision', 'This tag changed since you opened it. Reload it before saving again.');
+const datesInvalid = () => badRequest('tag_dates_invalid', 'The end date cannot be before the start date.');
+
+/** Shared organisation labels. A tag is attached to threads (a task's tags are its thread's), never to records directly;
+ *  attaching is a thread write in `threads/`. Tag creation and edits stay in the tenant-wide audit, as before. */
 export class TagsService {
  readonly #db: Sql;
  constructor(db: Sql) { this.#db = db; }
@@ -36,91 +49,83 @@ export class TagsService {
    return { tags: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   });
  }
- /** A bounded catalogue for one task; never infer its assignments from a filtered Work page. */
+ /** A bounded catalogue for one task's thread; never infer its assignments from a filtered Work page. */
  options(actor: Actor, organisationId: string, taskId: string, offset: number, limit: number) {
   return this.tx(actor, organisationId, async tx => {
-   // `for share of t` only: a standalone task has no project row, and locking p through an outer join is refused.
-   const [task] = await tx<{ id: string; title: string }[]>`select t.id, t.title ${tx.unsafe(eligible)}
-    where t.id = ${taskId} and t.parent_id is null and ${tx.unsafe(eligibleWhere)}
-    for share of t`;
+   const [task] = await tx<{ id: string; title: string; threadId: string }[]>`select t.id, t.title, th.id as thread_id from tasks t
+    join threads th on th.organisation_id = t.organisation_id and th.task_id = t.id where t.id = ${taskId} and t.parent_id is null`;
    if (!task) throw notFound();
    const rows = await tx<{ id: string; name: string; attached: boolean }[]>`select tag.id, tag.name,
-    exists (select 1 from task_tags link where link.organisation_id = tag.organisation_id
-     and link.tag_id = tag.id and link.task_id = ${taskId}) as attached
+    exists (select 1 from thread_tags link where link.thread_id = ${task.threadId} and link.tag_id = tag.id) as attached
     from tags tag order by lower(tag.name), tag.id limit ${limit + 1} offset ${offset}`;
-   return { task, tags: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
+   return { task: { id: task.id, title: task.title }, tags: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
   });
  }
- async save(actor: Actor, organisationId: string, raw: unknown, id?: string) {
-  const input = tagInput.parse(raw);
-  try {
-   return await this.tx(actor, organisationId, async tx => {
-    const previous = id ? (await tx<Tag[]>`select ${tx.unsafe(tagColumns)} from tags where id = ${id} for update`)[0] : undefined;
-    if (id && !previous) throw notFound();
-    const [tag] = id
-     ? await tx<Tag[]>`update tags set name = ${input.name}, updated_at = now() where id = ${id} returning ${tx.unsafe(tagColumns)}`
-     : await tx<Tag[]>`insert into tags (organisation_id, name) values (${organisationId}, ${input.name}) returning ${tx.unsafe(tagColumns)}`;
-    if (!tag) throw notFound();
-    await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId,
-     action: id ? 'tag.renamed' : 'tag.created', subjectType: 'tag', subjectId: tag.id, detail: { name: tag.name, ...(previous ? { before: { name: previous.name }, after: { name: tag.name } } : {}) } });
-    return tag;
-   });
-  } catch (error) {
+ private async requireOwner(tx: TransactionSql, organisationId: string, ownerId: string) {
+  const [owner] = await tx`select 1 from memberships where organisation_id = ${organisationId} and user_id = ${ownerId} and status = 'active' for share`;
+  if (!owner) throw badRequest('owner_invalid', 'The owner must be an active member of the organisation.');
+ }
+ private async guarded<T>(work: () => Promise<T>): Promise<T> {
+  try { return await work(); }
+  catch (error) {
    if (error instanceof Error && 'code' in error && error.code === '23505')
     throw new HttpError(409, 'tag_name_exists', 'A tag with that name already exists. Choose it or use another name.');
+   if (error instanceof Error && 'constraint_name' in error && error.constraint_name === 'tags_dates_check') throw datesInvalid();
    throw error;
   }
  }
- private async task(tx: TransactionSql, taskId: string) {
-  const [task] = await tx<{ id: string; projectId: string | null }[]>`select t.id, t.project_id ${tx.unsafe(eligible)}
-   where t.id = ${taskId} and t.parent_id is null and ${tx.unsafe(eligibleWhere)} for update of t`;
-  if (!task) throw notFound();
-  // Hold the project against a concurrent archive, as the inner join's `for share of p` did.
-  if (task.projectId) {
-   const [project] = await tx`select id from projects where id = ${task.projectId} and archived_at is null and state = 'active' for share`;
-   if (!project) throw notFound();
-  }
+ create(actor: Actor, organisationId: string, raw: unknown): Promise<Tag> {
+  const input = tagInput.parse(raw);
+  if (input.startsOn && input.endsOn && input.endsOn < input.startsOn) throw datesInvalid();
+  return this.guarded(() => this.tx(actor, organisationId, async tx => {
+   if (input.ownerId) await this.requireOwner(tx, organisationId, input.ownerId);
+   const [tag] = await tx<Tag[]>`insert into tags (organisation_id, name, owner_id, starts_on, ends_on, created_by)
+    values (${organisationId}, ${input.name}, ${input.ownerId ?? null}, ${input.startsOn ?? null}::date, ${input.endsOn ?? null}::date, ${actor.userId})
+    returning ${tx.unsafe(tagColumns)}`;
+   await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId,
+    action: 'tag.created', subjectType: 'tag', subjectId: tag!.id, detail: { name: tag!.name, ownerId: tag!.ownerId, startsOn: tag!.startsOn, endsOn: tag!.endsOn } });
+   return tag!;
+  }));
  }
- setLink(actor: Actor, organisationId: string, taskId: string, tagId: string, attached: boolean) {
-  return this.tx(actor, organisationId, async tx => {
-   await this.task(tx, taskId);
-   const [tag] = await tx`select id from tags where id = ${tagId} for share`;
-   if (!tag) throw notFound();
-   const changed = attached
-    ? await tx`insert into task_tags (organisation_id, task_id, tag_id, attached_by)
-       values (${organisationId}, ${taskId}, ${tagId}, ${actor.userId}) on conflict do nothing returning tag_id`
-    : await tx`delete from task_tags where task_id = ${taskId} and tag_id = ${tagId} returning tag_id`;
-   if (changed.length) await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId,
-    action: attached ? 'task.tag_added' : 'task.tag_removed', subjectType: 'task', subjectId: taskId, detail: { tagId } });
-   return { taskId, tagId, attached };
-  });
+ /** Name, owner, dates and archive, with `expectedRevision`. Archiving keeps every attachment (§3). */
+ update(actor: Actor, organisationId: string, tagId: string, raw: unknown): Promise<Tag> {
+  const input = tagPatch.parse(raw);
+  return this.guarded(() => this.tx(actor, organisationId, async tx => {
+   const [before] = await tx<Tag[]>`select ${tx.unsafe(tagColumns)} from tags where id = ${tagId} for update`;
+   if (!before) throw notFound();
+   if (before.revision !== input.expectedRevision) throw stale();
+   if (input.ownerId && input.ownerId !== before.ownerId) await this.requireOwner(tx, organisationId, input.ownerId);
+   const after = { name: input.name ?? before.name, ownerId: input.ownerId === undefined ? before.ownerId : input.ownerId,
+    startsOn: input.startsOn === undefined ? before.startsOn : input.startsOn, endsOn: input.endsOn === undefined ? before.endsOn : input.endsOn };
+   if (after.startsOn && after.endsOn && after.endsOn < after.startsOn) throw datesInvalid();
+   const archivedAt = input.archived === undefined ? before.archivedAt : input.archived ? before.archivedAt ?? new Date() : null;
+   const [tag] = await tx<Tag[]>`update tags set name = ${after.name}, owner_id = ${after.ownerId}, starts_on = ${after.startsOn}::date, ends_on = ${after.endsOn}::date,
+    archived_at = ${archivedAt}, updated_at = now() where id = ${tagId} returning ${tx.unsafe(tagColumns)}`;
+   const changed = (['name', 'ownerId', 'startsOn', 'endsOn', 'archivedAt'] as const).filter(key => String(before[key]) !== String(tag![key]));
+   const pick = (row: Tag) => Object.fromEntries(changed.map(key => [key, row[key]]));
+   await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId,
+    action: changed.length === 1 && changed[0] === 'name' ? 'tag.renamed' : 'tag.updated', subjectType: 'tag', subjectId: tagId,
+    detail: { name: tag!.name, before: pick(before), after: pick(tag!), revision: tag!.revision } });
+   return tag!;
+  }));
  }
  work(actor: Actor, organisationId: string, raw: unknown) {
   const query = workQuery.parse(raw);
   return this.tx(actor, organisationId, async tx => {
-   // The default list excludes archived and proposed projects' work. Naming a project or a series is an
-   // explicit request for that record's work, so it includes an archived project's tasks too.
-   const explicit = Boolean(query.projectId || query.seriesId);
    const conditions = [tx`t.organisation_id = ${organisationId}`, tx`t.parent_id is null`];
-   if (!explicit) conditions.push(tx`${tx.unsafe(eligibleWhere)}`);
    if (query.ownerId) conditions.push(tx`t.owner_id = ${query.ownerId}`);
-   if (query.projectId) conditions.push(tx`t.project_id = ${query.projectId}`);
    if (query.seriesId) conditions.push(tx`t.series_id = ${query.seriesId}`);
    conditions.push(query.status ? tx`t.status = ${query.status}` : tx`t.status <> 'cancelled'`);
-   // Match any selected tag, AND with other filter kinds; EXISTS returns each task only once.
+   // Match any selected tag on the task's thread, AND with other filter kinds; EXISTS returns each task only once.
    const tagIds = [...new Set(query.tagIds)];
-   if (tagIds.length) conditions.push(tx`exists (select 1 from task_tags tt
-    where tt.organisation_id = t.organisation_id and tt.task_id = t.id and tt.tag_id in ${tx(tagIds)})`);
+   if (tagIds.length) conditions.push(tx`exists (select 1 from threads th join thread_tags tt on tt.thread_id = th.id
+    where th.organisation_id = t.organisation_id and th.task_id = t.id and tt.tag_id in ${tx(tagIds)})`);
    const where = conditions.reduce((a, b) => tx`${a} and ${b}`);
-   const rows = await tx<Omit<WorkTask, 'tags'>[]>`select t.id, t.project_id, t.series_id, t.title, t.owner_id, t.status, t.due::text, t.revision
-    ${tx.unsafe(eligible)}
-    where ${where} order by t.due nulls last, t.id limit ${query.limit + 1} offset ${query.offset}`;
+   const rows = await tx<Omit<WorkTask, 'tags'>[]>`select t.id, t.series_id, t.title, t.owner_id, t.status, t.due::text, t.revision
+    from tasks t where ${where} order by t.due nulls last, t.id limit ${query.limit + 1} offset ${query.offset}`;
    const page = rows.slice(0, query.limit);
-   const links = page.length ? await tx<{ taskId: string; id: string; name: string }[]>`select tt.task_id, tag.id, tag.name
-    from task_tags tt join tags tag on tag.organisation_id = tt.organisation_id and tag.id = tt.tag_id
-    where tt.task_id in ${tx(page.map(t => t.id))} order by lower(tag.name), tag.id` : [];
-   return { tasks: page.map(t => ({ ...t, tags: links.filter(l => l.taskId === t.id).map(({ id, name }) => ({ id, name })) })),
-    nextOffset: rows.length > query.limit ? query.offset + query.limit : null };
+   const tags = await tagsOfRecords(tx, 'task', page.map(t => t.id));
+   return { tasks: page.map(t => ({ ...t, tags: tags.get(t.id) ?? [] })), nextOffset: rows.length > query.limit ? query.offset + query.limit : null };
   });
  }
 }

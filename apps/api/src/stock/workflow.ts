@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { PushService } from '../push/service.ts';
 import { journal, type Context } from '../workflows/journal.ts';
 import { shopifyState } from '../shopify/connections.ts';
+import { recordThread, writeThreadTags } from '../threads/tags.ts';
 const quantity = z.string().regex(/^-?\d+(?:\.\d+)?$/);
 const itemSchema = z.object({ id: z.uuid(), name: z.string(), location: z.string(), unitLabel: z.string(), reorderPoint: quantity.nullable(),
  preferredSupplier: z.object({ name: z.string(), email: z.string().nullable() }).nullable(), count: quantity.nullable().optional(), belowReorderPoint: z.boolean().nullable().optional() });
@@ -44,21 +45,23 @@ export class StocktakeService {
  }
  async task(ctx: Context, args: Record<string, unknown>) {
   const item = itemSchema.parse(args.item), count = args.count ? countSchema.parse(args.count).count : item.count;
-  const projectName = z.string().trim().min(1).max(80).parse(args.project);
+  // The step's `project` parameter names a tag since 0046 (a project is a tag): found case-insensitively, as tag names
+  // are unique that way, or created; the reorder task's thread carries it. An archived tag is still that tag.
+  const tagName = z.string().trim().min(1).max(80).parse(args.project);
   if (count === undefined || count === null || item.reorderPoint === null) throw problem('stocktake_count');
   const previous = await receipt(ctx, 'stock.reorder_task_created'); if (previous) return { id: previous.subjectId };
-  await ctx.tx`select pg_advisory_xact_lock(hashtextextended(${ctx.organisationId + ':stocktake-project:' + projectName}, 0))`;
-  const matches = await ctx.tx`select id from projects where name = ${projectName} and state = 'active' order by id limit 2 for share`;
-  if (matches.length > 1) throw problem('stocktake_project');
-  let projectId = matches[0]?.id;
-  if (!projectId) {
-   const [project] = await ctx.tx`insert into projects (organisation_id, name, created_by) values (${ctx.organisationId}, ${projectName}, ${ctx.userId}) returning id`;
-   projectId = project!.id; await journal(ctx, 'project.created', 'project', projectId);
+  await ctx.tx`select pg_advisory_xact_lock(hashtextextended(${ctx.organisationId + ':stocktake-tag:' + tagName.toLowerCase()}, 0))`;
+  let [tag] = await ctx.tx<{ id: string }[]>`select id from tags where lower(name) = lower(${tagName}) for share`;
+  if (!tag) {
+   [tag] = await ctx.tx<{ id: string }[]>`insert into tags (organisation_id, name, created_by) values (${ctx.organisationId}, ${tagName}, ${ctx.userId}) returning id`;
+   await journal(ctx, 'tag.created', 'tag', tag!.id);
   }
   const title = `Reorder ${item.name} (${count} ${item.unitLabel} left, reorder at ${item.reorderPoint})`;
-  const [task] = await ctx.tx`insert into tasks (organisation_id, project_id, title, body, due, source_kind, source_id, created_by)
-   values (${ctx.organisationId}, ${projectId}, ${title}, ${'Stocktake at ' + item.location + '. Review the quantity to order; this task does not place an order.'},
+  const [task] = await ctx.tx`insert into tasks (organisation_id, title, body, due, source_kind, source_id, created_by)
+   values (${ctx.organisationId}, ${title}, ${'Stocktake at ' + item.location + '. Review the quantity to order; this task does not place an order.'},
    (select (current_timestamp at time zone timezone)::date + 7 from organisations where id = ${ctx.organisationId}), 'run', ${ctx.runId}, ${ctx.userId}) returning id`;
+  const thread = await recordThread(ctx.tx, ctx.organisationId, 'task', task!.id, true);
+  await writeThreadTags(ctx.tx, ctx.organisationId, { userId: ctx.userId, requestId: ctx.runId }, thread.id, [tag!.id], { mode: 'add', bump: false });
   await journal(ctx, 'stock.reorder_task_created', 'task', task!.id, { itemId: item.id, location: item.location, idempotencyKey: ctx.idempotencyKey }); return { id: task!.id };
  }
  async shop(ctx: Context) {
