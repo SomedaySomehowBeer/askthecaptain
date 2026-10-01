@@ -7,7 +7,7 @@ const author='00000000-0000-4000-8000-000000000099';
 export function threadFixture(){
  const messages=Array.from({length:65},(_,i)=>({id:`00000000-0000-4000-8000-${String(i+100).padStart(12,'0')}`,threadId:tid,kind:'message',seq:i+1,changeSeq:i+1,authorId:author,authorName:'Pat Crew',body:`Message ${i+1}: check the packaging plan.`,createdAt:'2026-10-01T02:00:00.000Z',editedAt:null,deletedAt:null,deletedBy:null,revision:1}));
  const tags=[{id:tagId,name:'Summer lager'}];
- const detail={thread:{id:tid,kind:'topic',title:'Packaging plan',revision:1,lastSeq:65,lastChange:65,readPosition:3,unread:51,starred:false,createdAt:'2026-10-01T01:00:00.000Z'},card:{kind:'topic',id:null,title:'Packaging plan',status:null,facts:['Pat Crew',''],body:'Packaging discussion'},tags,pins:null};
+ const detail={thread:{id:tid,kind:'topic',title:'Packaging plan',revision:1,lastSeq:65,lastChange:65,readPosition:3,unread:51,starred:false,createdAt:'2026-10-01T01:00:00.000Z'},card:{kind:'topic',id:null,title:'Packaging plan',status:null,facts:['Pat Crew',''],body:'Packaging discussion'},tags,pin:null};
  const row={id:tid,kind:'topic',title:'Packaging plan',record:null,facts:['Pat Crew',''],status:null,lastMessageAt:'2026-10-01T02:00:00.000Z',lastMessage:{authorName:'Pat Crew',excerpt:'Check the packaging plan.'},unread:51,needsYou:true,starred:false,tags};
  return {messages,detail,list:{filter:'all',available:true,threads:[row],nextCursor:null,groups:[{key:tagId,label:'Summer lager',threads:1,needsYou:1}]}};
 }

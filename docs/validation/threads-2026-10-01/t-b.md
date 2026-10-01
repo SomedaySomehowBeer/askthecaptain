@@ -37,7 +37,7 @@ of T-A's payloads:
 - List row `status` is string or null; the two facts are strings. `record.kind` and link `kind`
   are `task`, `booking`, `stock_item`. A group `key` is its tag UUID or `none`; optional owner is
   `{ userId, name }`, dates are nullable `YYYY-MM-DD`. Tags are strictly `{ id, name }`.
-- Detail uses the top-level name `pins` from §6, holding one `{ id, messageId, pinnedBy,
+- Detail uses the top-level name `pin` from amended §6, holding one `{ id, messageId, pinnedBy,
   pinnedAt }` object or null (not an array). Participants are present only for private threads,
   with the inherited `{ userId, name, addedAt }` shape.
 - Card is `{ kind, id, title, status, facts, body, notes? }`; nullable body/notes are plain text.
@@ -56,8 +56,9 @@ merged. No implementation file in the parallel API worktree was read or changed.
 
 The owner announced the #229 amendments (no links, no tag kind, thread wire names and
 `thread_id_unavailable`) while T-B was finishing. Those are applied in the parsers/fixtures.
-The fetched remote contract still had the old text at that point; re-read it once updated.
-The checks below initially passed before the rebase and wire amendments; revalidation is running.
+The published remote amendment `91e504d` was then read in full; its singular `pin` key is
+also applied. Typecheck, 401 pure tests plus 20 boundary/config tests and fresh exports pass
+after the rebase. The final browser rerun is in progress.
 
 ## Checks
 
@@ -65,7 +66,7 @@ Heavy work uses `flock /tmp/atc-build.lock`; validation/export/browser chains ga
 1500 MB available memory.
 
 - Mobile typecheck and source boundary: passed.
-- **389 mobile pure tests + 20 boundary/config tests**, no skips.
+- **401 mobile pure tests + 20 boundary/config tests**, no skips.
 - SDK compatibility, Android backup configuration, fresh web/iOS/Android/harness exports,
   bundle boundary and canary guards: passed.
 - **9 cookie-session tests** against disposable real Postgres, no skips.
