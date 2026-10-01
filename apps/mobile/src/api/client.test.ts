@@ -517,3 +517,10 @@ test('membership PATCH sends the role body once through the bounded transport', 
  assert.deepEqual(await client.patch(path, null, { role: 'admin' }, value => value), { ok: true, value: { ok: true } });
  assert.equal(f.calls.length, 1); assert.equal(f.calls[0]!.init.method, 'PATCH'); assert.equal(f.calls[0]!.init.body, '{"role":"admin"}'); assert.equal(f.calls[0]!.init.redirect, 'error'); assert.equal(f.calls[0]!.init.headers.authorization, undefined);
 });
+
+test('push DELETE sends its endpoint body once, without bearer and with redirect refusal', async () => {
+ const f = fakeSend({ text: json({ ok: true }) }); const client = createApiClient(createTransport({ origin, send: f.send }));
+ const path = organisationPath('00000000-0000-4000-8000-000000000003', 'push', 'subscriptions');
+ await client.delete(path, null, value => value, { endpoint: 'https://push.example.test/synthetic' });
+ assert.equal(f.calls.length, 1); assert.equal(f.calls[0]!.init.body, '{"endpoint":"https://push.example.test/synthetic"}'); assert.equal(f.calls[0]!.init.headers.authorization, undefined); assert.equal(f.calls[0]!.init.redirect, 'error');
+});

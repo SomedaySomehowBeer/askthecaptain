@@ -6,6 +6,7 @@ Expo client (D37). Members/invitations and push devices remain the next two PRs.
 Based on main `654a608`; no deployment or hosted account was used.
 
 The second slice is recorded separately in [Members and invitations](members.md).
+The third slice is recorded in [Push devices](push.md).
 
 ## Behaviour and scope
 

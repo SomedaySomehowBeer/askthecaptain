@@ -102,6 +102,7 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
     await require('./mobile-shell-members-check.cjs')({ browser, production, base, shots, width });
     // Retain deeper read-only timeline and revocation UI regression checks at phone widths.
     if (width < 500) {
+     await require('./mobile-shell-push-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-passkeys-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-revocation-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
      await require('./mobile-shell-equipment-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });

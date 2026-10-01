@@ -1,3 +1,4 @@
+import { PushService } from '../push/service.ts';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -99,7 +100,7 @@ before(async () => {
 	if (!databaseUrl) return;
 	db = await freshDatabase();
 	const passkeys = new PasskeyService(db.app, webauthn);
-	const common = { db: db.app, passkeys, organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), rateLimiter: limiter };
+	const common = { push: new PushService(db.app, { async send() { return { statusCode: 201 }; } }, 'B' + 'a'.repeat(86)), db: db.app, passkeys, organisations: new OrganisationService(db.app), commitments: new CommitmentsService(db.app), rateLimiter: limiter };
 	auth = new AuthService(db.app, google, { appUrl: 'https://app.example.test', sessionTtlDays: 30, passkeys });
 	app = createApp({ ...common, auth, web: { exportDir, secureCookies: true } });
 	bare = createApp({ ...common, auth, web: { exportDir: join(exportDir, 'absent'), secureCookies: false } });
@@ -298,4 +299,26 @@ it('cookie member controls retain CSRF, tenant, owner/admin and last-owner rules
  assert.equal((await request(stranger.cookie, `${base}/members/${memberMe.user.id}`, 'DELETE')).status, 404);
  await read(await request(owner.cookie, `${base}/members/${memberMe.user.id}`, 'DELETE'), 200);
  assert.equal((await request(member.cookie, `${base}/members`)).status, 404, 'the removed member loses access');
+});
+
+
+it('cookie push controls isolate devices by person and tenant and require the web header for writes', async () => {
+ const owner = await signIn(), stranger = await signIn();
+ const request = (cookie: string, path: string, method = 'GET', body?: unknown) => call(app, path, { cookie, method, body, headers: { [web]: 'web' } });
+ const org = await read<{ id: string }>(await request(owner.cookie, '/v1/organisations', 'POST', { name: 'Notification crew' }), 201);
+ const base = `/v1/organisations/${org.id}/push`;
+ const input = { endpoint: 'https://push.example.test/cookie-device', keys: { p256dh: 'synthetic', auth: 'synthetic' }, userAgent: 'Test browser' };
+ assert.equal((await call(app, `${base}/subscriptions`, { cookie: owner.cookie, method: 'POST', body: input })).status, 401);
+ const created = await read<{ id: string; endpoint: string }>(await request(owner.cookie, `${base}/subscriptions`, 'POST', input), 201);
+ assert.equal(created.endpoint, input.endpoint);
+ const config = await read<{ configured: boolean }>(await request(owner.cookie, '/v1/push/config'), 200); assert.equal(config.configured, true);
+ assert.equal((await request(stranger.cookie, `${base}/subscriptions`)).status, 404);
+ const invite = await read<{ token: string }>(await request(owner.cookie, `/v1/organisations/${org.id}/invitations`, 'POST', { email: stranger.identity.email, role: 'member' }), 201);
+ await read(await request(stranger.cookie, '/v1/invitations/accept', 'POST', { token: invite.token }), 200);
+ const theirs = await read<{ subscriptions: unknown[] }>(await request(stranger.cookie, `${base}/subscriptions`), 200); assert.deepEqual(theirs.subscriptions, []);
+ assert.equal((await request(stranger.cookie, `${base}/subscriptions`, 'DELETE', { endpoint: input.endpoint })).status, 404);
+ const delivery = await read<{ deliveries: { state: string }[] }>(await request(owner.cookie, `${base}/test`, 'POST', {}), 200); assert.equal(delivery.deliveries[0]?.state, 'sent');
+ assert.equal((await call(app, `${base}/subscriptions`, { cookie: owner.cookie, method: 'DELETE', body: { endpoint: input.endpoint } })).status, 401);
+ await read(await request(owner.cookie, `${base}/subscriptions`, 'DELETE', { endpoint: input.endpoint }), 200);
+ const mine = await read<{ subscriptions: unknown[] }>(await request(owner.cookie, `${base}/subscriptions`), 200); assert.deepEqual(mine.subscriptions, []);
 });
