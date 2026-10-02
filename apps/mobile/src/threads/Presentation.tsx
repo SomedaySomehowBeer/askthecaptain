@@ -1,8 +1,8 @@
 /** Presentation only: existing callers own every action, disabled state and request. */
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, type TextInputProps } from 'react-native';
+import { Pressable, Text, TextInput, type TextInputProps } from 'react-native';
 import type { RecordKind } from './contracts.ts';
-import { colors } from '../theme/tokens.ts';
+import { themedStyles, useTheme } from '../theme/theme.ts';
 
 type ActionProps = {
  label: string;
@@ -15,6 +15,7 @@ type ActionProps = {
 };
 
 export function ThreadAction({ label, onPress, disabled = false, primary = false, testID, display, dashed = false }: ActionProps) {
+ const styles = useStyles();
  return <Pressable testID={testID} role="button" aria-label={label} aria-disabled={disabled}
   disabled={disabled} onPress={disabled ? undefined : onPress}
   style={[styles.action, primary && styles.primary, dashed && styles.dashed]}>
@@ -24,6 +25,8 @@ export function ThreadAction({ label, onPress, disabled = false, primary = false
 }
 
 export function ComposerInput(props: TextInputProps) {
+ const styles = useStyles();
+ const { colors } = useTheme();
  const [height, setHeight] = useState(44);
  useEffect(() => { if (!props.value) setHeight(44); }, [props.value]);
  return <TextInput {...props} multiline placeholderTextColor={colors.muted}
@@ -66,7 +69,7 @@ export function dayLabel(instant:string) {
  return new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(new Date(instant));
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
  action: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start', borderRadius: 10 },
  actionText: { fontSize: 13, fontWeight: '600', color: colors.action },
  primary: { backgroundColor: colors.action, paddingHorizontal: 12 },
@@ -74,4 +77,4 @@ const styles = StyleSheet.create({
  dashed: { alignSelf: 'stretch', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.line },
  disabledText: { color: colors.muted },
  input: { flex: 1, minWidth: 0, color: colors.body, fontSize: 15, lineHeight: 21, paddingHorizontal: 10, paddingVertical: 11, minHeight: 44, maxHeight: 120, textAlignVertical: 'top' }
-});
+}));

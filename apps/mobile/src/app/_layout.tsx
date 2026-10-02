@@ -14,7 +14,7 @@ export default function RootLayout() {
 	const source = accountInstance(() => appAccountPlatform, Platform.OS === 'web' ? { create: () => webAccountSource() } : {});
 	return (
 		<>
-			<StatusBar style="dark" />
+			<StatusBar style="auto" />
 			<AccountProvider source={source}>
 				<RootStack />
 			</AccountProvider>

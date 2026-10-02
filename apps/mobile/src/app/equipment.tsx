@@ -2,7 +2,7 @@ import { useAccount } from '../account/AccountProvider.tsx';
 import Welcome from './welcome.tsx';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { equipmentCopy, equipmentTimesIn, threadsCopy, webCopy } from '../account/copy.ts';
 import { Button } from '../components/AccountPage.tsx';
 import { Notice } from '../components/Notice.tsx';
@@ -12,7 +12,8 @@ import { ReservationPanel } from '../resources/equipment/ReservationPanel.tsx';
 import { panelRow, scheduleScreen, type Control, type Intent, type ScheduleScreen } from '../resources/equipment/schedule.ts';
 import { Timeline } from '../resources/equipment/Timeline.tsx';
 import { useEquipmentSchedule } from '../resources/equipment/useEquipmentSchedule.ts';
-import { colors, type } from '../theme/tokens.ts';
+import { type } from '../theme/tokens.ts';
+import { themedStyles } from '../theme/theme.ts';
 
 /** The equipment schedule, read-only, opened from its pinned row (docs/plans/expo-mobile-equipment-read-2026-09.md §5;
  *  D38: buttons only). Bookings for shared equipment across equipment and days. Only a fully read period may leave
@@ -25,6 +26,7 @@ export default function EquipmentPage() {
 }
 
 function EquipmentSchedule() {
+	const styles = useStyles();
 	const schedule = useEquipmentSchedule();
 	const [open, setOpen] = useState<{ equipment: Equipment; reservationId: string } | null>(null);
 	const state = schedule.state;
@@ -78,6 +80,7 @@ function EquipmentSchedule() {
 
 /** Subtitle, zone line, Refresh, the one screen-level problem with its way out, the catalogue notices and the legend. */
 function Header({ screen, onRefresh, onPress }: { screen: ScheduleScreen; onRefresh: () => boolean; onPress: (intent: Intent) => boolean }) {
+	const styles = useStyles();
 	const cellRetry = screen.cellRetry;
 	// With the schedule still shown (a failed Refresh keeps it, labelled stale), its Try again sits with the problem.
 	const tryAgain = screen.body === 'timeline' || screen.body === 'empty' ? screen.tryAgain : null;
@@ -105,6 +108,7 @@ function Header({ screen, onRefresh, onPress }: { screen: ScheduleScreen; onRefr
 
 /** The no-timeline states, each in words (contract §5 table). */
 function Body({ screen, onPress }: { screen: ScheduleScreen; onPress: (intent: Intent) => boolean }) {
+	const styles = useStyles();
 	const tryAgain = screen.tryAgain;
 	const retry = tryAgain === null ? null
 		: <ControlButton testID="equipment-try-again" label={equipmentCopy.tryAgain} control={tryAgain} onPress={() => { onPress(tryAgain.intent); }} />;
@@ -124,10 +128,10 @@ function ControlButton({ testID, label, control, onPress }: { testID: string; la
 	return <Button testID={testID} label={label} disabled={control.disabled} reason={control.reason} onPress={onPress} />;
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
 	fill: { flex: 1 },
 	stack: { gap: 12 },
 	subtitle: { fontSize: type.body, color: colors.muted, marginTop: -8 },
 	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
 	detail: { fontSize: 13, lineHeight: 18, color: colors.muted }
-});
+}));

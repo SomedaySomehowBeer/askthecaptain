@@ -1,17 +1,19 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { faultLines, isSignedIn, organisationCopy, roleLabel, signedInNotices, type Action } from '../account/copy.ts';
 import { AccountPageFrame, Actions, Lines, useWaitWake } from '../components/AccountPage.tsx';
 import { PlainScreen } from '../components/Screen.tsx';
 import Welcome from './welcome.tsx';
-import { colors, space, type } from '../theme/tokens.ts';
+import { space, type } from '../theme/tokens.ts';
+import { themedStyles } from '../theme/theme.ts';
 
 /** Choosing an organisation (docs/plans/expo-mobile-auth-composition-2026-09.md §4.4): the chooser while signed in but
  *  not ready, and Switch organisation from Account while ready. Rows come only from the latest applied membership list.
  *  Choosing another organisation sends the command; the root stack then returns to the thread list (RootStack).
  *  Choosing the current one just goes back. */
 export default function Organisation() {
+	const styles = useStyles();
 	const account = useAccount();
 	useWaitWake(account);
 	const view = account.snapshot.account;
@@ -59,10 +61,10 @@ export default function Organisation() {
 	return <AccountPageFrame heading={organisationCopy.chooseHeading}>{body}</AccountPageFrame>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
 	list: { gap: 8, marginBottom: 16 },
 	row: { minHeight: space.rowMinHeight, borderRadius: 14, borderWidth: 1, borderColor: colors.rowLine, backgroundColor: colors.card, padding: space.rowPadding, justifyContent: 'center', gap: 2 },
 	current: { backgroundColor: colors.sage, borderColor: colors.sageText },
 	name: { fontSize: type.body, fontWeight: '600', color: colors.heading },
 	role: { fontSize: 13, color: colors.muted }
-});
+}));

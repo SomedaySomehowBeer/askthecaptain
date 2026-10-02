@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Action, Line } from '../account/copy.ts';
 import { copy, isSignedIn, nextWake, revocationDisabled, revocationLines, revokeOthersCopy, snapshotWaits, webCopy } from '../account/copy.ts';
 import { useRevocation, type Account } from '../account/AccountProvider.tsx';
 import type { Wait } from '../account/clock.ts';
 import type { PersonScope } from '../account/revocation.ts';
-import { colors, space, type } from '../theme/tokens.ts';
+import { space, type } from '../theme/tokens.ts';
+import { themedStyles } from '../theme/theme.ts';
 import { Notice } from './Notice.tsx';
 
 /** The account pages' shared parts (docs/plans/expo-mobile-auth-composition-2026-09.md §4.2): the plain page language
@@ -26,6 +27,7 @@ export function useWaitWake(account: Account, extra: readonly (Wait | null)[] = 
 }
 
 export function AccountPageFrame({ heading, children, header }: { heading: string; children: ReactNode; header?: ReactNode }) {
+	const styles = useStyles();
 	const insets = useSafeAreaInsets();
 	return (
 		<View style={[styles.page, { paddingTop: insets.top }]}>
@@ -39,6 +41,7 @@ export function AccountPageFrame({ heading, children, header }: { heading: strin
 }
 
 export function Lines({ body, notices }: { body: readonly string[]; notices: readonly Line[] }) {
+	const styles = useStyles();
 	return (
 		<View style={styles.stack}>
 			{body.map((text) => <Text key={text} style={styles.body}>{text}</Text>)}
@@ -50,6 +53,7 @@ export function Lines({ body, notices }: { body: readonly string[]; notices: rea
 export function Button({ label, onPress, primary = false, disabled = false, reason, testID }: {
 	label: string; onPress: () => void; primary?: boolean; disabled?: boolean; reason?: string | null; testID?: string;
 }) {
+	const styles = useStyles();
 	return (
 		<View style={styles.buttonWrap}>
 			<Pressable
@@ -68,6 +72,7 @@ export function Button({ label, onPress, primary = false, disabled = false, reas
 /** A button that is a plain link: on the web React Native Web renders a View with `href` as an anchor, so the browser
  *  navigates in the same tab (the sign-in start, a full-page step). Never `Linking.openURL`, which opens a new tab. */
 export function LinkButton({ href, label, primary = false, testID }: { href: string; label: string; primary?: boolean; testID?: string }) {
+	const styles = useStyles();
 	const anchor = { href } as object;
 	return (
 		<View style={styles.buttonWrap}>
@@ -80,6 +85,7 @@ export function LinkButton({ href, label, primary = false, testID }: { href: str
 
 /** Every action on a page. A forbidden action is shown disabled with its reason, never hidden. Sign out asks first. */
 export function Actions({ actions, account }: { actions: readonly Action[]; account: Account }) {
+	const styles = useStyles();
 	const [confirming, setConfirming] = useState(false);
 	return (
 		<View style={styles.stack}>
@@ -113,6 +119,7 @@ export function Actions({ actions, account }: { actions: readonly Action[]; acco
  *  `useRevocation`; only whether the confirmation is open is local. The person scope is captured when the confirmation
  *  opens and sent with the press, so a press made for another sign-in (even as the same person) sends nothing. */
 export function RevokeOthers({ account }: { account: Account }) {
+	const styles = useStyles();
 	const view = useRevocation();
 	const [confirming, setConfirming] = useState<PersonScope | null>(null);
 	useWaitWake(account, [view.wait]);
@@ -145,7 +152,7 @@ export function RevokeOthers({ account }: { account: Account }) {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
 	page: { flex: 1, backgroundColor: colors.page },
 	spacer: { minHeight: 52 },
 	content: { paddingHorizontal: space.page, width: '100%', maxWidth: space.maxContentWidth, alignSelf: 'center' },
@@ -161,4 +168,4 @@ const styles = StyleSheet.create({
 	primaryText: { color: colors.actionText },
 	reason: { fontSize: 13, lineHeight: 18, color: colors.muted },
 	confirm: { gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card }
-});
+}));
