@@ -1,5 +1,15 @@
 # Staging resumed; production paused (2026-09-27)
 
+## Dark colour scheme release (2 October 2026, 04:31–04:32 UTC)
+
+On the owner's instruction, `main` at `b165e12` was deployed to `askthecaptain-api-staging` from the droplet
+(image `registry.fly.io/askthecaptain-api-staging:git-b165e12`). It carries the dark colour scheme
+([#235](https://github.com/SomedaySomehowBeer/askthecaptain/pull/235)) and a group-heading wording fix (#237). The
+release command ran and applied no migration (schema stays at 0046); the one machine `80e39ea6416e18` took the image
+and passed its check. Afterwards `/readyz` and `/healthz` answered 200, the page carried both `theme-color` metas and
+the dark background rule with `cache-control: no-store`, and the threads API answered 401 without a session.
+Not covered: no signed-in hosted check in either scheme, and no native device. Rollback: redeploy image `git-8a9768e`.
+
 ## Threads release: migration 0046 and the thread screens (2 October 2026, 03:28–03:30 UTC)
 
 R2 of the chat-first rebuild is on staging: [#229](https://github.com/SomedaySomehowBeer/askthecaptain/pull/229)
