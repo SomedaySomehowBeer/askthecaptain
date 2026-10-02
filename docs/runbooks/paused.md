@@ -1,5 +1,38 @@
 # Staging resumed; production paused (2026-09-27)
 
+## Threads release: migration 0046 and the thread screens (2 October 2026, 03:28–03:30 UTC)
+
+R2 of the chat-first rebuild is on staging: [#229](https://github.com/SomedaySomehowBeer/askthecaptain/pull/229)
+(projects as tags, the thread model, migration 0046, the `/threads` API), the client in #230, #232 and #233, and the
+account controls of #223, #225 and #226. The owner instructed the deploy. `flyctl deploy -a askthecaptain-api-staging
+-c apps/api/fly.staging.toml` ran from `main` at `8a9768e` on the droplet under the owner's Fly login; image
+`registry.fly.io/askthecaptain-api-staging:git-8a9768e`. The release command applied `0046_threads.sql` at
+**03:29:57Z** and the queue installer completed; the one existing machine `80e39ea6416e18` took the new image and
+passed its check. Evidence: [validation folder](../validation/threads-2026-10-01/release.md).
+
+- **Gate (read-only, owner connection, 03:26:45Z):** one organisation, one project, 5 tags, 35 task tags (none on a
+  step), 14 top-level tasks and 12 steps, 2 series, 7 bookings, 7 stock items, no saved views, one demo conversation
+  with one message, schema at 0045. No refusal condition.
+- **After (read-only, 03:31:00Z):** schema at 0046; 6 tags; 28 record threads (14 tasks, 7 bookings, 7 stock items);
+  56 thread tags (35 task tags, 14 task projects, 7 booking projects); 2 series tags; the eight 0042/0043 tables,
+  `projects`, `task_tags` and every `project_id` column gone; row security forced on all nine thread tables.
+- **Hosted, without a session:** `/readyz` and `/healthz` 200; `/` serves the export with `cache-control: no-store`;
+  `/sw.js` and `/manifest.webmanifest` are served with their types; `/v1/organisations/…/threads` answers 401.
+
+**Differences from the contract's §8, stated plainly.** HTTP was not stopped: the deploy used the configured release
+command while the machine was started (staging has one user, and no request failed that we know of). No Neon branch
+was taken first: the rollback point is Neon history before 03:29:57Z, within whatever retention the project has.
+One staging project had a description, which the migration does not carry; it is recoverable only from that history.
+The demo chat rows were dropped, as the owner decided on 1 October.
+
+**Not covered:** no signed-in hosted check yet. The owner's checks are passkey registration and step-up, an
+invitation round trip, a real test notification, the thread list, opening a task thread, sending a message, and
+creating a topic and a private thread. Issue #221 stays open until the first three pass. Production is unchanged.
+
+**Rollback:** an earlier API image cannot run against 0046 (it reads `projects` and the old chat tables). Fix
+forward, or restore the database from Neon history to before 03:29:57Z and redeploy the previous image
+`deployment-01M3RKG66S2WX49H5X5F4ME5ZM`.
+
 ## Web staging app destroyed (1 October 2026)
 
 At the owner's instruction the Fly app `askthecaptain-web-staging` was destroyed (`flyctl apps destroy`, run from the

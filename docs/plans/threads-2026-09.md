@@ -1,6 +1,6 @@
 # Threads: the R2 contract
 
-Status: root contract, 30 September 2026, for increment R2 of the
+Status: **delivered to staging on 2 October 2026** ([release record](../validation/threads-2026-10-01/release.md)); root contract, 30 September 2026, for increment R2 of the
 [chat-first rebuild](chat-first-rebuild-2026-09.md). Outcome: **discuss work** — every record has one
 thread, the app is one list of threads, and a person can start a topic by writing its first message.
 Implements D27, D28, D7 (projects are tags) and the migration half of D25 (decision 3 of the rebuild plan). It does not

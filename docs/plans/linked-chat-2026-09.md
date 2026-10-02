@@ -1,5 +1,8 @@
 # Linked chat: contract and PR sequence
 
+> **Historical (2 October 2026).** Replaced by the [threads contract](threads-2026-09.md): migration 0046 dropped the
+> 0042/0043 tables on staging and the `/conversations` API is retired. Kept for the rules the threads contract refers to with "as before".
+
 Status: **adopted in #160** (revision 5), 26 September 2026. That PR applied
 the §11 amendments to `AGENTS.md` and `docs/plan.md`.
 PR B (#169) shipped to staging after the runtime-role repair (#162–#168), with migration 0042
