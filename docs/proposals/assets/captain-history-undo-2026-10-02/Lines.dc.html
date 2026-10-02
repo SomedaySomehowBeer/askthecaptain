@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Thread with change lines</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./captain.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;600;700&display=swap">
+<style>
+body{margin:0}
+a{color:#276744}a:hover{color:#1f5638}
+</style>
+</helmet>
+<div class="screen" style="width: 390px; height: 844px">
+<div class="top">
+<a class="back" href="#top"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Threads</a>
+<div class="top-actions">
+<a class="icon-btn" href="History.dc.html" aria-label="History"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 107.5-7.5A7.6 7.6 0 006 7.5"/><path d="M4 4.5v3.4h3.4"/><path d="M12 8v4.2l2.8 1.8"/></svg></a>
+<button class="icon-btn" aria-label="Star thread"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.2 4.1 1 5.8-5.3-2.8-5.3 2.8 1-5.8-4.2-4.1 5.9-.9z"/></svg></button>
+<div class="avatar">MC</div>
+</div>
+</div>
+<div class="card">
+<div class="card-head">
+<h1 class="title card-title">Package summer lager</h1>
+<span class="chip">In progress</span>
+<a class="icon-btn" href="Main.dc.html" aria-label="Show details" style="width: 32px; height: 32px; color: #142619"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></a>
+</div>
+<div class="facts">
+<div><p class="label">Owner</p><p class="value">Tom Reilly</p></div>
+<div><p class="label">Due</p><p class="value">Thu 8 Oct</p></div>
+</div>
+</div>
+<div class="msgs">
+<div class="day">Thursday 1 October</div>
+<div class="msg">
+<div class="avatar avatar-sm">TR</div>
+<div class="msg-main">
+<div class="msg-head"><span class="name">Tom Reilly</span><span class="time">1:58 pm</span></div>
+<p>Labels are delayed. The printer says Wednesday now, not Monday.</p>
+</div>
+</div>
+<a class="change" href="History.dc.html">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>
+<span><b>Maya</b> changed the due date from <b>Tue 6 Oct</b> to <b>Thu 8 Oct</b> and added the tag <b>Production</b> · 4:40 pm</span>
+</a>
+<div class="msg">
+<div class="avatar avatar-sm">MC</div>
+<div class="msg-main">
+<div class="msg-head"><span class="name">Maya Chen</span><span class="time">4:41 pm</span></div>
+<p>Moved it to Thursday so the labels are here first.</p>
+</div>
+</div>
+<div class="day">Friday 2 October</div>
+<div class="unread">Unread</div>
+<a class="change" href="History.dc.html">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>
+<span><b>Tom</b> changed the owner from <b>Maya Chen</b> to <b>Tom Reilly</b> · 9:12 am</span>
+</a>
+<div class="msg">
+<div class="avatar avatar-sm">TR</div>
+<div class="msg-main">
+<div class="msg-head"><span class="name">Tom Reilly</span><span class="time">9:13 am</span></div>
+<p>I'll take this one from here. Maya has the launch to run.</p>
+</div>
+</div>
+<a class="change" href="History.dc.html">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/></svg>
+<span><b>Tom</b> ticked the step <b>Book the canning line</b> · 9:20 am</span>
+</a>
+</div>
+<div class="composer"><span>Message</span><button class="btn btn-primary">Send</button></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
