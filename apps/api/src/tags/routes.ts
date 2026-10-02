@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Session } from '../auth/service.ts';
 import { badRequest } from '../errors.ts';
+import { changeSetHeader } from '../changes.ts';
 import { TagsService, workQuery } from './service.ts';
 type Vars = { Variables: { requestId: string; session: Session } };
 const uuid = z.string().uuid();
@@ -19,8 +20,9 @@ export function tagsRoutes(service: TagsService) {
   const { offset, limit } = pagination.parse(c.req.query());
   return c.json(await service.list(actor(c), uuid.parse(c.req.param('id')), offset, limit));
  });
- routes.post('/v1/organisations/:id/tags', async c => c.json(await service.create(actor(c), uuid.parse(c.req.param('id')), await readJson(c.req)), 201));
- routes.patch('/v1/organisations/:id/tags/:tagId', async c => c.json(await service.update(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('tagId')), await readJson(c.req))));
+ const changed = <T extends { changeSetId: string }>(c: { header(name: string, value: string): void }, result: T) => { c.header(changeSetHeader, result.changeSetId); return result; };
+ routes.post('/v1/organisations/:id/tags', async c => c.json(changed(c, await service.create(actor(c), uuid.parse(c.req.param('id')), await readJson(c.req))), 201));
+ routes.patch('/v1/organisations/:id/tags/:tagId', async c => c.json(changed(c, await service.update(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('tagId')), await readJson(c.req)))));
  routes.get('/v1/organisations/:id/tasks/:taskId/tag-options', async c => {
   const { offset, limit } = pagination.parse(c.req.query());
   return c.json(await service.options(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('taskId')), offset, limit));

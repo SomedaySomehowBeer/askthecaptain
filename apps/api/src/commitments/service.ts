@@ -1,5 +1,5 @@
-import { withTenant, type Sql, type TransactionSql } from '@captain/db';
-import { audit } from '../audit.ts';
+import { openChangeSet, withTenant, type Sql, type TransactionSql } from '@captain/db';
+import { createdItem, createdRecord, personChangeSet } from '../changes.ts';
 import { badRequest, HttpError, notFound } from '../errors.ts';
 import { roleOf, type Actor } from '../tenant.ts';
 import { attachSeriesTags, requireTags } from '../threads/tags.ts';
@@ -16,6 +16,8 @@ export type Evidence = { id: string; taskId: string; kind: 'mail' | 'file' | 'ur
 /** `tagIds` are the series' tags, which each new occurrence receives on its thread (threads contract §3). */
 export type Series = { id: string; tagIds: string[]; title: string; body: string; ownerId: string | null; evidenceRequired: boolean; recurrence: Recurrence;
 	everyMonths: number | null; anchor: string; dueOffsetDays: number; pausedAt: Date | null; nextDue: string | null; revision: number; createdAt: Date; updatedAt: Date };
+/** A journalled write answers with its change set (versions contract §5). */
+export type Changed<T> = T & { changeSetId: string };
 export type Overview = { tasks: Task[]; series: Series[]; today: string; timezone: string };
 export type Page = { offset: number; limit: number };
 /** `tags` are the tags on the task's thread (threads contract §5): tagging is a thread write. */
@@ -31,15 +33,14 @@ const taskSelect = `select t.id, t.parent_id, t.title, t.body, t.status, t.owner
 	from tasks t left join users u on u.id = t.owner_id`;
 const evidenceColumns = 'id, task_id, kind, reference, label, attached_by, attached_at';
 const statuses: TaskStatus[] = ['suggested', 'open', 'in_progress', 'done', 'cancelled'];
-const person = (actor: Actor) => ({ kind: 'person' as const, id: actor.userId });
 const stale = () => new HttpError(409, 'stale_revision', 'This changed since you opened it. Reload it before saving again.');
 /** A bounded, case-insensitive substring match; `%`, `_` and `\` in the search are literal. */
 const like = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 const paged = <T>(rows: T[], page: Page) => ({ items: rows.slice(0, page.limit), nextOffset: rows.length > page.limit ? page.offset + page.limit : null });
 
 /** Tasks, series and evidence: the one work record (D7; a project is a tag since 0046). Any active member may use it; the
- *  database keeps it inside the tenant, every write is audited, and every edit of an existing record
- *  names the revision it was based on. */
+ *  database keeps it inside the tenant, every write opens a change set that the database journals (0047; it is the
+ *  write's audit record), and every edit of an existing record names the revision it was based on. */
 export class CommitmentsService {
 	readonly #db: Sql;
 	constructor(db: Sql) { this.#db = db; }
@@ -139,12 +140,20 @@ export class CommitmentsService {
 
 	/** A task, or with `parentId` a checklist item, one level deep (D7). Adding an item names the parent's revision and
 	 *  moves it on. A top-level task gets its thread from its insert (0046); its tags are thread writes. */
-	async createTask(actor: Actor, organisationId: string, input: { parentId?: string; expectedParentRevision?: number; title: string; body?: string; ownerId?: string | null; due?: string | null; status?: TaskStatus }): Promise<Task> {
+	async createTask(actor: Actor, organisationId: string, raw: { changeSetId?: string; parentId?: string; expectedParentRevision?: number; title: string; body?: string; ownerId?: string | null; due?: string | null; status?: TaskStatus }): Promise<Changed<Task>> {
 		await roleOf(this.#db, actor.userId, organisationId);
+		const { changeSetId, ...input } = raw;
 		const title = input.title.trim(); if (!title) throw badRequest('title_required', 'the task needs a title');
 		if (input.parentId && input.expectedParentRevision === undefined) throw badRequest('revision_required', 'adding a checklist item needs the task revision it was based on');
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
 			await this.#activeMember(tx, organisationId, actor);
+			const changeSet = await personChangeSet(tx, actor, 'task.create', input, changeSetId);
+			if (changeSet.matched) {
+				const id = input.parentId ? (await createdItem(tx, changeSet.id, 'step'))?.itemId : await createdRecord(tx, changeSet.id, 'task');
+				const [task] = id ? await this.#tasks(tx, organisationId, tx`t.id = ${id}`) : [];
+				if (!task) throw notFound('That task is not available.');
+				return { ...task, changeSetId: changeSet.id };
+			}
 			if (input.parentId) {
 				// Lock the parent: a concurrent edit either happens first (and this is stale) or waits.
 				const [parent] = await tx<{ parentId: string | null; revision: number }[]>`select parent_id, revision from tasks where id = ${input.parentId} and organisation_id = ${organisationId} for update`;
@@ -158,17 +167,23 @@ export class CommitmentsService {
 				values (${organisationId}, ${input.parentId ?? null}, ${title}, ${input.body?.trim() ?? ''}, ${status}, ${input.ownerId ?? null}, ${input.due ?? null}::date, 'person', ${actor.userId},
 					${status === 'done' ? actor.userId : null}, ${status === 'done' ? new Date() : null}, ${actor.userId}) returning id`;
 			if (input.parentId) await tx`update tasks set updated_at = now() where organisation_id = ${organisationId} and id = ${input.parentId}`;
-			await audit(tx, { organisationId, actor: person(actor), action: 'task.created', subjectType: 'task', subjectId: row!.id, requestId: actor.requestId, detail: { title, parentId: input.parentId ?? null, due: input.due ?? null } });
-			return (await this.#tasks(tx, organisationId, tx`t.id = ${row!.id}`))[0]!;
+			return { ...(await this.#tasks(tx, organisationId, tx`t.id = ${row!.id}`))[0]!, changeSetId: changeSet.id };
 		});
 	}
 
 	/** Fields of a task, with `expectedRevision`. Its checklist follows its status. Tags are thread writes. */
-	async updateTask(actor: Actor, organisationId: string, taskId: string, input: { expectedRevision: number; title?: string; body?: string; ownerId?: string | null; due?: string | null; status?: TaskStatus }): Promise<Task> {
+	async updateTask(actor: Actor, organisationId: string, taskId: string, raw: { changeSetId?: string; expectedRevision: number; title?: string; body?: string; ownerId?: string | null; due?: string | null; status?: TaskStatus }): Promise<Changed<Task>> {
 		await roleOf(this.#db, actor.userId, organisationId);
+		const { changeSetId, ...input } = raw;
 		if (input.title !== undefined && !input.title.trim()) throw badRequest('title_required', 'the task needs a title');
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
 			await this.#activeMember(tx, organisationId, actor);
+			const changeSet = await personChangeSet(tx, actor, 'task.update', { taskId, ...input }, changeSetId);
+			if (changeSet.matched) {
+				const [task] = await this.#tasks(tx, organisationId, tx`t.id = ${taskId}`);
+				if (!task) throw notFound('that task does not exist');
+				return { ...task, changeSetId: changeSet.id };
+			}
 			const [current] = await tx<{ status: TaskStatus; parentId: string | null; ownerId: string | null; evidenceRequired: boolean; revision: number }[]>`select t.status, t.parent_id, t.owner_id, t.revision, t.evidence_required
 				from tasks t where t.id = ${taskId} and t.organisation_id = ${organisationId} for update`;
 			if (!current) throw notFound('that task does not exist');
@@ -194,20 +209,26 @@ export class CommitmentsService {
 			else if (input.status === 'cancelled') await tx`update tasks set status = 'cancelled', updated_at = now() where organisation_id = ${organisationId} and parent_id = ${taskId} and status in ('suggested', 'open', 'in_progress')`;
 			else if (input.status === 'open' && current.status === 'suggested') await tx`update tasks set status = 'open', updated_at = now() where organisation_id = ${organisationId} and parent_id = ${taskId} and status = 'suggested'`;
 			const [task] = await this.#tasks(tx, organisationId, tx`t.id = ${taskId}`);
-			const { expectedRevision: _, ...change } = input;
-			await audit(tx, { organisationId, actor: person(actor), action: completing ? 'task.completed' : 'task.updated', subjectType: 'task', subjectId: taskId, requestId: actor.requestId, detail: { ...change, revision: task!.revision } });
-			return task!;
+			return { ...task!, changeSetId: changeSet.id };
 		});
 	}
 
-	async createSeries(actor: Actor, organisationId: string, input: { tagIds?: string[]; title: string; body?: string; ownerId?: string | null; evidenceRequired?: boolean;
-		recurrence: Recurrence; everyMonths?: number | null; anchor: string; dueOffsetDays?: number }): Promise<Series> {
+	async createSeries(actor: Actor, organisationId: string, raw: { changeSetId?: string; tagIds?: string[]; title: string; body?: string; ownerId?: string | null; evidenceRequired?: boolean;
+		recurrence: Recurrence; everyMonths?: number | null; anchor: string; dueOffsetDays?: number }): Promise<Changed<Series>> {
 		await roleOf(this.#db, actor.userId, organisationId);
+		const { changeSetId, ...input } = raw;
 		const title = input.title.trim(); if (!title) throw badRequest('title_required', 'the series needs a title');
 		const rule: SeriesRule = { recurrence: input.recurrence, everyMonths: input.recurrence === 'custom' ? input.everyMonths ?? null : null, anchor: input.anchor, dueOffsetDays: input.dueOffsetDays ?? 0 };
 		try { monthsPerPeriod(rule); nextPeriod(rule, rule.anchor); } catch (error) { throw badRequest('recurrence_invalid', error instanceof Error ? error.message : 'the recurrence is not valid'); }
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
 			await this.#activeMember(tx, organisationId, actor);
+			const changeSet = await personChangeSet(tx, actor, 'series.create', input, changeSetId);
+			if (changeSet.matched) {
+				const id = await createdRecord(tx, changeSet.id, 'series');
+				const [series] = id ? await this.#series(tx, organisationId, await this.#today(tx, organisationId), id) : [];
+				if (!series) throw notFound('That recurring work is not available.');
+				return { ...series, changeSetId: changeSet.id };
+			}
 			const tagIds = [...new Set(input.tagIds ?? [])].sort();
 			await requireTags(tx, tagIds);
 			if (input.ownerId) await this.#requireMember(tx, organisationId, input.ownerId);
@@ -215,20 +236,26 @@ export class CommitmentsService {
 				values (${organisationId}, ${title}, ${input.body?.trim() ?? ''}, ${input.ownerId ?? null}, ${input.evidenceRequired ?? false}, ${rule.recurrence}, ${rule.everyMonths}, ${rule.anchor}::date, ${rule.dueOffsetDays}, ${actor.userId})
 				returning id`;
 			for (const tagId of tagIds) await tx`insert into task_series_tags (organisation_id, series_id, tag_id) values (${organisationId}, ${row!.id}, ${tagId})`;
-			await audit(tx, { organisationId, actor: person(actor), action: 'series.created', subjectType: 'task_series', subjectId: row!.id, requestId: actor.requestId, detail: { title, tagIds, ...rule } });
 			const today = await this.#today(tx, organisationId);
 			await this.#materialise(tx, organisationId, today, actor, row!.id);
-			return (await this.#series(tx, organisationId, today, row!.id))[0]!;
+			return { ...(await this.#series(tx, organisationId, today, row!.id))[0]!, changeSetId: changeSet.id };
 		});
 	}
 
 	/** `tagIds` replaces the series' tags for future occurrences; existing occurrences keep their thread's tags. */
-	async updateSeries(actor: Actor, organisationId: string, seriesId: string, input: { expectedRevision: number; tagIds?: string[]; title?: string; body?: string; ownerId?: string | null; evidenceRequired?: boolean;
-		recurrence?: Recurrence; everyMonths?: number | null; anchor?: string; dueOffsetDays?: number; paused?: boolean }): Promise<Series> {
+	async updateSeries(actor: Actor, organisationId: string, seriesId: string, raw: { changeSetId?: string; expectedRevision: number; tagIds?: string[]; title?: string; body?: string; ownerId?: string | null; evidenceRequired?: boolean;
+		recurrence?: Recurrence; everyMonths?: number | null; anchor?: string; dueOffsetDays?: number; paused?: boolean }): Promise<Changed<Series>> {
 		await roleOf(this.#db, actor.userId, organisationId);
+		const { changeSetId, ...input } = raw;
 		if (input.title !== undefined && !input.title.trim()) throw badRequest('title_required', 'the series needs a title');
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
 			await this.#activeMember(tx, organisationId, actor);
+			const changeSet = await personChangeSet(tx, actor, 'series.update', { seriesId, ...input }, changeSetId);
+			if (changeSet.matched) {
+				const [series] = await this.#series(tx, organisationId, await this.#today(tx, organisationId), seriesId);
+				if (!series) throw notFound('that series does not exist');
+				return { ...series, changeSetId: changeSet.id };
+			}
 			const [current] = await tx<{ ownerId: string | null; recurrence: Recurrence; everyMonths: number | null; anchor: string; dueOffsetDays: number; revision: number }[]>`select owner_id, recurrence, every_months, anchor::text as anchor, due_offset_days, revision from task_series where id = ${seriesId} and organisation_id = ${organisationId} for update`;
 			if (!current) throw notFound('that series does not exist');
 			if (current.revision !== input.expectedRevision) throw stale();
@@ -255,37 +282,46 @@ export class CommitmentsService {
 			const today = await this.#today(tx, organisationId);
 			await this.#materialise(tx, organisationId, today, actor, seriesId);
 			const [series] = await this.#series(tx, organisationId, today, seriesId);
-			const { expectedRevision: _, ...change } = input;
-			await audit(tx, { organisationId, actor: person(actor), action: 'series.updated', subjectType: 'task_series', subjectId: seriesId, requestId: actor.requestId, detail: { ...change, revision: series!.revision } });
-			return series!;
+			return { ...series!, changeSetId: changeSet.id };
 		});
 	}
 
 	/** Evidence is part of its task: adding it names the task's revision, locks the task and moves it on, so a
 	 *  retried request after an uncertain response is refused instead of attaching a second copy. */
-	async addEvidence(actor: Actor, organisationId: string, taskId: string, input: { expectedRevision: number; kind: 'mail' | 'file' | 'url'; reference: string; label?: string }): Promise<Evidence> {
+	async addEvidence(actor: Actor, organisationId: string, taskId: string, raw: { changeSetId?: string; expectedRevision: number; kind: 'mail' | 'file' | 'url'; reference: string; label?: string }): Promise<Changed<Evidence>> {
 		await roleOf(this.#db, actor.userId, organisationId);
+		const { changeSetId, ...input } = raw;
 		if (input.kind === 'mail') throw badRequest('evidence_kind_retired', 'Mail evidence is no longer supported. Attach a file reference or a link.');
 		const reference = input.reference.trim(); if (!reference) throw badRequest('reference_required', 'evidence needs a link or an id');
 		if (input.kind === 'url' && !/^https?:\/\//.test(reference)) throw badRequest('url_invalid', 'a URL must start with http:// or https://');
 		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
 			await this.#activeMember(tx, organisationId, actor);
+			const changeSet = await personChangeSet(tx, actor, 'evidence.add', { taskId, ...input }, changeSetId);
+			if (changeSet.matched) {
+				// The evidence row exactly as the first request attached it, even if it has been removed since.
+				const made = await createdItem(tx, changeSet.id, 'evidence');
+				if (!made) throw notFound('that evidence does not exist');
+				const a = made.after as { id: string; taskId: string; kind: Evidence['kind']; reference: string; label: string; attachedBy: string | null; attachedAt: string };
+				return { id: a.id, taskId: a.taskId, kind: a.kind, reference: a.reference, label: a.label, attachedBy: a.attachedBy, attachedAt: new Date(a.attachedAt), changeSetId: changeSet.id };
+			}
 			await this.#lockTask(tx, organisationId, taskId, input.expectedRevision);
 			const [row] = await tx<Evidence[]>`insert into evidence (organisation_id, task_id, kind, reference, label, attached_by)
 				values (${organisationId}, ${taskId}, ${input.kind}, ${reference}, ${input.label?.trim() ?? ''}, ${actor.userId})
 				returning ${tx.unsafe(evidenceColumns)}`;
 			await tx`update tasks set updated_at = now() where organisation_id = ${organisationId} and id = ${taskId}`;
-			await audit(tx, { organisationId, actor: person(actor), action: 'evidence.attached', subjectType: 'evidence', subjectId: row!.id, requestId: actor.requestId, detail: { taskId, kind: input.kind } });
-			return row!;
+			return { ...row!, changeSetId: changeSet.id };
 		});
 	}
 
 	/** Removing evidence names its task's revision. The last evidence of a done task that requires it cannot
 	 *  be removed: reopen the task first. */
-	async removeEvidence(actor: Actor, organisationId: string, evidenceId: string, input: { expectedRevision: number }): Promise<void> {
+	async removeEvidence(actor: Actor, organisationId: string, evidenceId: string, raw: { changeSetId?: string; expectedRevision: number }): Promise<{ changeSetId: string }> {
 		await roleOf(this.#db, actor.userId, organisationId);
-		await withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
+		const { changeSetId, ...input } = raw;
+		return withTenant(this.#db, { organisationId, userId: actor.userId }, async (tx) => {
 			await this.#activeMember(tx, organisationId, actor);
+			const changeSet = await personChangeSet(tx, actor, 'evidence.remove', { evidenceId, ...input }, changeSetId);
+			if (changeSet.matched) return { changeSetId: changeSet.id };
 			const [found] = await tx<{ taskId: string }[]>`select task_id from evidence where id = ${evidenceId} and organisation_id = ${organisationId}`;
 			if (!found) throw notFound('that evidence does not exist');
 			const task = await this.#lockTask(tx, organisationId, found.taskId, input.expectedRevision);
@@ -294,20 +330,20 @@ export class CommitmentsService {
 			const rows = await tx`delete from evidence where id = ${evidenceId} and organisation_id = ${organisationId} returning task_id`;
 			if (!rows.length) throw notFound('that evidence does not exist');
 			await tx`update tasks set updated_at = now() where organisation_id = ${organisationId} and id = ${found.taskId}`;
-			await audit(tx, { organisationId, actor: person(actor), action: 'evidence.removed', subjectType: 'evidence', subjectId: evidenceId, requestId: actor.requestId, detail: { taskId: found.taskId } });
+			return { changeSetId: changeSet.id };
 		});
 	}
 
 	/** Creates the current occurrence of every active series that lacks one (or of one series). The
-	 *  materialise-series routine's work: idempotent, journaled as the system, safe to call as often as
-	 *  wanted; `today` is the organisation's date unless a caller (a test) says otherwise. */
+	 *  materialise-series routine's work: idempotent, journalled as the system (a `routine` change set, opened only
+	 *  when an occurrence is missing), safe to call as often as wanted; `today` is the organisation's date unless a
+	 *  caller (a test) says otherwise. */
 	async materialise(organisationId: string, today?: string): Promise<number> {
 		return withTenant(this.#db, { organisationId }, async (tx) => this.#materialise(tx, organisationId, today ?? (await this.#today(tx, organisationId)), null));
 	}
 
 	/** Each new occurrence receives its series' tags on its own thread, in the same transaction (threads contract §3).
-	 *  With a person acting (a series create or edit) that is their audited thread write; the routine records the tag
-	 *  ids on the occurrence's `task.materialised` row instead. */
+	 *  With a person acting (a series create or edit) it is part of their change set; the routine opens its own. */
 	async #materialise(tx: TransactionSql, organisationId: string, today: string, actor: Actor | null, seriesId?: string): Promise<number> {
 		const active = await tx<{ id: string; title: string; body: string; ownerId: string | null; evidenceRequired: boolean; recurrence: Recurrence; everyMonths: number | null; anchor: string; dueOffsetDays: number }[]>`
 			select s.id, s.title, s.body, s.owner_id, s.evidence_required, s.recurrence, s.every_months, s.anchor::text as anchor, s.due_offset_days
@@ -316,17 +352,22 @@ export class CommitmentsService {
 				for share of s`;
 		// Share-locked: a concurrent pause or edit either commits first (and the locked row is re-checked, so a
 		// just-paused series is skipped) or waits until this occurrence exists. Tags never stop a series.
-		let created = 0;
+		let created = 0, journalled = actor !== null;
 		for (const series of active) {
 			const period = periodContaining(series, today);
 			if (!period) continue;
+			if (!journalled) {
+				const [exists] = await tx`select 1 from tasks where organisation_id = ${organisationId} and series_id = ${series.id} and period_start = ${period.start}::date`;
+				if (exists) continue;
+				await openChangeSet(tx, { actorKind: 'system', causeKind: 'routine', causeId: 'series.materialise' });
+				journalled = true;
+			}
 			const rows = await tx<{ id: string }[]>`insert into tasks (organisation_id, title, body, status, owner_id, due, source_kind, source_id, series_id, period_start, period_end, evidence_required)
 				values (${organisationId}, ${titleFor(series.title, period)}, ${series.body}, 'open', ${series.ownerId}, ${dueFor(series, period)}::date, 'series', ${series.id}, ${series.id}, ${period.start}::date, ${period.end}::date, ${series.evidenceRequired})
 				on conflict (series_id, period_start) where series_id is not null do nothing returning id`;
 			if (rows.length) {
 				created += 1;
-				const tagIds = await attachSeriesTags(tx, organisationId, actor, rows[0]!.id, series.id);
-				await audit(tx, { organisationId, actor: { kind: 'system' }, action: 'task.materialised', subjectType: 'task', subjectId: rows[0]!.id, detail: { seriesId: series.id, period, tagIds } });
+				await attachSeriesTags(tx, organisationId, actor, rows[0]!.id, series.id);
 			}
 		}
 		return created;

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { withTenant } from '@captain/db';
-import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
+import { databaseUrl, freshDatabase, withJournalledTenant, type Harness } from '@captain/db/test';
 import { TagsService } from '../tags/service.ts';
 import { SeriesRoutine } from './routine.ts';
 import { CommitmentsService } from './service.ts';
@@ -22,7 +22,8 @@ async function organisation(name = 'Work without projects') {
 	const org = String(o!.id), actor = { userId: String(u!.id), requestId: randomUUID() };
 	await db.owner`insert into memberships (organisation_id, user_id, role) values (${org}, ${actor.userId}, 'owner')`;
 	const tx = <T>(fn: Parameters<typeof withTenant<T>>[2]) => withTenant(db.app, { organisationId: org, userId: actor.userId }, fn);
-	return { org, actor, tx };
+	const write = <T>(fn: Parameters<typeof withTenant<T>>[2]) => withJournalledTenant(db.app, { organisationId: org, userId: actor.userId }, fn);
+	return { org, actor, tx, write };
 }
 const tagsOn = (taskId: string) => db.owner<{ tagId: string }[]>`select tt.tag_id from threads th join thread_tags tt on tt.thread_id = th.id where th.task_id = ${taskId} order by tt.tag_id`
 	.then((rows) => rows.map((r) => r.tagId));
@@ -32,8 +33,8 @@ it('a task and its checklist carry no project; the task has a thread and its ste
 	const task = await c.createTask(f.actor, f.org, { title: 'Service the chiller' });
 	const step = await c.createTask(f.actor, f.org, { title: 'Order the filter', parentId: task.id, expectedParentRevision: await rev('tasks', task.id) });
 	assert.ok(!('projectId' in task) && !('projectId' in step));
-	const [created] = await db.owner`select detail from audit_events where subject_id = ${task.id} and action = 'task.created'`;
-	assert.ok(!('projectId' in (created!.detail as object)));
+	const [created] = await db.owner<{ after: Record<string, unknown> }[]>`select after from record_changes where record_id = ${task.id} and operation = 'create' and item_id is null`;
+	assert.ok(!('projectId' in created!.after), 'the journalled row has no project');
 	assert.deepEqual((await db.owner`select task_id from threads where task_id in ${db.owner([task.id, step.id])}`).map((r) => r.taskId), [task.id]);
 	await assert.rejects(c.createTask(f.actor, f.org, { title: 'Too deep', parentId: step.id, expectedParentRevision: await rev('tasks', step.id) }), { code: 'step_depth' });
 	// Completing and cancelling still cascade to steps.
@@ -82,7 +83,7 @@ it('Work lists top-level tasks, untagged or tagged, never steps', async () => {
 	const work = await tags.work(f.actor, f.org, {});
 	assert.deepEqual(work.tasks.map(t => t.title), ['Brew', 'Sweep the cold room']);
 	const tag = await tags.create(f.actor, f.org, { name: 'Cellar' });
-	await f.tx(sql => sql`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by) select organisation_id, id, ${tag.id}, ${f.actor.userId} from threads where task_id = ${brew.id}`);
+	await f.write(sql => sql`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by) select organisation_id, id, ${tag.id}, ${f.actor.userId} from threads where task_id = ${brew.id}`);
 	assert.deepEqual((await tags.work(f.actor, f.org, { tagIds: [tag.id] })).tasks.map(t => [t.id, t.tags.map(x => x.name)]), [[brew.id, ['Cellar']]]);
 	assert.equal((await tags.options(f.actor, f.org, loose.id, 0, 10)).task.id, loose.id);
 });

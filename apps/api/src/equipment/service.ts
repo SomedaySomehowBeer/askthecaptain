@@ -1,6 +1,6 @@
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { z } from 'zod';
-import { audit } from '../audit.ts';
+import { changeSetId, createdRecord, personChangeSet } from '../changes.ts';
 import { HttpError, notFound } from '../errors.ts';
 import { roleOf, type Actor } from '../tenant.ts';
 import { recordThread, requireTags, tagsOfRecords, writeThreadTags } from '../threads/tags.ts';
@@ -26,14 +26,14 @@ const validBooking = (value: { startsAt: Date; endsAt: Date }) => {
  if (!(value.startsAt instanceof Date) || !(value.endsAt instanceof Date)) return true;
  return value.endsAt.getTime() > value.startsAt.getTime() && value.endsAt.getTime() - value.startsAt.getTime() <= 366 * day;
 };
-export const createReservation = z.object({ id: uuid, ...rangeFields, tagIds: tagIds.default([]) }).strict().refine(validBooking,
+export const createReservation = z.object({ id: uuid, changeSetId: changeSetId.optional(), ...rangeFields, tagIds: tagIds.default([]) }).strict().refine(validBooking,
  'The end must follow the start within 366 days.');
 /** `tagIds` absent keeps the thread's tags; present, the thread carries exactly those. */
-export const replaceReservation = z.object({ expectedRevision: revision, ...rangeFields, tagIds: tagIds.optional() }).strict().refine(validBooking,
+export const replaceReservation = z.object({ changeSetId: changeSetId.optional(), expectedRevision: revision, ...rangeFields, tagIds: tagIds.optional() }).strict().refine(validBooking,
  'The end must follow the start within 366 days.');
-export const cancelReservation = z.object({ expectedRevision: revision }).strict();
-export const equipmentInput = z.object({ name }).strict();
-export const equipmentPatch = z.object({ expectedRevision: revision, name: name.optional(), archived: z.boolean().optional() }).strict()
+export const cancelReservation = z.object({ changeSetId: changeSetId.optional(), expectedRevision: revision }).strict();
+export const equipmentInput = z.object({ changeSetId: changeSetId.optional(), name }).strict();
+export const equipmentPatch = z.object({ changeSetId: changeSetId.optional(), expectedRevision: revision, name: name.optional(), archived: z.boolean().optional() }).strict()
  .refine(value => value.name !== undefined || value.archived !== undefined, 'Supply a name or archived state.');
 export const equipmentQuery = z.object({
  offset: z.coerce.number().int().min(0).max(1_000_000).default(0), limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -46,7 +46,9 @@ export const reservationsQuery = z.object({
  (value.to.getTime() > value.from.getTime() && value.to.getTime() - value.from.getTime() <= 93 * day),
  'Request a positive time window of at most 93 days.');
 export type Equipment = { id: string; name: string; archivedAt: Date | null; revision: number; createdAt: Date; updatedAt: Date };
-type Schedule = Omit<z.infer<typeof createReservation>, 'id' | 'tagIds'>;
+type Schedule = Omit<z.infer<typeof createReservation>, 'id' | 'tagIds' | 'changeSetId'>;
+/** A journalled write answers with its change set (versions contract §5). */
+export type Changed<T> = T & { changeSetId: string };
 /** `tagIds` are the tags on the booking's thread. */
 export type Reservation = Schedule & { id: string; equipmentId: string; tagIds: string[]; status: 'confirmed' | 'cancelled'; occupiedStartsAt: Date; occupiedEndsAt: Date;
  createdBy: string; revision: number; createdAt: Date; updatedAt: Date };
@@ -60,6 +62,7 @@ const idExists = () => conflict('reservation_id_exists', 'That reservation reque
 const occupancy = (input: Schedule) => ({ occupiedStartsAt: new Date(input.startsAt.getTime() - input.setupMinutes * 60_000),
  occupiedEndsAt: new Date(input.endsAt.getTime() + input.cleanupMinutes * 60_000) });
 function sameRequest(row: Reservation, input: Schedule & { tagIds: string[] }, actor: Actor) {
+ // The change set id is the retry id of the write, not part of the booking: it is not compared.
  return row.revision === 1 && row.status === 'confirmed' && row.createdBy === actor.userId &&
  row.title === input.title && row.kind === input.kind && row.startsAt.getTime() === input.startsAt.getTime() && row.endsAt.getTime() === input.endsAt.getTime() &&
  row.setupMinutes === input.setupMinutes && row.cleanupMinutes === input.cleanupMinutes && row.taskId === input.taskId && row.ownerId === input.ownerId &&
@@ -105,9 +108,13 @@ export class EquipmentService {
   const tags = await tagsOfRecords(tx, 'booking', rows.map(row => row.id));
   return rows.map(row => ({ ...row, tagIds: (tags.get(row.id) ?? []).map(tag => tag.id).sort() }));
  }
- private async record(tx: TransactionSql, actor: Actor, organisationId: string, action: string, subjectType: string, id: string, before: Equipment | Reservation | null, after: Equipment | Reservation) {
-  await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId,
-   action, subjectType, subjectId: id, detail: { before, after } });
+ /** The change set that made a record (or, for one made before the journal, its baseline), for answering a retry that
+  *  matched the record rather than the change set. */
+ private async creation(tx: TransactionSql, kind: 'reservation' | 'equipment', id: string): Promise<string> {
+  const [row] = await tx<{ changeSetId: string }[]>`select change_set_id from record_versions where record_kind = ${kind} and record_id = ${id}
+   order by id limit 1`;
+  if (!row) throw notFound();
+  return row.changeSetId;
  }
  private async links(tx: TransactionSql, input: Schedule) {
   if (input.ownerId) {
@@ -138,16 +145,24 @@ export class EquipmentService {
   return this.tx(actor, organisationId, tx => this.reservation(tx, equipmentId, id, false));
  }
  create(actor: Actor, organisationId: string, raw: unknown) {
-  const input = equipmentInput.parse(raw);
-  return this.tx(actor, organisationId, async tx => {
+  const { changeSetId: wanted, ...input } = equipmentInput.parse(raw);
+  return this.tx(actor, organisationId, async (tx): Promise<Changed<Equipment>> => {
+   const changeSet = await personChangeSet(tx, actor, 'equipment.create', input, wanted);
+   if (changeSet.matched) {
+    const id = await createdRecord(tx, changeSet.id, 'equipment');
+    if (!id) throw notFound();
+    return { ...await this.equipment(tx, id), changeSetId: changeSet.id };
+   }
    const [row] = await tx<Equipment[]>`insert into equipment (organisation_id, name) values (${organisationId}, ${input.name}) returning ${tx.unsafe(equipmentColumns)}`;
    if (!row) throw notFound();
-   await this.record(tx, actor, organisationId, 'equipment.created', 'equipment', row.id, null, row); return row;
+   return { ...row, changeSetId: changeSet.id };
   });
  }
  update(actor: Actor, organisationId: string, id: string, raw: unknown) {
-  const input = equipmentPatch.parse(raw);
-  return this.tx(actor, organisationId, async tx => {
+  const { changeSetId: wanted, ...input } = equipmentPatch.parse(raw);
+  return this.tx(actor, organisationId, async (tx): Promise<Changed<Equipment>> => {
+   const changeSet = await personChangeSet(tx, actor, 'equipment.update', { id, ...input }, wanted);
+   if (changeSet.matched) return { ...await this.equipment(tx, id), changeSetId: changeSet.id };
    const before = await this.equipment(tx, id, true);
    if (before.revision !== input.expectedRevision) throw stale();
    if (input.archived === true && !before.archivedAt) {
@@ -158,7 +173,7 @@ export class EquipmentService {
    const [row] = await tx<Equipment[]>`update equipment set name = ${input.name ?? before.name}, archived_at = ${archivedAt}, revision = revision + 1, updated_at = now()
     where id = ${id} returning ${tx.unsafe(equipmentColumns)}`;
    if (!row) throw notFound();
-   await this.record(tx, actor, organisationId, 'equipment.updated', 'equipment', id, before, row); return row;
+   return { ...row, changeSetId: changeSet.id };
   });
  }
  reservations(actor: Actor, organisationId: string, equipmentId: string, raw: unknown) {
@@ -197,15 +212,19 @@ export class EquipmentService {
   });
  }
  createBooking(actor: Actor, organisationId: string, equipmentId: string, raw: unknown) {
-  const input = createReservation.parse(raw);
-  return this.tx(actor, organisationId, async tx => {
+  const { changeSetId: wanted, ...input } = createReservation.parse(raw);
+  return this.tx(actor, organisationId, async (tx): Promise<{ reservation: Changed<Reservation>; created: boolean }> => {
    const resource = await this.equipment(tx, equipmentId, true);
+   // The booking id is this request's own retry identity (it predates change sets): a retry that matches it returns
+   // the booking with the change set that made it, before any new change set is opened.
    const [stored] = await tx<Stored[]>`select ${tx.unsafe(reservationColumns)} from equipment_reservations where id = ${input.id}`;
    if (stored) {
     const existing = (await this.withTags(tx, [stored]))[0]!;
     if (existing.equipmentId !== equipmentId || !sameRequest(existing, input, actor)) throw idExists();
-    return { reservation: existing, created: false };
+    return { reservation: { ...existing, changeSetId: await this.creation(tx, 'reservation', existing.id) }, created: false };
    }
+   const changeSet = await personChangeSet(tx, actor, 'reservation.create', { equipmentId, ...input }, wanted);
+   if (changeSet.matched) throw idExists(); // the change set made something else: this booking id was never written
    if (resource.archivedAt) throw conflict('equipment_archived', 'This equipment is archived. Restore it before making a reservation.');
    await this.links(tx, input);
    await this.tags(tx, input.tagIds);
@@ -218,14 +237,14 @@ export class EquipmentService {
    // The insert made the booking's thread (0046); its first tags belong to that creation, so no revision bump.
    const thread = await recordThread(tx, organisationId, 'booking', row.id, true);
    await writeThreadTags(tx, organisationId, actor, thread.id, input.tagIds, { mode: 'replace', bump: false });
-   const reservation = { ...row, tagIds: input.tagIds };
-   await this.record(tx, actor, organisationId, 'equipment.reservation_created', 'equipment_reservation', row.id, null, reservation);
-   return { reservation, created: true };
+   return { reservation: { ...row, tagIds: input.tagIds, changeSetId: changeSet.id }, created: true };
   });
  }
  replaceBooking(actor: Actor, organisationId: string, equipmentId: string, id: string, raw: unknown) {
-  const input = replaceReservation.parse(raw);
-  return this.tx(actor, organisationId, async tx => {
+  const { changeSetId: wanted, ...input } = replaceReservation.parse(raw);
+  return this.tx(actor, organisationId, async (tx): Promise<Changed<Reservation>> => {
+   const changeSet = await personChangeSet(tx, actor, 'reservation.replace', { equipmentId, id, ...input }, wanted);
+   if (changeSet.matched) return { ...await this.reservation(tx, equipmentId, id, false), changeSetId: changeSet.id };
    const resource = await this.equipment(tx, equipmentId, true);
    const before = await this.reservation(tx, equipmentId, id);
    if (before.revision !== input.expectedRevision) throw stale();
@@ -243,22 +262,27 @@ export class EquipmentService {
     const thread = await recordThread(tx, organisationId, 'booking', id, true);
     await writeThreadTags(tx, organisationId, actor, thread.id, input.tagIds, { mode: 'replace', bump: true });
    }
-   const after = { ...row, tagIds: input.tagIds ?? before.tagIds };
-   await this.record(tx, actor, organisationId, 'equipment.reservation_updated', 'equipment_reservation', id, before, after); return after;
+   return { ...row, tagIds: input.tagIds ?? before.tagIds, changeSetId: changeSet.id };
   });
  }
  cancelBooking(actor: Actor, organisationId: string, equipmentId: string, id: string, raw: unknown) {
-  const input = cancelReservation.parse(raw);
-  return this.tx(actor, organisationId, async tx => {
+  const { changeSetId: wanted, ...input } = cancelReservation.parse(raw);
+  return this.tx(actor, organisationId, async (tx): Promise<Changed<Reservation>> => {
+   const changeSet = await personChangeSet(tx, actor, 'reservation.cancel', { equipmentId, id, ...input }, wanted);
+   if (changeSet.matched) return { ...await this.reservation(tx, equipmentId, id, false), changeSetId: changeSet.id };
    await this.equipment(tx, equipmentId, true);
    const before = await this.reservation(tx, equipmentId, id);
    if (before.revision !== input.expectedRevision) throw stale();
-   if (before.status === 'cancelled') return before;
+   if (before.status === 'cancelled') {
+    // Already cancelled: answer with the change set that cancelled it, so a retry after a lost response reads the same.
+    const [cancelling] = await tx<{ changeSetId: string }[]>`select change_set_id from record_changes where record_kind = 'reservation' and record_id = ${id}
+     and field = 'status' and after = '"cancelled"'::jsonb order by id desc limit 1`;
+    return { ...before, changeSetId: cancelling?.changeSetId ?? changeSet.id };
+   }
    const [row] = await tx<Stored[]>`update equipment_reservations set status = 'cancelled', revision = revision + 1, updated_at = now()
     where id = ${id} and equipment_id = ${equipmentId} returning ${tx.unsafe(reservationColumns)}`;
    if (!row) throw notFound();
-   const after = { ...row, tagIds: before.tagIds };
-   await this.record(tx, actor, organisationId, 'equipment.reservation_cancelled', 'equipment_reservation', id, before, after); return after;
+   return { ...row, tagIds: before.tagIds, changeSetId: changeSet.id };
   });
  }
 }

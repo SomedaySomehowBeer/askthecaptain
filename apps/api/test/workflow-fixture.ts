@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { withTenant } from '@captain/db';
-import type { Harness } from '@captain/db/test';
+import { withJournalledTenant, type Harness } from '@captain/db/test';
 import { BossEngine, Registry } from '@captain/engine';
 import { definitions, retiredWorkflowVersions } from '@captain/steps';
 import { installQueues } from '../../../packages/engine/src/queue.ts';
@@ -12,10 +12,12 @@ export async function workflowFixture(db: Harness) {
  const org = String(o!.id), userId = String(u!.id), actor = { userId, requestId: randomUUID() };
  await db.owner`insert into memberships (organisation_id, user_id, role) values (${org}, ${userId}, 'owner'), (${org}, ${member!.id}, 'member')`;
  const tx = <T>(fn: Parameters<typeof withTenant<T>>[2]) => withTenant(db.app, { organisationId: org, userId }, fn);
+ /** A direct write to a journalled table (0047), with a test change set as the owner. */
+ const write = <T>(fn: Parameters<typeof withTenant<T>>[2]) => withJournalledTenant(db.app, { organisationId: org, userId }, fn);
  const registry = new Registry(); await installQueues(db.databaseUrl, definitions);
  const engine = new BossEngine(db.app, db.runtimeUrl, registry, definitions, 86400000, retiredWorkflowVersions);
  const workflows = new WorkflowService(db.app, null, engine); await workflows.sync(); await engine.open();
- return { org, userId, actor, member: { userId: String(member!.id), requestId: randomUUID() }, stranger: { userId: String(stranger!.id), requestId: randomUUID() }, tx, db, registry, engine, workflows };
+ return { org, userId, actor, member: { userId: String(member!.id), requestId: randomUUID() }, stranger: { userId: String(stranger!.id), requestId: randomUUID() }, tx, write, db, registry, engine, workflows };
 }
 export async function until<T>(read: () => Promise<T>, predicate: (value: T) => boolean, timeout = 15000): Promise<T> {
  const end = Date.now() + timeout; let value: T;

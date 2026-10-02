@@ -38,7 +38,7 @@ it('the latest schema has the thread tables and none of the retired ones, and mi
 	assert.deepEqual(await tablesPresent(latest.owner, retiredTables), []);
 	assert.deepEqual(await tablesPresent(latest.owner, newTables), newTables);
 	assert.deepEqual(await projectColumns(latest.owner), []);
-	assert.equal((await applied(latest.owner)).at(-1), migration);
+	assert.ok((await applied(latest.owner)).includes(migration), "0046 is applied");
 	assert.deepEqual(await applyMigrations(latest.owner), []);
 	const [chatAudit] = await latest.owner<{ column: boolean }[]>`select exists (select 1 from information_schema.columns where table_name = 'chat_audit_events' and column_name = 'thread_id') as column`;
 	assert.equal(chatAudit!.column, true, 'chat_audit_events is in its new shape');
@@ -98,7 +98,7 @@ it('projects become tags, tags move onto threads, records get threads, and the o
 		});
 		const tagsBefore = (await owner<{ n: number }[]>`select count(*)::int as n from tags`)[0]!.n;
 
-		assert.deepEqual(await applyMigrations(db.owner), [migration]);
+		assert.deepEqual(await applyMigrations(db.owner, undefined, migration), [migration]);
 		assert.equal((await applied(owner)).at(-1), migration);
 
 		// The old tables and columns are gone; the new ones exist; the demo chats are not copied anywhere.
@@ -165,12 +165,12 @@ it('two projects whose names differ only in case stop the migration, and nothing
 	try {
 		const [org] = await db.owner<{ id: string }[]>`insert into organisations (name) values ('Duplicates') returning id`;
 		await db.owner`insert into projects (organisation_id, name) values (${org!.id}, 'Purchasing'), (${org!.id}, 'purchasing ')`;
-		await assert.rejects(applyMigrations(db.owner), /migration 0046 refused: 1 project names are used by more than one project/);
+		await assert.rejects(applyMigrations(db.owner, undefined, migration), /migration 0046 refused: 1 project names are used by more than one project/);
 		assert.equal((await applied(db.owner)).at(-1), before0046, '0046 is not recorded');
 		assert.deepEqual(await tablesPresent(db.owner, retiredTables), retiredTables, 'nothing was dropped');
 		assert.equal((await db.owner`select 1 from pg_class where relname = 'threads'`).length, 0);
 		await db.owner`update projects set name = 'Purchasing (old)' where name = 'purchasing '`;
-		assert.deepEqual(await applyMigrations(db.owner), [migration], 'applies once the names are distinct');
+		assert.deepEqual(await applyMigrations(db.owner, undefined, migration), [migration], 'applies once the names are distinct');
 		assert.equal((await db.owner`select count(*)::int as n from tags where organisation_id = ${org!.id}`)[0]!.n, 2);
 	} finally { await db.close(); }
 });
@@ -184,7 +184,7 @@ it('a task tag on a step, which has no thread to carry it, stops the migration r
 		const [step] = await db.owner<{ id: string }[]>`insert into tasks (organisation_id, parent_id, title) values (${org!.id}, ${parent!.id}, 'Step') returning id`;
 		const [tag] = await db.owner<{ id: string }[]>`insert into tags (organisation_id, name) values (${org!.id}, 'Odd') returning id`;
 		await db.owner`insert into task_tags (organisation_id, task_id, tag_id, attached_by) values (${org!.id}, ${step!.id}, ${tag!.id}, ${lead})`;
-		await assert.rejects(applyMigrations(db.owner), /migration 0046: 1 tag attachments in but 0 thread tags written/);
+		await assert.rejects(applyMigrations(db.owner, undefined, migration), /migration 0046: 1 tag attachments in but 0 thread tags written/);
 		assert.equal((await applied(db.owner)).at(-1), before0046);
 		assert.equal((await db.owner`select 1 from task_tags`).length, 1, 'the attachment is kept');
 	} finally { await db.close(); }

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { after, before, test } from 'node:test';
 import type { TransactionSql } from 'postgres';
 import { withTenant } from '../src/context.ts';
-import { databaseUrl, freshDatabase, type Harness } from './harness.ts';
+import { databaseUrl, fixture, freshDatabase, withJournalledTenant, type Harness } from './harness.ts';
 
 // Migration 0046 (threads contract §3–§5, D25), moved from the 0042 chat suite: private threads' database security,
 // proven by direct SQL, bypassing any service, as the role the API connects as: the harness's `db.app` connection signs
@@ -31,7 +31,7 @@ async function person(org: string, role: 'owner' | 'admin' | 'member' = 'member'
 }
 /** One transaction as the runtime role for this person in this organisation, failing instead of waiting on a lock cycle. */
 function as<T>(org: string, user: string, work: (tx: TransactionSql) => Promise<T>): Promise<T> {
-	return withTenant(db.app, { organisationId: org, userId: user }, async (tx) => { await tx`set local lock_timeout = '5s'`; return work(tx); });
+	return withJournalledTenant(db.app, { organisationId: org, userId: user }, async (tx) => { await tx`set local lock_timeout = '5s'`; return work(tx); });
 }
 async function lockShare(tx: TransactionSql, org: string, users: string[]) {
 	for (const user of [...new Set(users)].sort()) await tx`select 1 from memberships where organisation_id = ${org} and user_id = ${user} for share`;
@@ -220,7 +220,7 @@ it('nobody but an active participant sees a private thread, its tags, messages o
 	const org = await organisation(), other = await organisation();
 	const owner = await person(org, 'owner'), admin = await person(org, 'admin'), alice = await person(org), bob = await person(org), carol = await person(org);
 	const outsider = await person(other, 'owner');
-	const [tag] = await db.owner<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Canning') returning id`;
+	const [tag] = await fixture(db.owner, org)<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Canning') returning id`;
 	const { id } = await create(org, alice, [bob]);
 	await send(org, alice, id);
 	await as(org, alice, async (tx) => {
@@ -228,13 +228,24 @@ it('nobody but an active participant sees a private thread, its tags, messages o
 		await tx`update threads set revision = revision + 1 where id = ${id}`;
 		await audit(tx, org, id, alice, 'chat.tag_added', 'tag', tag!.id);
 	});
-	// Audit: created, participant added, message sent, tag added.
-	assert.deepEqual(await counts(org, alice), { threads: 1, thread_participants: 2, thread_tags: 1, thread_messages: 1, chat_audit_events: 4 });
+	// Audit: created, participant added, message sent, tag added. Messages: the message and the tag's change line (0047).
+	assert.deepEqual(await counts(org, alice), { threads: 1, thread_participants: 2, thread_tags: 1, thread_messages: 2, chat_audit_events: 4 });
 	for (const user of [owner, admin, carol]) assert.deepEqual(Object.values(await counts(org, user)), [0, 0, 0, 0, 0], user);
 	assert.deepEqual(Object.values(await counts(other, outsider)), [0, 0, 0, 0, 0]);
-	assert.deepEqual(Object.values(await counts(org, bob)).slice(0, 4), [1, 2, 1, 1]);
+	assert.deepEqual(Object.values(await counts(org, bob)).slice(0, 4), [1, 2, 1, 2]);
+	// The tag's history is the private thread's: change set, change and version are its participants' alone (0047).
+	const history = (user: string, organisationId = org) => as(organisationId, user, async (tx) => [
+		(await tx`select 1 from record_changes where record_kind = 'thread' and record_id = ${id}`).length,
+		(await tx`select 1 from record_versions where record_kind = 'thread' and record_id = ${id}`).length,
+		(await tx`select 1 from change_sets c where exists (select 1 from record_changes rc where rc.change_set_id = c.id and rc.record_id = ${id})
+			or c.id in (select change_set_id from thread_messages where thread_id = ${id})`).length]);
+	assert.deepEqual(await history(alice), [1, 1, 1]);
+	assert.deepEqual(await history(bob), [1, 1, 1]);
+	for (const user of [owner, admin, carol]) assert.deepEqual(await history(user), [0, 0, 0], user);
+	assert.deepEqual(await history(outsider, other), [0, 0, 0]);
 	await db.owner`update memberships set status = 'removed' where organisation_id = ${org} and user_id = ${bob}`;
 	assert.deepEqual(Object.values(await counts(org, bob)), [0, 0, 0, 0, 0], 'an inactive membership sees nothing, even before its participation ends');
+	assert.deepEqual(await history(bob), [0, 0, 0], 'nor its history');
 	assert.equal((await as(org, carol, (tx) => tx<{ ok: boolean }[]>`select thread_visible(${id}) as ok`))[0]!.ok, false);
 	assert.equal((await as(org, alice, (tx) => tx<{ ok: boolean }[]>`select thread_visible(${id}) as ok`))[0]!.ok, true);
 });
@@ -243,7 +254,7 @@ it('an insert naming an inaccessible conversation fails exactly like one naming 
 	const org = await organisation();
 	const alice = await person(org), carol = await person(org);
 	const { id } = await create(org, alice);
-	const [tag] = await db.owner<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Trade pack') returning id`;
+	const [tag] = await fixture(db.owner, org)<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Trade pack') returning id`;
 	const attempts = (conversation: string) => [
 		(tx: TransactionSql) => tx`insert into thread_messages (id, organisation_id, thread_id, seq, change_seq, author_id, body, sent_body_sha256)
 			values (${randomUUID()}, ${org}, ${conversation}, 1, 1, ${carol}, 'Hi', ${fp('Hi')})`,
@@ -420,7 +431,7 @@ it('every advanced seq has its message by commit — a bare bump fails, even whe
 it('chat timestamps are the server’s: caller-chosen times are ignored on every insert and transition', async () => {
 	const org = await organisation();
 	const admin = await person(org, 'admin'), alice = await person(org), bob = await person(org), carol = await person(org);
-	const [tag] = await db.owner<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Pallet labels') returning id`;
+	const [tag] = await fixture(db.owner, org)<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Pallet labels') returning id`;
 	const { id } = await create(org, alice, [bob, admin]);
 	const past = new Date('2001-01-01T00:00:00Z'), future = new Date('2099-01-01T00:00:00Z');
 	const serverTime = (value: Date | null | undefined) => value instanceof Date && value.getTime() > Date.parse('2020-01-01') && value.getTime() < Date.parse('2090-01-01');
@@ -573,7 +584,7 @@ it('the same client ID from different people at once: exactly one wins, the othe
 it('account and organisation deletion null attribution on live rows, tombstones and audit without bumps, then cascade', async () => {
 	const org = await organisation();
 	const alice = await person(org), bob = await person(org), carol = await person(org);
-	const [tag] = await db.owner<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Launch') returning id`;
+	const [tag] = await fixture(db.owner, org)<{ id: string }[]>`insert into tags (organisation_id, name) values (${org}, 'Launch') returning id`;
 	const { id } = await create(org, alice, [bob]);
 	await as(org, bob, (tx) => addIn(tx, org, id, bob, carol));
 	await as(org, bob, (tx) => tx`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by) values (${org}, ${id}, ${tag!.id}, ${bob})`);
@@ -590,7 +601,9 @@ it('account and organisation deletion null attribution on live rows, tombstones 
 	const after = await snapshot();
 	assert.deepEqual(after.conversation, before.conversation, 'no counter or revision moved');
 	assert.deepEqual(after.messages.map((m) => [m.id, m.revision, m.changeSeq]), before.messages.map((m) => [m.id, m.revision, m.changeSeq]));
-	assert.deepEqual(after.messages.find((m) => m.id === bobs), { id: bobs, revision: 2, changeSeq: 3, authorId: null, deletedBy: null }, 'a tombstone is nulled too');
+	// changeSeq 4: Bob's tag added a change line (0047) before his message.
+	assert.deepEqual(after.messages.find((m) => m.id === bobs), { id: bobs, revision: 2, changeSeq: 4, authorId: null, deletedBy: null }, 'a tombstone is nulled too');
+	assert.equal((await db.owner`select author_id from thread_messages where thread_id = ${id} and kind = 'change'`)[0]!.authorId, null, 'a change line is nulled too');
 	assert.equal(after.messages.find((m) => m.id === alices)!.authorId, alice);
 	assert.equal((await db.owner`select 1 from thread_participants where user_id = ${bob}`).length, 0, 'participation cascades');
 	assert.equal((await db.owner<{ addedBy: string | null }[]>`select added_by from thread_participants where user_id = ${carol}`)[0]!.addedBy, null);

@@ -9,3 +9,6 @@ export function connect(url: string, options: { max?: number } = {}): Sql {
 	return postgres(url, { max: options.max ?? 10, prepare: !neonPooler, idle_timeout: 20, connect_timeout: 10,
 		transform: postgres.camel });
 }
+export { journalFields, journalledTables, openChangeSet, withChangeSet, journalled, fingerprintOf, changeSetIdFor, changesOf, ChangeSetUnavailable,
+	type JournalledTable, type JournalRecordKind, type ChangeOperation, type ActorKind, type CauseKind, type RecordChange, type ChangeSetRequest,
+	type OpenedChangeSet } from './versions.ts';

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { withTenant } from '@captain/db';
-import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
+import { databaseUrl, fixture, freshDatabase, withJournalledTenant, type Harness } from '@captain/db/test';
 import { TagsService } from '../tags/service.ts';
 import { CommitmentsService } from './service.ts';
 
@@ -19,7 +19,8 @@ async function organisation(name = 'Work records') {
 	const org = String(o!.id), actor = { userId: String(u!.id), requestId: randomUUID() }, member = { userId: String(m!.id), requestId: randomUUID() };
 	await db.owner`insert into memberships (organisation_id, user_id, role) values (${org}, ${actor.userId}, 'owner'), (${org}, ${member.userId}, 'member')`;
 	const tx = <T>(fn: Parameters<typeof withTenant<T>>[2]) => withTenant(db.app, { organisationId: org, userId: actor.userId }, fn);
-	return { org, actor, member, tx };
+	const write = <T>(fn: Parameters<typeof withTenant<T>>[2]) => withJournalledTenant(db.app, { organisationId: org, userId: actor.userId }, fn);
+	return { org, actor, member, tx, write };
 }
 const pages = { checklistOffset: 0, evidenceOffset: 0, tagOffset: 0, limit: 50 };
 const revisionOf = async (table: 'tasks' | 'task_series' | 'equipment_reservations', id: string) =>
@@ -32,7 +33,7 @@ it('a task detail is bounded and complete: parent, series, checklist, evidence a
 	for (let i = 0; i < 3; i++) await c.addEvidence(f.actor, f.org, task.id, { expectedRevision: await revisionOf('tasks', task.id), kind: 'url', reference: `https://example.test/${i}` });
 	for (const name of ['Beta', 'alpha', 'Gamma']) {
 		const tag = await tags.create(f.actor, f.org, { name });
-		await f.tx((sql) => sql`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by) select organisation_id, id, ${tag.id}, ${f.actor.userId} from threads where task_id = ${task.id}`);
+		await f.write((sql) => sql`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by) select organisation_id, id, ${tag.id}, ${f.actor.userId} from threads where task_id = ${task.id}`);
 	}
 
 	const first = await c.task(f.actor, f.org, task.id, { ...pages, limit: 2 });
@@ -72,7 +73,7 @@ it('a stale or retried edit is refused, and of two concurrent edits from the sam
 	const series = await c.createSeries(f.actor, f.org, { title: 'Stock check', recurrence: 'monthly', anchor: '2026-01-01' });
 	await assert.rejects(c.updateSeries(f.actor, f.org, series.id, { expectedRevision: 2, title: 'Count' }), { code: 'stale_revision' });
 	// The database moves the revision for every update, whoever writes it, and ignores a supplied value.
-	await db.owner`update tasks set revision = 1, title = 'Direct' where id = ${task.id}`;
+	await fixture(db.owner, f.org)`update tasks set revision = 1, title = 'Direct' where id = ${task.id}`;
 	assert.equal(await revisionOf('tasks', task.id), 4);
 });
 
@@ -175,12 +176,12 @@ it('Work lists a series’ occurrences explicitly, whatever their tags', async (
 
 it('a booking keeps its tags when its task is edited: a task and its booking are tagged independently', async () => {
 	const f = await organisation(); const tags = new TagsService(db.app);
-	const [equipment] = await db.owner`insert into equipment (organisation_id, name) values (${f.org}, 'Fermenter') returning id`;
+	const [equipment] = await fixture(db.owner, f.org)`insert into equipment (organisation_id, name) values (${f.org}, 'Fermenter') returning id`;
 	const task = await c.createTask(f.actor, f.org, { title: 'Brew' });
-	const [booking] = await f.tx((sql) => sql`insert into equipment_reservations (id, organisation_id, equipment_id, title, starts_at, ends_at, occupied_starts_at, occupied_ends_at, task_id, created_by)
+	const [booking] = await f.write((sql) => sql`insert into equipment_reservations (id, organisation_id, equipment_id, title, starts_at, ends_at, occupied_starts_at, occupied_ends_at, task_id, created_by)
 		values (gen_random_uuid(), ${f.org}, ${equipment!.id}, 'Brew', '2030-01-01T00:00:00Z', '2030-01-01T01:00:00Z', '2030-01-01T00:00:00Z', '2030-01-01T01:00:00Z', ${task.id}, ${f.actor.userId}) returning id`);
 	const tag = await tags.create(f.actor, f.org, { name: 'Autumn' });
-	await f.tx((sql) => sql`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by) select organisation_id, id, ${tag.id}, ${f.actor.userId} from threads where reservation_id = ${booking!.id}`);
+	await f.write((sql) => sql`insert into thread_tags (organisation_id, thread_id, tag_id, attached_by) select organisation_id, id, ${tag.id}, ${f.actor.userId} from threads where reservation_id = ${booking!.id}`);
 	assert.equal((await c.updateTask(f.actor, f.org, task.id, { expectedRevision: 1, title: 'Brew the autumn ale' })).revision, 2);
 	assert.equal(await revisionOf('equipment_reservations', String(booking!.id)), 1, 'nothing follows the task any more');
 	assert.equal((await db.owner`select count(*)::int as n from thread_tags tt join threads th on th.id = tt.thread_id where th.reservation_id = ${booking!.id}`)[0]!.n, 1);

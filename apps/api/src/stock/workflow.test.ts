@@ -62,6 +62,12 @@ it('Supplier addresses are irrelevant; observations and tasks are idempotent rec
   }
   assert.equal((await f.tx(tx => tx`select * from stock_counts`)).length, 1); assert.equal((await f.tx(tx => tx`select * from tasks`)).length, 1);
   assert.equal((await f.tx(tx => tx`select * from audit_events where action = 'stock.count_observed'`)).length, 1);
+  // The reorder task's idempotency is its change set's retry id (0047), written as the enabling person, caused by the run.
+  const [made] = await db.owner`select s.actor_id, s.actor_kind, s.cause_kind, s.cause_id from change_sets s join record_changes c on c.change_set_id = s.id
+   where s.organisation_id = ${f.org} and c.record_kind = 'task' and c.operation = 'create' and c.item_id is null`;
+  assert.deepEqual({ ...made }, { actorId: f.userId, actorKind: 'workflow', causeKind: 'workflow_run', causeId: runId });
+  assert.equal((await db.owner`select count(*)::int as n from change_sets s where s.cause_id = ${runId}`)[0]!.n, 1, 'the repeat opened no second change set');
+  assert.equal((await db.owner`select * from audit_events where action in ('stock.reorder_task_created', 'tag.created')`).length, 0, 'no business audit row');
  } finally { await f.engine.close(); }
 });
 it('a count racing wait registration wakes it; count and wake roll back together', async () => {
@@ -117,12 +123,12 @@ it('cross-tenant counts cannot wake or reorder another organisation; removed ena
 });
 it('the Purchasing project is a tag: an existing one is reused case-insensitively on the reorder task’s thread; oversize locations are never truncated', async () => {
  const f = await stocktakeFixture(db); try {
-  const a = await item(f); const [tag] = await f.tx(tx => tx`insert into tags (organisation_id, name) values (${f.org}, 'purchasing') returning id`);
+  const a = await item(f); const [tag] = await f.write(tx => tx`insert into tags (organisation_id, name) values (${f.org}, 'purchasing') returning id`);
   const { runId } = await f.startStocktake(); await state(f, runId, 'waiting'); await f.stock.count(f.member, f.org, a.id, { count: '1' }); await state(f, runId, 'succeeded');
   const [task] = await f.tx(tx => tx`select id from tasks`);
   assert.deepEqual((await f.tx(tx => tx`select tt.tag_id from threads th join thread_tags tt on tt.thread_id = th.id where th.task_id = ${task!.id}`)).map(r => r.tagId), [tag!.id]);
   assert.equal((await f.tx(tx => tx`select * from tags where lower(name) = 'purchasing'`)).length, 1, 'no second tag');
-  await f.tx(tx => tx`insert into stock_items (organisation_id, name, location, unit_label) select ${f.org}, 'Extra ' || n, 'Store', 'bags' from generate_series(1, 100) n`);
+  await f.write(tx => tx`insert into stock_items (organisation_id, name, location, unit_label) select ${f.org}, 'Extra ' || n, 'Store', 'bags' from generate_series(1, 100) n`);
   const oversized = await f.startStocktake(); const result = await state(f, oversized.runId, 'paused'); assert.match(result[0]!.reason, /100 items/);
  } finally { await f.engine.close(); }
 });

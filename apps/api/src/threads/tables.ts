@@ -7,3 +7,10 @@ export const threadTables: readonly string[] = ['threads', 'thread_participants'
 
 export const threadExportNote = 'Thread tables hold every record and topic thread, only the private threads the exporting person participates in, '
  + 'and only that person’s stars and read positions; other members’ private threads are not exported, so this is not a complete thread backup.';
+
+/** The change journal (migration 0047). Its rows follow their record's visibility: a private thread's tag history is its
+ *  participants', and a change set is visible only where one of its changes or versions is. Counts and exports of it
+ *  are therefore the reader's view, not the organisation's total, like the thread tables. */
+export const journalTables: readonly string[] = ['change_sets', 'record_changes', 'record_versions'];
+export const journalExportNote = 'Change history (change_sets, record_changes, record_versions) holds what the exporting person can see: '
+ + 'the history of private threads they do not participate in is not exported.';

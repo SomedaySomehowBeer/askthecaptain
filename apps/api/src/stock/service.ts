@@ -1,16 +1,16 @@
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { z } from 'zod';
-import { audit } from '../audit.ts';
+import { changeSetId, createdRecord, personChangeSet } from '../changes.ts';
 import { badRequest, HttpError, notFound } from '../errors.ts';
 type Actor = { userId: string; requestId: string };
 const text = (max: number) => z.string().trim().max(max);
 // Decimal strings preserve the count exactly; ordinary JSON numbers remain convenient for callers.
 const quantity = z.union([z.number().finite().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(String), text(80)])
  .pipe(z.string().regex(/^\d+(?:\.\d+)?$/, 'Enter a count of zero or more.'));
-const itemSchema = z.object({ name: text(200).min(1), location: text(200).min(1), unitLabel: text(80).min(1),
+const itemSchema = z.object({ changeSetId: changeSetId.optional(), name: text(200).min(1), location: text(200).min(1), unitLabel: text(80).min(1),
  reorderPoint: quantity.nullable().optional(), preferredSupplierId: z.string().uuid().nullable().optional(), notes: text(5000).optional() }).strict();
 const editSchema = itemSchema.partial().extend({ archived: z.boolean().optional() });
-const countSchema = z.object({ count: quantity, note: text(1000).optional() }).strict();
+const countSchema = z.object({ changeSetId: changeSetId.optional(), count: quantity, note: text(1000).optional() }).strict();
 export class StockService {
  readonly db: Sql;
  readonly emit: (tx: TransactionSql, org: string, event: string, data: unknown, waitKey: string) => Promise<unknown>;
@@ -39,8 +39,15 @@ export class StockService {
   });
  }
  async save(actor: Actor, org: string, raw: unknown, id?: string) {
-  const input = id ? editSchema.parse(raw) : itemSchema.parse(raw);
+  const { changeSetId: wanted, ...input } = id ? editSchema.parse(raw) : itemSchema.parse(raw);
   return this.tenant(actor, org, async (tx) => {
+   const changeSet = await personChangeSet(tx, actor, id ? 'stock.update' : 'stock.create', { id: id ?? null, ...input }, wanted);
+   if (changeSet.matched) {
+    const made = id ?? await createdRecord(tx, changeSet.id, 'stock_item');
+    const [item] = made ? await tx`select * from stock_items where id = ${made}` : [];
+    if (!item) throw notFound('That stock item is not available.');
+    return Object.assign(item, { changeSetId: changeSet.id });
+   }
    const [old] = id ? await tx`select * from stock_items where id = ${id} for update` : [];
    if (id && !old) throw notFound('That stock item is not available.');
    const archived = 'archived' in input ? input.archived : undefined;
@@ -56,13 +63,20 @@ export class StockService {
    const clean = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined));
    const [item] = id ? await tx`update stock_items set ${tx(clean)} where id = ${id} returning *`
     : await tx`insert into stock_items ${tx({ ...clean, organisationId: org })} returning *`;
-   await audit(tx, { organisationId: org, actor: { kind: 'person', id: actor.userId }, action: id ? archived === true ? 'stock.archived' : archived === false ? 'stock.restored' : 'stock.updated' : 'stock.created',
-    subjectType: 'stock_item', subjectId: item!.id, requestId: actor.requestId, detail: { fields: Object.keys(clean) } }); return item!;
+   return Object.assign(item!, { changeSetId: changeSet.id });
   });
  }
  async count(actor: Actor, org: string, id: string, raw: unknown) {
-  const input = countSchema.parse(raw);
+  const { changeSetId: wanted, ...input } = countSchema.parse(raw);
   return this.tenant(actor, org, async (tx) => {
+   const changeSet = await personChangeSet(tx, actor, 'stock.count', { id, ...input }, wanted);
+   if (changeSet.matched) {
+    // The observation this change set recorded: the count it set on the item names it by item and time.
+    const [observation] = await tx`select c.* from record_changes rc join stock_counts c on c.item_id = rc.record_id and c.counted_at = (rc.after #>> '{}')::timestamptz
+     where rc.change_set_id = ${changeSet.id} and rc.record_kind = 'stock_item' and rc.record_id = ${id} and rc.field = 'counted_at'`;
+    if (!observation) throw notFound('That stock item is not available.');
+    return Object.assign(observation, { changeSetId: changeSet.id });
+   }
    // Serialise observations; obtain the timestamp after the row lock so a delayed writer cannot
    // replace the current count with an observation timestamp from before the preceding writer.
    const [item] = await tx`select archived_at from stock_items where id = ${id} for update`;
@@ -72,9 +86,8 @@ export class StockService {
     values (${org}, ${id}, ${actor.userId}, ${input.count}, ${input.note ?? ''}) returning *`;
    await tx`update stock_items s set current_count = c.count, counted_at = c.counted_at, counted_by = c.counted_by, updated_at = clock_timestamp()
     from stock_counts c where s.id = ${id} and c.id = ${observation!.id} and c.organisation_id = s.organisation_id and c.item_id = s.id`;
-   await audit(tx, { organisationId: org, actor: { kind: 'person', id: actor.userId }, action: 'stock.counted', subjectType: 'stock_item', subjectId: id, requestId: actor.requestId, detail: { countId: observation!.id, count: input.count } });
    await this.emit(tx, org, 'stock.counted', { itemId: id, countId: observation!.id }, `stock:${id}`);
-   return observation!;
+   return Object.assign(observation!, { changeSetId: changeSet.id });
   });
  }
 }

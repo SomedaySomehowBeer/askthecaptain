@@ -98,18 +98,23 @@ export const threadMessages = pgTable('thread_messages', {
 	body: text('body'), sentBodySha256: bytea('sent_body_sha256'), createdAt: at('created_at'),
 	editedAt: timestamp('edited_at', { withTimezone: true }), deletedAt: timestamp('deleted_at', { withTimezone: true }),
 	deletedBy: uuid('deleted_by'), revision: integer('revision').notNull().default(1),
+	changeSetId: uuid('change_set_id'), // 0047: a change line's change set; null for every other kind
 }, (t) => [unique('thread_messages_organisation_id_id_key').on(t.organisationId, t.id),
 	unique('thread_messages_thread_seq').on(t.threadId, t.seq),
 	unique('thread_messages_thread_change').on(t.threadId, t.changeSeq),
 	foreignKey({ columns: [t.organisationId, t.threadId], foreignColumns: [threads.organisationId, threads.id] }).onDelete('cascade'),
 	member(t.organisationId, t.authorId), // on delete set null (author_id)
 	member(t.organisationId, t.deletedBy), // on delete set null (deleted_by)
-	check('thread_messages_kind_check', sql`${t.kind} in ('message', 'change', 'approval')`), // R2's guard accepts only 'message'
+	check('thread_messages_kind_check', sql`${t.kind} in ('message', 'change', 'approval')`), // 0047's guard: people send 'message'; only the journal writes 'change'
 	check('thread_messages_counters_check', sql`${t.seq} > 0 and ${t.changeSeq} > 0 and ${t.revision} > 0`),
 	check('thread_messages_body_check', sql`${t.body} is null or (char_length(${t.body}) between 1 and 4000 and octet_length(${t.body}) <= 16384)`),
 	check('thread_messages_hash_check', sql`${t.sentBodySha256} is null or octet_length(${t.sentBodySha256}) = 32`),
-	check('thread_messages_tombstone_check', sql`(${t.deletedAt} is null and ${t.body} is not null and ${t.sentBodySha256} is not null and ${t.deletedBy} is null)
-		or (${t.deletedAt} is not null and ${t.body} is null and ${t.sentBodySha256} is null)`)]);
+	// 0047: a change line has no body and is never edited or deleted; every other row is live with its body, or a tombstone.
+	check('thread_messages_tombstone_check', sql`(${t.kind} = 'change' and ${t.changeSetId} is not null and ${t.body} is null and ${t.sentBodySha256} is null
+		and ${t.deletedAt} is null and ${t.deletedBy} is null and ${t.editedAt} is null)
+		or (${t.kind} <> 'change' and ${t.changeSetId} is null and ((${t.deletedAt} is null and ${t.body} is not null and ${t.sentBodySha256} is not null and ${t.deletedBy} is null)
+		or (${t.deletedAt} is not null and ${t.body} is null and ${t.sentBodySha256} is null)))`),
+	uniqueIndex('thread_messages_change_set').on(t.threadId, t.changeSetId).where(sql`${t.changeSetId} is not null`)]);
 
 /** At most one live pin per thread, set and cleared by an owner or admin; it references the message, never its text. */
 export const threadPins = pgTable('thread_pins', {

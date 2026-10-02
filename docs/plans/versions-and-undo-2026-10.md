@@ -46,17 +46,19 @@ These five shape the increment. The owner accepted each recommendation; the rest
 ## 2. Storage (migration 0047)
 
 Three tables, all with `organisation_id`, composite keys, forced row security `to captain_runtime,
-app`, and select/insert grants only: nothing in them is ever updated or deleted by the runtime.
+app`, and select grants on all three plus insert on `change_sets` only (built in V-B: `record_changes` and
+`record_versions` are written by the journal's definer triggers alone): nothing in them is ever updated or deleted by
+the runtime.
 
 **`change_sets`** — one per action.
 
 | Column | Notes |
 |---|---|
-| `id uuid pk` | The client's retry id for a person's write; server uuidv7 otherwise. A retried write with the same id returns the first result |
+| `id uuid pk` | The client's retry id for a person's write; a deterministic id from a workflow step's idempotency key; server uuidv7 otherwise. A retried write with the same id returns the first result (§5) |
 | `actor_id` | The membership that acted; null for a system routine |
 | `actor_kind` | `person`, `workflow`, `system` (R4 adds `agent`) |
-| `cause_kind`, `cause_id` | `request` (the request id), `workflow_run`, `reversal` (the change set it reverses from), `baseline` (the migration). R4 adds `message` with the private-source rule of the amendment §1 |
-| `request_id`, `created_at` | |
+| `cause_kind`, `cause_id` | `request` (the request id), `workflow_run` (the run id), `routine` (a system routine with no run, by name: `series.materialise`), `reversal` (the change set it reverses from), `baseline` (the migration). R4 adds `message` with the private-source rule of the amendment §1 |
+| `request_id`, `fingerprint`, `created_xact`, `created_at` | The fingerprint is sha256 of the normalised request, for the retry rule; `created_xact` holds one change set per organisation per transaction |
 
 **`record_changes`** — one per changed field or item, immutable.
 
@@ -68,40 +70,52 @@ app`, and select/insert grants only: nothing in them is ever updated or deleted 
 | `field` | The field's fixed name for an update; null otherwise |
 | `item_kind`, `item_id` | A stable child or relation: a step, an evidence row, a tag on a thread. Null for the record's own fields |
 | `before`, `after jsonb` | Typed values; a removed item's `before` is its full row, so it can be restored |
-| `base_revision`, `result_revision` | The record's revision before and after |
+| `base_revision`, `result_revision` | The record's revision in its previous version (null when this change set created it) and at commit. A thread tag moves the thread's revision, not its record's, so a tag-only change set has `base = result` |
 | `reverses_change_id` | Set on a reversal's changes |
 
 **`record_versions`** — `(record_kind, record_id, revision, change_set_id, snapshot jsonb)`: the full
-row after the write, with its steps, evidence and tags, for inspection. Never restored wholesale.
+row after the write, with its steps, evidence and tags, for inspection, unique per record per change set (two versions
+may share a revision after a tag-only change). Never restored wholesale. A removed record's last version is its row
+just before removal, marked `removed`. Stock items gain a `revision` (0047), moved on every update like the other records'.
 
 Access is one predicate, `record_visible(kind, id)`, used by every policy: active membership for
 the work records, and `thread_visible` for `thread`. A narrowed record policy narrows its history
 with it.
 
-**How rows get there.** The API sets `app.change_set_id` in the transaction, beside
-`app.user_id`, after inserting the change set. `after insert or update or delete` triggers on
-`tasks`, `task_series`, `evidence`, `equipment`, `equipment_reservations`, `stock_items`, `tags`,
-`thread_tags` and `task_series_tags` compare old and new for a fixed list of fields per table and
-write the change rows and the version. A write to any of those tables with no change set raises.
-Fields that are bookkeeping (`updated_at`, `revision`, counters) are not changes. A step is its
-task's item; evidence is its task's item; a thread tag is an item of the thread's record, or of
-the thread itself for a topic or private thread.
+**How rows get there.** The API opens the change set with `change_set_open(...)`, which inserts it and sets
+`app.change_set_id` in the transaction beside `app.user_id` (one change set per organisation per transaction).
+`after insert or update or delete` triggers on `tasks`, `task_series`, `evidence`, `equipment`,
+`equipment_reservations`, `stock_items`, `tags`, `thread_tags` and `task_series_tags` do the rest: an immediate
+`journal_guard` refuses a write with no change set of this transaction, and a deferred constraint trigger,
+`journal_capture`, runs at commit for each row event, compares old and new for the fixed list of fields per table
+(`journal_fields()`, mirrored in `packages/db/src/versions.ts`) and writes the change rows, then the record's one
+version and its one change line. Deferring to commit is what makes one version per record per change set and the
+final result revision exact. Fields that are bookkeeping (`updated_at`, `revision`, the derived booking occupancy,
+counters) are not changes. A step is its task's item; evidence is its task's item; a thread tag is an item of the
+thread's record, or of the thread itself for a topic or private thread; a series tag is an item of its series. Two
+writes need no change set and are not journalled: rows removed with their organisation, and an update that only
+clears a deleted member's attribution (an account or membership deletion's `on delete set null`).
 
 **Baseline.** The migration writes one `baseline` change set per organisation and one version per
 existing record at its current revision. It invents no changes: history starts here, and the
 screen says so.
 
 **Retired with this.** The business `audit_events` inserts (decision 2). The stocktake's
-idempotency check, which reads `audit_events` by key, becomes the change set's retry id. Xero's
-sync state, also read from `audit_events`, moves to a small `xero_sync_state` table.
+idempotency check, which reads `audit_events` by key, becomes the change set's retry id (the reorder task); its count
+observation, which writes no record, checks the run's own step journal instead. Xero's sync state, also read from
+`audit_events`, moves to a small `xero_sync_state` table, filled by 0047 from each connection's latest sync event and
+its latest completed sync since it was last connected; the audit rows stay as history.
 
 ## 3. Change lines in the thread
 
 A change set that touches a record with a thread adds one `thread_messages` row of kind `change`
-to that thread, in the same transaction: no body, a `change_set_id`, the next `seq`. The R2 guard
-is replaced to allow it from the journal trigger only. The client words the line from the changes
-(code, never a model). Change lines count as unread activity by others. A change set that touches
-three records adds one line to each thread. Editing or deleting a change line is refused.
+to that thread, in the same transaction: no body, a `change_set_id`, the next `seq`, the change set's actor as
+author (none for the system). The R2 guard is replaced to allow it from the journal trigger only. The client words the
+line from the changes (code, never a model): the message payload carries `changeSetId` and `change` (actor kind, id
+and name, cause kind, and that change set's changes to this thread's record, field names in camelCase). Change lines
+count as unread activity by others and move the thread's activity time; the list's excerpt stays the latest message.
+A change set that touches three records adds one line to each thread. Editing, deleting or pinning a change line is
+refused (`409 change_line_immutable`).
 
 ## 4. Reversal
 
@@ -126,9 +140,11 @@ Behaviour is the amendment's §3 and §4. Mechanically:
 
 ## 5. API
 
-- Every existing business write takes an optional `changeSetId` (a UUID) and returns it. A retry
-  with the same id and the same content returns the first result; different content is
-  `409 change_set_id_unavailable`.
+- Every existing business write takes an optional `changeSetId` (a UUID) and returns it, in the body and in the
+  `Change-Set-Id` header (a thread tag write in the header only, so the thread detail keeps its shape). A retry
+  with the same id and the same content returns the first result: the record the change set made or changed, read
+  as it is now (a count returns the observation it recorded; added evidence its row as attached); nothing is stored
+  beside the change set. Different content, another person or another write is `409 change_set_id_unavailable`.
 - `GET …/history/:recordKind/:recordId?before=<cursor>&limit≤50` → change sets, newest first, each
   with its actor, cause, time and changes; each change carries `state`: `reversible`, `conflict`,
   `needs` (with the change ids), `irreversible` (with a reason code) or `reversed` (with the
@@ -173,7 +189,7 @@ Client: pure tests for wording change lines and preview states; Playwright on th
 | PR | Delivers |
 |---|---|
 | V-A | This contract and the plan and AGENTS amendments. The screen designs are reviewed separately and gate only V-D and V-E |
-| V-B | Migration 0047: the three tables, triggers, baseline; every write path sets a change set; change lines; audit and state-store retirements |
+| V-B | Migration 0047: the three tables, triggers, baseline; every write path sets a change set; change lines; audit and state-store retirements. Built as above; the deviations from the first draft are named in its pull request |
 | V-C | History and reversal API |
 | V-D | Client: card editing, make-a-task, change lines |
 | V-E | Client: history, selection, preview, apply |

@@ -4,7 +4,7 @@ import { withTenant, type TransactionSql } from '@captain/db';
 import { z } from 'zod';
 import { audit } from '../audit.ts';
 import { HttpError } from '../errors.ts';
-import type { XeroConnections } from './connections.ts';
+import { recordSync, type XeroConnections } from './connections.ts';
 import { contactSchema, invoiceSchema, paymentSchema, saveContact, saveInvoice, savePayment } from './store.ts';
 const busy = () => new HttpError(409, 'xero_sync_running', 'Xero sync is already running. Check again shortly.');
 const failed = 'Xero sync did not finish. Cached money may be incomplete. Try Sync now again; reconnect Xero if access has expired.';
@@ -59,7 +59,7 @@ export class XeroSync {
    acquired = await withTenant(db, { organisationId: org }, async (tx) => (await tx`insert into sync_cursors (organisation_id, connection_id, resource, cursor) values (${org}, ${conn!.id}, 'xero.sync-lock', ${runId})
     on conflict (organisation_id, connection_id, resource) do update set cursor = excluded.cursor, updated_at = clock_timestamp() where sync_cursors.updated_at < clock_timestamp() - interval '2 minutes' returning id`).length > 0);
    if (!acquired) throw busy();
-   await batch((tx) => journal(tx, 'xero.sync_started', { error: 'Xero sync is running. Cached money may be incomplete; check again shortly.' }));
+   await batch(async (tx) => { const error = 'Xero sync is running. Cached money may be incomplete; check again shortly.'; await journal(tx, 'xero.sync_started', { error }); await recordSync(tx, org, conn!.id, 'started', error); });
    const ensureContact = async (id: string) => {
     const exists = await batch(async (tx) => (await tx`select id from xero_contacts where connection_id = ${conn!.id} and provider_id = ${id}`).length);
     if (!exists) { const c = contactSchema.parse(await request((token) => client.one(token, conn!.providerAccountId, 'Contacts', id))); if (c.ContactID !== id) throw new XeroError(); await batch(async (tx) => { await saveContact(tx, org, conn!.id, conn!.providerAccountId, c); await journal(tx, 'xero.page_synced', { resource: 'Contacts', count: 1, backfill: true }); }); counts.contacts++; }
@@ -85,13 +85,13 @@ export class XeroSync {
     if (!complete) throw new XeroError();
     await batch(async (tx) => { await tx`insert into sync_cursors (organisation_id, connection_id, resource, cursor) values (${org}, ${conn!.id}, ${key}, ${started}) on conflict (organisation_id, connection_id, resource) do update set cursor = excluded.cursor, updated_at = now()`; });
    }
-   await batch((tx) => journal(tx, 'xero.synced', { ...counts, success: true })); return counts;
+   await batch(async (tx) => { await journal(tx, 'xero.synced', { ...counts, success: true }); await recordSync(tx, org, conn!.id, 'synced'); }); return counts;
   } catch (error) {
    if (error instanceof HttpError && error.code === 'xero_sync_running') throw error;
    const message = error instanceof XeroError && error.status === 429 ? `Xero’s rate limit paused sync. Try again after ${new Date(this.now() + error.retryAfter * 1000).toISOString()}. Cached money may be incomplete.` : failed;
    if (acquired) await withTenant(db, { organisationId: org }, async (tx) => {
     const [lock] = await tx`select id from sync_cursors where connection_id = ${conn!.id} and resource = 'xero.sync-lock' and cursor = ${runId}`;
-    if (lock) await journal(tx, 'xero.sync_failed', { ...counts, success: false, error: message });
+    if (lock) { await journal(tx, 'xero.sync_failed', { ...counts, success: false, error: message }); await recordSync(tx, org, conn!.id, 'failed', message); }
    }); throw new HttpError(503, 'xero_sync_failed', message);
   } finally { if (acquired) await withTenant(db, { organisationId: org }, async (tx) => { await tx`delete from sync_cursors where connection_id = ${conn!.id} and resource = 'xero.sync-lock' and cursor = ${runId}`; }); }
  }
