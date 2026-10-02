@@ -357,7 +357,7 @@ it('0047 from 0046: one baseline per organisation, one version per record at its
 		const revisions = await owner<{ id: string; revision: number }[]>`select id, revision from tasks where parent_id is null`;
 
 		const startedAt = Date.now();
-		assert.deepEqual(await applyMigrations(owner), [migration]);
+		assert.deepEqual(await applyMigrations(owner, undefined, migration), [migration]);
 		const took = Date.now() - startedAt;
 		const sets = await owner<{ organisationId: string; actorKind: string; causeKind: string }[]>`select organisation_id, actor_kind, cause_kind from change_sets order by organisation_id`;
 		assert.deepEqual(sets.map((s) => [s.organisationId, s.actorKind, s.causeKind]).sort(), [[o, 'system', 'baseline'], [quiet, 'system', 'baseline']].sort(), 'one per organisation, the quiet one too');
@@ -380,6 +380,6 @@ it('0047 from 0046: one baseline per organisation, one version per record at its
 		await journalled(old.app, { organisationId: o, userId: member }, (tx) => tx`update tasks set title = 'Brew batch 44' where id = ${task!.id}`);
 		const [first] = await owner<{ baseRevision: number; resultRevision: number }[]>`select base_revision, result_revision from record_changes where record_id = ${task!.id}`;
 		assert.deepEqual({ ...first }, { baseRevision: 2, resultRevision: 3 }, 'the first change builds on the baseline version');
-		assert.deepEqual(await applyMigrations(owner), []);
+		assert.deepEqual(await applyMigrations(owner, undefined, migration), []);
 	} finally { await old.close(); }
 });

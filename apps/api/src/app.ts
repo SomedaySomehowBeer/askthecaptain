@@ -7,6 +7,8 @@ import { savedViewsRoutes } from './views/routes.ts';
 import { SavedViewsService } from './views/service.ts';
 import { threadsRoutes } from './threads/routes.ts';
 import { ThreadsService } from './threads/service.ts';
+import { versionsRoutes } from './versions/routes.ts';
+import { VersionsService } from './versions/service.ts';
 import { EquipmentService } from './equipment/service.ts';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import { shopifyRoutes } from './shopify/routes.ts';
@@ -256,13 +258,14 @@ export function createApp(deps: Deps) {
 	signedIn.route('/', equipmentRoutes(new EquipmentService(deps.db)));
 	signedIn.route('/', savedViewsRoutes(new SavedViewsService(deps.db)));
 	signedIn.route('/', threadsRoutes(new ThreadsService(deps.db)));
+	signedIn.route('/', versionsRoutes(new VersionsService(deps.db)));
 	if (deps.workflows) signedIn.route('/', workflowRoutes(deps.workflows));
 	if (deps.push) signedIn.route('/', pushRoutes(deps.push));
 	app.route('/', signedIn);
 
 	app.notFound((c) => c.json({ ok: false, code: 'not_found', error: 'not found' }, 404));
 	app.onError((error, c) => {
-		if (error instanceof HttpError) return c.json({ ok: false, code: error.code, error: error.message, ...(error.field ? { field: error.field } : {}) }, error.status as 400);
+		if (error instanceof HttpError) return c.json({ ...error.body, ok: false, code: error.code, error: error.message, ...(error.field ? { field: error.field } : {}) }, error.status as 400);
 		if (error instanceof z.ZodError) return c.json({ ok: false, code: 'invalid_request', error: 'the request was not understood' }, 400);
 		console.error(`[${c.get('requestId')}]`, error);
 		return c.json({ ok: false, code: 'internal', error: 'something went wrong on our side' }, 500);

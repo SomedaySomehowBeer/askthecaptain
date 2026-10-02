@@ -43,6 +43,10 @@ export const revisionQuery = z.object({ expectedRevision: queryRevision }).stric
 /** A tag write is journalled (0047), so it also takes an optional change set id (versions contract §5). */
 export const tagBody = z.object({ expectedRevision: revision, changeSetId: changeSetId.optional() }).strict();
 export const tagQuery = z.object({ expectedRevision: queryRevision, changeSetId: changeSetId.optional() }).strict();
+/** Topic to task (versions contract §0 decision 4, §6): the topic's thread becomes the new task's thread. */
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').refine(value => !Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+ && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value), 'A real calendar date.');
+export const makeTask = z.object({ expectedRevision: revision, ownerId: uuid.nullable().optional(), due: day.nullable().optional(), changeSetId: changeSetId.optional() }).strict();
 export const sendMessage = z.object({ id: uuid, body: z.string() }).strict();
 export const filters = ['all', 'needs_you', 'tasks', 'bookings', 'stock', 'records', 'files', 'people'] as const;
 export type Filter = typeof filters[number];
@@ -106,6 +110,8 @@ const invalidBody = () => badRequest('invalid_body', 'A message is 1 to 4,000 ch
 const pinExists = () => conflict('pin_exists', 'This thread already has a pinned message. Unpin it first.');
 const deletedMessage = () => conflict('message_deleted', 'That message was deleted, so it cannot be pinned.');
 const notPrivate = () => badRequest('thread_not_private', 'Only a private thread has a list of people.');
+const notTopic = () => badRequest('thread_not_topic', 'Only a topic becomes a task. A private thread stays private.');
+const alreadyRecord = () => conflict('thread_is_record', 'This thread already belongs to a record.');
 const changeLineFixed = () => conflict('change_line_immutable', 'A change line records what changed. It cannot be edited, deleted or pinned.');
 
 /** Unique violations map to a 409 only by exact constraint name (linked-chat §9.4); anything else stays an error. */
@@ -558,6 +564,28 @@ export class ThreadsService {
    await requireTags(tx, [tagId], !attached);
    await writeThreadTags(tx, organisationId, actor, threadId, [tagId], { mode: attached ? 'add' : 'remove', bump: true });
    return { ...await this.detailIn(tx, organisationId, threadId, actor.userId.toLowerCase()), changeSetId: changeSet.id };
+  });
+ }
+
+ /** Makes a topic thread a task's thread (contract §6): one new task titled as the thread, with no body; the thread
+  *  keeps its id, messages and tags and becomes kind `record`, and no second thread is made. Journalled as the task's
+  *  creation under the person's change set (its change line lands in this thread); a retry with the same change set id
+  *  answers with the thread as it is now. A private thread, or one that is already a record's, is refused. */
+ makeTask(actor: Actor, organisationId: string, threadId: string, raw: unknown): Promise<ThreadDetail & { changeSetId: string }> {
+  const { changeSetId: wanted, ...input } = makeTask.parse(raw);
+  const me = actor.userId.toLowerCase();
+  const owner = input.ownerId ?? null;
+  return this.write(actor, organisationId, async tx => {
+   const { people } = await this.lockPeople(tx, organisationId, actor, owner && owner !== me ? new Map([[owner, 'share' as const]]) : new Map());
+   const changeSet = await personChangeSet(tx, actor, 'thread.make_task', { threadId, ownerId: owner, due: input.due ?? null, expectedRevision: input.expectedRevision }, wanted);
+   if (changeSet.matched) return { ...await this.detailIn(tx, organisationId, threadId, me), changeSetId: changeSet.id };
+   const thread = await this.lockThread(tx, organisationId, threadId);
+   if (thread.kind === 'private') throw notTopic();
+   if (thread.kind === 'record') throw alreadyRecord();
+   if (thread.revision !== input.expectedRevision) throw staleThread();
+   if (owner && people.get(owner)?.status !== 'active') throw badRequest('owner_invalid', 'The owner must be an active member of the organisation.');
+   await tx`select thread_make_task(${threadId}::uuid, ${owner}::uuid, ${input.due ?? null}::date, ${input.expectedRevision}::integer)`;
+   return { ...await this.detailIn(tx, organisationId, threadId, me), changeSetId: changeSet.id };
   });
  }
 
