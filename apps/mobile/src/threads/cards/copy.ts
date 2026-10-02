@@ -1,0 +1,27 @@
+/** Card editing copy (design boards 1 and 2). The boards' helper lines also promise undo from History; History is V-E,
+ *  so until it ships the lines say only what is true now. */
+export const cardCopy = {
+	task: { saving: 'Saving…', saved: 'Saved. The change is in the thread.', confirmed: 'Change confirmed. It is in the thread.' },
+	step: { saving: 'Saving the step…', saved: 'Step saved.', confirmed: 'Step change confirmed.' },
+	booking: { saving: 'Saving…', saved: 'Saved. The change is in the thread.', confirmed: 'Change confirmed. It is in the thread.' },
+	cancel: { saving: 'Cancelling the booking…', saved: 'Booking cancelled. The time is free for others.', confirmed: 'Cancellation confirmed.' },
+	count: { saving: 'Saving the count…', saved: 'Count saved. It is in the thread.', confirmed: 'Count confirmed.' },
+	saveTogether: 'Saved together as one change.',
+	bookingTogether: 'The time, setup and cleanup are saved as one change.',
+	countHelp: 'Saved as one change, with who counted and when.',
+	loading: 'Loading the record…',
+	membersLoading: 'Loading members for the owner list…',
+	noSteps: 'No steps yet.',
+	moreSteps: 'Only the first 50 steps are shown here.',
+	suggestedTask: 'This task is suggested. Choose a status to accept it.',
+	cancelledTask: 'This task is cancelled. Choose a status to reopen it.',
+	equipmentFixed: 'Moving a booking to other equipment is not available yet. Cancel it and book the other equipment instead.',
+	cancelledBooking: 'This booking is cancelled. Its time is free for others.',
+	cancelConfirm: (equipment: string) => `Cancel this booking? The time on the ${equipment} becomes free for others. This is saved as one change.`,
+	checking: 'Checking that time…',
+	free: 'That time is free.',
+	partial: 'Some bookings in that time could not be checked; it may not be free.',
+	unchecked: 'Could not check that time just now.',
+	archivedStock: 'This item is archived. Restore it before counting it.',
+	notCounted: 'Not counted yet.'
+} as const;

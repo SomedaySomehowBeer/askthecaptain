@@ -6,7 +6,8 @@ export function firstUnread(messages:readonly Message[],position:number,userId:s
 export const initialMessages=(detail:Detail)=>detail.thread.unread>50?{after:Math.max(0,detail.thread.readPosition-1),limit:50}:{latest:50};
 export function mergeMessages(old:readonly Message[],next:readonly Message[]):Message[]{const map=new Map(old.map(m=>[m.id,m]));for(const m of next){const old=map.get(m.id);if(!old||m.changeSeq>old.changeSeq)map.set(m.id,m);}return [...map.values()].sort((a,b)=>a.seq-b.seq);}
 export function hasGap(messages:readonly Message[]):boolean {return messages.some((m,i)=>i>0&&m.seq!==messages[i-1]!.seq+1);}
-export function messagePowers(message:Message,userId:string,role:string){const live=message.deletedAt===null;return {edit:live&&message.authorId===userId,delete:live&&(message.authorId===userId||role==='owner'||role==='admin'),pin:live&&(role==='owner'||role==='admin')};}
+/** A change line records what changed: it has no menu (no edit, delete or pin; the API refuses each with 409). */
+export function messagePowers(message:Message,userId:string,role:string){const live=message.deletedAt===null&&message.kind==='message';return {edit:live&&message.authorId===userId,delete:live&&(message.authorId===userId||role==='owner'||role==='admin'),pin:live&&(role==='owner'||role==='admin')};}
 export function recordRoute(detail:Detail):'/equipment'|null{return detail.card.record?.kind==='booking'?'/equipment':null;}
 export const validBody=(value:string)=>{const body=value.trim();return body.length>0&&[...body].length<=4000&&new TextEncoder().encode(body).length<=16000;};
 

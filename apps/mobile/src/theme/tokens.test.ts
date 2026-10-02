@@ -41,14 +41,17 @@ export const textPairs = (p: Palette): readonly (readonly [string, string, strin
 	['sageText on needsYou', p.sageText, p.needsYou],
 	['heading on pinned', p.heading, p.pinned], ['body on pinned', p.body, p.pinned],
 	['card on sageText (pip)', p.card, p.sageText],
-	['muted on unknown time', p.muted, over(p.unknown, p.page)]
+	['muted on unknown time', p.muted, over(p.unknown, p.page)],
+	['warningText on warning', p.warningText, p.warning], ['warningText on card', p.warningText, p.card], ['neutralText on neutral', p.neutralText, p.neutral],
+	['body on needsYou (an ok note)', p.body, p.needsYou]
 ];
 
-test('the light palette is the reviewed green-grey set, unchanged, plus the tokens for colours the screens used inline', () => {
+test('the light palette is the reviewed green-grey set, unchanged, plus the tokens for colours the screens used inline and the R3 warning and neutral pairs', () => {
 	assert.deepEqual(light, {
 		page: '#f1f5ee', card: '#ffffff', heading: '#142619', body: '#1f3a2c', muted: '#54655a', action: '#276744', actionText: '#ffffff',
 		line: '#d8e0d3', rowLine: '#e6ece2', needsYou: '#e9f2e4', needsYouLine: '#bfd4b8', pinned: '#e3ebdd', sage: '#dbe6d4', sageText: '#2d4c36',
-		plain: '#000000', unknown: 'rgba(84, 101, 90, 0.10)', unknownStripe: 'rgba(84, 101, 90, 0.22)', shadow: '#142619'
+		plain: '#000000', unknown: 'rgba(84, 101, 90, 0.10)', unknownStripe: 'rgba(84, 101, 90, 0.22)', shadow: '#142619',
+		warning: '#fbe8c4', warningText: '#6b4a0c', warningLine: '#b98a2b', neutral: '#e4e8e1', neutralText: '#434a44'
 	});
 });
 
@@ -56,7 +59,8 @@ test('the dark palette is the owner-reviewed set', () => {
 	assert.deepEqual(dark, {
 		page: '#0f1a14', card: '#17231c', heading: '#f4f7f2', body: '#e6ede4', muted: '#a9b6ab', action: '#90e8a8', actionText: '#10261a',
 		line: '#2e3d34', rowLine: '#263229', needsYou: '#1a2c21', needsYouLine: '#2f5040', pinned: '#1f3126', sage: '#2c4335', sageText: '#cfe3d1',
-		plain: '#e6ede4', unknown: 'rgba(169, 182, 171, 0.10)', unknownStripe: 'rgba(169, 182, 171, 0.22)', shadow: '#000000'
+		plain: '#e6ede4', unknown: 'rgba(169, 182, 171, 0.10)', unknownStripe: 'rgba(169, 182, 171, 0.22)', shadow: '#000000',
+		warning: '#3a2c10', warningText: '#f3d08a', warningLine: '#8a6a2a', neutral: '#2a312c', neutralText: '#cfd6d0'
 	});
 });
 

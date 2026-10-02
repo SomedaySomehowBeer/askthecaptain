@@ -1,5 +1,5 @@
 import { isCanonicalInstant, isCanonicalUuid } from '../api/paths.ts';
-import { filters, type Card, type Changes, type Detail, type Group, type Message, type MessagePage, type Pin, type Row, type Tag, type ThreadList } from './contracts.ts';
+import { filters, type Card, type ChangeLine, type Changes, type Detail, type Group, type LineChange, type Message, type MessagePage, type Pin, type Row, type Tag, type ThreadList } from './contracts.ts';
 const bad = (): never => { throw new TypeError('threads: unexpected response'); };
 export const object = (x: unknown): Record<string, unknown> => x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string, unknown> : bad();
 export const keys = (x: Record<string, unknown>, required: string[], optional: string[] = []) => { if (!required.every(k => Object.hasOwn(x,k)) || Object.keys(x).some(k => !required.includes(k) && !optional.includes(k))) bad(); };
@@ -29,10 +29,44 @@ export function parseGroup(raw: unknown): Group {
  return {key:x.key==='none'?'none':uuid(x.key),label:text(x.label,200),threads:integer(x.threads),needsYou:integer(x.needsYou,0,integer(x.threads)),...(x.owner===undefined?{}:{owner:nullable(x.owner,v=>{const o=object(v);keys(o,['id','name']);return {id:uuid(o.id),name:nullable(o.name,v=>text(v,500))};})}),...(x.startsOn===undefined?{}:{startsOn:nullable(x.startsOn,date)}),...(x.endsOn===undefined?{}:{endsOn:nullable(x.endsOn,date)})};
 }
 export function parseList(raw: unknown): ThreadList { const x=object(raw);keys(x,['filter','available','threads','nextCursor','groups']);return {filter:oneOf(x.filter,filters),available:bool(x.available),threads:unique(array(x.threads,parseRow,50),r=>r.id),nextCursor:nullable(x.nextCursor,v=>{const s=text(v,2000);return s.length?s:bad();}),groups:unique(array(x.groups,parseGroup,100),g=>g.key)}; }
+const messageKeys=['id','threadId','kind','seq','changeSeq','authorId','authorName','body','createdAt','editedAt','deletedAt','deletedBy','revision'];
+const journalKinds=['task','reservation','stock_item','series','equipment','tag','thread'] as const;
+const operations=['create','update','remove','attach','detach'] as const;
+/** A journalled value: JSON only, bounded so a hostile payload cannot grow the page without limit. */
+const json=(x:unknown):unknown=>{if(x===undefined||JSON.stringify(x).length>20000)bad();return x;};
+const isRow=(x:unknown)=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+/** One change of a change line (R3 §3), with the database's shape rules: an update names a field and has both values; a
+ *  create or attach has only `after`, a full row; a remove or detach only `before`; attach and detach are tag items. */
+export function parseLineChange(raw:unknown):LineChange{
+ const x=object(raw);keys(x,['id','recordKind','recordId','operation','field','itemKind','itemId','before','after']);
+ const operation=oneOf(x.operation,operations),field=nullable(x.field,v=>{const f=text(v,60);return /^[a-z][A-Za-z]{0,59}$/.test(f)?f:bad();});
+ const itemKind=nullable(x.itemKind,v=>oneOf(v,['step','evidence','tag'] as const)),itemId=nullable(x.itemId,uuid),before=json(x.before),after=json(x.after);
+ if((itemKind===null)!==(itemId===null)||(operation==='update')!==(field!==null))bad();
+ if(operation==='update'&&(before===null&&after===null))bad();
+ if((operation==='create'||operation==='attach')&&(before!==null||!isRow(after)))bad();
+ if((operation==='remove'||operation==='detach')&&(after!==null||!isRow(before)))bad();
+ if((operation==='attach'||operation==='detach')!==(itemKind==='tag'))bad();
+ return {id:uuid(x.id),recordKind:oneOf(x.recordKind,journalKinds),recordId:uuid(x.recordId),operation,field,itemKind,itemId,before,after};
+}
+export function parseChangeLine(raw:unknown):ChangeLine{
+ const x=object(raw);keys(x,['actorKind','actorId','actorName','causeKind','createdAt','changes','truncated']);
+ const actorKind=oneOf(x.actorKind,['person','workflow','system'] as const),actorId=nullable(x.actorId,uuid);
+ if(actorKind==='system'&&actorId!==null)bad();
+ const changes=unique(array(x.changes,parseLineChange,50),c=>c.id),truncated=bool(x.truncated);if(truncated&&changes.length<50)bad();
+ return {actorKind,actorId,actorName:nullable(x.actorName,v=>text(v,500)),causeKind:oneOf(x.causeKind,['request','workflow_run','routine','reversal','baseline'] as const),createdAt:instant(x.createdAt),changes,truncated};
+}
+/** A message, or a change line. Anything else (an approval card, R5) is refused with the page that holds it. */
 export function parseMessage(raw: unknown): Message {
- const x=object(raw);keys(x,['id','threadId','kind','seq','changeSeq','authorId','authorName','body','createdAt','editedAt','deletedAt','deletedBy','revision']);
+ const x=object(raw);const k=oneOf(x.kind,['message','change'] as const);
+ if(k==='change'){
+  keys(x,[...messageKeys,'changeSetId','change']);
+  if(x.body!==null||x.editedAt!==null||x.deletedAt!==null||x.deletedBy!==null)bad();
+  const change=parseChangeLine(x.change);if(change.actorKind==='system'?x.authorId!==null:false)bad();
+  return {id:uuid(x.id),threadId:uuid(x.threadId),kind:'change',seq:integer(x.seq,1),changeSeq:integer(x.changeSeq,1),authorId:nullable(x.authorId,uuid),authorName:nullable(x.authorName,v=>text(v,500)),body:null,createdAt:instant(x.createdAt),editedAt:null,deletedAt:null,deletedBy:null,revision:integer(x.revision,1),changeSetId:uuid(x.changeSetId),change};
+ }
+ keys(x,messageKeys);
  const body=nullable(x.body,v=>text(v)),deletedAt=nullable(x.deletedAt,instant);if ((body===null)!==(deletedAt!==null) || body==='') bad();
- return {id:uuid(x.id),threadId:uuid(x.threadId),kind:oneOf(x.kind,['message']),seq:integer(x.seq,1),changeSeq:integer(x.changeSeq,1),authorId:nullable(x.authorId,uuid),authorName:nullable(x.authorName,v=>text(v,500)),body,createdAt:instant(x.createdAt),editedAt:nullable(x.editedAt,instant),deletedAt,deletedBy:nullable(x.deletedBy,uuid),revision:integer(x.revision,1)};
+ return {id:uuid(x.id),threadId:uuid(x.threadId),kind:'message',seq:integer(x.seq,1),changeSeq:integer(x.changeSeq,1),authorId:nullable(x.authorId,uuid),authorName:nullable(x.authorName,v=>text(v,500)),body,createdAt:instant(x.createdAt),editedAt:nullable(x.editedAt,instant),deletedAt,deletedBy:nullable(x.deletedBy,uuid),revision:integer(x.revision,1)};
 }
 export function parsePin(raw: unknown): Pin { const x=object(raw);keys(x,['id','messageId','pinnedBy','pinnedAt']);return {id:uuid(x.id),messageId:uuid(x.messageId),pinnedBy:nullable(x.pinnedBy,uuid),pinnedAt:instant(x.pinnedAt)}; }
 export function parseChangedPin(raw:unknown){const p=object(raw);keys(p,['id','threadId','messageId','changeSeq','pinnedBy','pinnedAt','unpinnedBy','unpinnedAt']);return {...parsePin({id:p.id,messageId:p.messageId,pinnedBy:p.pinnedBy,pinnedAt:p.pinnedAt}),threadId:uuid(p.threadId),changeSeq:integer(p.changeSeq,1),unpinnedBy:nullable(p.unpinnedBy,uuid),unpinnedAt:nullable(p.unpinnedAt,instant)};}

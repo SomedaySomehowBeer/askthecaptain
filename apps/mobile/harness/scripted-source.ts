@@ -36,7 +36,7 @@ export const harnessOrgC: Membership = Object.freeze({ organisationId: 'feedface
 export const timedWaitMs = 5_000;
 
 export const scenarioNames = [
-	'threads-new', 'threads-new-empty', 'threads-new-failed', 'threads-new-wait', 'threads-new-pending', 'threads-new-refused', 'threads-loaded', 'threads-empty', 'threads-failed', 'threads-lost', 'threads-wait', 'threads-unavailable', 'push-empty', 'push-loaded', 'push-unavailable', 'push-failed', 'members-owner', 'members-admin', 'members-empty', 'members-failed', 'members-refused', 'members-denied', 'members-none', 'passkeys-empty', 'passkeys-loaded', 'passkeys-unavailable', 'passkeys-failed', 'ready', 'ready-destination', 'misconfigured', 'starting', 'starting-slow', 'startup-failed',
+	'threads-new', 'threads-new-empty', 'threads-new-failed', 'threads-new-wait', 'threads-new-pending', 'threads-new-refused', 'threads-loaded', 'threads-empty', 'threads-failed', 'threads-lost', 'threads-wait', 'threads-unavailable', 'threads-lines', 'threads-card-task', 'threads-card-task-failed', 'threads-card-booking', 'threads-card-booking-cancelled', 'threads-card-stock', 'threads-card-stock-archived', 'push-empty', 'push-loaded', 'push-unavailable', 'push-failed', 'members-owner', 'members-admin', 'members-empty', 'members-failed', 'members-refused', 'members-denied', 'members-none', 'passkeys-empty', 'passkeys-loaded', 'passkeys-unavailable', 'passkeys-failed', 'ready', 'ready-destination', 'misconfigured', 'starting', 'starting-slow', 'startup-failed',
 	'storage-unavailable', 'storage-unreadable', 'signed-out', 'signed-out-busy', 'signed-out-cancelled', 'signed-out-released',
 	'signing-in', 'closing', 'saving', 'checking', 'unverified', 'unverified-retry-at', 'releasing', 'releasing-warning',
 	'releasing-retry-at', 'choose', 'none', 'lost-named', 'lost-unnamed', 'not-remembered', 'refreshing', 'fault',
@@ -78,6 +78,7 @@ function scenario(name: ScenarioName, wait: Wait): AccountSnapshot {
 		case 'push-empty': case 'push-loaded': case 'push-unavailable': case 'push-failed':
 		case 'threads-new': case 'threads-new-empty': case 'threads-new-failed': case 'threads-new-wait': case 'threads-new-pending': case 'threads-new-refused':
 		case 'threads-loaded': case 'threads-empty': case 'threads-failed': case 'threads-lost': case 'threads-wait': case 'threads-unavailable':
+		case 'threads-lines': case 'threads-card-task': case 'threads-card-task-failed': case 'threads-card-booking': case 'threads-card-booking-cancelled': case 'threads-card-stock': case 'threads-card-stock-archived':
 		case 'members-owner': case 'members-empty': case 'members-failed': case 'members-refused':
 		case 'ready': return snap(signedIn());
 		case 'ready-destination': return snap(signedIn({ destination: '/equipment' }));
