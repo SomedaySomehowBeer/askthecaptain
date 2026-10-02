@@ -154,7 +154,7 @@ it('runs as captain_runtime; the new tables force row security, name both roles,
 	const functions = await db.owner<{ name: string; definer: boolean; runtime: boolean; legacy: boolean }[]>`
 		select p.proname as name, p.prosecdef as definer, has_function_privilege('captain_runtime', p.oid, 'EXECUTE') as runtime,
 			has_function_privilege('app', p.oid, 'EXECUTE') as legacy from pg_proc p where p.proname like 'thread\\_%' order by p.proname`;
-	assert.deepEqual(functions.filter((f) => f.runtime).map((f) => f.name), ['thread_create', 'thread_end_membership', 'thread_visible']);
+	assert.deepEqual(functions.filter((f) => f.runtime).map((f) => f.name), ['thread_create', 'thread_end_membership', 'thread_make_task', 'thread_visible']);
 	assert.deepEqual(functions.map((f) => f.legacy), functions.map((f) => f.runtime));
 	assert.deepEqual(functions.filter((f) => f.definer && !f.runtime).map((f) => f.name), ['thread_seq_check'], 'no other definer function');
 	for (const name of ['thread_pins_guard', 'thread_stars_guard', 'thread_reads_guard']) assert.ok(functions.some((f) => f.name === name && !f.definer && !f.runtime), name);
