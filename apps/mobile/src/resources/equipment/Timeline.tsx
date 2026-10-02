@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-	Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent
+	Pressable, ScrollView, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent
 } from 'react-native';
 import { equipmentCellText, equipmentColumnSummary, equipmentCopy, reservationLabel } from '../../account/copy.ts';
 import { Button } from '../../components/AccountPage.tsx';
 import type { ScreenListFrame } from '../../components/Screen.tsx';
-import { colors } from '../../theme/tokens.ts';
+import { themedStyles } from '../../theme/theme.ts';
 import { cellOf, failureOf, reservationsBetween, slotOf, stateBetween, stateOf } from './cells.ts';
 import type { Equipment, Reservation } from './data.ts';
 import { clampScroll, pixelsAt, scales, zoomScroll, type Scale } from './geometry.ts';
@@ -37,6 +37,7 @@ export function Timeline({ state, screen, zone, frame, header, footer, onSettle,
 	onEdge: (direction: 'earlier' | 'later') => ScheduleRange | null; onToday: () => boolean;
 	onPress: (intent: Intent) => void; onOpen: (equipment: Equipment, reservation: Reservation) => void;
 }) {
+	const styles = useStyles();
 	const range = state.range!, scale = state.scale, ppd = scales[scale];
 	const start = Date.parse(range.start), end = Date.parse(range.end);
 	const bodyHeight = pixelsAt(end, start, ppd);
@@ -294,6 +295,7 @@ function Column({ state, equipment, chunkIndexes, window, start, ppd, width, bod
 	state: ScheduleState; equipment: Equipment; chunkIndexes: readonly number[]; window: TimeWindow; start: number; ppd: number;
 	width: number; bodyHeight: number; time: (instant: string) => string; onOpen: (equipment: Equipment, reservation: Reservation) => void;
 }) {
+	const styles = useStyles();
 	const range = state.range!;
 	const bars = reservationsBetween(state.occupancy, equipment.id, window.low, window.high);
 	return (
@@ -327,6 +329,7 @@ function Column({ state, equipment, chunkIndexes, window, start, ppd, width, bod
 /** Not known: a tinted span with a bounded number of diagonal stripes, and the state's words (a marker says the same
  *  words and shows no bars). */
 function Hatch({ top, height, width, text, marker }: { top: number; height: number; width: number; text: string; marker: boolean }) {
+	const styles = useStyles();
 	const spacing = Math.max(16, height / 40), count = Math.ceil(height / spacing);
 	return (
 		<View testID={marker ? 'equipment-marker' : 'equipment-hatch'} style={[styles.hatch, { top, height }]} pointerEvents="none">
@@ -344,6 +347,7 @@ function EdgeButton({ testID, label, control, onPress }: { testID: string; label
 
 /** The end of the names row (§4.5): More, its own Try again, "Loading more equipment…", or the ceiling notice. */
 function MoreSlot({ more, onPress }: { more: ScheduleScreen['more']; onPress: (intent: Intent) => void }) {
+	const styles = useStyles();
 	if (more === null) return null;
 	if (more.kind !== 'offered' && more.kind !== 'try-again') {
 		if (more.kind === 'loading') return <Text style={styles.nameText}>{equipmentCopy.moreLoading}</Text>;
@@ -359,8 +363,7 @@ function MoreSlot({ more, onPress }: { more: ScheduleScreen['more']; onPress: (i
 	);
 }
 
-const hatchTint = 'rgba(84, 101, 90, 0.10)', stripeTint = 'rgba(84, 101, 90, 0.22)';
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
 	fill: { flex: 1 },
 	header: { gap: 12, marginBottom: 12 },
 	scales: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
@@ -381,10 +384,10 @@ const styles = StyleSheet.create({
 	axis: { width: axisWidth, position: 'relative' },
 	tick: { position: 'absolute', left: 0, width: axisWidth - 4, fontSize: 10, color: colors.muted },
 	// The base of every column is "not known"; only a painted, fully read block is page colour (review S1).
-	column: { position: 'absolute', top: 0, borderLeftWidth: 1, borderColor: colors.rowLine, overflow: 'hidden', backgroundColor: hatchTint },
+	column: { position: 'absolute', top: 0, borderLeftWidth: 1, borderColor: colors.rowLine, overflow: 'hidden', backgroundColor: colors.unknown },
 	read: { position: 'absolute', left: 0, right: 0, backgroundColor: colors.page },
 	hatch: { position: 'absolute', left: 0, right: 0, overflow: 'hidden' },
-	stripe: { position: 'absolute', height: 2, backgroundColor: stripeTint, transform: [{ rotate: '-30deg' }] },
+	stripe: { position: 'absolute', height: 2, backgroundColor: colors.unknownStripe, transform: [{ rotate: '-30deg' }] },
 	hatchText: { margin: 4, fontSize: 11, lineHeight: 14, color: colors.muted },
 	bar: { position: 'absolute', left: 3, right: 3, borderRadius: 6, borderWidth: 1, paddingHorizontal: 4, overflow: 'hidden' },
 	booking: { backgroundColor: colors.sage, borderColor: colors.action },
@@ -393,4 +396,4 @@ const styles = StyleSheet.create({
 	more: { minHeight: 44, justifyContent: 'center' },
 	moreText: { fontSize: 13, fontWeight: '600', color: colors.action },
 	reason: { fontSize: 12, lineHeight: 16, color: colors.muted }
-});
+}));

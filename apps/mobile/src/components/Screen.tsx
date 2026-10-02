@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, ScrollView, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { isSignedIn, signedInNotices, threadsCopy } from '../account/copy.ts';
-import { colors, space, type } from '../theme/tokens.ts';
+import { space, type } from '../theme/tokens.ts';
+import { themedStyles, useTheme } from '../theme/theme.ts';
 import { Notice } from './Notice.tsx';
 import { Chevron, Magnifier } from './Icons.tsx';
 
@@ -25,6 +26,8 @@ type ScreenProps = { title?: string; back?: Back; headerAction?: ReactNode } & (
  *  optional 26 pt heading and the page. Content keeps a 16 pt gutter and a readable column on wide screens.
  *  Accessibility uses React Native's `role` and `aria-*` props, which iOS, Android and React Native Web all map. */
 export function Screen({ title, back, children, list, headerAction }: ScreenProps) {
+	const styles = useStyles();
+	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
 	const { snapshot } = useAccount();
 	const account = snapshot.account;
@@ -64,6 +67,8 @@ export function Screen({ title, back, children, list, headerAction }: ScreenProp
 
 /** A page outside the shell (the refusal page, a step-up): a plain way back and a heading. */
 export function PlainScreen({ title, back, children }: { title: string; back: Back | null; children: ReactNode }) {
+	const styles = useStyles();
+	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
 	return (
 		<View style={[styles.page, { paddingTop: insets.top }]}>
@@ -82,7 +87,7 @@ export function PlainScreen({ title, back, children }: { title: string; back: Ba
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
 	page: { flex: 1, backgroundColor: colors.page },
 	fill: { flex: 1 },
 	header: {
@@ -99,4 +104,4 @@ const styles = StyleSheet.create({
 	head: { width: 13, height: 13, borderRadius: 7, backgroundColor: colors.sageText, marginTop: 8 },
 	shoulders: { width: 26, height: 14, borderTopLeftRadius: 13, borderTopRightRadius: 13, backgroundColor: colors.sageText, marginTop: 3 },
 	heading: { fontSize: type.heading, lineHeight: 32, fontWeight: '600', color: colors.heading, marginTop: 4, marginBottom: 14 }
-});
+}));

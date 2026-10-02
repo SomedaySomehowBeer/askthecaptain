@@ -1,13 +1,15 @@
 import type { PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Text, TextInput, View } from 'react-native';
 import { accountCopy, passkeyDetail } from '../account/copy.ts';
 import { createPasskeyControls } from '../account/passkey-controls.ts';
 import type { WebCalls } from '../account/web-calls.ts';
-import { colors, space, type } from '../theme/tokens.ts';
+import { space, type } from '../theme/tokens.ts';
+import { themedStyles } from '../theme/theme.ts';
 import { Button } from './AccountPage.tsx';
 
 export function Passkeys({ web, now }: { web: WebCalls | null; now: () => number }) {
+ const styles = useStyles();
  return <View testID="account-passkeys" style={styles.stack}>
   <Text role="heading" style={styles.heading}>{accountCopy.passkeys}</Text>
   <Text style={styles.muted}>{accountCopy.passkeysIntro} Once you add one, every sign-in asks for it.</Text>
@@ -15,6 +17,7 @@ export function Passkeys({ web, now }: { web: WebCalls | null; now: () => number
  </View>;
 }
 function WebPasskeys({ web, now }: { web: WebCalls; now: () => number }) {
+ const styles = useStyles();
  const [controls] = useState(() => createPasskeyControls(web, now));
  const state = useSyncExternalStore(controls.subscribe, controls.snapshot, controls.snapshot);
  const [name, setName] = useState('');
@@ -60,10 +63,10 @@ function WebPasskeys({ web, now }: { web: WebCalls; now: () => number }) {
   <Button testID={state.phase === 'failed' ? 'account-passkeys-try-again' : 'passkey-refresh'} label={state.phase === 'failed' ? 'Try again' : 'Refresh passkeys'} disabled={busy || waiting} onPress={() => { void controls.refresh(); }} />
  </View>;
 }
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
  stack: { gap: 10 }, heading: { fontSize: 18, fontWeight: '600', color: colors.heading },
  card: { gap: 6, padding: 12, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
  name: { fontSize: type.body, fontWeight: '600', color: colors.heading },
  body: { fontSize: type.body, lineHeight: 21, color: colors.body }, muted: { fontSize: 14, lineHeight: 20, color: colors.muted },
  input: { minHeight: space.minTarget, padding: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 8, backgroundColor: colors.card, color: colors.body, fontSize: type.body }
-});
+}));

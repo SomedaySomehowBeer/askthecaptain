@@ -1,9 +1,10 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import {
 	equipmentCopy, reservationBuffersText, reservationKindText, reservationOccupiedText, reservationSpanText, type FormatInstant
 } from '../../account/copy.ts';
 import { Button } from '../../components/AccountPage.tsx';
-import { colors, space, type } from '../../theme/tokens.ts';
+import { space, type } from '../../theme/tokens.ts';
+import { themedStyles } from '../../theme/theme.ts';
 import type { Reservation } from './data.ts';
 import { displayTime } from './zone.ts';
 
@@ -18,6 +19,7 @@ export const zoneTime = (zone: string): FormatInstant => (instant) => {
 export function ReservationPanel({ equipmentName, reservation, zone, onClose }: {
 	equipmentName: string; reservation: Reservation; zone: string; onClose: () => void;
 }) {
+	const styles = useStyles();
 	const time = zoneTime(zone);
 	const buffers = reservationBuffersText(reservation);
 	return (
@@ -34,14 +36,14 @@ export function ReservationPanel({ equipmentName, reservation, zone, onClose }: 
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
 	panel: {
 		position: 'absolute', left: space.page, right: space.page, bottom: 24, gap: 6, padding: 16,
 		backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.line,
-		shadowColor: colors.heading, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6
+		shadowColor: colors.shadow, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6
 	},
 	equipment: { fontSize: 13, fontWeight: '600', color: colors.muted },
 	title: { fontSize: 18, fontWeight: '600', color: colors.heading },
 	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
 	detail: { fontSize: 13, lineHeight: 18, color: colors.muted }
-});
+}));

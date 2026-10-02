@@ -10,16 +10,19 @@ import type { ThreadCalls } from '../threads/api.ts';
 import type { ReadScope } from '../account/contracts.ts';
 import { Button } from '../components/AccountPage.tsx';
 import { Redirect, router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { isSignedIn, threadsCopy, webCopy } from '../account/copy.ts';
 import { Calendar, People, ThreadKindIcon } from '../components/Icons.tsx';
 import { PlainScreen, Screen } from '../components/Screen.tsx';
 import Welcome from './welcome.tsx';
-import { colors, space, type } from '../theme/tokens.ts';
+import { space, type } from '../theme/tokens.ts';
+import { themedStyles, useTheme } from '../theme/theme.ts';
 
 /** The one scoped list of threads; account guards resolve before any thread read. */
 export default function Home() {
+	const styles = useStyles();
+	const { colors } = useTheme();
 	const { snapshot, web, now } = useAccount();
 	const account = snapshot.account;
 	if (account.kind === 'checking' || account.kind === 'starting') {
@@ -28,10 +31,12 @@ export default function Home() {
 	if (account.kind === 'unverified') return <Welcome />;
 	if (!isSignedIn(account)) return <Redirect href="/welcome" />;
 	if (account.org.kind !== 'chosen') return <Redirect href="/organisation" />;
-	if(!web||!account.scope)return <Screen title={threadsCopy.heading}><View style={styles.pinned}><PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/><PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>}/></View><Text testID="threads-empty">{copy.unavailable}</Text></Screen>;
+	if(!web||!account.scope)return <Screen title={threadsCopy.heading}><View style={styles.pinned}><PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/><PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>}/></View><Text testID="threads-empty" style={{ color: colors.plain }}>{copy.unavailable}</Text></Screen>;
  return <ThreadList key={account.scope.epoch} calls={web.threads} scope={account.scope} now={now} />;
 }
 function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>number}){
+ const styles = useStyles();
+ const { colors } = useTheme();
  const [controls]=useState(()=>createListControls(calls,scope,now));
  const state=useSyncExternalStore(controls.subscribe,controls.snapshot,controls.snapshot);
  const [folds,setFolds]=useState(foldedGroups);
@@ -63,6 +68,8 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
  </ScrollView><View style={{position:'absolute',right:16,bottom:16}}><Button testID="threads-new" label="New thread" primary disabled={state.phase==='lost'} onPress={()=>router.push('/threads/new')}/></View></View>}/>;
 }
 function ThreadRow({row}:{row:Row}){
+ const styles = useStyles();
+ const { colors } = useTheme();
  return <Pressable testID={`thread-row-${row.id}`} onPress={()=>router.push(`/threads/${row.id}`)} role="link" style={[styles.threadRow,row.needsYou&&{backgroundColor:colors.needsYou,borderColor:colors.needsYouLine}]}>
   <View style={styles.icon}><ThreadKindIcon kind={row.record?.kind??row.kind} color={colors.sageText}/></View><View style={styles.text}>
   <View style={styles.line}><Text style={[styles.threadTitle,row.needsYou&&{fontWeight:'700'}]} numberOfLines={1}>{row.title}</Text><Text style={styles.time}>{row.lastMessageAt?new Date(row.lastMessageAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'No messages'}</Text></View>
@@ -73,13 +80,15 @@ function ThreadRow({row}:{row:Row}){
 
 /** A pinned row opens a view that is not a list of threads. One without `onPress` is listed but not available. */
 function PinnedRow({ testID, label, detail, icon, onPress }: { testID: string; label: string; detail: string; icon: React.ReactNode; onPress?: () => void }) {
+ const styles = useStyles();
+ const { colors } = useTheme();
  const content = <><View aria-hidden>{icon}</View><Text numberOfLines={1} style={[styles.label,!onPress&&styles.unavailable]}>{label}</Text></>;
  const style = [styles.row,onPress?{flex:1.25}:{backgroundColor:colors.page}];
 	if (!onPress) return <View testID={testID} style={style} accessible aria-label={`${label}. ${detail}`} aria-disabled>{content}</View>;
 	return <Pressable testID={testID} style={style} onPress={onPress} role="link" aria-label={`${label}. ${detail}`}>{content}</Pressable>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
  statusRow:{flexDirection:'row',alignItems:'center',gap:8},group:{minHeight:44,flexDirection:'row',alignItems:'center',gap:8},groupLabel:{maxWidth:'36%',flexShrink:1,fontSize:15,fontWeight:'600',color:colors.heading},groupMeta:{flex:1,minWidth:0,fontSize:11,color:colors.muted},threadRow:{flexDirection:'row',alignItems:'flex-start',gap:8,borderWidth:1,borderRadius:12,borderColor:colors.rowLine,paddingHorizontal:10,paddingVertical:8,backgroundColor:colors.card},line:{flexDirection:'row',alignItems:'center',gap:8},threadTitle:{flex:1,minWidth:0,fontSize:14,fontWeight:'500',color:colors.heading},time:{fontSize:11,color:colors.muted},facts:{fontSize:12,color:colors.sageText,marginTop:3},preview:{flex:1,minWidth:0,fontSize:13,color:colors.muted,marginTop:3},pip:{fontSize:11,fontWeight:'600',minWidth:17,textAlign:'center',borderRadius:9,paddingHorizontal:4,backgroundColor:colors.sageText,color:colors.card},
 	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
 	filters: { flexDirection: 'row', gap: 6 },
@@ -94,4 +103,4 @@ const styles = StyleSheet.create({
 	label: { flexShrink:1,fontSize:12, fontWeight: '600', color: colors.heading },
 	unavailable: { color: colors.muted },
 	detail: { marginTop: 2, fontSize: type.rowDetail, lineHeight: type.rowDetailLine, color: colors.muted }
-});
+}));

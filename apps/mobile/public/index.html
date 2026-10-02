@@ -4,6 +4,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>%WEB_TITLE%</title>
 <link rel="manifest" href="/manifest.webmanifest" />
-<meta name="theme-color" content="#f1f5ee" />
-<style>html,body{height:100%;margin:0}body{overflow:hidden}#root{display:flex;height:100%;flex:1}</style>
+<meta name="color-scheme" content="light dark" />
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f1f5ee" />
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1a14" />
+<style>html,body{height:100%;margin:0;background:#f1f5ee}body{overflow:hidden}#root{display:flex;height:100%;flex:1}@media (prefers-color-scheme:dark){html,body{background:#0f1a14}}</style>
 </head><body><noscript>Captain needs JavaScript to run.</noscript><div id="root"></div></body></html>

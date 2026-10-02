@@ -1,13 +1,14 @@
 import { useLocalSearchParams } from 'expo-router';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { useAccount } from '../../account/AccountProvider.tsx';
 import { stepUpCopy } from '../../account/copy.ts';
 import type { WebCalls } from '../../account/web-calls.ts';
 import { AccountPageFrame, Button, LinkButton } from '../../components/AccountPage.tsx';
 import { Notice } from '../../components/Notice.tsx';
-import { colors, type } from '../../theme/tokens.ts';
+import { type } from '../../theme/tokens.ts';
+import { themedStyles } from '../../theme/theme.ts';
 
 /** The passkey step-up between Google and the session (docs/plans/expo-web-session-2026-09.md §A.2, §B.2). The API
  *  sent the browser here with the `captain_stepup` cookie; the page asks the API for assertion options, has the
@@ -26,6 +27,7 @@ export default function Passkey() {
 type Phase = 'starting' | 'waiting' | 'checking' | 'done' | 'failed';
 
 function StepUp({ web, native }: { web: WebCalls; native: boolean }) {
+	const styles = useStyles();
 	const [phase, setPhase] = useState<Phase>('starting');
 	const [message, setMessage] = useState('');
 	const [target, setTarget] = useState<string | null>(null);
@@ -76,8 +78,8 @@ function StepUp({ web, native }: { web: WebCalls; native: boolean }) {
 	);
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
 	stack: { gap: 12 },
 	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
 	muted: { fontSize: 14, lineHeight: 20, color: colors.muted }
-});
+}));

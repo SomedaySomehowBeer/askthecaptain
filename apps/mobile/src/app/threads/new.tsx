@@ -1,7 +1,7 @@
 import { ComposerInput, ThreadAction } from '../../threads/Presentation.tsx';
 import { router } from 'expo-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { useAccount } from '../../account/AccountProvider.tsx';
 import type { ReadScope } from '../../account/contracts.ts';
@@ -12,18 +12,22 @@ import { createOptions } from '../../threads/options.ts';
 import { useDeadline } from '../../threads/use-poll.ts';
 import { copy } from '../../threads/copy.ts';
 import { Screen } from '../../components/Screen.tsx';
-import { colors, space } from '../../theme/tokens.ts';
+import { space } from '../../theme/tokens.ts';
+import { themedStyles, useTheme } from '../../theme/theme.ts';
 import Welcome from '../welcome.tsx';
 const back={label:'Threads',onPress:()=>router.dismissTo('/')};
 export default function NewThread(){
+ const { colors } = useTheme();
  const account=useAccount(),view=account.snapshot.account;
- if(view.kind==='checking'||view.kind==='starting')return <Screen back={back}><Text>{webCopy.checking}</Text></Screen>;
+ if(view.kind==='checking'||view.kind==='starting')return <Screen back={back}><Text style={{ color: colors.plain }}>{webCopy.checking}</Text></Screen>;
  if(view.kind==='unverified')return <Welcome/>;
  if(!isSignedIn(view))return null;
- if(!account.web||!view.scope||view.org.kind!=='chosen')return <Screen back={back}><Text>{copy.unavailable}</Text></Screen>;
+ if(!account.web||!view.scope||view.org.kind!=='chosen')return <Screen back={back}><Text style={{ color: colors.plain }}>{copy.unavailable}</Text></Screen>;
  return <Composer key={view.scope.epoch} calls={account.web.threads} scope={view.scope} now={account.now}/>;
 }
 function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>number}){
+ const styles = useStyles();
+ const { colors } = useTheme();
  const [controls]=useState(()=>createNewThread(calls,scope,browserCreates,now,()=>Crypto.randomUUID(),id=>router.replace(`/threads/${id}`)));
  const [members]=useState(()=>createOptions(calls,scope,'members',now));
  const state=useSyncExternalStore(controls.subscribe,controls.snapshot,controls.snapshot),choices=useSyncExternalStore(members.subscribe,members.snapshot,members.snapshot),d=state.draft;
@@ -42,7 +46,7 @@ function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>n
     {choices.busy?<Text testID="new-members-loading" style={styles.hint}>Loading members…</Text>:null}
     {choices.message?<Text testID="new-members-status" role="status" style={styles.hint}>{choices.message}</Text>:null}
     {choices.loaded&&choices.rows.length===0?<Text testID="new-members-empty" style={styles.hint}>No other members are available. Only you will see this thread.</Text>:null}
-    {choices.rows.map(m=><Pressable key={m.userId} testID={`new-member-${m.userId}`} role="checkbox" aria-checked={d.participantIds.includes(m.userId)} disabled={locked||(!d.participantIds.includes(m.userId)&&d.participantIds.length>=49)} onPress={()=>toggle(m.userId)} style={styles.member}><Text style={styles.label}>{m.name||m.email}</Text><Text>{d.participantIds.includes(m.userId)?'✓':'○'}</Text></Pressable>)}
+    {choices.rows.map(m=><Pressable key={m.userId} testID={`new-member-${m.userId}`} role="checkbox" aria-checked={d.participantIds.includes(m.userId)} disabled={locked||(!d.participantIds.includes(m.userId)&&d.participantIds.length>=49)} onPress={()=>toggle(m.userId)} style={styles.member}><Text style={styles.label}>{m.name||m.email}</Text><Text style={{ color: colors.plain }}>{d.participantIds.includes(m.userId)?'✓':'○'}</Text></Pressable>)}
     {d.participantIds.some(id=>!choices.rows.some(m=>m.userId===id))?<Text style={styles.hint}>Some saved selections are not in this member list. {d.locked?'Retry the exact saved request to confirm its outcome.':'Refresh members or clear these selections before sending.'}</Text>:null}
     {!d.locked&&d.participantIds.length?<ThreadAction label="Clear selected people" disabled={state.busy} onPress={()=>controls.edit({participantIds:[]})}/>:null}
     <ThreadAction testID="new-members-refresh" label="Refresh members" disabled={locked||choices.busy||memberWaiting} onPress={()=>{void members.load();}}/>
@@ -58,4 +62,4 @@ function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>n
   </View>:null}
  </View>}/>;
 }
-const styles=StyleSheet.create({frame:{flex:1,maxWidth:space.maxContentWidth,width:'100%',alignSelf:'center',paddingHorizontal:16,paddingBottom:12,gap:12},startHint:{flex:1,minHeight:100,justifyContent:'center',paddingHorizontal:20},composerRow:{flexDirection:'row',alignItems:'flex-end',gap:4,padding:6,backgroundColor:colors.card,borderWidth:1,borderColor:colors.line,borderRadius:14},input:{fontSize:16,minHeight:48,color:colors.body,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:10,backgroundColor:colors.card},toggle:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderBottomWidth:1,borderColor:colors.line},label:{fontSize:15,color:colors.heading},hint:{fontSize:13,lineHeight:19,color:colors.muted},member:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:10,borderWidth:1,borderColor:colors.line,borderRadius:10},actions:{flexDirection:'row',flexWrap:'wrap',gap:8}});
+const useStyles = themedStyles((colors) => ({frame:{flex:1,maxWidth:space.maxContentWidth,width:'100%',alignSelf:'center',paddingHorizontal:16,paddingBottom:12,gap:12},startHint:{flex:1,minHeight:100,justifyContent:'center',paddingHorizontal:20},composerRow:{flexDirection:'row',alignItems:'flex-end',gap:4,padding:6,backgroundColor:colors.card,borderWidth:1,borderColor:colors.line,borderRadius:14},input:{fontSize:16,minHeight:48,color:colors.body,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:10,backgroundColor:colors.card},toggle:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderBottomWidth:1,borderColor:colors.line},label:{fontSize:15,color:colors.heading},hint:{fontSize:13,lineHeight:19,color:colors.muted},member:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:10,borderWidth:1,borderColor:colors.line,borderRadius:10},actions:{flexDirection:'row',flexWrap:'wrap',gap:8}}));

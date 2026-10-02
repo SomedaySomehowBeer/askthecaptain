@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { useAccount } from '../../account/AccountProvider.tsx';
 import { isSignedIn, webCopy } from '../../account/copy.ts';
 import type { ReadScope } from '../../account/contracts.ts';
@@ -9,12 +9,14 @@ import { createPushControls } from '../../account/push-controls.ts';
 import { browserPush } from '../../platform/push-browser.ts';
 import { Button } from '../../components/AccountPage.tsx';
 import { PlainScreen } from '../../components/Screen.tsx';
-import { colors } from '../../theme/tokens.ts';
+import { themedStyles, useTheme } from '../../theme/theme.ts';
 import Welcome from '../welcome.tsx';
 export default function Notifications() {
+ const { colors } = useTheme();
+ const styles = useStyles();
  const account = useAccount(), view = account.snapshot.account;
  let content;
- if (view.kind === 'checking' || view.kind === 'starting') content = <Text>{webCopy.checking}</Text>;
+ if (view.kind === 'checking' || view.kind === 'starting') content = <Text style={{ color: colors.plain }}>{webCopy.checking}</Text>;
  else if (view.kind === 'unverified') return <Welcome />;
  else if (!isSignedIn(view)) return null;
  else if (Platform.OS !== 'web' || !account.web) content = <Text style={styles.body}>Push notification controls are available in the browser. Native push is not available yet.</Text>;
@@ -23,6 +25,7 @@ export default function Notifications() {
  return <PlainScreen title="Notifications" back={{ label: 'Settings', onPress: () => router.dismissTo('/settings') }}>{content}</PlainScreen>;
 }
 function Devices({ calls, scope, name, now }: { calls: PushCalls; scope: ReadScope; name: string; now(): number }) {
+ const styles = useStyles();
  const [controls] = useState(() => createPushControls(calls, scope, browserPush, now));
  const state = useSyncExternalStore(controls.subscribe, controls.snapshot, controls.snapshot);
  const [, wake] = useState(0);
@@ -56,4 +59,4 @@ function Devices({ calls, scope, name, now }: { calls: PushCalls; scope: ReadSco
   </> : null}
  </View>;
 }
-const styles = StyleSheet.create({ stack: { gap: 12 }, body: { color: colors.body, fontSize: 15, lineHeight: 21 }, card: { gap: 10, backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 14, padding: 14 } });
+const useStyles = themedStyles((colors) => ({ stack: { gap: 12 }, body: { color: colors.body, fontSize: 15, lineHeight: 21 }, card: { gap: 10, backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 14, padding: 14 } }));

@@ -59,6 +59,15 @@ removal, failures and uncertain-write reconciliation. Members checks cover invit
 CSRF, revocation and step-up tests in `apps/api/src/web/session.test.ts` require real throwaway
 Postgres and provide separate server evidence.
 
+## Colour scheme
+
+The client follows the device's light or dark setting (`app.json` `userInterfaceStyle: automatic`; on the web,
+`prefers-color-scheme`). `src/theme/tokens.ts` holds the `light` and `dark` palettes with identical keys; screens read
+them only through `useTheme()` and `themedStyles()` in `src/theme/theme.ts`, never a static colour. Its test fails
+any text pair under 4.5:1. `public/index.html` paints the scheme's page colour before React. The browser suite renders
+the harness thread list, a thread, new thread, settings and the equipment schedule in both schemes at 390 pixels
+(`apps/e2e/scripts/mobile-shell-dark-check.cjs`); see the [dark-theme record](../../docs/validation/dark-theme-2026-10-02/README.md).
+
 `.github/workflows/mobile.yml` also exports iOS and Android JavaScript bundles, checks SDK
 compatibility, generated Android backup settings, and production/harness separation. Exports
 are not native builds or device evidence. Native rendering, accessibility services, safe areas,
