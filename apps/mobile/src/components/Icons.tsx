@@ -47,6 +47,37 @@ export function People({ color }: { color: string }) {
 	);
 }
 
+/** A clock with a turning arrow, for History (design board 4's header button). */
+export function Clock({ color }: { color: string }) {
+	return (
+		<View style={styles.icon20} aria-hidden>
+			<View style={{ position: 'absolute', left: 1, top: 1, width: 18, height: 18, borderRadius: 9, borderWidth: 1.7, borderColor: color }} />
+			<View style={{ position: 'absolute', left: 9.2, top: 5, width: 1.7, height: 5.6, backgroundColor: color, borderRadius: 1 }} />
+			<View style={{ position: 'absolute', left: 9.6, top: 9.4, width: 1.7, height: 4.4, backgroundColor: color, borderRadius: 1, transform: [{ rotate: '-55deg' }] }} />
+		</View>
+	);
+}
+
+/** A padlock: a change that can't be undone (design board 5). */
+export function Lock({ color }: { color: string }) {
+	return (
+		<View style={styles.icon18} aria-hidden>
+			<View style={{ position: 'absolute', left: 5, top: 1, width: 8, height: 9, borderTopLeftRadius: 4, borderTopRightRadius: 4, borderWidth: 1.6, borderBottomWidth: 0, borderColor: color }} />
+			<View style={{ position: 'absolute', left: 2.5, top: 8, width: 13, height: 9, borderRadius: 2, borderWidth: 1.6, borderColor: color }} />
+		</View>
+	);
+}
+
+/** A turning-back arrow: a change that was undone (design board 5). */
+export function Undone({ color }: { color: string }) {
+	return (
+		<View style={styles.icon18} aria-hidden>
+			<View style={{ position: 'absolute', left: 4, top: 5, width: 12, height: 11, borderTopRightRadius: 6, borderBottomRightRadius: 6, borderWidth: 1.6, borderLeftWidth: 0, borderColor: color }} />
+			<View style={{ position: 'absolute', left: 2, top: 2.5, width: 6, height: 6, borderLeftWidth: 1.6, borderBottomWidth: 1.6, borderColor: color, transform: [{ rotate: '45deg' }] }} />
+		</View>
+	);
+}
+
 /** Fixed thread kinds use the same small line drawings as pinned views. */
 export function ThreadKindIcon({kind,color}:{kind:'task'|'booking'|'stock'|'record'|'topic'|'private';color:string}) {
  if(kind==='booking')return <Calendar color={color}/>;
@@ -61,5 +92,6 @@ export function ThreadKindIcon({kind,color}:{kind:'task'|'booking'|'stock'|'reco
 const styles = StyleSheet.create({
 	chevron: { width: 10, height: 10, borderLeftWidth: 2, borderBottomWidth: 2, transform: [{ rotate: '45deg' }], marginLeft: 4, marginRight: 2 },
 	chevronRight: { width: 9, height: 9, borderRightWidth: 2, borderTopWidth: 2, transform: [{ rotate: '45deg' }], marginRight: 4 },
-	icon18: { width: 18, height: 18 }
+	icon18: { width: 18, height: 18 },
+	icon20: { width: 20, height: 20 }
 });

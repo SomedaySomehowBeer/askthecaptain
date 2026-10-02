@@ -93,8 +93,9 @@ export type ApiOutcome<T> =
 	/** Status 0 (network, timeout, a redirect or a response from another URL), 429, 5xx, a 2xx whose body doesn't
 	 *  parse, or any other non-4xx status. */
 	| { ok: false; kind: 'unavailable'; status: number; retryAfter?: number }
-	/** Any other 4xx, by the API's error code. */
-	| { ok: false; kind: 'refused'; status: number; code: string };
+	/** Any other 4xx, by the API's error code. `detail` is the rest of the error body when the API sends more than its
+	 *  code and message (a reversal's `409 stale_preview` carries the fresh preview); callers parse it strictly. */
+	| { ok: false; kind: 'refused'; status: number; code: string; detail?: Record<string, unknown> };
 export type ApiOutcomeKind = Extract<ApiOutcome<unknown>, { ok: false }>['kind'] | 'ok';
 
 /** Parses a successful JSON body strictly; throws when the shape is not the expected one (treated as unavailable). */

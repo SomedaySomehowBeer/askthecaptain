@@ -22,6 +22,8 @@ export type WordingOptions = {
 	readonly year?: number;
 	/** A stock item's unit, written after its counts. */
 	readonly unit?: string | null;
+	/** The change set reverses earlier changes (cause `reversal`): a value set again reads "changed the due date back from …". */
+	readonly reversal?: boolean;
 };
 
 /** journalFields in camelCase, per table, exactly as the API names a change's field. */
@@ -70,6 +72,8 @@ export function rowField(row: unknown, camel: string): unknown {
 }
 
 const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/;
+/** Newer CLDR data (some browsers) abbreviates September "Sept" in en-GB; Captain writes three letters everywhere. */
+const month = (name: string) => name === 'Sept' ? 'Sep' : name;
 /** A calendar date as people say it: "Tue 6 Oct", with the year when it is not `year`. Never shifted by a time zone. */
 export function wordDate(value: string, year?: number): string {
 	const m = dateOnly.exec(value);
@@ -78,7 +82,7 @@ export function wordDate(value: string, year?: number): string {
 	if (!Number.isFinite(at)) return value;
 	const parts = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }).formatToParts(at);
 	const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-	const base = `${get('weekday')} ${get('day')} ${get('month')}`;
+	const base = `${get('weekday')} ${get('day')} ${month(get('month'))}`;
 	return year !== undefined && Number(m[1]) === year ? base : `${base} ${m[1]}`;
 }
 
@@ -92,7 +96,7 @@ export function wordInstant(value: string, zone?: string, year?: number): { day:
 	} catch { return null; }
 	const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
 	const y = get('year');
-	const day = `${get('weekday')} ${get('day')} ${get('month')}${year !== undefined && y === String(year) ? '' : ` ${y}`}`;
+	const day = `${get('weekday')} ${get('day')} ${month(get('month'))}${year !== undefined && y === String(year) ? '' : ` ${y}`}`;
 	return { day, time: `${get('hour')}:${get('minute')} ${get('dayPeriod').toLowerCase()}` };
 }
 
@@ -120,16 +124,17 @@ const words = (...segments: Segment[]): Phrase => ({ kind: 'words', segments });
 const listed = (key: string, singular: string, plural: string, object: Segment): Phrase => ({ kind: 'list', key, singular, plural, object });
 
 /** "changed the due date from A to B", "set the due date to B", "cleared the due date". */
-function fieldPhrase(what: string, before: unknown, after: unknown, format: Formatter): Phrase {
+function fieldPhrase(what: string, before: unknown, after: unknown, format: Formatter, back = false): Phrase {
 	const a = before === null || before === undefined ? null : format(before), b = after === null || after === undefined ? null : format(after);
-	if (a === null && b === null) return words(plain(`changed the ${what}`));
-	if (a === null) return words(plain(`set the ${what} to `), strong(b!));
+	const again = back ? ' back' : '';
+	if (a === null && b === null) return words(plain(`changed the ${what}${again}`));
+	if (a === null) return words(plain(`set the ${what}${again} to `), strong(b!));
 	if (b === null) return words(plain(`cleared the ${what}`));
-	return words(plain(`changed the ${what} from `), strong(a), plain(' to '), strong(b));
+	return words(plain(`changed the ${what}${again} from `), strong(a), plain(' to '), strong(b));
 }
 const generic = (field: string | null) => words(plain(field ? `changed the ${field.replace(/([A-Z])/g, ' $1').toLowerCase()}` : 'made a change'));
 
-type Context = { options: WordingOptions; person: Formatter; date: Formatter };
+type Context = { options: WordingOptions; person: Formatter; date: Formatter; back: boolean };
 
 function stepName(change: LineChange, ctx: Context): Segment {
 	const fromRow = asText(rowField(change.after, 'title')) ?? asText(rowField(change.before, 'title'));
@@ -179,7 +184,7 @@ function timePhrase(changes: LineChange[], ctx: Context): Phrase {
 	const parts: Segment[][] = [];
 	if (start && end) {
 		const from = range(start.before, end.before), to = range(start.after, end.after);
-		parts.push(from && to ? [plain('changed the time from '), strong(from), plain(' to '), strong(to)] : [plain('changed the time')]);
+		parts.push(from && to ? [plain(`changed the time${ctx.back ? ' back' : ''} from `), strong(from), plain(' to '), strong(to)] : [plain('changed the time')]);
 	} else {
 		for (const [c, what] of [[start, 'start'], [end, 'end']] as const) {
 			if (!c) continue;
@@ -204,7 +209,7 @@ function countPhrase(changes: LineChange[], ctx: Context): Phrase {
 	const a = n(count.before), b = n(count.after);
 	if (b === null) return words(plain('cleared the count'));
 	if (a === null) return words(plain('counted '), strong(b));
-	return words(plain('changed the count from '), strong(a), plain(' to '), strong(b));
+	return words(plain(`changed the count${ctx.back ? ' back' : ''} from `), strong(a), plain(' to '), strong(b));
 }
 
 /** A task's or step's status, with its completion fields (coupled, §4). */
@@ -222,7 +227,7 @@ function statusPhrase(changes: LineChange[], ctx: Context, step: boolean): Phras
 		if (after === 'cancelled') return listed('cancel-step', 'cancelled the step', 'cancelled the steps', name);
 		return words(plain('changed the step '), name, plain(' from '), strong(label(before, taskStatus) ?? '?'), plain(' to '), strong(label(after, taskStatus) ?? '?'));
 	}
-	return fieldPhrase('status', status.before, status.after, (v) => label(v, taskStatus));
+	return fieldPhrase('status', status.before, status.after, (v) => label(v, taskStatus), ctx.back);
 }
 
 /** A single field change of a known table. */
@@ -230,6 +235,7 @@ function fieldOf(table: Table, change: LineChange, ctx: Context): Phrase {
 	const f = change.field!, b = change.before, a = change.after;
 	const person = ctx.person, date = ctx.date;
 	const onStep = change.itemKind === 'step';
+	const fp = (what: string, before: unknown, after: unknown, format: Formatter) => fieldPhrase(what, before, after, format, ctx.back);
 	if (onStep && table === 'tasks') {
 		const name = stepName(change, ctx);
 		if (f === 'title') return words(plain('renamed the step '), ...(asWords(b) ? [strong(asWords(b)!)] : [plain('')]), plain(' to '), strong(asWords(a) ?? ''));
@@ -240,26 +246,26 @@ function fieldOf(table: Table, change: LineChange, ctx: Context): Phrase {
 	switch (table) {
 		case 'tasks': case 'task_series':
 			switch (f) {
-				case 'title': return fieldPhrase('title', b, a, asWords);
+				case 'title': return fp('title', b, a, asWords);
 				case 'body': return words(plain(a ? 'edited the description' : 'cleared the description'));
-				case 'ownerId': return fieldPhrase('owner', b, a, person);
-				case 'due': return fieldPhrase('due date', b, a, date);
+				case 'ownerId': return fp('owner', b, a, person);
+				case 'due': return fp('due date', b, a, date);
 				case 'evidenceRequired': return words(plain(a === true ? 'required evidence' : 'stopped requiring evidence'));
 				case 'seriesId': return words(plain(a ? 'linked it to recurring work' : 'unlinked it from its recurring work'));
-				case 'periodStart': return fieldPhrase('period start', b, a, date);
-				case 'periodEnd': return fieldPhrase('period end', b, a, date);
-				case 'recurrence': return fieldPhrase('repeat', b, a, (v) => label(v, recurrence));
-				case 'everyMonths': return fieldPhrase('interval', b, a, (v) => typeof v === 'number' ? `every ${v} month${v === 1 ? '' : 's'}` : null);
-				case 'anchor': return fieldPhrase('start date', b, a, date);
-				case 'dueOffsetDays': return fieldPhrase('due offset', b, a, (v) => typeof v === 'number' ? `${v} day${Math.abs(v) === 1 ? '' : 's'}` : null);
+				case 'periodStart': return fp('period start', b, a, date);
+				case 'periodEnd': return fp('period end', b, a, date);
+				case 'recurrence': return fp('repeat', b, a, (v) => label(v, recurrence));
+				case 'everyMonths': return fp('interval', b, a, (v) => typeof v === 'number' ? `every ${v} month${v === 1 ? '' : 's'}` : null);
+				case 'anchor': return fp('start date', b, a, date);
+				case 'dueOffsetDays': return fp('due offset', b, a, (v) => typeof v === 'number' ? `${v} day${Math.abs(v) === 1 ? '' : 's'}` : null);
 				case 'pausedAt': return words(plain(a ? 'paused the recurring work' : 'resumed the recurring work'));
 			}
 			break;
 		case 'evidence':
 			switch (f) {
-				case 'kind': return fieldPhrase('evidence kind', b, a, asWords);
+				case 'kind': return fp('evidence kind', b, a, asWords);
 				case 'reference': return words(plain('changed the evidence link'));
-				case 'label': return fieldPhrase('evidence label', b, a, asWords);
+				case 'label': return fp('evidence label', b, a, asWords);
 			}
 			break;
 		case 'equipment':
@@ -270,20 +276,20 @@ function fieldOf(table: Table, change: LineChange, ctx: Context): Phrase {
 			break;
 		case 'equipment_reservations':
 			switch (f) {
-				case 'equipmentId': return fieldPhrase('equipment', b, a, (v) => typeof v === 'string' ? ctx.options.names?.equipment?.(v) ?? 'other equipment' : null);
-				case 'title': return fieldPhrase('title', b, a, asWords);
-				case 'kind': return fieldPhrase('kind', b, a, (v) => v === 'maintenance' ? 'Maintenance' : v === 'booking' ? 'Booking' : asWords(v));
+				case 'equipmentId': return fp('equipment', b, a, (v) => typeof v === 'string' ? ctx.options.names?.equipment?.(v) ?? 'other equipment' : null);
+				case 'title': return fp('title', b, a, asWords);
+				case 'kind': return fp('kind', b, a, (v) => v === 'maintenance' ? 'Maintenance' : v === 'booking' ? 'Booking' : asWords(v));
 				case 'status': return words(plain(a === 'cancelled' ? 'cancelled the booking' : a === 'confirmed' ? 'restored the booking' : 'changed the booking status'));
 				case 'taskId': return a ? words(plain('linked it to the task '), ...(typeof a === 'string' && ctx.options.names?.task?.(a) ? [strong(clip(ctx.options.names.task(a)!))] : [plain('')])) : words(plain('unlinked it from its task'));
-				case 'ownerId': return fieldPhrase('owner', b, a, person);
+				case 'ownerId': return fp('owner', b, a, person);
 			}
 			break;
 		case 'stock_items':
 			switch (f) {
-				case 'name': return fieldPhrase('name', b, a, asWords);
-				case 'location': return fieldPhrase('location', b, a, asWords);
-				case 'unitLabel': return fieldPhrase('unit', b, a, asWords);
-				case 'reorderPoint': return fieldPhrase('reorder point', b, a, (v) => asText(v) === null ? null : `${asText(v)}${ctx.options.unit ? ` ${ctx.options.unit}` : ''}`);
+				case 'name': return fp('name', b, a, asWords);
+				case 'location': return fp('location', b, a, asWords);
+				case 'unitLabel': return fp('unit', b, a, asWords);
+				case 'reorderPoint': return fp('reorder point', b, a, (v) => asText(v) === null ? null : `${asText(v)}${ctx.options.unit ? ` ${ctx.options.unit}` : ''}`);
 				case 'preferredSupplierId': return words(plain(a ? 'changed the preferred supplier' : 'cleared the preferred supplier'));
 				case 'notes': return words(plain(a ? 'edited the notes' : 'cleared the notes'));
 				case 'archivedAt': return words(plain(a ? 'archived the item' : 'restored the item'));
@@ -292,9 +298,9 @@ function fieldOf(table: Table, change: LineChange, ctx: Context): Phrase {
 		case 'tags':
 			switch (f) {
 				case 'name': return words(plain('renamed the tag from '), strong(asWords(b) ?? ''), plain(' to '), strong(asWords(a) ?? ''));
-				case 'ownerId': return fieldPhrase('tag owner', b, a, person);
-				case 'startsOn': return fieldPhrase('tag start', b, a, date);
-				case 'endsOn': return fieldPhrase('tag end', b, a, date);
+				case 'ownerId': return fp('tag owner', b, a, person);
+				case 'startsOn': return fp('tag start', b, a, date);
+				case 'endsOn': return fp('tag end', b, a, date);
 				case 'archivedAt': return words(plain(a ? 'archived the tag' : 'restored the tag'));
 			}
 			break;
@@ -313,7 +319,7 @@ function slotOf(change: LineChange, table: Table | null): string {
 	return `change:${change.id}`;
 }
 
-function phrasesOf(line: ChangeLine, ctx: Context): Phrase[] {
+function phrasesOf(line: Pick<ChangeLine, 'changes'>, ctx: Context): Phrase[] {
 	const slots = new Map<string, LineChange[]>();
 	for (const change of line.changes) {
 		const key = slotOf(change, tableOf(change));
@@ -370,15 +376,22 @@ export function actorOf(line: Pick<ChangeLine, 'actorKind' | 'actorName'>): stri
 	return first ?? 'A former member';
 }
 
-/** The whole line: who, then what, as segments (strong ones are values) and as one plain sentence. */
-export function wordChangeLine(line: ChangeLine, options: WordingOptions = {}): { segments: Segment[]; text: string } {
+/** What changed, without who: the phrases of `changes` joined as one clause ("changed the due date from … to …"). History
+ *  words each entry with this, so a change reads the same there as in its change line. */
+export function wordChanges(changes: readonly LineChange[], options: WordingOptions = {}, truncated = false): Segment[] {
 	const ctx: Context = {
 		options,
 		person: (v) => typeof v === 'string' ? options.names?.person?.(v) ?? 'another member' : null,
-		date: (v) => typeof v === 'string' ? wordDate(v, options.year) : null
+		date: (v) => typeof v === 'string' ? wordDate(v, options.year) : null,
+		back: options.reversal === true
 	};
-	const parts = merged(phrasesOf(line, ctx));
-	const body = parts.length ? joined(parts, line.truncated) : [plain(line.truncated ? 'made several changes' : 'made a change')];
+	const parts = merged(phrasesOf({ changes: [...changes] }, ctx));
+	return (parts.length ? joined(parts, truncated) : [plain(truncated ? 'made several changes' : 'made a change')]).filter((s) => s.text !== '');
+}
+
+/** The whole line: who, then what, as segments (strong ones are values) and as one plain sentence. */
+export function wordChangeLine(line: ChangeLine, options: WordingOptions = {}): { segments: Segment[]; text: string } {
+	const body = wordChanges(line.changes, { ...options, reversal: options.reversal ?? line.causeKind === 'reversal' }, line.truncated);
 	const segments: Segment[] = [strong(actorOf(line)), plain(' '), ...body].filter((s) => s.text !== '');
 	return { segments, text: segments.map((s) => s.text).join('') };
 }

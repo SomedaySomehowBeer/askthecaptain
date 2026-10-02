@@ -2,6 +2,7 @@
 import type { ApiClient } from '../src/auth/contracts.ts';
 import type { MemberScope } from '../src/account/members.ts';
 import { createWebCalls } from '../src/account/web-calls.ts';
+import { historyClient } from './history-fixtures.ts';
 export const tid='00000000-0000-4000-8000-000000000011',tagId='00000000-0000-4000-8000-000000000012';
 const author='00000000-0000-4000-8000-000000000099';
 export function threadFixture(){
@@ -43,6 +44,7 @@ export function recordFixture(kind:'task'|'booking'|'stock',variant=''){
 }
 export const recordMembers=[{userId:maya,name:'Maya Chen',email:'maya@example.test',role:'member',status:'active',since:at},{userId:tom,name:'Tom Reilly',email:'tom@example.test',role:'member',status:'active',since:at},{userId:'00000000-0000-4000-8000-000000000051',name:'Jess Park',email:'jess@example.test',role:'member',status:'active',since:at}];
 export function threadHarness(scenario:string,scope:()=>MemberScope|null){
+ if(scenario.startsWith('threads-history'))return createWebCalls(historyClient(scenario,scope),'https://harness.invalid',{memberScope:scope,accountEpoch:()=>scope()?.epoch??null,accepted(){},sessionEnded(){}});
  const f=threadFixture();
  const kind=scenario.startsWith('threads-card-booking')?'booking':scenario.startsWith('threads-card-stock')?'stock':scenario.startsWith('threads-card-task')||scenario==='threads-lines'?'task':null;
  const r=kind?recordFixture(kind,scenario.split('-').at(-1)):null;

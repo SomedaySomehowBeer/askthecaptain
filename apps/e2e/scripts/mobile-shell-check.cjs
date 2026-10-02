@@ -109,6 +109,8 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
      await require('./mobile-shell-create-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-cards-check.cjs')({ browser, production, base, shots, width });
      if (width === 390) await require('./mobile-shell-cards-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
+     await require('./mobile-shell-history-check.cjs')({ browser, production, base, shots, width });
+     if (width === 390) await require('./mobile-shell-history-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
      await require('./mobile-shell-design-check.cjs')({ browser, production, shots, width });
      await require('./mobile-shell-passkeys-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-revocation-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });

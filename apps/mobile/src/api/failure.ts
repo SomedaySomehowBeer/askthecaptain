@@ -10,6 +10,14 @@ export function errorCode(body: Body): string | null {
 	return typeof code === 'string' && /^[a-z0-9_]{1,64}$/.test(code) ? code : null;
 }
 
+/** The rest of an error body beyond `ok`, `code`, `error` and `field`, when there is any: data a refusal carries for the
+ *  client's next step (a reversal's fresh preview). Never interpreted here. */
+export function errorDetail(body: Body): Record<string, unknown> | null {
+	if (!body.readable || typeof body.value !== 'object' || body.value === null || Array.isArray(body.value)) return null;
+	const rest = Object.fromEntries(Object.entries(body.value as Record<string, unknown>).filter(([key]) => !['ok', 'code', 'error', 'field'].includes(key)));
+	return Object.keys(rest).length ? rest : null;
+}
+
 const busy = (status: number) => status === 429 || (status >= 500 && status < 600);
 
 /** Any request other than the native exchange:
@@ -26,7 +34,7 @@ export function apiOutcome<T>(answer: Answer, parse: Parse<T>): ApiOutcome<T> {
 	}
 	if (status === 401) return { ok: false, kind: 'unauthorised' };
 	if (busy(status)) return { ok: false, kind: 'unavailable', status, ...(retryAfter === undefined ? {} : { retryAfter }) };
-	if (status >= 400 && status < 500) return { ok: false, kind: 'refused', status, code: errorCode(body) ?? 'unknown' };
+	if (status >= 400 && status < 500) { const detail = errorDetail(body); return { ok: false, kind: 'refused', status, code: errorCode(body) ?? 'unknown', ...(detail ? { detail } : {}) }; }
 	return { ok: false, kind: 'unavailable', status };
 }
 

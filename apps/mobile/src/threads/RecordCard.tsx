@@ -17,6 +17,7 @@ import { BookingEditor } from './cards/BookingEditor.tsx';
 import { StockEditor } from './cards/StockEditor.tsx';
 import { TaskEditor } from './cards/TaskEditor.tsx';
 import { CardButton } from './cards/Fields.tsx';
+import { MakeTask } from './cards/MakeTask.tsx';
 import type { RecordState } from './cards/store.ts';
 import type { CardHooks } from './cards/useSaver.ts';
 import { themedStyles, useTheme } from '../theme/theme.ts';
@@ -24,9 +25,9 @@ import { themedStyles, useTheme } from '../theme/theme.ts';
 const statusWords: Record<string, string> = { open: 'Open', in_progress: 'In progress', done: 'Done', cancelled: 'Cancelled', suggested: 'Suggested', confirmed: 'Confirmed',
 	maintenance: 'Maintenance', not_counted: 'Not counted', counted: 'Counted', below_reorder: 'Below reorder point', archived: 'Archived' };
 
-export function RecordCard({ detail, calls, scope, now, fold, setFold, disabled, locked, record, hooks, confirmed, onTag }: {
+export function RecordCard({ detail, calls, scope, now, fold, setFold, disabled, locked, record, hooks, confirmed, onTag, onMembers = () => {} }: {
 	detail: Detail; calls: ThreadCalls; scope: ReadScope; now: () => number; fold: boolean; setFold: (v: boolean) => void; disabled: boolean; locked: boolean;
-	record: RecordState; hooks: CardHooks; confirmed: readonly string[]; onTag: (tagId: string, attached: boolean) => void;
+	record: RecordState; hooks: CardHooks; confirmed: readonly string[]; onTag: (tagId: string, attached: boolean) => void; onMembers?: () => void;
 }) {
 	const styles = useStyles();
 	const { colors } = useTheme();
@@ -49,10 +50,13 @@ export function RecordCard({ detail, calls, scope, now, fold, setFold, disabled,
 			{kind === 'task' ? <TaskEditor {...editorProps} />
 				: kind === 'booking' ? <BookingEditor {...editorProps} year={year} />
 					: kind === 'stock' ? <StockEditor calls={calls} scope={scope} detail={detail} hooks={hooks} locked={locked} confirmed={confirmed} year={year} />
-						: <Text style={styles.body}>{cardDetails(detail.card).join('\n') || 'No further details.'}</Text>}
+						: detail.thread.kind === 'topic' && !cardDetails(detail.card).length ? null : <Text style={styles.body}>{cardDetails(detail.card).join('\n') || 'No further details.'}</Text>}
 			<View style={styles.chips} testID="thread-tag-chips">{detail.tags.length ? detail.tags.map((t) => <Text key={t.id} style={styles.chip}>{t.name}</Text>) : <Text style={styles.small}>No tags</Text>}
-				<View style={{ flex: 1 }} /><CardButton testID="thread-tags-toggle" label={tagging ? 'Close tags' : 'Change tags'} quiet onPress={() => setTagging(!tagging)} /></View>
+				<View style={{ flex: 1 }} /><CardButton testID="thread-tags-toggle" label={tagging ? 'Close tags' : 'Change tags'} quiet onPress={() => setTagging(!tagging)} />
+				<View style={{ marginLeft: 10 }}><CardButton testID="thread-history-link" label="History" quiet onPress={() => router.push(`/threads/${detail.thread.id}/history` as never)} /></View></View>
 			{tagging ? <TagControls calls={calls} scope={scope} detail={detail} now={now} disabled={disabled} change={onTag} /> : null}
+			{!kind && detail.thread.kind === 'topic' ? <MakeTask calls={calls} scope={scope} detail={detail} record={record} hooks={hooks} locked={locked} confirmed={confirmed}
+				onMembers={onMembers} onCancel={() => setFold(false)} /> : null}
 			{recordRoute(detail) ? <Button label="Open the record" onPress={() => router.push(recordRoute(detail)!)} /> : null}
 			{detail.thread.kind === 'private' ? <Text style={styles.body}>{copy.privacy}</Text> : null}
 		</ScrollView> : null}

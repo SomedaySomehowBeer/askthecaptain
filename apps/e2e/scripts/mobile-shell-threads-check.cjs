@@ -57,7 +57,7 @@ module.exports = async ({ browser, production, base, shots, width }) => {
   await id(`thread-row-${thread}`).first().click();await expect(id('thread-unread-line')).toBeVisible();expect(calls.some(p=>p.includes('/messages?after=2&limit=50'))).toBe(true);
   const line=await id('thread-unread-line').boundingBox(),area=await id('thread-messages').boundingBox();expect(line.y).toBeGreaterThanOrEqual(area.y-2);expect(line.y).toBeLessThan(area.y+area.height);
   await overflow();await shot('unread');
-  await id('thread-card-fold').click();await expect(id('thread-details')).toContainText('No further details');await id('thread-card-fold').click();
+  await id('thread-card-fold').click();await expect(id('thread-details')).toContainText('Make this a task');await id('thread-card-fold').click();
   await id(`message-menu-${uuid(103)}`).click();await expect(page.getByRole('button',{name:'Edit message',exact:true})).toHaveCount(0);await id(`message-menu-${uuid(103)}`).click();
   const beforeCard=await id('thread-card').boundingBox();await id('thread-messages').evaluate(el=>{el.scrollTop=el.scrollHeight;});await page.clock.fastForward(16000);await expect.poll(()=>reads.some(seq=>seq>4)).toBe(true);const afterCard=await id('thread-card').boundingBox();expect(afterCard.y).toBe(beforeCard.y);
   await id('thread-newer').click();await expect(id(`message-${uuid(164)}`)).toBeVisible();await page.clock.fastForward(16000);await id('thread-messages').evaluate(el=>{el.scrollTop=el.scrollHeight;});await page.clock.fastForward(16000);await expect.poll(async()=>{if(!reads.includes(65))await page.clock.fastForward(16000);return reads.includes(65);}).toBe(true);

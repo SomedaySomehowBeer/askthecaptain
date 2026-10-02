@@ -1,4 +1,5 @@
 import { browserDrafts } from '../threads/storage.ts';
+import { browserPendingUndo } from '../threads/history/storage.ts';
 import { createContext, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import type { AccountSource } from './account-source.ts';
@@ -20,7 +21,7 @@ const AccountContext = createContext<AccountSource | null>(null);
 
 export function AccountProvider({ source, children }: { source: AccountSource; children: ReactNode }) {
 	useEffect(() => {
-  const changed=()=>{const view=source.snapshot().account;if(view.kind==='signed-in')browserDrafts.person(view.user.id);else if(view.kind==='releasing'&&view.reason==='sign-out')browserDrafts.person(null);};
+  const changed=()=>{const view=source.snapshot().account;if(view.kind==='signed-in'){browserDrafts.person(view.user.id);browserPendingUndo.person(view.user.id);}else if(view.kind==='releasing'&&view.reason==='sign-out'){browserDrafts.person(null);browserPendingUndo.person(null);}};
   changed();return source.subscribe(changed);
  },[source]);
  // Foreground refresh: the source paces it (30 s spacing, the server's wait, coalescing), so repeated transitions

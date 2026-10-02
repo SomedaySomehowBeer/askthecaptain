@@ -1,13 +1,12 @@
-/** Card editing copy (design boards 1 and 2). The boards' helper lines also promise undo from History; History is V-E,
- *  so until it ships the lines say only what is true now. */
+/** Card editing copy (design boards 1, 2 and 3). */
 export const cardCopy = {
 	task: { saving: 'Saving…', saved: 'Saved. The change is in the thread.', confirmed: 'Change confirmed. It is in the thread.' },
 	step: { saving: 'Saving the step…', saved: 'Step saved.', confirmed: 'Step change confirmed.' },
 	booking: { saving: 'Saving…', saved: 'Saved. The change is in the thread.', confirmed: 'Change confirmed. It is in the thread.' },
 	cancel: { saving: 'Cancelling the booking…', saved: 'Booking cancelled. The time is free for others.', confirmed: 'Cancellation confirmed.' },
 	count: { saving: 'Saving the count…', saved: 'Count saved. It is in the thread.', confirmed: 'Count confirmed.' },
-	saveTogether: 'Saved together as one change.',
-	bookingTogether: 'The time, setup and cleanup are saved as one change.',
+	saveTogether: 'Saved together as one change. You can undo it from History.',
+	bookingTogether: 'The time, setup and cleanup are saved as one change and undone together.',
 	countHelp: 'Saved as one change, with who counted and when.',
 	loading: 'Loading the record…',
 	membersLoading: 'Loading members for the owner list…',
@@ -23,5 +22,10 @@ export const cardCopy = {
 	partial: 'Some bookings in that time could not be checked; it may not be free.',
 	unchecked: 'Could not check that time just now.',
 	archivedStock: 'This item is archived. Restore it before counting it.',
-	notCounted: 'Not counted yet.'
+	notCounted: 'Not counted yet.',
+	makeTask: { saving: 'Making this a task…', saved: 'This thread is now a task.', confirmed: 'Confirmed: this thread is now a task.' },
+	makeTaskHeading: 'Make this a task',
+	makeTaskHelp: 'Gives this thread an owner, a due date and steps. The messages stay here.',
+	makeTaskRecord: 'This thread already belongs to a record, so it can’t become a task. It is shown as it is now.',
+	makeTaskPrivate: 'Only a topic can become a task. A private thread stays private.'
 } as const;
