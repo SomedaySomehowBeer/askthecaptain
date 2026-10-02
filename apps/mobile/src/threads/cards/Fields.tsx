@@ -33,11 +33,11 @@ export function TextField({ label, value, onChange, disabled = false, testID, pl
 }
 
 /** A calendar date (`YYYY-MM-DD`) or a clock time (`HH:MM`). */
-export function DateTimeField({ label, kind, value, onChange, disabled = false, testID }: { label: string; kind: 'date' | 'time'; value: string; onChange: (v: string) => void; disabled?: boolean; testID?: string }) {
+export function DateTimeField({ label, kind, value, onChange, disabled = false, testID, required = true }: { label: string; kind: 'date' | 'time'; value: string; onChange: (v: string) => void; disabled?: boolean; testID?: string; required?: boolean }) {
 	const styles = useStyles();
 	const dom = useDomStyle(disabled);
 	const { colors } = useTheme();
-	if (web) return <Field label={label}>{createElement('input', { type: kind, 'data-testid': testID, 'aria-label': label, value, disabled, required: true, style: dom,
+	if (web) return <Field label={label}>{createElement('input', { type: kind, 'data-testid': testID, 'aria-label': label, value, disabled, required, style: dom,
 		onChange: (e: { target: { value: string } }) => onChange(e.target.value) })}</Field>;
 	return <Field label={label}><TextInput testID={testID} accessibilityLabel={label} value={value} onChangeText={onChange} editable={!disabled} placeholder={kind === 'date' ? 'YYYY-MM-DD' : 'HH:MM'}
 		placeholderTextColor={colors.muted} style={[styles.input, disabled && styles.off]} /></Field>;
@@ -74,13 +74,16 @@ export function Check({ label, checked, onChange, disabled = false, testID, afte
 		<View aria-hidden style={[styles.box, checked && styles.boxOn]}>{checked ? <Text style={styles.tick}>✓</Text> : null}</View><Text style={styles.stepText}>{label}</Text></Pressable>{after}</View>;
 }
 
-export function CardButton({ label, onPress, primary = false, quiet = false, warn = false, disabled = false, testID, grow = false, display }: {
-	label: string; onPress: () => void; primary?: boolean; quiet?: boolean; warn?: boolean; disabled?: boolean; testID?: string; grow?: boolean; display?: string;
+/** `start`: a choice written as a sentence, left-aligned (design board 8). `offNeutral`: a disabled primary drawn in the
+ *  neutral pair rather than faded (boards 8 and 9). */
+export function CardButton({ label, onPress, primary = false, quiet = false, warn = false, disabled = false, testID, grow = false, display, start = false, offNeutral = false }: {
+	label: string; onPress: () => void; primary?: boolean; quiet?: boolean; warn?: boolean; disabled?: boolean; testID?: string; grow?: boolean; display?: string; start?: boolean; offNeutral?: boolean;
 }) {
 	const styles = useStyles();
+	const neutral = offNeutral && disabled && primary;
 	return <Pressable testID={testID} role="button" aria-label={label} aria-disabled={disabled} disabled={disabled} onPress={disabled ? undefined : onPress}
-		style={[styles.button, primary && styles.primary, quiet && styles.quiet, grow && styles.grow, disabled && styles.off]}>
-		<Text style={[styles.buttonText, primary && styles.primaryText, quiet && styles.quietText, warn && styles.warnText]}>{display ?? label}</Text></Pressable>;
+		style={[styles.button, primary && !neutral && styles.primary, neutral && styles.neutralOff, quiet && styles.quiet, grow && styles.grow, start && styles.start, disabled && !neutral && styles.off]}>
+		<Text style={[styles.buttonText, primary && !neutral && styles.primaryText, neutral && styles.neutralOffText, quiet && styles.quietText, warn && styles.warnText, start && styles.startText]}>{display ?? label}</Text></Pressable>;
 }
 
 /** An occupancy, overlap or status note (design board 2's `note`). */
@@ -123,6 +126,10 @@ const useStyles = themedStyles((colors) => ({
 	primary: { backgroundColor: colors.action, borderColor: colors.action },
 	quiet: { borderWidth: 0, backgroundColor: 'transparent', paddingHorizontal: 0, alignSelf: 'flex-start' },
 	grow: { flex: 1 },
+	start: { alignItems: 'flex-start', paddingVertical: 10 },
+	startText: { textAlign: 'left' },
+	neutralOff: { backgroundColor: colors.neutral, borderColor: colors.neutral },
+	neutralOffText: { color: colors.neutralText },
 	buttonText: { fontSize: 15, fontWeight: '600', color: colors.heading },
 	primaryText: { color: colors.actionText },
 	quietText: { color: colors.action },

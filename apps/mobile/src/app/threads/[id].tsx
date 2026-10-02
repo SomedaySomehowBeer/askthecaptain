@@ -22,20 +22,21 @@ import { hasGap, messagePowers, validBody } from '../../threads/derive.ts';
 import { useDeadline, useThreadPoll } from '../../threads/use-poll.ts';
 import { copy } from '../../threads/copy.ts';
 import { space } from '../../theme/tokens.ts';
+import { Clock } from '../../components/Icons.tsx';
 import { themedStyles, useTheme } from '../../theme/theme.ts';
 import Welcome from '../welcome.tsx';
 export default function ThreadScreen(){
  const { colors } = useTheme();
- const account=useAccount(),view=account.snapshot.account,params=useLocalSearchParams<{id:string}>();const id=params.id;
+ const account=useAccount(),view=account.snapshot.account,params=useLocalSearchParams<{id:string;edit?:string}>();const id=params.id;
  const back={label:'Threads',onPress:()=>router.dismissTo('/')};
  if(view.kind==='checking'||view.kind==='starting')return <Screen back={back}><Text style={{ color: colors.plain }}>{webCopy.checking}</Text></Screen>;
  if(view.kind==='unverified')return <Welcome/>;
  if(!isSignedIn(view))return null;
  if(!isCanonicalUuid(id))return <Screen back={back}><Text style={{ color: colors.plain }}>{copy.lost}</Text></Screen>;
  if(!account.web||!view.scope||view.org.kind!=='chosen')return <Screen back={back}><Text style={{ color: colors.plain }}>{copy.unavailable}</Text></Screen>;
- return <Thread key={`${view.scope.epoch}:${id}:${view.org.membership.role}`} calls={account.web.threads} scope={view.scope} id={id} role={view.org.membership.role} now={account.now}/>;
+ return <Thread key={`${view.scope.epoch}:${id}:${view.org.membership.role}`} calls={account.web.threads} scope={view.scope} id={id} role={view.org.membership.role} now={account.now} edit={typeof params.edit==='string'?params.edit:null}/>;
 }
-function Thread({calls,scope,id,role,now}:{calls:ThreadCalls;scope:ReadScope;id:string;role:string;now:()=>number}){
+function Thread({calls,scope,id,role,now,edit}:{calls:ThreadCalls;scope:ReadScope;id:string;role:string;now:()=>number;edit:string|null}){
  const styles = useStyles();
  const { colors } = useTheme();
  const [pair]=useState(()=>{
@@ -56,6 +57,7 @@ function Thread({calls,scope,id,role,now}:{calls:ThreadCalls;scope:ReadScope;id:
  const confirmed=useMemo(()=>state.messages.flatMap(m=>m.kind==='change'&&m.changeSetId?[m.changeSetId]:[]),[state.messages]);
  const wording=useMemo(()=>({names:namesFor(state.detail,recordState,state.messages),zone:recordState.zone??undefined,year:new Date().getFullYear(),unit:typeof state.detail?.card.fold.unitLabel==='string'?state.detail.card.fold.unitLabel:null}),[state.detail,recordState,state.messages]);
  const [fold,setFold]=useState(false),[menu,setMenu]=useState<string|null>(null),[editing,setEditing]=useState<string|null>(null),[editBody,setEditBody]=useState('');
+ useEffect(()=>{if(edit)setFold(true);},[edit]);
  const scroll=useRef<ScrollView>(null),positions=useRef(new Map<number,{y:number;height:number}>()),offset=useRef(0),height=useRef(0),focused=useRef(false),positioned=useRef(false),jumped=useRef<number|null>(null);
  const current=useRef(state);current.current=state;
  useFocusEffect(useCallback(()=>{focused.current=true;return()=>{focused.current=false;};},[]));
@@ -68,8 +70,9 @@ function Thread({calls,scope,id,role,now}:{calls:ThreadCalls;scope:ReadScope;id:
  useEffect(()=>{if(!state.busy)readVisible();},[state.busy,state.messages]);
  const paused=useThreadPoll(()=>controls.poll(),now),waiting=useDeadline(Math.max(state.waitUntil,draft.waitUntil),now),disabled=state.busy||draft.busy||waiting;
  const back={label:'Threads',onPress:()=>router.dismissTo('/')};
- return <Screen back={back} headerAction={state.detail?<Pressable testID="thread-star" role="button" aria-label={state.detail.thread.starred?'Unstar thread':'Star thread'} aria-disabled={disabled||state.needsRefresh} disabled={disabled||state.needsRefresh} onPress={()=>{void controls.mutate({kind:'star',value:!state.detail!.thread.starred});}} style={styles.star}><Text aria-hidden style={[styles.starIcon,(disabled||state.needsRefresh)&&{color:colors.muted}]}>{state.detail.thread.starred?'★':'☆'}</Text></Pressable>:null} list={()=> <View style={styles.frame}>
-  {state.detail?<RecordCard detail={state.detail} calls={calls} scope={scope} now={now} fold={fold} setFold={setFold} disabled={disabled||state.needsRefresh} locked={state.phase!=='ready'} record={recordState} hooks={hooks} confirmed={confirmed} onTag={(tagId,attached)=>{void controls.mutate({kind:'tag',tagId,attached,expectedRevision:state.detail!.thread.revision});}}/>:null}
+ const history=`/threads/${id}/history`;
+ return <Screen back={back} headerAction={state.detail?<><Pressable testID="thread-history" role="button" aria-label="History" onPress={()=>router.push(history as never)} style={styles.star}><Clock color={colors.action}/></Pressable><Pressable testID="thread-star" role="button" aria-label={state.detail.thread.starred?'Unstar thread':'Star thread'} aria-disabled={disabled||state.needsRefresh} disabled={disabled||state.needsRefresh} onPress={()=>{void controls.mutate({kind:'star',value:!state.detail!.thread.starred});}} style={styles.star}><Text aria-hidden style={[styles.starIcon,(disabled||state.needsRefresh)&&{color:colors.muted}]}>{state.detail.thread.starred?'★':'☆'}</Text></Pressable></>:null} list={()=> <View style={styles.frame}>
+  {state.detail?<RecordCard detail={state.detail} calls={calls} scope={scope} now={now} fold={fold} setFold={setFold} disabled={disabled||state.needsRefresh} locked={state.phase!=='ready'} record={recordState} hooks={hooks} confirmed={confirmed} onTag={(tagId,attached)=>{void controls.mutate({kind:'tag',tagId,attached,expectedRevision:state.detail!.thread.revision});}} onMembers={()=>record.askMembers()}/>:null}
   {state.detail?.pin&&!state.messages.some(m=>m.id===state.detail!.pin!.messageId&&m.deletedAt!==null)?<Pressable testID="thread-pin" role="button" onPress={()=>{void controls.jumpPin().then(jump);}} disabled={disabled} style={styles.pin}><Text numberOfLines={1} style={styles.body}>⌖ {state.messages.find(m=>m.id===state.detail!.pin!.messageId)?.body??'Pinned message — tap to find it'}</Text></Pressable>:null}
   {state.phase==='loading'?<Text testID="thread-loading" style={styles.body}>{copy.threadLoading}</Text>:null}
   {state.message?<View style={styles.statusRow}><Text testID="thread-status" role="status" style={[styles.body,{flex:1}]}>{state.message}</Text>{(state.phase==='failed'||state.needsRefresh||([copy.threadFailed,copy.wait,copy.gap,copy.mutationUnknown] as readonly string[]).includes(state.message))?<ThreadAction testID="thread-refresh" label="Try again" disabled={disabled} onPress={()=>{void controls.load();}}/>:null}</View>:null}
@@ -80,7 +83,7 @@ function Thread({calls,scope,id,role,now}:{calls:ThreadCalls;scope:ReadScope;id:
    {state.messages.map((message,index)=>{const powers=messagePowers(message,scope.userId,role);return <Fragment key={message.id}>
     {index===0||messageDay(message.createdAt)!==messageDay(state.messages[index-1]!.createdAt)?<View testID={`message-day-${message.id}`} style={styles.day}><View style={styles.dayLine}/><Text style={styles.small}>{dayLabel(message.createdAt)}</Text><View style={styles.dayLine}/></View>:null}
     <View testID={`message-${message.id}`} onLayout={e=>{positions.current.set(message.seq,e.nativeEvent.layout);if(!positioned.current)jump();}} style={[styles.message,message.kind==='change'&&styles.changeWrap]}>{message.seq===state.firstUnreadSeq?<View testID="thread-unread-line" style={styles.unread}><Text style={styles.small}>Unread</Text></View>:null}
-    {message.kind==='change'?<ChangeLine message={message} options={wording}/>:<><View style={styles.messageRow}><View aria-hidden style={styles.avatar}><Text style={styles.initials}>{initials(message.authorName)}</Text></View><View style={{flex:1,minWidth:0,gap:3}}>
+    {message.kind==='change'?<ChangeLine message={message} options={wording} onOpen={route=>router.push(route as never)}/>:<><View style={styles.messageRow}><View aria-hidden style={styles.avatar}><Text style={styles.initials}>{initials(message.authorName)}</Text></View><View style={{flex:1,minWidth:0,gap:3}}>
     <View style={[styles.row,{minHeight:20,paddingRight:32}]}><Text numberOfLines={1} style={styles.author}>{message.authorName??'Former member'}</Text><Text style={styles.small}>{new Date(message.createdAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}{message.editedAt?' · edited':''}</Text>{powers.edit||powers.delete||powers.pin?<Pressable testID={`message-menu-${message.id}`} role="button" aria-label={`Actions for message by ${message.authorName??'former member'}`} onPress={()=>setMenu(menu===message.id?null:message.id)} style={styles.menu}><Text style={{ color: colors.plain }}>•••</Text></Pressable>:null}</View>
     <MessageBody body={message.body}/>
     {menu===message.id?<View style={styles.actions}>

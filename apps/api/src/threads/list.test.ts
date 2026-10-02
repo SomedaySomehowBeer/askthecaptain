@@ -490,3 +490,124 @@ it('real change lines for a task edit, a step, a tag, a booking move and a stock
  const stockLines = await lines(await b.threadOf('stock_item_id', item));
  assert.deepEqual(stockLines.map(m => say(m, { unit: 'kg' })), ['Olive created the stock item Hops', 'Mia counted 4.5 kg']);
 });
+
+it('real history pages, a version, previews (a conflict, a blocked booking), a stale apply, an apply and topic to task parse in the Expo client and drive its History controller', async () => {
+ const { parseHistory, parseVersion, parsePreview, parseStale } = await import('../../../mobile/src/threads/history/parse.ts');
+ const { entrySentence, plainText, stateWords, conflictWords, blockedReason, versionLines } = await import('../../../mobile/src/threads/history/words.ts');
+ const { createHistory, entryIndex } = await import('../../../mobile/src/threads/history/controller.ts');
+ const { createPendingUndoStorage } = await import('../../../mobile/src/threads/history/storage.ts');
+ const { makeTaskBody, parseMadeTask } = await import('../../../mobile/src/threads/cards/make-task.ts');
+ const { parseMessages } = await import('../../../mobile/src/threads/parse.ts');
+ const { wordDate } = await import('../../../mobile/src/threads/wording.ts');
+ const { apiOutcome } = await import('../../../mobile/src/api/failure.ts');
+ const { createThreadCalls } = await import('../../../mobile/src/threads/api.ts');
+ type Outcome<T> = import('../../../mobile/src/auth/contracts.ts').ApiOutcome<T>;
+ const b = await business('Expo history');
+ const n = people, words = { now: Date.now(), zone: 'UTC' };
+ // The client's own mapping of a real answer (status and body), so refusals keep their detail as they do in the app.
+ const answer = async <T>(person: Person, method: string, path: string, body: unknown, parse: (v: unknown) => T): Promise<Outcome<T>> => {
+  const response = await request(method, path, person, body);
+  return apiOutcome({ kind: 'answered', status: response.status, body: { readable: true, value: await response.json() } }, parse);
+ };
+ const date = (d: string) => wordDate(d, new Date(words.now).getFullYear());
+
+ // A task: made, its due date moved twice, a tag, an owner.
+ const task = await b.task('Package summer lager', { due: '2031-10-02' });
+ const thread = await b.threadOf('task_id', task);
+ const edit = (person: Person, body: Record<string, unknown>) => json<{ revision: number; changeSetId: string }>(request('PATCH', `${b.base}/tasks/${task}`, person, body));
+ const first = await edit(b.owner, { expectedRevision: 1, due: '2031-10-06' });
+ const second = await edit(b.owner, { expectedRevision: 2, due: '2031-10-08' });
+ const tag = await b.tag('Production');
+ await tagged(b, thread, tag.id);
+ const owned = await edit(b.member, { expectedRevision: 3, ownerId: b.member.user.id });
+
+ // Pages of two, newest first, to the start of history: every page parses.
+ const target = { kind: 'task' as const, id: task };
+ const pages: ReturnType<typeof parseHistory>[] = [];
+ let cursor: string | null = null;
+ do {
+  const raw: unknown = await json(request('GET', `${b.base}/history/task/${task}?limit=2${cursor ? `&before=${encodeURIComponent(cursor)}` : ''}`, b.member));
+  const page = parseHistory(raw, target); pages.push(page); cursor = page.nextCursor;
+ } while (cursor);
+ const sets = pages.flatMap(p => p.changeSets), names = { people: Object.assign({}, ...pages.map(p => p.names.people)), tags: Object.assign({}, ...pages.map(p => p.names.tags)) };
+ assert.deepEqual([pages.length, sets.length, pages.at(-1)!.start?.kind], [3, 5, 'created']);
+ const of = (changeSetId: string) => sets.find(s => s.id === changeSetId)!;
+ const due1 = of(first.changeSetId).changes[0]!, due2 = of(second.changeSetId).changes[0]!;
+ assert.equal(plainText(entrySentence(due1, of(first.changeSetId), names, words)), `Changed the due date from ${date('2031-10-02')} to ${date('2031-10-06')}`);
+ assert.equal(due1.state, 'conflict');
+ assert.match(conflictWords(due1 as typeof due1 & { state: 'conflict' }, names, words).also, new RegExp(`^Also undo the change of (today|\\w{3} \\d{1,2} \\w{3}( \\d{4})?)\\. The due date goes back to ${date('2031-10-02')}\\.$`));
+ const created = sets.at(-1)!.changes[0]!;
+ assert.deepEqual([created.operation, stateWords(created, words)], ['create', { badge: 'Can’t undo', note: 'Cancel or complete it instead.', tickable: false }]);
+ const attach = sets.flatMap(s => s.changes).find(c => c.itemKind === 'tag')!;
+ assert.equal(plainText(entrySentence(attach, sets.find(s => s.changes.includes(attach))!, names, words)), 'Added the tag Production');
+ assert.match(plainText(entrySentence(of(owned.changeSetId).changes[0]!, of(owned.changeSetId), names, words)), new RegExp(`the owner .*Mia ${n}$`));
+ // The record as it was where history starts.
+ const start = pages.at(-1)!.start!;
+ const version = parseVersion(await json(request('GET', `${b.base}/history/task/${task}/versions/${start.revision}`, b.member)), { ...target, revision: start.revision });
+ assert.deepEqual(versionLines(version.snapshot, 'task', names, words).slice(0, 1), [{ label: 'Title', value: 'Package summer lager' }]);
+ assert.ok(versionLines(version.snapshot, 'task', names, words).some(l => l.label === 'Due date' && l.value === date('2031-10-02')));
+
+ // A conflict, then the later change added: applicable.
+ const conflict = parsePreview(await json(request('POST', `${b.base}/reversals/preview`, b.member, { changeIds: [due1.id] })), [due1.id]);
+ assert.deepEqual([conflict.applicable, conflict.changes[0]!.state, conflict.changes[0]!.proposed], [false, 'conflict', null]);
+ const both = parsePreview(await json(request('POST', `${b.base}/reversals/preview`, b.member, { changeIds: [due1.id, due2.id] })), [due1.id, due2.id]);
+ assert.deepEqual([both.applicable, both.changes.map(c => c.proposed)], [true, ['2031-10-02', '2031-10-02']]);
+
+ // A stale apply: the refusal's body, through the client's mapping, is the fresh preview and what moved.
+ const stalePreview = parsePreview(await json(request('POST', `${b.base}/reversals/preview`, b.owner, { changeIds: [due2.id, attach.id] })), [due2.id, attach.id]);
+ assert.ok(stalePreview.applicable);
+ await edit(b.member, { expectedRevision: 4, due: '2031-10-09' });
+ const refused = await answer(b.owner, 'POST', `${b.base}/reversals`, { id: randomUUID(), changeIds: [due2.id, attach.id], basis: stalePreview.basis }, () => null);
+ assert.ok(!refused.ok && refused.kind === 'refused' && refused.code === 'stale_preview' && refused.detail);
+ const stale = parseStale(refused.detail, [due2.id, attach.id]);
+ assert.deepEqual([stale.moved.map(m => m.revision), stale.preview.changes.map(c => c.state)], [[5], ['conflict', 'reversible']]);
+
+ // The History controller over the real API: load, tick the tag, preview, apply; one request; History shows the undo.
+ const scope = { epoch: 'e', userId: b.owner.user.id, organisationId: b.org };
+ const client: import('../../../mobile/src/auth/contracts.ts').ApiClient = {
+  get: (path, _t, parse) => answer(b.owner, 'GET', path, undefined, parse), post: (path, _t, body, parse) => answer(b.owner, 'POST', path, body, parse),
+  patch: (path, _t, body, parse) => answer(b.owner, 'PATCH', path, body, parse), delete: (path, _t, parse) => answer(b.owner, 'DELETE', path, undefined, parse),
+ };
+ const calls = createThreadCalls(client, { scope: () => scope, sessionEnded() {}, reconcile() {} });
+ const store = new Map<string, string>();
+ const storage = createPendingUndoStorage(() => ({ getItem: k => store.get(k) ?? null, setItem: (k, v) => { store.set(k, v); }, removeItem: k => { store.delete(k); }, key: i => [...store.keys()][i] ?? null, get length() { return store.size; } }));
+ const undoId = randomUUID();
+ const history = createHistory({ calls, scope, threadId: thread, now: () => 0, randomId: () => undoId, storage });
+ await history.load();
+ assert.deepEqual([history.snapshot().phase, history.snapshot().sets.length], ['ready', 6]);
+ history.toggle(entryIndex(history.snapshot().sets).get(attach.id)!.entry); history.openPreview();
+ for (let i = 0; i < 50 && history.snapshot().sheet?.phase !== 'ready'; i++) await new Promise(r => setTimeout(r, 20));
+ assert.equal(history.snapshot().sheet?.preview?.applicable, true);
+ history.apply();
+ for (let i = 0; i < 100 && history.snapshot().sets[0]?.id !== undoId; i++) await new Promise(r => setTimeout(r, 20));
+ assert.deepEqual([history.snapshot().notice, history.snapshot().sets[0]!.id, history.snapshot().sets[0]!.causeKind, store.size], ['1 change undone.', undoId, 'reversal', 0]);
+ assert.equal(entryIndex(history.snapshot().sets).get(attach.id)!.entry.state, 'reversed');
+ const lines = parseMessages(await json(request('GET', `${b.threads}/${thread}/messages?latest=50`, b.member))).messages.filter(m => m.changeSetId === undoId);
+ assert.equal(lines.length, 1, 'the thread shows the undo as a change line');
+ history.dispose();
+
+ // A booking moved, its old slot taken since: the preview is blocked, naming the booking that holds it.
+ const tank = (await json<{ id: string }>(request('POST', `${b.base}/equipment`, b.owner, { name: 'Canning line' }), 201)).id;
+ const booking = await json<{ id: string }>(request('POST', `${b.base}/equipment/${tank}/reservations`, b.owner, { id: randomUUID(), title: 'Can the lager', startsAt: '2031-10-08T08:00:00Z', endsAt: '2031-10-08T12:00:00Z' }), 201);
+ await json(request('PATCH', `${b.base}/equipment/${tank}/reservations/${booking.id}`, b.owner, { expectedRevision: 1, title: 'Can the lager', kind: 'booking', startsAt: '2031-10-09T13:00:00Z', endsAt: '2031-10-09T17:00:00Z', setupMinutes: 0, cleanupMinutes: 0, taskId: null, ownerId: null }));
+ await json(request('POST', `${b.base}/equipment/${tank}/reservations`, b.member, { id: randomUUID(), title: 'Keg wash', startsAt: '2031-10-08T08:00:00Z', endsAt: '2031-10-08T12:00:00Z', setupMinutes: 30, cleanupMinutes: 30, ownerId: b.member.user.id }), 201);
+ const bookingHistory = parseHistory(await json(request('GET', `${b.base}/history/reservation/${booking.id}`, b.member)), { kind: 'reservation', id: booking.id });
+ const moved = bookingHistory.changeSets[0]!.changes.find(c => c.field === 'time')!;
+ assert.deepEqual(moved.fields.sort(), ['endsAt', 'startsAt']);
+ const blocked = parsePreview(await json(request('POST', `${b.base}/reversals/preview`, b.member, { changeIds: moved.changeIds })), moved.changeIds);
+ const entry = blocked.changes[0]!;
+ assert.ok(entry.state === 'blocked' && entry.reason === 'slot_taken');
+ assert.equal(blockedReason(entry as typeof entry & { state: 'blocked' }, blocked.names, { ...words, equipmentName: 'Canning line' }), `This can’t be undone now. Keg wash (Mia ${n}) holds the Canning line on ${date('2031-10-08')} from 7:30 am to 12:30 pm.`);
+
+ // A topic's own tag history, then topic to task; a private thread is refused in the client's words.
+ const topic = await json<Detail>(b.topic(b.member, 'Order pallet wrap before the canning run'), 201);
+ await tagged(b, topic.thread.id, tag.id);
+ const own = parseHistory(await json(request('GET', `${b.base}/history/thread/${topic.thread.id}`, b.member)), { kind: 'thread', id: topic.thread.id });
+ assert.deepEqual(own.changeSets.map(s => s.changes.map(c => [c.operation, c.itemKind])), [[['attach', 'tag']]]);
+ const revision = (await b.detail(b.member, topic.thread.id)).thread.revision;
+ const made = parseMadeTask(await json(request('POST', `${b.threads}/${topic.thread.id}/task`, b.member, makeTaskBody(randomUUID(), revision, b.member.user.id, '2031-10-05'))), topic.thread.id);
+ assert.deepEqual([made.thread.kind, made.card.record?.kind, made.card.fold.due], ['record', 'task', '2031-10-05']);
+ const secret = (await json<Detail>(request('POST', b.threads, b.member, { id: randomUUID(), kind: 'private', title: 'Margins', participantIds: [] }), 201)).thread.id;
+ const refusal = await answer(b.member, 'POST', `${b.threads}/${secret}/task`, makeTaskBody(randomUUID(), 1, null, ''), () => null);
+ assert.deepEqual(refusal, { ok: false, kind: 'refused', status: 400, code: 'thread_not_topic' });
+});

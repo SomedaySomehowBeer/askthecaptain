@@ -40,7 +40,9 @@ const refusals: Record<string, string> = {
 	equipment_archived: 'This equipment is archived. A booking on it cannot be changed.',
 	stock_archived: 'This item is archived. Restore it before counting it.',
 	invalid_request: 'Captain could not accept these values. Check them and try again.',
-	forbidden: 'You can no longer change this.'
+	forbidden: 'You can no longer change this.',
+	thread_is_record: 'This thread already belongs to a record, so it can’t become a task. It is shown as it is now.',
+	thread_not_topic: 'Only a topic can become a task. A private thread stays private.'
 };
 
 export type Saver<T> = {

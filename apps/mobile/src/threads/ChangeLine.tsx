@@ -1,20 +1,19 @@
 /** One change line in a thread (design board 4, Lines.dc.html): worded by code from its changes, with the actor's
- *  first name and the time. It has no menu. It is focusable and tappable; until History exists (V-E) a tap does nothing
- *  more than the full wording its label gives assistive technology. V-E links it through `historyRoute`. */
+ *  first name and the time. It has no menu. It is a link: a tap opens History at its change set (R3 V-E). */
 import { Pressable, Text, View } from 'react-native';
 import type { Message } from './contracts.ts';
 import { wordChangeLine, type WordingOptions } from './wording.ts';
+import { historyRoute } from './history/route.ts';
 import { themedStyles } from '../theme/theme.ts';
 
-/** The seam for V-E: the History screen for a change set, `/threads/[id]/history`. Nothing to open until it exists. */
-export function historyRoute(_threadId: string, _changeSetId: string): string | null { return null; }
+export { historyRoute } from './history/route.ts';
 
 export function ChangeLine({ message, options, onOpen }: { message: Message; options: WordingOptions; onOpen?: (route: string) => void }) {
 	const styles = useStyles();
 	const { segments, text } = wordChangeLine(message.change!, options);
 	const time = new Date(message.createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 	const route = message.changeSetId ? historyRoute(message.threadId, message.changeSetId) : null;
-	return <Pressable testID={`change-line-${message.id}`} focusable accessible aria-label={`${text}, ${time}`} onPress={route && onOpen ? () => onOpen(route) : undefined} style={styles.line}>
+	return <Pressable testID={`change-line-${message.id}`} focusable accessible role={route && onOpen ? 'link' : undefined} aria-label={`${text}, ${time}${route && onOpen ? '. Opens History' : ''}`} onPress={route && onOpen ? () => onOpen(route) : undefined} style={styles.line}>
 		<Text aria-hidden style={styles.icon}>✎</Text>
 		<View style={styles.textBox}><Text style={styles.text}>{segments.map((s, i) => s.strong ? <Text key={i} style={styles.strong}>{s.text}</Text> : s.text)}<Text> · {time}</Text></Text></View>
 	</Pressable>;

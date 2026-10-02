@@ -13,7 +13,13 @@ Uncertain creates preserve their IDs and selections for explicit retry. The card
 revision-checked tag attachment/removal. R3 V-D adds change lines (kind `change`, parsed strictly and worded by code in
 `src/threads/wording.ts`) and card editing in `src/threads/cards/`: a task's title, status, owner, due and steps, a
 booking's title and time and its cancellation, and a stock count, each a revision-checked write with a client change
-set id and the composer's uncertain-write rules ([V-D record](../../docs/validation/versions-2026-10-02/v-d.md)). Files and People remain unavailable. Thread responses currently follow the R2 contract using
+set id and the composer's uncertain-write rules ([V-D record](../../docs/validation/versions-2026-10-02/v-d.md)). R3 V-E adds History at `/threads/[id]/history` (`src/threads/history/`): a record's change sets newest first,
+each change worded by the same code as its change line, with its state (tickable, changed since, undone, can't undo and why);
+paging by cursor and where history starts, with the record as it was then; ticking, the preview sheet (now and after, conflicts
+and coupled groups explained, blocked reasons in words), one apply per intent with a client id kept for an explicit retry, the
+`409 stale_preview` fresh preview, and the applied state. It opens from the thread header's clock, the card's History link and
+any change line. A topic's card offers "Make this a task" ([V-E record](../../docs/validation/versions-2026-10-02/v-e.md)).
+Only an uncertain undo's id, change ids and basis are kept in session storage, per person and organisation. Files and People remain unavailable. Thread responses currently follow the R2 contract using
 strict client parsers; a real-Postgres API test checks them against the merged T-A payloads. Account provides organisation switching, sign out, sign out everywhere else,
 and web passkey listing, naming at registration, and removal. The invitation page accepts an invitation once and reports an
 uncertain response without replaying the write. Owners and admins can open Members from Settings to create and revoke invitation links, change roles and remove members. These controls currently use the web cookie session; native shows an unavailable notice. Notifications in Settings lists and removes personal devices, registers this browser and sends the displayed test notification. Native push and organisation export/deletion controls are later work.

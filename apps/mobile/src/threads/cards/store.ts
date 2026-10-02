@@ -87,9 +87,12 @@ export function createRecordStore(calls: ThreadCalls, scope: ReadScope, now: () 
 			detail = next;
 			if (!next?.card.record) return;
 			if (first || reload) void load();
-			if (first && next.card.record.kind !== 'stock') void members();
+			// A topic that became a task needs the members too (the first detail had no record).
+			if (next.card.record.kind !== 'stock') void members();
 		},
 		load,
+		/** The members, for an owner list outside a record's editor (a topic's "Make this a task"). Read once. */
+		askMembers() { void members(); },
 		/** Change lines name tags by id; a tag no longer on the thread is looked up once. */
 		lines(messages: readonly Message[]) {
 			const known = new Set([...(detail?.tags ?? []), ...(state.tags ?? [])].map((t) => t.id));

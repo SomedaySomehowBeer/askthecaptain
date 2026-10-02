@@ -139,7 +139,7 @@ module.exports = async ({ browser, production, base, shots, width, scheme = 'lig
 
   // Editing a task: four fields, one save, one PATCH with one change set id; the card and thread reconcile.
   await id('thread-card-fold').click(); await expect(id('task-title')).toHaveValue('Package summer lager');
-  await expect(id('task-help')).toHaveText('Saved together as one change.'); await expect(id('task-save')).toHaveAttribute('aria-disabled', 'true');
+  await expect(id('task-help')).toHaveText('Saved together as one change. You can undo it from History.'); await expect(id('task-save')).toHaveAttribute('aria-disabled', 'true');
   await targets('[data-testid="task-editor"]'); await overflow(); await shot('task-open');
   await id('task-title').fill('Package summer lager cans'); await id('task-status-done').click(); await id('task-owner').selectOption(maya); await id('task-due').fill('2026-10-09');
   await expect(id('task-status-done')).toHaveAttribute('aria-pressed', 'true');
