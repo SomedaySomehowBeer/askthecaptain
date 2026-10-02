@@ -28,6 +28,12 @@ export type Palette = {
 	readonly unknownStripe: string;
 	/** The drop shadow under a floating panel. */
 	readonly shadow: string;
+	/** R3 (design: captain-history-undo-2026-10-02): a warning note or state, its text and its border; a neutral state. */
+	readonly warning: string;
+	readonly warningText: string;
+	readonly warningLine: string;
+	readonly neutral: string;
+	readonly neutralText: string;
 };
 
 export type Scheme = 'light' | 'dark';
@@ -50,7 +56,12 @@ export const light: Palette = {
 	plain: '#000000',
 	unknown: 'rgba(84, 101, 90, 0.10)', // muted at 10%
 	unknownStripe: 'rgba(84, 101, 90, 0.22)', // muted at 22%
-	shadow: '#142619' // heading
+	shadow: '#142619', // heading
+	warning: '#fbe8c4',
+	warningText: '#6b4a0c',
+	warningLine: '#b98a2b',
+	neutral: '#e4e8e1',
+	neutralText: '#434a44'
 };
 
 export const dark: Palette = {
@@ -71,7 +82,12 @@ export const dark: Palette = {
 	plain: '#e6ede4', // body
 	unknown: 'rgba(169, 182, 171, 0.10)', // muted at 10%
 	unknownStripe: 'rgba(169, 182, 171, 0.22)', // muted at 22%
-	shadow: '#000000'
+	shadow: '#000000',
+	warning: '#3a2c10', // a dark amber surface; the light amber text on it
+	warningText: '#f3d08a',
+	warningLine: '#8a6a2a',
+	neutral: '#2a312c',
+	neutralText: '#cfd6d0'
 };
 
 /** The palette for a reported colour scheme. Anything but an explicit dark scheme (null, 'unspecified', 'light') is light. */

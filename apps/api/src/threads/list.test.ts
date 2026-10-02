@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
-import { withTenant } from '@captain/db';
+import { journalFields, withTenant } from '@captain/db';
 import { databaseUrl, fixture, freshDatabase, type Harness } from '@captain/db/test';
 import { createApp } from '../app.ts';
 import { AuthService } from '../auth/service.ts';
@@ -365,13 +365,12 @@ it('the Expo client parses real list, card, message, pin and change payloads for
  assert.equal(parseDetail(await json(request('GET', thread, b.member))).pin?.id, pin.id);
  parseChangedPin(await json(request('DELETE', `${thread}/pin`, b.owner)));
  // 0047 puts change lines (kind 'change', no body, with changeSetId and change) in a thread: the topic's tag made one.
- // This client's parser predates them and refuses any page holding one, whole (V-D teaches it); a page of plain messages
- // still parses.
- const lined = await json<{ messages: Message[] }>(request('GET', `${thread}/messages?latest=50`, b.member));
- assert.ok(lined.messages.some(m => m.kind === 'change'));
- assert.throws(() => parseMessages(lined), /threads: unexpected response/);
- const changed = await json(request('GET', `${thread}/changes?after=0&limit=100`, b.member));
- assert.throws(() => parseChanges(changed), /threads: unexpected response/);
+ // V-D's parser reads them strictly, in a page of messages and in the change feed, beside plain messages.
+ const lined = parseMessages(await json(request('GET', `${thread}/messages?latest=50`, b.member)));
+ const tagLine = lined.messages.find(m => m.kind === 'change');
+ assert.ok(tagLine?.change && tagLine.changeSetId);
+ assert.deepEqual(tagLine.change.changes.map(c => [c.recordKind, c.operation, c.itemKind, c.itemId]), [['thread', 'attach', 'tag', tag.id]]);
+ assert.ok(parseChanges(await json(request('GET', `${thread}/changes?after=0&limit=100`, b.member))).changes.some(c => c.kind === 'message' && c.message.kind === 'change'));
  const plain = `${b.threads}/${privateThread.thread.id}`;
  parseMessages(await json(request('GET', `${plain}/messages?latest=50`, b.member)));
  parseChanges(await json(request('GET', `${plain}/changes?after=0&limit=100`, b.member)));
@@ -423,4 +422,71 @@ it('the Expo create controller reconciles an uncertain private create against th
  const page = await json<{ messages: Message[] }>(request('GET', `${b.threads}/${opened[0]}/messages?latest=50`, b.member));
  assert.equal(page.messages.length, 1); assert.equal(page.messages[0]?.body, 'Review these privately');
  assert.equal((await request('GET', `${b.threads}/${opened[0]}`, b.other)).status, 404);
+});
+
+it('real change lines for a task edit, a step, a tag, a booking move and a stock count parse in the Expo client and are worded; its card parsers read the real writes', async () => {
+ const { parseMessages, parseChanges } = await import('../../../mobile/src/threads/parse.ts');
+ const { wordChangeLine, wordedFields } = await import('../../../mobile/src/threads/wording.ts');
+ const { parseTaskDetail, parseTaskWrite, parseBooking, parseCount } = await import('../../../mobile/src/threads/cards/records.ts');
+ // The client words every field the database journals (it mirrors the list; this is the authority).
+ const camel = (f: string) => f.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+ assert.deepEqual(Object.fromEntries(Object.entries(wordedFields).map(([t, f]) => [t, [...f].sort()])),
+  Object.fromEntries(Object.entries(journalFields).map(([t, f]) => [t, f.map(camel).sort()])));
+ const b = await business('Expo change lines');
+ const n = people, owner = `Olive ${n}`, member = `Mia ${n}`;
+ const names = { person: (id: string) => id === b.member.user.id ? member : id === b.owner.user.id ? owner : null };
+ const lines = async (thread: string) => {
+  const page = parseMessages(await json(request('GET', `${b.threads}/${thread}/messages?latest=50`, b.member)));
+  parseChanges(await json(request('GET', `${b.threads}/${thread}/changes?after=0&limit=100`, b.member)));
+  return page.messages.filter(m => m.kind === 'change');
+ };
+ const say = (m: { change?: Parameters<typeof wordChangeLine>[0] }, extra: Parameters<typeof wordChangeLine>[1] = {}) => wordChangeLine(m.change!, { names, year: 2031, zone: 'UTC', ...extra }).text;
+
+ // A task: created, then title, owner and due together as one change set with the client's id.
+ const task = await b.task('Pack', { due: '2031-10-06' });
+ const thread = await b.threadOf('task_id', task);
+ const detail = parseTaskDetail(await json(request('GET', `${b.base}/tasks/${task}?limit=50`, b.member)), task);
+ const edit = randomUUID();
+ const edited = parseTaskWrite(await json(request('PATCH', `${b.base}/tasks/${task}`, b.member, { changeSetId: edit, expectedRevision: detail.task.revision, title: 'Package summer lager', ownerId: b.member.user.id, due: '2031-10-08' })), { id: task, changeSetId: edit });
+ assert.equal(edited.revision, detail.task.revision + 1);
+ // A step: added, then ticked as its own change set.
+ const add = randomUUID();
+ const step = parseTaskWrite(await json(request('POST', `${b.base}/tasks`, b.member, { changeSetId: add, parentId: task, expectedParentRevision: edited.revision, title: 'Book the canning line' }), 201), { parentId: task, changeSetId: add });
+ const tick = randomUUID();
+ parseTaskWrite(await json(request('PATCH', `${b.base}/tasks/${step.id}`, b.member, { changeSetId: tick, expectedRevision: step.revision, status: 'done' })), { id: step.id, changeSetId: tick });
+ // A tag on the task's thread.
+ const tag = await b.tag('Production');
+ await tagged(b, thread, tag.id);
+ const taskLines = await lines(thread);
+ const steps = parseTaskDetail(await json(request('GET', `${b.base}/tasks/${task}?limit=50`, b.member)), task).steps;
+ const stepNames = { ...names, step: (id: string) => steps.find(s => s.id === id)?.title ?? null, tag: (id: string) => id === tag.id ? 'Production' : null };
+ assert.deepEqual(taskLines.map(m => say(m, { names: stepNames })), [
+  `Olive created the task Pack`,
+  `Mia changed the title from Pack to Package summer lager, set the owner to ${member} and changed the due date from Mon 6 Oct to Wed 8 Oct`,
+  'Mia added the step Book the canning line',
+  'Mia ticked the step Book the canning line',
+  'Olive added the tag Production'
+ ]);
+ assert.deepEqual(taskLines.slice(1, 4).map(m => m.changeSetId), [edit, add, tick], 'each line names the client’s change set');
+
+ // A booking moved: start, end and setup in one phrase.
+ const tank = (await json<{ id: string }>(request('POST', `${b.base}/equipment`, b.owner, { name: 'Canning line' }), 201)).id;
+ const made = await json<{ id: string }>(request('POST', `${b.base}/equipment/${tank}/reservations`, b.owner,
+  { id: randomUUID(), title: 'Summer lager canning run', startsAt: '2031-10-08T08:00:00Z', endsAt: '2031-10-08T12:00:00Z' }), 201);
+ const booking = parseBooking(await json(request('GET', `${b.base}/equipment/${tank}/reservations/${made.id}`, b.member)), { id: made.id, equipmentId: tank });
+ const move = randomUUID();
+ const moved = parseBooking(await json(request('PATCH', `${b.base}/equipment/${tank}/reservations/${made.id}`, b.member, { changeSetId: move, expectedRevision: booking.revision,
+  title: booking.title, kind: booking.kind, startsAt: '2031-10-08T09:00:00.000Z', endsAt: '2031-10-08T13:00:00.000Z', setupMinutes: 30, cleanupMinutes: 0, taskId: null, ownerId: null })), { id: made.id, equipmentId: tank, changeSetId: move });
+ const cancel = randomUUID();
+ parseBooking(await json(request('POST', `${b.base}/equipment/${tank}/reservations/${made.id}/cancel`, b.member, { changeSetId: cancel, expectedRevision: moved.revision })), { id: made.id, equipmentId: tank, changeSetId: cancel });
+ const bookingLines = await lines(await b.threadOf('reservation_id', made.id));
+ assert.deepEqual(bookingLines.map(m => say(m)), ['Olive booked Summer lager canning run',
+  'Mia changed the time from Wed 8 Oct, 8:00 am–12:00 pm to Wed 8 Oct, 9:00 am–1:00 pm and setup from none to 30 minutes', 'Mia cancelled the booking']);
+
+ // A stock count, with the unit.
+ const item = (await json<{ id: string }>(request('POST', `${b.base}/stock`, b.owner, { name: 'Hops', location: 'Store', unitLabel: 'kg' }), 201)).id;
+ const counted = randomUUID();
+ assert.equal(parseCount(await json(request('POST', `${b.base}/stock/${item}/count`, b.member, { changeSetId: counted, count: '4.5', note: 'Back shelf' }), 201), { itemId: item, changeSetId: counted }).count, '4.5');
+ const stockLines = await lines(await b.threadOf('stock_item_id', item));
+ assert.deepEqual(stockLines.map(m => say(m, { unit: 'kg' })), ['Olive created the stock item Hops', 'Mia counted 4.5 kg']);
 });

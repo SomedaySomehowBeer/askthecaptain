@@ -5,7 +5,7 @@ import { copy } from './copy.ts';
 import { firstUnread, hasGap, initialMessages, mergeMessages } from './derive.ts';
 export type ThreadState={phase:'idle'|'loading'|'ready'|'failed'|'lost';detail:Detail|null;messages:Message[];busy:boolean;message:string;waitUntil:number;cursor:number;complete:boolean;firstUnreadSeq:number|null;jumpSeq:number|null;readPosition:number;needsRefresh:boolean};
 export function createThreadControls(calls:ThreadCalls,scope:ReadScope,id:string,now:()=>number,onMessages:(m:Message[])=>void,onLost:()=>void){
- let live=true,failures=0,lastReadAttempt=-Infinity,attemptedRead=0,readWait=0,reading=false,pinSearch=0,pinTarget:string|null=null;
+ let live=true,forceDetail=false,failures=0,lastReadAttempt=-Infinity,attemptedRead=0,readWait=0,reading=false,pinSearch=0,pinTarget:string|null=null;
  let state:ThreadState={phase:'idle',detail:null,messages:[],busy:false,message:'',waitUntil:0,cursor:0,complete:true,firstUnreadSeq:null,jumpSeq:null,readPosition:0,needsRefresh:false};
  const listeners=new Set<()=>void>();const active=()=>live&&calls.current(scope);const set=(s:ThreadState)=>{if(active()){state=s;listeners.forEach(fn=>fn());}};
  const allowed=()=>active()&&!state.busy&&state.phase!=='lost'&&now()>=state.waitUntil;
@@ -26,12 +26,17 @@ export function createThreadControls(calls:ThreadCalls,scope:ReadScope,id:string
   set({...state,busy:false,messages,cursor:Math.min(state.cursor,result.value.thread.lastChange),detail:{...state.detail!,thread:{...state.detail!.thread,lastSeq:Math.max(state.detail!.thread.lastSeq,result.value.thread.lastSeq)}},jumpSeq:direction==='earlier'?edge:result.value.messages[0]?.seq??edge,message:hasGap(messages)?copy.gap:''});
  };
  return {snapshot:()=>state,subscribe(fn:()=>void){listeners.add(fn);return()=>{listeners.delete(fn);};},dispose(){live=false;listeners.clear();state={...state,messages:[],detail:null};},load,page,lost(){fail({status:404,retryAfter:0});},
+  /** After a card write: the card from the detail, the change line through the change feed. A refresh that cannot run
+   *  now (another read in flight, a wait) is kept for the next poll. */
+  refresh(){forceDetail=true;return this.poll();},
   sent(m:Message){if(!active())return;const messages=mergeMessages(state.messages,[m]);set({...state,messages,jumpSeq:m.seq,detail:state.detail?{...state.detail,thread:{...state.detail.thread,lastSeq:Math.max(state.detail.thread.lastSeq,m.seq)}}:null});},
   async poll(){
    if(!allowed()||!state.detail)return;set({...state,busy:true});const result=await calls.changes(scope,id,state.cursor);
    if(!active()||result.kind==='stale')return;if(result.kind==='error'){fail(result);return;}
    const changes=result.value;let detail=state.detail;
-   if(changes.thread.revision!==detail.thread.revision||changes.changes.some(c=>c.kind==='pin')){const d=await calls.detail(scope,id);if(!active()||d.kind==='stale')return;if(d.kind==='error'){fail(d);return;}detail=d.value;}
+   // A change line means the record (the card) changed: read the detail again with it. A refresh asks for the same.
+   const reread=forceDetail||changes.changes.some(c=>c.kind==='message'&&c.message.kind==='change');forceDetail=false;
+   if(reread||changes.thread.revision!==detail.thread.revision||changes.changes.some(c=>c.kind==='pin')){const d=await calls.detail(scope,id);if(!active()||d.kind==='stale')return;if(d.kind==='error'){fail(d);return;}detail=d.value;}
    const incoming=changes.changes.filter(c=>c.kind==='message').map(c=>c.message);onMessages(incoming);
    // Changes below the display window are reconciled, but cannot punch holes in its visible sequence.
    const start=state.messages[0]?.seq??1,messages=mergeMessages(state.messages,incoming.filter(m=>m.seq>=start));

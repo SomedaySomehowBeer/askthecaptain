@@ -103,3 +103,19 @@ test('poll requests coalesce; incomplete feed progress and newer versions conver
 });
 
 test('card folds reject unknown fields and old card shapes',()=>{const d=threadFixture().detail;assert.throws(()=>parseCard({...d.card,body:'retired'}));assert.throws(()=>parseCard({...d.card,fold:{...d.card.fold,token:'secret'}}));assert.throws(()=>parseDetail({...d,pins:null}));});
+test('a change line in the feed rereads the card; a refresh after a card save does too; a change line has no menu',async()=>{
+ const f=threadFixture(),detail=parseDetail(f.detail);let details=0,feed:unknown[]=[];
+ const line={...f.messages[64],id:'00000000-0000-4000-8000-000000000301',kind:'change',seq:66,changeSeq:66,body:null,changeSetId:'00000000-0000-4000-8000-000000000302',
+  change:{actorKind:'person',actorId:f.messages[0]!.authorId,actorName:'Pat Crew',causeKind:'request',createdAt:f.messages[0]!.createdAt,changes:[],truncated:false}};
+ const ok=<T,>(value:T):Result<T>=>({kind:'ok',value});
+ const calls={current:()=>true,request:async()=>({kind:'stale'}),list:async()=>({kind:'stale'}),
+  detail:async()=>{details++;return ok(detail);},
+  messages:async()=>ok(parseMessages({thread:{id:tid,revision:1,lastSeq:65,lastChange:65},messages:f.messages.slice(-50),hasMore:true})),
+  changes:async(_s:unknown,_i:string,after:number)=>ok(parseChanges({thread:{id:tid,revision:1,lastSeq:feed.length?66:65,highWater:feed.length?66:65},changes:feed.filter((c:any)=>c.changeSeq>after),next:feed.length?66:65,complete:true})),
+  send:async()=>({kind:'stale'}),mutate:async()=>({kind:'stale'}),read:async()=>({kind:'stale'})} as unknown as ThreadCalls;
+ const c=createThreadControls(calls,scope,tid,()=>0,()=>{},()=>{});await c.load();assert.equal(details,1);
+ await c.poll();assert.equal(details,1,'a quiet feed leaves the card alone');
+ feed=[{changeSeq:66,kind:'message',message:line}];await c.poll();assert.equal(details,2,'a change line rereads the card');
+ assert.equal(c.snapshot().messages.at(-1)?.kind,'change');assert.deepEqual(messagePowers(c.snapshot().messages.at(-1)!,user,'owner'),{edit:false,delete:false,pin:false});
+ await c.refresh();assert.equal(details,3,'a refresh after a card write rereads it');
+});
