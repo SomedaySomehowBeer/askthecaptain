@@ -1,5 +1,8 @@
 # Linked chat web delivery — 27 September 2026
 
+> **Historical (2 October 2026).** The Next.js chat screen it specified was removed with `apps/web` (#220); threads are
+> specified by the [threads contract](threads-2026-09.md).
+
 Status: adopted in #172, after core API #169 and personal state/pins #171. Read API #173 and
 web #174 are released to staging; validation (validation record removed in the chat-first rebuild; see git history) records
 local/CI acceptance and limits of hosted checks.
