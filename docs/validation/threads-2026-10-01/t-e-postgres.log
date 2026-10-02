@@ -1,0 +1,308 @@
+
+> @captain/api@ check /tmp/captain-r2-design-2026-10-01/apps/api
+> tsc --noEmit -p tsconfig.json
+
+TAP version 13
+# Subtest: a topic is created by its first message in one transaction: seq 1, a derived title, retry 200 and mismatch 409
+ok 1 - a topic is created by its first message in one transaction: seq 1, a derived title, retry 200 and mismatch 409
+  ---
+  duration_ms: 1574.34231
+  type: 'test'
+  ...
+# Subtest: every task, booking and stock item has a record thread with its card; a step has none and shares its task’s
+ok 2 - every task, booking and stock item has a record thread with its card; a step has none and shares its task’s
+  ---
+  duration_ms: 306.335662
+  type: 'test'
+  ...
+# Subtest: filters, a cursor that stays stable across a new message, and headings over the whole filtered set
+ok 3 - filters, a cursor that stays stable across a new message, and headings over the whole filtered set
+  ---
+  duration_ms: 785.381971
+  type: 'test'
+  ...
+# Subtest: a list has at most 100 headings, by thread count, and Other competes with the tags
+ok 4 - a list has at most 100 headings, by thread count, and Other competes with the tags
+  ---
+  duration_ms: 203.43687
+  type: 'test'
+  ...
+# Subtest: needs you: unread messages, or an open task or booking the caller owns; read positions start at 0 on record and topic threads
+ok 5 - needs you: unread messages, or an open task or booking the caller owns; read positions start at 0 on record and topic threads
+  ---
+  duration_ms: 458.439607
+  type: 'test'
+  ...
+# Subtest: the latest live message is excerpted at 120 characters with its author; a tombstone is skipped
+ok 6 - the latest live message is excerpted at 120 characters with its author; a tombstone is skipped
+  ---
+  duration_ms: 232.528588
+  type: 'test'
+  ...
+# Subtest: tags are added and removed on any thread with the thread’s revision, audited as thread writes, and archived tags stay attached
+ok 7 - tags are added and removed on any thread with the thread’s revision, audited as thread writes, and archived tags stay attached
+  ---
+  duration_ms: 356.587485
+  type: 'test'
+  ...
+# Subtest: pins on record and topic threads are an owner’s or admin’s, one at a time, and the detail carries it
+ok 8 - pins on record and topic threads are an owner’s or admin’s, one at a time, and the detail carries it
+  ---
+  duration_ms: 193.970222
+  type: 'test'
+  ...
+# Subtest: access: a removed member sees 404; a non-participant sees nothing of a private thread, by any path
+ok 9 - access: a removed member sees 404; a non-participant sees nothing of a private thread, by any path
+  ---
+  duration_ms: 418.607192
+  type: 'test'
+  ...
+# Subtest: the Expo client parses real list, card, message, pin and change payloads for every R2 thread kind
+ok 10 - the Expo client parses real list, card, message, pin and change payloads for every R2 thread kind
+  ---
+  duration_ms: 550.19512
+  type: 'test'
+  ...
+# Subtest: the Expo create controller reconciles an uncertain private create against the real API and parses picker choices
+ok 11 - the Expo create controller reconciles an uncertain private create against the real API and parses picker choices
+  ---
+  duration_ms: 247.071876
+  type: 'test'
+  ...
+# Subtest: bodies are trimmed and bounded by code points and bytes; fingerprints ignore order but not content; topic titles are first lines
+ok 12 - bodies are trimmed and bounded by code points and bytes; fingerprints ignore order but not content; topic titles are first lines
+  ---
+  duration_ms: 1565.366883
+  type: 'test'
+  ...
+# Subtest: list cursors accept only the exact UTC activity key the list query writes, or none, and belong to their filter
+ok 13 - list cursors accept only the exact UTC activity key the list query writes, or none, and belong to their filter
+  ---
+  duration_ms: 2.859627
+  type: 'test'
+  ...
+# Subtest: lists pages by most recent activity with an opaque cursor, and refuses crafted cursors with 400, not 500
+ok 14 - lists pages by most recent activity with an opaque cursor, and refuses crafted cursors with 400, not 500
+  ---
+  duration_ms: 257.183976
+  type: 'test'
+  ...
+# Subtest: the conversation and work-to-chat routes are retired, and threads have no links; nothing answers there
+ok 15 - the conversation and work-to-chat routes are retired, and threads have no links; nothing answers there
+  ---
+  duration_ms: 57.558893
+  type: 'test'
+  ...
+# Subtest: a private thread holds at most fifty people, including under concurrent adds
+ok 16 - a private thread holds at most fifty people, including under concurrent adds
+  ---
+  duration_ms: 324.721777
+  type: 'test'
+  ...
+# Subtest: creates a private thread, sends and reads messages, and shows it only to its participants
+ok 17 - creates a private thread, sends and reads messages, and shows it only to its participants
+  ---
+  duration_ms: 205.906391
+  type: 'test'
+  ...
+# Subtest: rejects stale thread writes and never replays an old add over a later removal
+ok 18 - rejects stale thread writes and never replays an old add over a later removal
+  ---
+  duration_ms: 186.527582
+  type: 'test'
+  ...
+# Subtest: a leave audits before access ends, and a stale leave never removes someone re-added since
+ok 19 - a leave audits before access ends, and a stale leave never removes someone re-added since
+  ---
+  duration_ms: 109.214784
+  type: 'test'
+  ...
+# Subtest: create and send retries return the stored record, and every other use of an id is one generic 409
+ok 20 - create and send retries return the stored record, and every other use of an id is one generic 409
+  ---
+  duration_ms: 181.693503
+  type: 'test'
+  ...
+# Subtest: concurrent uses of one client id by different people give exactly one success and one generic 409
+ok 21 - concurrent uses of one client id by different people give exactly one success and one generic 409
+  ---
+  duration_ms: 78.125446
+  type: 'test'
+  ...
+# Subtest: concurrent sends get dense, unique seq values and the change feed converges by id
+ok 22 - concurrent sends get dense, unique seq values and the change feed converges by id
+  ---
+  duration_ms: 359.34308
+  type: 'test'
+  ...
+# Subtest: removal from the organisation ends participation for good, and concurrent removals by one admin finish
+ok 23 - removal from the organisation ends participation for good, and concurrent removals by one admin finish
+  ---
+  duration_ms: 195.071602
+  type: 'test'
+  ...
+# Subtest: a create naming several people, racing the organisation removal of one of them, is all-or-nothing
+ok 24 - a create naming several people, racing the organisation removal of one of them, is all-or-nothing
+  ---
+  duration_ms: 65.488577
+  type: 'test'
+  ...
+# Subtest: two owners demoting each other at once: one change lands, the other is refused, and an owner remains
+ok 25 - two owners demoting each other at once: one change lands, the other is refused, and an owner remains
+  ---
+  duration_ms: 76.054415
+  type: 'test'
+  ...
+# Subtest: the database refuses thread inserts for inaccessible threads identically, whether or not they exist
+ok 26 - the database refuses thread inserts for inaccessible threads identically, whether or not they exist
+  ---
+  duration_ms: 38.429373
+  type: 'test'
+  ...
+# Subtest: a unique violation on a constraint the contract does not name is a 500, never a mapped 409
+ok 27 - a unique violation on a constraint the contract does not name is a 500, never a mapped 409
+  ---
+  duration_ms: 78.722323
+  type: 'test'
+  ...
+# Subtest: export includes only the exporter’s private threads and says so; deletion leaves threads out of its counts
+ok 28 - export includes only the exporter’s private threads and says so; deletion leaves threads out of its counts
+  ---
+  duration_ms: 624.339904
+  type: 'test'
+  ...
+# Subtest: thread writes have their own bounded limit on the /threads prefix; reads do not count against it
+ok 29 - thread writes have their own bounded limit on the /threads prefix; reads do not count against it
+  ---
+  duration_ms: 858.75802
+  type: 'test'
+  ...
+# Subtest: authors edit their own messages; moderators cannot; stale, deleted and unchanged edits write nothing
+ok 30 - authors edit their own messages; moderators cannot; stale, deleted and unchanged edits write nothing
+  ---
+  duration_ms: 181.387206
+  type: 'test'
+  ...
+# Subtest: only an owner or admin pins and unpins; a thread has one live pin; tombstones and hidden messages are refused
+ok 31 - only an owner or admin pins and unpins; a thread has one live pin; tombstones and hidden messages are refused
+  ---
+  duration_ms: 276.710837
+  type: 'test'
+  ...
+# Subtest: two pins at once: exactly one lands and the other is 409 pin_exists; unpin then pin works
+ok 32 - two pins at once: exactly one lands and the other is 409 pin_exists; unpin then pin works
+  ---
+  duration_ms: 85.979854
+  type: 'test'
+  ...
+# Subtest: deleting a pinned message unpins it atomically, numbered after the tombstone, with one audit row
+ok 33 - deleting a pinned message unpins it atomically, numbered after the tombstone, with one audit row
+  ---
+  duration_ms: 70.099791
+  type: 'test'
+  ...
+# Subtest: a failure between the tombstone and the unpin rolls the whole DELETE back, and a retry then succeeds
+ok 34 - a failure between the tombstone and the unpin rolls the whole DELETE back, and a retry then succeeds
+  ---
+  duration_ms: 83.394458
+  type: 'test'
+  ...
+# Subtest: the change feed converges across edits and pins made between pages
+ok 35 - the change feed converges across edits and pins made between pages
+  ---
+  duration_ms: 113.826977
+  type: 'test'
+  ...
+# Subtest: stars are personal and idempotent; only changes are audited, and only the actor sees those rows
+ok 36 - stars are personal and idempotent; only changes are audited, and only the actor sees those rows
+  ---
+  duration_ms: 158.355039
+  type: 'test'
+  ...
+# Subtest: read positions start at the participation baseline, never move back, and bound unread counts
+ok 37 - read positions start at the participation baseline, never move back, and bound unread counts
+  ---
+  duration_ms: 413.963934
+  type: 'test'
+  ...
+# Subtest: unread counts stop at 51, in the list and detail
+ok 38 - unread counts stop at 51, in the list and detail
+  ---
+  duration_ms: 827.752344
+  type: 'test'
+  ...
+# Subtest: author names: kept after leaving or removal from the organisation, null only when the attribution was deleted
+ok 39 - author names: kept after leaving or removal from the organisation, null only when the attribution was deleted
+  ---
+  duration_ms: 274.804345
+  type: 'test'
+  ...
+# Subtest: the callback spends the code, sets the HttpOnly session cookie and returns to the checked path
+ok 40 - the callback spends the code, sets the HttpOnly session cookie and returns to the checked path
+  ---
+  duration_ms: 1128.216262
+  type: 'test'
+  ...
+# Subtest: a spent, missing or refused code and a repeated Google error each go to the welcome page with its own code
+ok 41 - a spent, missing or refused code and a repeated Google error each go to the welcome page with its own code
+  ---
+  duration_ms: 54.713487
+  type: 'test'
+  ...
+# Subtest: the cookie is refused without the web client header, and bearer requests are unchanged
+ok 42 - the cookie is refused without the web client header, and bearer requests are unchanged
+  ---
+  duration_ms: 45.872425
+  type: 'test'
+  ...
+# Subtest: a passkey steps up through the step-up cookie, and verify moves the session into the session cookie
+ok 43 - a passkey steps up through the step-up cookie, and verify moves the session into the session cookie
+  ---
+  duration_ms: 103.870149
+  type: 'test'
+  ...
+# Subtest: sign-out with the cookie ends the session and clears both cookies
+ok 44 - sign-out with the cookie ends the session and clears both cookies
+  ---
+  duration_ms: 19.24817
+  type: 'test'
+  ...
+# Subtest: a native sign-in is handed to the app's fixed callback with no cookie
+ok 45 - a native sign-in is handed to the app's fixed callback with no cookie
+  ---
+  duration_ms: 58.212993
+  type: 'test'
+  ...
+# Subtest: the export is served at the root with the page as the fallback, and the API's paths are never shadowed
+ok 46 - the export is served at the root with the page as the fallback, and the API's paths are never shadowed
+  ---
+  duration_ms: 32.561425
+  type: 'test'
+  ...
+# Subtest: without the export the API still answers and the page says the web build is missing
+ok 47 - without the export the API still answers and the page says the web build is missing
+  ---
+  duration_ms: 37.696113
+  type: 'test'
+  ...
+# Subtest: cookie member controls retain CSRF, tenant, owner/admin and last-owner rules
+ok 48 - cookie member controls retain CSRF, tenant, owner/admin and last-owner rules
+  ---
+  duration_ms: 217.754483
+  type: 'test'
+  ...
+# Subtest: cookie push controls isolate devices by person and tenant and require the web header for writes
+ok 49 - cookie push controls isolate devices by person and tenant and require the web header for writes
+  ---
+  duration_ms: 112.288193
+  type: 'test'
+  ...
+1..49
+# tests 49
+# suites 0
+# pass 49
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 17272.57877

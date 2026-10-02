@@ -47,6 +47,17 @@ export function People({ color }: { color: string }) {
 	);
 }
 
+/** Fixed thread kinds use the same small line drawings as pinned views. */
+export function ThreadKindIcon({kind,color}:{kind:'task'|'booking'|'stock'|'record'|'topic'|'private';color:string}) {
+ if(kind==='booking')return <Calendar color={color}/>;
+ return <View aria-hidden style={styles.icon18}>
+  {kind==='task'?<><View style={{position:'absolute',left:3,top:1,width:12,height:16,borderRadius:3,borderWidth:1.5,borderColor:color}}/><View style={{position:'absolute',left:6,top:6,width:6,height:4,borderLeftWidth:1.5,borderBottomWidth:1.5,borderColor:color,transform:[{rotate:'-45deg'}]}}/></>:null}
+  {kind==='stock'||kind==='record'?<><View style={{position:'absolute',left:2,top:3,width:14,height:13,borderWidth:1.5,borderColor:color,borderRadius:2}}/><View style={{position:'absolute',left:2,top:7,width:14,height:1.5,backgroundColor:color}}/><View style={{position:'absolute',left:8,top:3,width:1.5,height:13,backgroundColor:color}}/></>:null}
+  {kind==='private'?<><View style={{position:'absolute',left:5,top:1,width:8,height:10,borderRadius:5,borderWidth:1.5,borderColor:color}}/><View style={{position:'absolute',left:3,top:8,width:12,height:9,borderWidth:1.5,borderColor:color,borderRadius:2}}/></>:null}
+  {kind==='topic'?<><View style={{position:'absolute',left:1,top:2,width:16,height:12,borderWidth:1.5,borderColor:color,borderRadius:4}}/><View style={{position:'absolute',left:4,top:12,width:4,height:4,borderLeftWidth:1.5,borderColor:color,transform:[{rotate:'35deg'}]}}/></>:null}
+ </View>;
+}
+
 const styles = StyleSheet.create({
 	chevron: { width: 10, height: 10, borderLeftWidth: 2, borderBottomWidth: 2, transform: [{ rotate: '45deg' }], marginLeft: 4, marginRight: 2 },
 	chevronRight: { width: 9, height: 9, borderRightWidth: 2, borderTopWidth: 2, transform: [{ rotate: '45deg' }], marginRight: 4 },

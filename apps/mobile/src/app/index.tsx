@@ -1,3 +1,4 @@
+import { groupDates, ThreadAction } from '../threads/Presentation.tsx';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { createListControls } from '../threads/list-controls.ts';
 import { filters, type Row } from '../threads/contracts.ts';
@@ -12,7 +13,7 @@ import { Redirect, router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { isSignedIn, threadsCopy, webCopy } from '../account/copy.ts';
-import { Calendar, ChevronRight, People } from '../components/Icons.tsx';
+import { Calendar, People, ThreadKindIcon } from '../components/Icons.tsx';
 import { PlainScreen, Screen } from '../components/Screen.tsx';
 import Welcome from './welcome.tsx';
 import { colors, space, type } from '../theme/tokens.ts';
@@ -27,7 +28,7 @@ export default function Home() {
 	if (account.kind === 'unverified') return <Welcome />;
 	if (!isSignedIn(account)) return <Redirect href="/welcome" />;
 	if (account.org.kind !== 'chosen') return <Redirect href="/organisation" />;
-	if(!web||!account.scope)return <Screen title={threadsCopy.heading}><PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/><PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>} last/><Text testID="threads-empty">{copy.unavailable}</Text></Screen>;
+	if(!web||!account.scope)return <Screen title={threadsCopy.heading}><View style={styles.pinned}><PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/><PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>}/></View><Text testID="threads-empty">{copy.unavailable}</Text></Screen>;
  return <ThreadList key={account.scope.epoch} calls={web.threads} scope={account.scope} now={now} />;
 }
 function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>number}){
@@ -40,68 +41,57 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
  const toggle=(key:string)=>{const next=new Set(folds);if(next.has(key))next.delete(key);else next.add(key);setFolds(next);saveFolds(next);};
  return <Screen title={threadsCopy.heading} list={({heading,contentContainerStyle})=><View style={{flex:1}}><ScrollView testID="threads-list" contentContainerStyle={[contentContainerStyle,{paddingBottom:80}]}>
   {heading}
-  <View role="radiogroup" aria-label={threadsCopy.filterGroup} style={styles.filters}>
-   {threadsCopy.filters.map((filter,index)=><Pressable key={filter} testID={`threads-filter-${index}`} disabled={index>5||busy||waiting} aria-disabled={index>5||busy||waiting} role="radio" aria-checked={state.filter===filters[index]} aria-label={filter} onPress={()=>{void controls.filter(filters[index]!);}} style={[styles.filter,state.filter===filters[index]&&styles.filterOn]}><Text style={[styles.filterText,state.filter===filters[index]&&styles.filterTextOn]}>{filter}</Text></Pressable>)}
-  </View><Text style={styles.detail}>{copy.files}</Text>
+  <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="threads-filters" style={{flexGrow:0,marginBottom:10}} contentContainerStyle={styles.filters}><View role="radiogroup" aria-label={threadsCopy.filterGroup} style={styles.filters}>
+   {threadsCopy.filters.map((filter,index)=><Pressable key={filter} testID={`threads-filter-${index}`} disabled={index>5||busy||waiting} aria-disabled={index>5||busy||waiting} role="radio" aria-checked={state.filter===filters[index]} aria-label={filter} accessibilityHint={index>5?copy.files:undefined} onPress={()=>{void controls.filter(filters[index]!);}} style={[styles.filter,state.filter===filters[index]&&styles.filterOn]}><Text style={[styles.filterText,state.filter===filters[index]&&styles.filterTextOn]}>{filter}</Text></Pressable>)}
+  </View></ScrollView>{state.filter==='files'||state.filter==='people'?<Text style={styles.detail}>{copy.files}</Text>:null}
   <View style={styles.pinned}>
    <PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/>
-   <PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>} last/>
+   <PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>}/>
   </View>
   {busy?<Text testID="threads-loading" style={styles.body}>{copy.loading}</Text>:null}
-  {state.message?<Text testID="threads-status" role="status" style={styles.body}>{state.message}</Text>:null}
+  {state.message?<View style={styles.statusRow}><Text testID="threads-status" role="status" style={[styles.body,{flex:1}]}>{state.message}</Text>{state.phase==='failed'?<ThreadAction testID="threads-refresh" label="Try again" disabled={busy||waiting} onPress={()=>{void controls.load();}}/>:null}</View>:null}
   {paused?<Text style={styles.body}>{copy.paused}</Text>:null}
-  <Button testID="threads-refresh" label="Refresh threads" disabled={busy||waiting||state.phase==='lost'} onPress={()=>{void controls.load();}}/>
   {state.data?.available&&state.data.threads.length===0?<Text testID="threads-empty" style={styles.body}>{copy.empty}</Text>:null}
   {state.data?groupedRows(state.data).map(({group,rows})=><View key={group.key} style={{marginTop:16}}>
    <Pressable testID={`thread-group-${group.key}`} role="button" aria-expanded={!folds.has(group.key)} onPress={()=>toggle(group.key)} style={styles.group}>
-    <Text style={styles.groupLabel} numberOfLines={1}>{folds.has(group.key)?'›':'⌄'} {group.label}</Text><Text style={styles.detail}>{group.threads} threads · {group.needsYou} need you</Text>
+    <Text style={styles.detail}>{folds.has(group.key)?'›':'⌄'}</Text><Text style={styles.groupLabel} numberOfLines={1}>{group.label}</Text><Text style={styles.groupMeta} numberOfLines={1}>{[group.owner?.name,groupDates(group.startsOn,group.endsOn),`${group.threads} threads`].filter(Boolean).join(' · ')}</Text>{group.needsYou>0?<Text style={styles.pip} accessibilityLabel={`${group.needsYou} need you`}>{group.needsYou}</Text>:null}
    </Pressable>
-   {group.owner||group.startsOn||group.endsOn?<Text style={styles.detail}>{[group.owner?.name,group.startsOn,group.endsOn].filter(Boolean).join(' · ')}</Text>:null}
-   {!folds.has(group.key)?rows.map(row=><ThreadRow key={row.id} row={row}/>):null}
+   {!folds.has(group.key)&&rows.length?<View style={{gap:4}}>{rows.map(row=><ThreadRow key={row.id} row={row}/>)}</View>:null}
    {!folds.has(group.key)&&rows.length===0?<Text style={styles.detail}>Load more threads to see this group.</Text>:null}
   </View>):null}
-  {state.data?.nextCursor?<Button testID="threads-more" label="Show more" disabled={busy||waiting} onPress={()=>{void controls.load(true);}}/>:null}
+  {state.data?.nextCursor?<ThreadAction testID="threads-more" label="Show more" disabled={busy||waiting} onPress={()=>{void controls.load(true);}}/>:null}
  </ScrollView><View style={{position:'absolute',right:16,bottom:16}}><Button testID="threads-new" label="New thread" primary disabled={state.phase==='lost'} onPress={()=>router.push('/threads/new')}/></View></View>}/>;
 }
 function ThreadRow({row}:{row:Row}){
- return <Pressable testID={`thread-row-${row.id}`} onPress={()=>router.push(`/threads/${row.id}`)} role="link" style={[styles.threadRow,row.needsYou&&styles.needs]}>
-  <View style={styles.line}><Text style={styles.threadTitle} numberOfLines={1}>{row.title}</Text><Text style={styles.time}>{row.lastMessageAt?new Date(row.lastMessageAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'No messages'}</Text></View>
+ return <Pressable testID={`thread-row-${row.id}`} onPress={()=>router.push(`/threads/${row.id}`)} role="link" style={[styles.threadRow,row.needsYou&&{backgroundColor:colors.needsYou,borderColor:colors.needsYouLine}]}>
+  <View style={styles.icon}><ThreadKindIcon kind={row.record?.kind??row.kind} color={colors.sageText}/></View><View style={styles.text}>
+  <View style={styles.line}><Text style={[styles.threadTitle,row.needsYou&&{fontWeight:'700'}]} numberOfLines={1}>{row.title}</Text><Text style={styles.time}>{row.lastMessageAt?new Date(row.lastMessageAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}):'No messages'}</Text></View>
   <Text style={styles.facts} numberOfLines={1}>{[row.status,...row.facts].filter(Boolean).join(' · ')}</Text>
-  <View style={styles.line}><Text style={styles.preview} numberOfLines={1}>{row.lastMessage?`${firstName(row.lastMessage.authorName)}: ${row.lastMessage.excerpt}`:'No messages yet'}</Text>{row.needsYou?<Text testID={`thread-unread-${row.id}`} accessibilityLabel={row.unread?`${unreadLabel(row.unread)} unread`:'Needs you'} style={styles.pip}>{row.unread?unreadLabel(row.unread):'•'}</Text>:null}</View>
+  <View style={styles.line}><Text style={styles.preview} numberOfLines={1}>{row.lastMessage?`${firstName(row.lastMessage.authorName)}: ${row.lastMessage.excerpt}`:'No messages yet'}</Text>{row.needsYou?<Text testID={`thread-unread-${row.id}`} accessibilityLabel={row.unread?`${unreadLabel(row.unread)} unread`:'Needs you'} style={styles.pip}>{row.unread?unreadLabel(row.unread):'•'}</Text>:null}</View></View>
  </Pressable>;
 }
 
 /** A pinned row opens a view that is not a list of threads. One without `onPress` is listed but not available. */
-function PinnedRow({ testID, label, detail, icon, onPress, last = false }: { testID: string; label: string; detail: string; icon: React.ReactNode; onPress?: () => void; last?: boolean }) {
-	const content = (
-		<>
-			<View style={styles.icon}>{icon}</View>
-			<View style={styles.text}>
-				<Text style={[styles.label, onPress ? null : styles.unavailable]}>{label}</Text>
-				<Text style={styles.detail}>{detail}</Text>
-			</View>
-			{onPress ? <ChevronRight color={colors.muted} /> : null}
-		</>
-	);
-	const style = [styles.row, last ? styles.lastRow : null];
+function PinnedRow({ testID, label, detail, icon, onPress }: { testID: string; label: string; detail: string; icon: React.ReactNode; onPress?: () => void }) {
+ const content = <><View aria-hidden>{icon}</View><Text numberOfLines={1} style={[styles.label,!onPress&&styles.unavailable]}>{label}</Text></>;
+ const style = [styles.row,onPress?{flex:1.25}:{backgroundColor:colors.page}];
 	if (!onPress) return <View testID={testID} style={style} accessible aria-label={`${label}. ${detail}`} aria-disabled>{content}</View>;
 	return <Pressable testID={testID} style={style} onPress={onPress} role="link" aria-label={`${label}. ${detail}`}>{content}</Pressable>;
 }
 
 const styles = StyleSheet.create({
- group:{minHeight:44,flexDirection:'row',alignItems:'center',gap:8},groupLabel:{flex:1,fontSize:16,fontWeight:'600',color:colors.heading},threadRow:{borderWidth:1,borderColor:colors.line,borderRadius:12,padding:10,marginTop:5,backgroundColor:colors.card},needs:{backgroundColor:colors.sage},line:{flexDirection:'row',alignItems:'center',gap:8},threadTitle:{flex:1,minWidth:0,fontSize:15,fontWeight:'600',color:colors.heading},time:{fontSize:11,color:colors.muted},facts:{fontSize:12,color:colors.sageText,marginTop:3},preview:{flex:1,minWidth:0,fontSize:13,color:colors.muted,marginTop:4},pip:{fontSize:12,borderRadius:10,paddingHorizontal:5,backgroundColor:colors.sageText,color:colors.card},
+ statusRow:{flexDirection:'row',alignItems:'center',gap:8},group:{minHeight:44,flexDirection:'row',alignItems:'center',gap:8},groupLabel:{maxWidth:'36%',flexShrink:1,fontSize:15,fontWeight:'600',color:colors.heading},groupMeta:{flex:1,minWidth:0,fontSize:11,color:colors.muted},threadRow:{flexDirection:'row',alignItems:'flex-start',gap:8,borderWidth:1,borderRadius:12,borderColor:colors.rowLine,paddingHorizontal:10,paddingVertical:8,backgroundColor:colors.card},line:{flexDirection:'row',alignItems:'center',gap:8},threadTitle:{flex:1,minWidth:0,fontSize:14,fontWeight:'500',color:colors.heading},time:{fontSize:11,color:colors.muted},facts:{fontSize:12,color:colors.sageText,marginTop:3},preview:{flex:1,minWidth:0,fontSize:13,color:colors.muted,marginTop:3},pip:{fontSize:11,fontWeight:'600',minWidth:17,textAlign:'center',borderRadius:9,paddingHorizontal:4,backgroundColor:colors.sageText,color:colors.card},
 	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
-	filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 14 },
-	filter: { minHeight: space.minTarget, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
-	filterOn: { backgroundColor: colors.sage, borderColor: colors.sage },
+	filters: { flexDirection: 'row', gap: 6 },
+	filter: { minHeight: space.minTarget, paddingHorizontal: 12, borderRadius: 22, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
+	filterOn: { backgroundColor: colors.action, borderColor: colors.action },
 	filterText: { fontSize: 14, color: colors.body },
-	filterTextOn: { fontWeight: '600', color: colors.sageText },
-	pinned: { backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.line, overflow: 'hidden', marginBottom: 14 },
-	row: { minHeight: space.rowMinHeight, padding: space.rowPadding, flexDirection: 'row', gap: 12, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: colors.rowLine },
-	lastRow: { borderBottomWidth: 0 },
-	icon: { width: 32, height: 32, borderRadius: 11, backgroundColor: colors.sage, alignItems: 'center', justifyContent: 'center' },
+	filterTextOn: { fontWeight: '600', color: colors.actionText },
+ pinned: { flexDirection:'row',gap:6,marginBottom:8 },
+ row: { flex:1,minWidth:0,minHeight:44,paddingHorizontal:10,flexDirection:'row',gap:6,alignItems:'center',borderWidth:1,borderColor:colors.line,borderRadius:12,backgroundColor:colors.pinned },
+ icon: { width:26,height:26,borderRadius:7,backgroundColor:colors.sage,alignItems:'center',justifyContent:'center' },
 	text: { flex: 1, minWidth: 0 },
-	label: { fontSize: type.rowTitle, fontWeight: '600', color: colors.heading },
+	label: { flexShrink:1,fontSize:12, fontWeight: '600', color: colors.heading },
 	unavailable: { color: colors.muted },
 	detail: { marginTop: 2, fontSize: type.rowDetail, lineHeight: type.rowDetailLine, color: colors.muted }
 });

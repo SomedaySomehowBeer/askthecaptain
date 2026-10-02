@@ -1,0 +1,29 @@
+PASS 360px: members, invitation link/copy/revoke, roles/removal, owner/admin restrictions, pending and uncertain writes, scope changes, session expiry and harness states
+PASS 360px: push registration/removal/test, delivery counts, permission/unavailable/failed/loading/pending states, uncertain-write backoff, leaving during permission, 401 and native notice
+PASS 360px: grouped/folded/paged threads, filters, first unread, visible reads, fixed card, send/edit/delete/pin/star, persisted uncertain send, lost access and harness states
+PASS 360px: new topic/private creation, focused composer, member choices, locked create retry, same IDs on 429, explicit conflict restart, revision-checked tags, second-person private absence and harness states
+PASS 360px: individual sage/white cards, single-row filters, side-by-side pinned views, compact group metadata, labelled facts, avatars/day dividers, dashed earlier row, green Send and bottom new-thread composer
+PASS 360px: passkey registration, next-sign-in assertion, removal, cancellation, refusal, uncertain-write reconciliation, session expiry and harness states
+PASS 360px: session confirmation/cancel, remount-persistent progress/result/wait, slow wording, counts, failures and expiry
+PASS 360px: Equipment schedule bootstrap order, one flight, never-free partial/conflict/failed cells, zone change, waits, More and stale scope suppression
+PASS 360px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
+PASS 390px: members, invitation link/copy/revoke, roles/removal, owner/admin restrictions, pending and uncertain writes, scope changes, session expiry and harness states
+PASS 390px: push registration/removal/test, delivery counts, permission/unavailable/failed/loading/pending states, uncertain-write backoff, leaving during permission, 401 and native notice
+PASS 390px: grouped/folded/paged threads, filters, first unread, visible reads, fixed card, send/edit/delete/pin/star, persisted uncertain send, lost access and harness states
+PASS 390px: new topic/private creation, focused composer, member choices, locked create retry, same IDs on 429, explicit conflict restart, revision-checked tags, second-person private absence and harness states
+PASS 390px: individual sage/white cards, single-row filters, side-by-side pinned views, compact group metadata, labelled facts, avatars/day dividers, dashed earlier row, green Send and bottom new-thread composer
+PASS 390px: passkey registration, next-sign-in assertion, removal, cancellation, refusal, uncertain-write reconciliation, session expiry and harness states
+PASS 390px: session confirmation/cancel, remount-persistent progress/result/wait, slow wording, counts, failures and expiry
+PASS 390px: Equipment schedule bootstrap order, one flight, never-free partial/conflict/failed cells, zone change, waits, More and stale scope suppression
+PASS 390px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
+PASS 430px: members, invitation link/copy/revoke, roles/removal, owner/admin restrictions, pending and uncertain writes, scope changes, session expiry and harness states
+PASS 430px: push registration/removal/test, delivery counts, permission/unavailable/failed/loading/pending states, uncertain-write backoff, leaving during permission, 401 and native notice
+PASS 430px: grouped/folded/paged threads, filters, first unread, visible reads, fixed card, send/edit/delete/pin/star, persisted uncertain send, lost access and harness states
+PASS 430px: new topic/private creation, focused composer, member choices, locked create retry, same IDs on 429, explicit conflict restart, revision-checked tags, second-person private absence and harness states
+PASS 430px: individual sage/white cards, single-row filters, side-by-side pinned views, compact group metadata, labelled facts, avatars/day dividers, dashed earlier row, green Send and bottom new-thread composer
+PASS 430px: passkey registration, next-sign-in assertion, removal, cancellation, refusal, uncertain-write reconciliation, session expiry and harness states
+PASS 430px: session confirmation/cancel, remount-persistent progress/result/wait, slow wording, counts, failures and expiry
+PASS 430px: Equipment schedule bootstrap order, one flight, never-free partial/conflict/failed cells, zone change, waits, More and stale scope suppression
+PASS 430px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
+PASS 1280px: members, invitation link/copy/revoke, roles/removal, owner/admin restrictions, pending and uncertain writes, scope changes, session expiry and harness states
+PASS 1280px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors
