@@ -22,8 +22,10 @@ records deliberately; never claim a live data audit from a code inventory.
   instruction, input data and an output schema. The output is validated before any code sees it.
   The model gets no tools, makes no writes, and never sees a credential, a token or a key.
 - **Business changes are versioned (D29).** A business write is role-checked inside Row Level
-  Security, stores a full snapshot with who (person, agent or system), what caused it and when, and is recorded in
-  `audit_events`, except private thread records (D25), which are recorded in the
+  Security, stores a full snapshot with who (person, agent or system), what caused it and when. From R3 its change set is its audit
+  record ([versions contract](docs/plans/versions-and-undo-2026-10.md)); `audit_events` keeps sign-in, membership,
+  connection, export and deletion events. Until a table is journalled its writes still go to
+  `audit_events`. Private thread records (D25) are recorded in the
   participant-scoped, append-only `chat_audit_events` so audit never reveals a private conversation
   to nonparticipants. Store typed before/after changes as well as snapshots. A person can select
   independent changes to reverse; undo applies checked inverse operations, preserves unrelated
