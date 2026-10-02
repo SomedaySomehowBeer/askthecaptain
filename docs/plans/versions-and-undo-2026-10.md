@@ -1,6 +1,6 @@
 # Versions and undo: the R3 contract
 
-Status: root draft, 2 October 2026, for the owner's review. Increment R3 of the
+Status: **adopted, 2 October 2026**: the owner accepted all five recommendations in §0. Increment R3 of the
 [chat-first rebuild](chat-first-rebuild-2026-09.md). Outcome: **manage shared work** — a person can
 see what changed on a record, who changed it and why, and reverse the changes they pick without losing
 anyone's later work. Implements D29 and the rules of the
@@ -8,9 +8,9 @@ anyone's later work. Implements D29 and the rules of the
 authority for behaviour; this document fixes storage, the API, the screens and the order of work.
 It does not implement agents or message causes (R4), pending or approval (R5), or external effects (R9).
 
-## 0. Decisions for the owner
+## 0. Decisions (owner, 2 October 2026: all five as recommended)
 
-These five shape the increment. Each has a recommendation; the rest of the document assumes it.
+These five shape the increment. The owner accepted each recommendation; the rest of the document follows them.
 
 1. **The database writes the journal, not each service.** Triggers on the business tables record
    every change, and refuse a write that arrives without a change set. Nothing can forget to
@@ -28,8 +28,8 @@ These five shape the increment. Each has a recommendation; the rest of the docum
    Captain will call, and creation has to be journalled anyway. *Recommended for a task only;*
    bookings and stock items are created from their own screens later (R5, R6).
 5. **Screen designs before client code.** The prototype's History frame predates selective undo.
-   Root draws the history, selection, preview, conflict and applied states for review, as a
-   canvas beside the prototype, before V-D and V-E start.
+   Root draws the card-editing, history, selection, preview, conflict and applied states for the
+   owner's review before V-D and V-E start. V-B and V-C do not wait for them.
 
 ## 1. What a person can do when R3 is done
 
@@ -172,7 +172,7 @@ Client: pure tests for wording change lines and preview states; Playwright on th
 
 | PR | Delivers |
 |---|---|
-| V-A | This contract, the plan and AGENTS amendments, and the reviewed screen designs |
+| V-A | This contract and the plan and AGENTS amendments. The screen designs are reviewed separately and gate only V-D and V-E |
 | V-B | Migration 0047: the three tables, triggers, baseline; every write path sets a change set; change lines; audit and state-store retirements |
 | V-C | History and reversal API |
 | V-D | Client: card editing, make-a-task, change lines |

@@ -576,9 +576,11 @@ backup/restore and owner-reviewed legal prerequisites, not mail reconnect prereq
   0042/0043 tables with the thread model (D27), dropping their staging demo data rather than migrating it (owner, 2026-10-01); summaries,
   notifications and native delivery need their own contracts.
 - Versions: the [selective-undo contract](plans/private-threads-and-selective-undo-2026-09.md)
-  defines selection, inverse operations, concurrency and privacy. The R3 schema/migration contract
-  must name the typed change journal alongside `record_versions`, including moving stocktake
-  idempotency and Xero sync state out of the audit log into their own tables.
+  defines selection, inverse operations, concurrency and privacy. The
+  [versions contract](plans/versions-and-undo-2026-10.md), adopted 2 October 2026, fixes R3's storage
+  (`change_sets`, `record_changes`, `record_versions`, written by database triggers), API, screens and
+  order of work. A business write's change set is its audit record; stocktake idempotency and Xero
+  sync state move out of the audit log.
 - Agents: where agent keys are stored, how they are rotated and withdrawn, and the shared admin-set
   chain budget (D30).
 - Inference: the cheapest tier for the message classifier and image inference for worksheet boxes
