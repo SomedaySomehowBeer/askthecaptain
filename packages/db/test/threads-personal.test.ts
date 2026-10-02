@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import type { Sql, TransactionSql } from 'postgres';
 import { withTenant } from '../src/context.ts';
-import { databaseUrl, freshDatabase, type Harness } from './harness.ts';
+import { databaseUrl, fixture, freshDatabase, type Harness } from './harness.ts';
 
 // Migration 0046 (threads contract §3, §4; D25), moved from the 0043 suite: pins, stars, read positions and author edits,
 // proven by direct SQL, bypassing any service, as the role the API connects as (`db.app` signs in as captain_runtime).
@@ -189,7 +189,7 @@ it('the read baseline is the database’s: last_seq on create, add and re-add, n
 it('a record or topic thread has no baseline: a member who never read it starts at 0, and only their own row moves', async () => {
 	const org = await organisation();
 	const alice = await person(org), bob = await person(org);
-	const [task] = await db.owner<{ id: string }[]>`insert into tasks (organisation_id, title) values (${org}, 'Fill the fermenter') returning id`;
+	const [task] = await fixture(db.owner, org)<{ id: string }[]>`insert into tasks (organisation_id, title) values (${org}, 'Fill the fermenter') returning id`;
 	const [record] = await db.owner<{ id: string }[]>`select id from threads where task_id = ${task!.id}`;
 	for (let i = 0; i < 3; i++) await send(org, alice, record!.id);
 	const position = (user: string) => as(org, user, async (tx) => (await tx<{ position: number }[]>`select coalesce((select last_read_seq from thread_reads

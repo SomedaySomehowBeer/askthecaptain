@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { withTenant, type TransactionSql } from '@captain/db';
-import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
+import { databaseUrl, fixture, freshDatabase, type Harness } from '@captain/db/test';
 import { createApp } from '../app.ts';
 import { AuthService } from '../auth/service.ts';
 import type { IdentityProvider } from '../auth/google.ts';
@@ -185,7 +185,7 @@ it('validates referenced tags and projects in the tenant at save time, including
  // References are only checked when a filter is supplied: a name-only change keeps a view whose project has since gone.
  const temporary = await makeProject('Short-lived');
  const orphan = await newView(member, 'Orphan', filter({ projectId: temporary }));
- await db.owner`delete from tags where id = ${temporary}`;
+ await fixture(db.owner, org)`delete from tags where id = ${temporary}`;
  const renamed = await json<View>(patch(member, orphan.id, { expectedRevision: 1, name: 'Orphan renamed' }));
  assert.equal(renamed.filter.projectId, temporary);
  assert.equal((await json<Failure>(patch(member, orphan.id, { expectedRevision: 2, filter: filter({ projectId: temporary }) }), 400)).field, 'projectId');
@@ -333,7 +333,7 @@ it('only the owner, as an active member, can see or change a view — through th
 
 it('references resolve in bounded batches: available, missing and unavailable never change the stored filter', async () => {
  const person = await signIn('views-references'); await join(person);
- await db.owner`insert into tags (organisation_id, name) select ${org}, 'Bulk ' || lpad(n::text, 2, '0') from generate_series(1, 55) n`;
+ await fixture(db.owner, org)`insert into tags (organisation_id, name) select ${org}, 'Bulk ' || lpad(n::text, 2, '0') from generate_series(1, 55) n`;
  const tail = await makeTag('zzz Tail tag'), gone = await makeTag('zzz Going'), kept = await makeTag('aaa Kept');
  const firstPage = await json<{ tags: { id: string }[]; nextOffset: number | null }>(request('GET', `${base()}/tags?limit=50`, person));
  assert.ok(firstPage.nextOffset !== null && !firstPage.tags.some(t => t.id === tail), 'the tail tag is on no first page');
@@ -346,8 +346,8 @@ it('references resolve in bounded batches: available, missing and unavailable ne
  assert.equal(available.references!.tags.find(t => t.id === tail)!.name, 'zzz Tail tag');
  assert.deepEqual(available.references!.tags.map(t => t.id), sorted);
 
- await db.owner`delete from tags where id = ${gone}`;
- await db.owner`delete from tags where id = ${leaving}`;
+ await fixture(db.owner, org)`delete from tags where id = ${gone}`;
+ await fixture(db.owner, org)`delete from tags where id = ${leaving}`;
  const missing = await json<Detail>(request('GET', `${views()}/${view.id}`, person));
  assert.deepEqual(missing.references!.tags.find(t => t.id === gone), { id: gone, state: 'missing' });
  assert.equal(missing.references!.tags.find(t => t.id === kept)!.state, 'available');

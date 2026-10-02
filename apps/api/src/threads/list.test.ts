@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { withTenant } from '@captain/db';
-import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
+import { databaseUrl, fixture, freshDatabase, type Harness } from '@captain/db/test';
 import { createApp } from '../app.ts';
 import { AuthService } from '../auth/service.ts';
 import type { IdentityProvider } from '../auth/google.ts';
@@ -26,7 +26,7 @@ type List = { filter: string; available: boolean; threads: Row[]; nextCursor: st
 type Detail = { thread: { id: string; kind: string; title: string; revision: number; lastSeq: number; readPosition: number; unread: number };
  card: { record: { kind: string; id: string } | null; title: string; status: string | null; facts: [string, string]; fold: Record<string, unknown> };
  tags: Chip[]; participants?: { userId: string }[]; pin: { id: string; messageId: string } | null };
-type Message = { id: string; seq: number; body: string | null };
+type Message = { id: string; seq: number; kind: string; body: string | null };
 type Failure = { code: string };
 const google: IdentityProvider & { next: { subject: string; email: string; name: string } } = {
  next: { subject: 'owner', email: 'owner@example.test', name: 'Owner' },
@@ -174,11 +174,12 @@ it('filters, a cursor that stays stable across a new message, and headings over 
  assert.equal((await request('GET', `${b.threads}?filter=everything`, b.member)).status, 400);
  // Headings: one per tag a visible thread carries, plus Other, with counts over the whole set and the tag's owner and dates.
  const groups = Object.fromEntries(all.groups.map(g => [g.key, g]));
- assert.deepEqual(groups[production.id], { key: production.id, label: 'Production', threads: 2, needsYou: 0, owner: null, startsOn: null, endsOn: null },
+ // Every thread here carries the owner's change lines (its record's creation, its tags; 0047) or the owner's first message,
+ // which are unread for the member: so every visible thread needs them, and the private one is never counted.
+ assert.deepEqual(groups[production.id], { key: production.id, label: 'Production', threads: 2, needsYou: 2, owner: null, startsOn: null, endsOn: null },
   'the private thread is not counted for someone outside it');
- assert.deepEqual(groups[launch.id], { key: launch.id, label: 'Summer lager launch', threads: 2, needsYou: 1, owner: { id: b.member.user.id, name: `Mia ${people}` }, startsOn: '2031-06-01', endsOn: '2031-08-31' });
- // A topic's first message is unread for everyone but its author.
- assert.deepEqual(groups.none, { key: 'none', label: 'Other', threads: 5, needsYou: 2, owner: null, startsOn: null, endsOn: null });
+ assert.deepEqual(groups[launch.id], { key: launch.id, label: 'Summer lager launch', threads: 2, needsYou: 2, owner: { id: b.member.user.id, name: `Mia ${people}` }, startsOn: '2031-06-01', endsOn: '2031-08-31' });
+ assert.deepEqual(groups.none, { key: 'none', label: 'Other', threads: 5, needsYou: 5, owner: null, startsOn: null, endsOn: null });
  assert.equal((await b.list(b.owner)).groups.find(g => g.key === production.id)!.threads, 3, 'its participant sees it under the heading');
  // The headings are the same on every page, whatever the page size: they summarise the set, not the page.
  const firstPage = await b.list(b.member, 'limit=3');
@@ -201,15 +202,16 @@ it('filters, a cursor that stays stable across a new message, and headings over 
 
 it('a list has at most 100 headings, by thread count, and Other competes with the tags', async () => {
  const b = await business('Many tags');
- const tags = await db.owner<{ id: string }[]>`insert into tags (organisation_id, name) select ${b.org}, 'Tag ' || lpad(g::text, 3, '0') from generate_series(1, 101) g returning id`;
+ const tags = await fixture(db.owner, b.org)<{ id: string }[]>`insert into tags (organisation_id, name) select ${b.org}, 'Tag ' || lpad(g::text, 3, '0') from generate_series(1, 101) g returning id`;
  const task = await b.task('Tagged a lot'), busy = await b.task('Tagged twice');
  const [thread, busyThread] = [await b.threadOf('task_id', task), await b.threadOf('task_id', busy)];
- await db.owner`insert into thread_tags (organisation_id, thread_id, tag_id) select ${b.org}, ${thread}, id from tags where organisation_id = ${b.org}`;
- await db.owner`insert into thread_tags (organisation_id, thread_id, tag_id) values (${b.org}, ${busyThread}, ${tags[100]!.id})`;
+ await fixture(db.owner, b.org)`insert into thread_tags (organisation_id, thread_id, tag_id) select ${b.org}, ${thread}, id from tags where organisation_id = ${b.org}`;
+ await fixture(db.owner, b.org)`insert into thread_tags (organisation_id, thread_id, tag_id) values (${b.org}, ${busyThread}, ${tags[100]!.id})`;
  await b.task('Untagged');
  const groups = (await b.list(b.member)).groups;
  assert.equal(groups.length, groupLimit);
- assert.deepEqual(groups[0], { key: tags[100]!.id, label: 'Tag 101', threads: 2, needsYou: 0, owner: null, startsOn: null, endsOn: null }, 'the largest first');
+ // needsYou 2: the owner's creation lines and the system's tag lines (0047) are unread for the member.
+ assert.deepEqual(groups[0], { key: tags[100]!.id, label: 'Tag 101', threads: 2, needsYou: 2, owner: null, startsOn: null, endsOn: null }, 'the largest first');
  assert.deepEqual(groups.slice(1).map(g => g.threads), Array(99).fill(1));
  assert.ok(groups.some(g => g.key === 'none'), 'Other is a heading when untagged threads exist');
  assert.ok(!groups.some(g => g.label === 'Tag 100'), 'the rest are cut, by count then name');
@@ -225,6 +227,10 @@ it('needs you: unread messages, or an open task or booking the caller owns; read
   { id: randomUUID(), title: 'Boil', startsAt: '2031-07-01T08:00:00Z', endsAt: '2031-07-01T10:00:00Z', ownerId: b.member.user.id }), 201)).id;
  const bookingThread = await b.threadOf('reservation_id', booking);
  const row = async (id: string, person = b.member) => (await b.list(person)).threads.find(t => t.id === id)!;
+ // Each creation is the owner's change line (0047): unread for the member, so every one of these needs them until read.
+ assert.deepEqual([(await row(theirsThread)).unread, (await row(theirsThread)).needsYou], [1, true], 'another person’s change line is unread');
+ assert.equal((await row(theirsThread, b.owner)).unread, 0, 'the actor’s own change line is not');
+ for (const thread of [mineThread, theirsThread, doneThread, bookingThread]) await json(request('POST', `${b.threads}/${thread}/read`, b.member, { seq: 1 }));
  assert.equal((await row(mineThread)).needsYou, true, 'an open task I own');
  assert.equal((await row(bookingThread)).needsYou, true, 'an upcoming booking I own');
  assert.equal((await row(theirsThread)).needsYou, false);
@@ -232,11 +238,11 @@ it('needs you: unread messages, or an open task or booking the caller owns; read
  await b.send(b.owner, theirsThread, 'Can you look at this?');
  await b.send(b.member, doneThread, 'My own words are never unread');
  const theirsRow = await row(theirsThread);
- assert.deepEqual([theirsRow.unread, theirsRow.needsYou], [1, true], 'never opened: the whole thread is unread');
+ assert.deepEqual([theirsRow.unread, theirsRow.needsYou], [1, true], 'the new message is unread');
  assert.deepEqual([(await row(doneThread)).unread, (await row(doneThread)).needsYou], [0, false]);
  assert.deepEqual((await b.list(b.member, 'filter=needs_you')).threads.map(t => t.id).sort(), [mineThread, theirsThread, bookingThread].sort());
  assert.equal((await b.list(b.member)).groups.find(g => g.key === 'none')!.needsYou, 3);
- assert.deepEqual(await json(request('POST', `${b.threads}/${theirsThread}/read`, b.member, { seq: 1 })), { readPosition: 1, unread: 0 });
+ assert.deepEqual(await json(request('POST', `${b.threads}/${theirsThread}/read`, b.member, { seq: 2 })), { readPosition: 2, unread: 0 });
  assert.equal((await row(theirsThread)).needsYou, false);
  assert.equal((await b.detail(b.other, theirsThread)).thread.readPosition, 0, 'a read position is personal');
 });
@@ -306,12 +312,15 @@ it('access: a removed member sees 404; a non-participant sees nothing of a priva
   message: { id: randomUUID(), body: 'Margins are thin' } }), 201)).thread.id;
  const tag = await b.tag('Contracts');
  await json(b.addTag(b.owner, secret, tag.id, 1));
- const said = (await json<{ messages: Message[] }>(request('GET', `${b.threads}/${secret}/messages?latest=1`, b.owner))).messages[0]!;
+ const said = (await json<{ messages: Message[] }>(request('GET', `${b.threads}/${secret}/messages?latest=5`, b.owner))).messages.find(m => m.kind === 'message')!;
+ // The tag's change line is in the private thread; it cannot be pinned, edited or deleted (0047).
+ const line = (await json<{ messages: Message[] }>(request('GET', `${b.threads}/${secret}/messages?latest=5`, b.owner))).messages.find(m => m.kind === 'change')!;
+ assert.equal((await json<Failure>(request('POST', `${b.threads}/${secret}/pin`, b.owner, { messageId: line.id }), 409)).code, 'change_line_immutable');
  await json(request('POST', `${b.threads}/${secret}/pin`, b.owner, { messageId: said.id }), 201);
  // Rows and detail carry no links: R2 has no way to write one.
  assert.ok(!('links' in (await b.detail(b.admin, secret))) && !('links' in (await b.list(b.admin)).threads.find(t => t.id === secret)!));
  // The member: the record thread is theirs to see, the private thread is not, by any path.
- assert.equal((await b.detail(b.member, record)).thread.lastSeq, 1);
+ assert.equal((await b.detail(b.member, record)).thread.lastSeq, 2, 'the task’s creation line and the message');
  for (const path of ['', '/messages?latest=5', '/changes?after=0']) assert.equal((await request('GET', `${b.threads}/${secret}${path}`, b.member)).status, 404, path || 'detail');
  for (const response of [request('POST', `${b.threads}/${secret}/pin`, b.owner.user.id === b.member.user.id ? b.owner : b.member, { messageId: said.id }),
   b.addTag(b.member, secret, tag.id, 2), request('POST', `${b.threads}/${secret}/star`, b.member)]) assert.equal((await response).status, 404);
@@ -355,8 +364,17 @@ it('the Expo client parses real list, card, message, pin and change payloads for
  const pin = parseChangedPin(await json(request('POST', `${thread}/pin`, b.owner, { messageId: sent.id }), 201));
  assert.equal(parseDetail(await json(request('GET', thread, b.member))).pin?.id, pin.id);
  parseChangedPin(await json(request('DELETE', `${thread}/pin`, b.owner)));
- parseMessages(await json(request('GET', `${thread}/messages?latest=50`, b.member)));
- parseChanges(await json(request('GET', `${thread}/changes?after=0&limit=100`, b.member)));
+ // 0047 puts change lines (kind 'change', no body, with changeSetId and change) in a thread: the topic's tag made one.
+ // This client's parser predates them and refuses any page holding one, whole (V-D teaches it); a page of plain messages
+ // still parses.
+ const lined = await json<{ messages: Message[] }>(request('GET', `${thread}/messages?latest=50`, b.member));
+ assert.ok(lined.messages.some(m => m.kind === 'change'));
+ assert.throws(() => parseMessages(lined), /threads: unexpected response/);
+ const changed = await json(request('GET', `${thread}/changes?after=0&limit=100`, b.member));
+ assert.throws(() => parseChanges(changed), /threads: unexpected response/);
+ const plain = `${b.threads}/${privateThread.thread.id}`;
+ parseMessages(await json(request('GET', `${plain}/messages?latest=50`, b.member)));
+ parseChanges(await json(request('GET', `${plain}/changes?after=0&limit=100`, b.member)));
  parseRead(await json(request('POST', `${thread}/read`, b.member, { seq: sent.seq })));
  parseStar(await json(request('POST', `${thread}/star`, b.member)));
  const deleted = parseMessage(await json(request('DELETE', `${thread}/messages/${sent.id}?expectedRevision=${edited.revision}`, b.member)));

@@ -3,8 +3,9 @@ import { HttpError, notFound } from '../errors.ts';
 import type { Actor } from '../tenant.ts';
 
 /** Tags on threads (threads contract §3, §5): the one place a tag is attached to anything. Other modules (bookings,
- *  series occurrences, the stocktake) attach tags through these helpers, so every attachment to a thread is audited in
- *  the participant-scoped `chat_audit_events` like any other thread write, and only this module writes that table. */
+ *  series occurrences, the stocktake) attach tags through these helpers, so every attachment to a thread by a person is
+ *  audited in the participant-scoped `chat_audit_events` like any other thread write. Every attachment, the system's
+ *  too, is also journalled by the database (0047) under the caller's change set, as an item of the thread's record. */
 
 export type RecordKind = 'task' | 'booking' | 'stock';
 const column = { task: 'task_id', booking: 'reservation_id', stock: 'stock_item_id' } as const;
@@ -56,7 +57,7 @@ export async function writeThreadTags(tx: TransactionSql, organisationId: string
 
 /** A new series occurrence receives its series' tags on its own thread, in the task's transaction (contract §3). With
  *  a person acting, each is audited as their thread write; the system routine has no person to record in the
- *  participant-scoped audit, so its caller records the tag ids on the occurrence's `task.materialised` row instead. */
+ *  participant-scoped audit, and its routine change set is the record of the attachment. */
 export async function attachSeriesTags(tx: TransactionSql, organisationId: string, actor: Actor | null, taskId: string, seriesId: string): Promise<string[]> {
  const tags = (await tx<{ tagId: string }[]>`select tag_id from task_series_tags where organisation_id = ${organisationId} and series_id = ${seriesId} order by tag_id`).map(row => row.tagId);
  if (!tags.length) return [];

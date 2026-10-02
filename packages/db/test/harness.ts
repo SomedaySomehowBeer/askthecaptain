@@ -1,6 +1,9 @@
 import { randomBytes } from 'node:crypto';
-import postgres, { type Sql } from 'postgres';
+import postgres, { type Sql, type TransactionSql } from 'postgres';
+import { withTenant, type TenantContext } from '../src/context.ts';
 import { applyMigrations } from '../src/migrate.ts';
+import { journalled } from '../src/versions.ts';
+export { journalled } from '../src/versions.ts';
 
 /** A fresh database per test file, migrated as the owner, reachable as the runtime role: `captain_runtime` once
  *  migration 0041 has created it, `app` for a database left before it. `app` is the connection's name either way.
@@ -57,4 +60,24 @@ export async function freshDatabase(options: { through?: string } = {}): Promise
 			await drop.end();
 		}
 	};
+}
+
+/** Fixtures write journalled tables (0047) inside one transaction with a change set, as every writer must: `fixture(sql,
+ *  organisationId)` is a tagged template that runs its one statement that way, as the system, or as `userId` when given
+ *  (who must then be an active member). */
+export function fixture(sql: Sql, organisationId: string, userId?: string) {
+	return <T extends readonly unknown[] = Record<string, any>[]>(strings: TemplateStringsArray, ...values: unknown[]): Promise<T> =>
+		journalled(sql, userId ? { organisationId, userId } : { organisationId }, (tx) => tx(strings, ...(values as never[])) as unknown as Promise<T>);
+}
+
+/** Opens a change set in a test transaction when its person may act (or it has none): reads by a stranger or a removed
+ *  member still reach row security, which answers as it would for the API. */
+export async function openTestChangeSet(tx: TransactionSql): Promise<void> {
+	await tx`select change_set_open(null, case when current_user_id() is null then 'system' else 'person' end, case when current_user_id() is null then 'routine' else 'request' end,
+		'test', null, null) where current_user_id() is null or exists (select 1 from memberships where organisation_id = current_organisation_id()
+		and user_id = current_user_id() and status = 'active')`;
+}
+/** `withTenant` with a test change set opened first (see openTestChangeSet). */
+export function withJournalledTenant<T>(sql: Sql, context: TenantContext, work: (tx: TransactionSql) => Promise<T>): Promise<T> {
+	return withTenant(sql, context, async (tx) => { await openTestChangeSet(tx); return work(tx); });
 }

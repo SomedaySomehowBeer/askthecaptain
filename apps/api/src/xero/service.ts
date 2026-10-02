@@ -1,5 +1,5 @@
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
-import { xeroRole, type Actor } from './connections.ts';
+import { syncState, xeroRole, type Actor } from './connections.ts';
 export class XeroService {
  readonly db: Sql;
  constructor(db: Sql) { this.db = db; }
@@ -17,10 +17,9 @@ export class XeroService {
  }
  async readIn(tx: TransactionSql, org: string, overdueDays?: number, offset = 0, forDate?: string) {
    const [connection] = await tx`select id, status, error from connections where provider = 'xero' for share`;
-   const [sync] = connection ? await tx`select action, detail, created_at from audit_events where subject_id = ${connection.id} and action in ('xero.sync_started', 'xero.synced', 'xero.sync_failed') order by created_at desc, id desc limit 1` : [];
-   const [last] = connection ? await tx`select created_at from audit_events where subject_id = ${connection.id} and action = 'xero.synced' and created_at >= coalesce((select max(created_at) from audit_events where subject_id = ${connection.id} and action = 'xero.connected'), 'epoch'::timestamptz) order by created_at desc, id desc limit 1` : [];
-   const state = { connected: connection?.status === 'connected', complete: connection?.status === 'connected' && sync?.action === 'xero.synced', lastSyncedAt: last?.createdAt ?? null,
-    error: connection?.error ?? (connection?.status !== 'connected' ? 'Connect Xero in Settings.' : sync?.action !== 'xero.synced' ? sync?.detail.error ?? 'Xero has not been synced yet. Choose Sync now in Settings.' : null) };
+   const sync = connection ? await syncState(tx, connection.id) : undefined;
+   const state = { connected: connection?.status === 'connected', complete: connection?.status === 'connected' && sync?.state === 'synced', lastSyncedAt: sync?.lastSyncedAt ?? null,
+    error: connection?.error ?? (connection?.status !== 'connected' ? 'Connect Xero in Settings.' : sync?.state !== 'synced' ? sync?.error ?? 'Xero has not been synced yet. Choose Sync now in Settings.' : null) };
    if (!state.connected) return { ...state, invoices: [], totals: null, nextOffset: null };
    const [clock] = await tx`select (current_timestamp at time zone timezone)::date::text as today from organisations where id = ${org}`; const today = forDate ?? clock!.today as string;
    if (overdueDays !== undefined) {

@@ -58,16 +58,17 @@ before(async () => {
  otherTask = (await json<{ id: string }>(request('POST', `/v1/organisations/${otherOrg}/tasks`, outsider, { title: 'Other tenant task' }), 201)).id;
 });
 after(async () => { await db?.close(); });
-it('active members create and rename flat tags; duplicate names race safely; writes are audited', async () => {
+it('active members create and rename flat tags; duplicate names race safely; writes are journalled', async () => {
  const tag = await makeTag('  Production  '); assert.equal(tag.name, 'Production');
  assert.deepEqual([tag.ownerId, tag.startsOn, tag.endsOn, tag.archivedAt, tag.revision, tag.createdBy], [null, null, null, null, 1, member.user.id]);
  const renamed = await json<Tag>(request('PATCH', `${base()}/tags/${tag.id}`, member, { expectedRevision: 1, name: 'Operations' }));
  assert.equal(renamed.id, tag.id); assert.equal(renamed.name, 'Operations'); assert.equal(renamed.revision, 2);
- const audit = await db.owner`select action, actor_id, detail from audit_events where subject_id = ${tag.id} order by created_at`;
- assert.deepEqual(audit.map(a => a.action), ['tag.created', 'tag.renamed']);
- assert.ok(audit.every(a => a.actorId === member.user.id));
- assert.deepEqual(audit[1]!.detail.before, { name: 'Production' });
- assert.deepEqual(audit[1]!.detail.after, { name: 'Operations' });
+ const journal = await db.owner`select s.actor_id, c.operation, c.field, c.before, c.after from record_changes c join change_sets s on s.id = c.change_set_id
+  where c.record_kind = 'tag' and c.record_id = ${tag.id} order by c.id`;
+ assert.deepEqual(journal.map(c => [c.operation, c.field]), [['create', null], ['update', 'name']]);
+ assert.ok(journal.every(c => c.actorId === member.user.id));
+ assert.deepEqual([journal[1]!.before, journal[1]!.after], ['Production', 'Operations']);
+ assert.equal((await db.owner`select 1 from audit_events where subject_id = ${tag.id}`).length, 0, 'the change set is the audit record');
  assert.equal((await json<{ code: string }>(request('PATCH', `${base()}/tags/${tag.id}`, member, { expectedRevision: 1, name: 'Late' }), 409)).code, 'stale_revision');
  const attempts = await Promise.all([request('POST', `${base()}/tags`, member, { name: 'Marketing' }), request('POST', `${base()}/tags`, member, { name: 'marketing' })]);
  assert.deepEqual(attempts.map(r => r.status).sort(), [201, 409]);
@@ -103,9 +104,11 @@ it('a tag’s owner and dates are optional and independent; the end cannot prece
  assert.ok(archived.archivedAt);
  const restored = await json<Tag>(request('PATCH', `${base()}/tags/${launch.id}`, member, { expectedRevision: 3, archived: false }));
  assert.equal(restored.archivedAt, null); assert.equal(restored.revision, 4);
- const audit = await db.owner<{ action: string; detail: Record<string, unknown> }[]>`select action, detail from audit_events where subject_id = ${launch.id} order by created_at`;
- assert.deepEqual(audit.map(a => a.action), ['tag.created', 'tag.updated', 'tag.updated', 'tag.updated']);
- assert.deepEqual(audit[1]!.detail.before, { ownerId: owner.user.id, endsOn: '2031-08-31' });
+ const sets = await db.owner<{ fields: string[] }[]>`select array_agg(coalesce(c.field, c.operation) order by c.field nulls first) as fields from record_changes c
+  where c.record_kind = 'tag' and c.record_id = ${launch.id} group by c.change_set_id order by min(c.id::text)`;
+ assert.deepEqual(sets.map(s => s.fields), [['create'], ['ends_on', 'owner_id'], ['archived_at'], ['archived_at']]);
+ const [cleared] = await db.owner`select before, after from record_changes where record_id = ${launch.id} and field = 'owner_id'`;
+ assert.deepEqual([cleared!.before, cleared!.after], [owner.user.id, null]);
 });
 it('retrying concurrent attach/detach on a task’s thread makes one link and one audit per actual change', async () => {
  const tag = await makeTag('Retry-safe');
@@ -179,14 +182,14 @@ it('a step has no thread of its own, so it carries its task’s tags; an archive
  await json(request('PATCH', `${base()}/tags/${tag.id}`, owner, { expectedRevision: 1, archived: true }));
  assert.deepEqual((await json<{ tasks: WorkTask[] }>(request('GET', `${base()}/tasks?tagId=${tag.id}`, member))).tasks.map(t => t.id), [task]);
 });
-it('tag writes and their audit roll back together on failure', async () => {
+it('tag writes and their journal roll back together on failure', async () => {
  await db.owner.unsafe(`create function fail_tag_audit() returns trigger language plpgsql as $$ begin
-  if new.action = 'tag.created' and new.detail->>'name' = 'Rollback proof' then raise exception 'forced audit failure'; end if;
-  return new; end $$; create trigger fail_tag_audit before insert on audit_events for each row execute function fail_tag_audit()`);
+  if new.record_kind = 'tag' and new.after->>'name' = 'Rollback proof' then raise exception 'forced journal failure'; end if;
+  return new; end $$; create trigger fail_tag_audit before insert on record_changes for each row execute function fail_tag_audit()`);
  try {
   assert.equal((await request('POST', `${base()}/tags`, member, { name: 'Rollback proof' })).status, 500);
   assert.equal((await db.owner`select * from tags where name = 'Rollback proof'`).length, 0);
- } finally { await db.owner.unsafe('drop trigger fail_tag_audit on audit_events; drop function fail_tag_audit()'); }
+ } finally { await db.owner.unsafe('drop trigger fail_tag_audit on record_changes; drop function fail_tag_audit()'); }
 });
 type Options = { task: { id: string; title: string }; tags: { id: string; name: string; attached: boolean }[]; nextOffset: number | null };
 it('task tag choices page confirmed assignments on the task’s thread and preserve their identity through renames', async () => {

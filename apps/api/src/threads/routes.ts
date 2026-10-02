@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Session } from '../auth/service.ts';
 import { badRequest } from '../errors.ts';
+import { changeSetHeader } from '../changes.ts';
 import { ThreadsService } from './service.ts';
 type Vars = { Variables: { requestId: string; session: Session } };
 const uuid = z.string().uuid().transform(value => value.toLowerCase());
@@ -39,8 +40,12 @@ export function threadsRoutes(service: ThreadsService) {
  routes.post(`${one}/participants`, async c => c.json(await service.addParticipants(actor(c), org(c), thread(c), await readJson(c.req))));
  routes.delete(`${one}/participants/:userId`, async c => c.json(await service.removeParticipant(actor(c), org(c), thread(c),
   uuid.parse(c.req.param('userId')), singleQuery(c.req.queries()))));
- routes.post(`${one}/tags/:tagId`, async c => c.json(await service.setTag(actor(c), org(c), thread(c), uuid.parse(c.req.param('tagId')), true, await readJson(c.req))));
- routes.delete(`${one}/tags/:tagId`, async c => c.json(await service.setTag(actor(c), org(c), thread(c), uuid.parse(c.req.param('tagId')), false, singleQuery(c.req.queries()))));
+ // A tag write is journalled (0047). Its change set is named in the header only: the detail body keeps its shape.
+ const tagged = (c: { header(name: string, value: string): void }, { changeSetId, ...detail }: Awaited<ReturnType<ThreadsService['setTag']>>) => {
+  c.header(changeSetHeader, changeSetId); return detail;
+ };
+ routes.post(`${one}/tags/:tagId`, async c => c.json(tagged(c, await service.setTag(actor(c), org(c), thread(c), uuid.parse(c.req.param('tagId')), true, await readJson(c.req)))));
+ routes.delete(`${one}/tags/:tagId`, async c => c.json(tagged(c, await service.setTag(actor(c), org(c), thread(c), uuid.parse(c.req.param('tagId')), false, singleQuery(c.req.queries())))));
  routes.get(`${one}/messages`, async c => c.json(await service.messages(actor(c), org(c), thread(c), singleQuery(c.req.queries()))));
  routes.post(`${one}/messages`, async c => {
   const result = await service.send(actor(c), org(c), thread(c), await readJson(c.req));

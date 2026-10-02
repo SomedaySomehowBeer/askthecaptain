@@ -2,7 +2,7 @@ import { withTenant, type Sql } from '@captain/db';
 import { audit } from '../audit.ts';
 import { badRequest, forbidden } from '../errors.ts';
 import { canManage, roleOf, type Actor } from '../tenant.ts';
-import { threadExportNote, threadTables } from '../threads/tables.ts';
+import { journalExportNote, journalTables, threadExportNote, threadTables } from '../threads/tables.ts';
 
 /** Columns that never leave the database, whatever table they are in: encrypted provider tokens and
  *  sprite secrets, device keys, token hashes. An export is the business's data, not its credentials. */
@@ -16,7 +16,7 @@ const exportOnly: Record<string, string> = { saved_views: 'deleted_at is null' }
  *  foreign-key cascade still removes every member's views and tombstones with the organisation. Threads are the same
  *  (threads contract §3): row security hides other members' private threads, so a count would mislead; the cascade
  *  removes every thread and everything under it regardless, and stars and reads are personal besides. */
-const uncounted = new Set(['saved_views', ...threadTables]);
+const uncounted = new Set(['saved_views', ...threadTables, ...journalTables]);
 
 export type TenantTable = { name: string; columns: string[] };
 export type Revoker = (actor: Actor, organisationId: string) => Promise<void>;
@@ -53,7 +53,7 @@ export class OrganisationLifecycle {
 		});
 		yield JSON.stringify({ kind: 'captain-export', version: 1, exportedAt: new Date().toISOString(), keys: 'camelCase, as the API returns them', organisation, tables: tables.map((t) => t.name),
 			notes: ['saved_views holds only the exporting person’s own live saved views. Other members’ private views and deleted views are not exported, so this is not a complete backup of personal views.',
-				threadExportNote] }) + '\n';
+				threadExportNote, journalExportNote] }) + '\n';
 		const counts: Record<string, number> = {};
 		for (const table of tables) {
 			const only = exportOnly[table.name];

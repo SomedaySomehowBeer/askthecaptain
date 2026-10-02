@@ -1,18 +1,22 @@
-import { withTenant, type Sql } from '@captain/db';
+import { changeSetIdFor, fingerprintOf, openChangeSet, withTenant, type Sql } from '@captain/db';
 import { Registry, type HandlerContext } from '@captain/engine';
 import { z } from 'zod';
 import type { PushService } from '../push/service.ts';
 import { journal, type Context } from '../workflows/journal.ts';
 import { shopifyState } from '../shopify/connections.ts';
+import { createdRecord } from '../changes.ts';
 import { recordThread, writeThreadTags } from '../threads/tags.ts';
 const quantity = z.string().regex(/^-?\d+(?:\.\d+)?$/);
 const itemSchema = z.object({ id: z.uuid(), name: z.string(), location: z.string(), unitLabel: z.string(), reorderPoint: quantity.nullable(),
  preferredSupplier: z.object({ name: z.string(), email: z.string().nullable() }).nullable(), count: quantity.nullable().optional(), belowReorderPoint: z.boolean().nullable().optional() });
 const countSchema = z.object({ countId: z.uuid(), count: quantity, belowReorderPoint: z.boolean(), countedBy: z.uuid().nullable(), countedAt: z.iso.datetime() });
 const problem = (code: string) => Object.assign(Error('Stocktake needs attention'), { code });
-async function receipt(ctx: Context, action: string) {
+/** The step's earlier success, if this exact step (run, path, item) already committed: the engine records a write
+ *  step's success in the step's own transaction, so a repeat of the handler is answered from the step journal, not
+ *  from audit_events (which is no longer a state store, versions contract §2). */
+async function stepDone(ctx: Context) {
  await ctx.tx`select pg_advisory_xact_lock(hashtextextended(${ctx.idempotencyKey}, 0))`;
- return (await ctx.tx`select subject_id, detail from audit_events where action = ${action} and detail->>'idempotencyKey' = ${ctx.idempotencyKey} limit 1`)[0];
+ return (await ctx.tx`select 1 from workflow_run_steps where run_id = ${ctx.runId} and path = ${ctx.path} and state = 'succeeded'`).length > 0;
 }
 export class StocktakeService {
  readonly db: Sql; readonly push: PushService;
@@ -40,7 +44,7 @@ export class StocktakeService {
   const [saved] = await ctx.tx`select c.id from stock_counts c join workflow_runs r on r.id = ${ctx.runId}
    where c.id = ${count.countId} and c.item_id = ${item.id} and c.count = ${count.count}::numeric and c.counted_at > r.started_at`;
   if (!saved) throw problem('stocktake_count');
-  if (!await receipt(ctx, 'stock.count_observed')) await journal(ctx, 'stock.count_observed', 'stock_item', item.id, { ...count, idempotencyKey: ctx.idempotencyKey });
+  if (!await stepDone(ctx)) await journal(ctx, 'stock.count_observed', 'stock_item', item.id, { ...count, idempotencyKey: ctx.idempotencyKey });
   return count;
  }
  async task(ctx: Context, args: Record<string, unknown>) {
@@ -49,20 +53,25 @@ export class StocktakeService {
   // are unique that way, or created; the reorder task's thread carries it. An archived tag is still that tag.
   const tagName = z.string().trim().min(1).max(80).parse(args.project);
   if (count === undefined || count === null || item.reorderPoint === null) throw problem('stocktake_count');
-  const previous = await receipt(ctx, 'stock.reorder_task_created'); if (previous) return { id: previous.subjectId };
+  // The step's change set has a deterministic id from its idempotency key: a repeat finds the task its first attempt
+  // made (versions contract §2: stocktake idempotency is the change set's retry id). Written as the enabling person (D4).
+  const changeSet = await openChangeSet(ctx.tx, { id: changeSetIdFor(ctx.idempotencyKey), actorKind: 'workflow', causeKind: 'workflow_run', causeId: ctx.runId,
+   requestId: ctx.runId, fingerprint: fingerprintOf({ step: 'tasks.createInProject', key: ctx.idempotencyKey }) });
+  if (changeSet.matched) {
+   const id = await createdRecord(ctx.tx, changeSet.id, 'task');
+   if (!id) throw problem('stocktake_task');
+   return { id };
+  }
   await ctx.tx`select pg_advisory_xact_lock(hashtextextended(${ctx.organisationId + ':stocktake-tag:' + tagName.toLowerCase()}, 0))`;
   let [tag] = await ctx.tx<{ id: string }[]>`select id from tags where lower(name) = lower(${tagName}) for share`;
-  if (!tag) {
-   [tag] = await ctx.tx<{ id: string }[]>`insert into tags (organisation_id, name, created_by) values (${ctx.organisationId}, ${tagName}, ${ctx.userId}) returning id`;
-   await journal(ctx, 'tag.created', 'tag', tag!.id);
-  }
+  if (!tag) [tag] = await ctx.tx<{ id: string }[]>`insert into tags (organisation_id, name, created_by) values (${ctx.organisationId}, ${tagName}, ${ctx.userId}) returning id`;
   const title = `Reorder ${item.name} (${count} ${item.unitLabel} left, reorder at ${item.reorderPoint})`;
   const [task] = await ctx.tx`insert into tasks (organisation_id, title, body, due, source_kind, source_id, created_by)
    values (${ctx.organisationId}, ${title}, ${'Stocktake at ' + item.location + '. Review the quantity to order; this task does not place an order.'},
    (select (current_timestamp at time zone timezone)::date + 7 from organisations where id = ${ctx.organisationId}), 'run', ${ctx.runId}, ${ctx.userId}) returning id`;
   const thread = await recordThread(ctx.tx, ctx.organisationId, 'task', task!.id, true);
   await writeThreadTags(ctx.tx, ctx.organisationId, { userId: ctx.userId, requestId: ctx.runId }, thread.id, [tag!.id], { mode: 'add', bump: false });
-  await journal(ctx, 'stock.reorder_task_created', 'task', task!.id, { itemId: item.id, location: item.location, idempotencyKey: ctx.idempotencyKey }); return { id: task!.id };
+  return { id: task!.id };
  }
  async shop(ctx: Context) {
   const state = await shopifyState(ctx.tx);

@@ -1,6 +1,6 @@
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { z } from 'zod';
-import { audit } from '../audit.ts';
+import { changeSetId, createdRecord, personChangeSet } from '../changes.ts';
 import { HttpError, badRequest, notFound } from '../errors.ts';
 import { roleOf, type Actor } from '../tenant.ts';
 import { tagsOfRecords } from '../threads/tags.ts';
@@ -13,10 +13,10 @@ const uuid = z.string().uuid().transform(value => value.toLowerCase());
 const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').refine(value => !Number.isNaN(Date.parse(`${value}T00:00:00Z`))
  && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value), 'A real calendar date.');
 const name = z.string().trim().min(1).max(120);
-export const tagInput = z.object({ name, ownerId: uuid.nullable().optional(), startsOn: date.nullable().optional(), endsOn: date.nullable().optional() }).strict();
-export const tagPatch = z.object({ expectedRevision: z.number().int().min(1).max(2_147_483_646), name: name.optional(), ownerId: uuid.nullable().optional(),
+export const tagInput = z.object({ changeSetId: changeSetId.optional(), name, ownerId: uuid.nullable().optional(), startsOn: date.nullable().optional(), endsOn: date.nullable().optional() }).strict();
+export const tagPatch = z.object({ changeSetId: changeSetId.optional(), expectedRevision: z.number().int().min(1).max(2_147_483_646), name: name.optional(), ownerId: uuid.nullable().optional(),
  startsOn: date.nullable().optional(), endsOn: date.nullable().optional(), archived: z.boolean().optional() }).strict()
- .refine(value => Object.keys(value).length > 1, 'Supply at least one change.');
+ .refine(value => Object.keys(value).filter(key => key !== 'changeSetId').length > 1, 'Supply at least one change.');
 export const workQuery = z.object({
  tagIds: z.array(z.string().uuid()).max(20).default([]), ownerId: z.string().uuid().optional(), seriesId: z.string().uuid().optional(),
  status: z.enum(['suggested', 'open', 'in_progress', 'done', 'cancelled']).optional(),
@@ -29,7 +29,8 @@ const stale = () => new HttpError(409, 'stale_revision', 'This tag changed since
 const datesInvalid = () => badRequest('tag_dates_invalid', 'The end date cannot be before the start date.');
 
 /** Shared organisation labels. A tag is attached to threads (a task's tags are its thread's), never to records directly;
- *  attaching is a thread write in `threads/`. Tag creation and edits stay in the tenant-wide audit, as before. */
+ *  attaching is a thread write in `threads/`. Tag creation and edits are journalled (0047): their change set is their
+ *  audit record. */
 export class TagsService {
  readonly #db: Sql;
  constructor(db: Sql) { this.#db = db; }
@@ -74,23 +75,34 @@ export class TagsService {
    throw error;
   }
  }
- create(actor: Actor, organisationId: string, raw: unknown): Promise<Tag> {
-  const input = tagInput.parse(raw);
+ create(actor: Actor, organisationId: string, raw: unknown): Promise<Tag & { changeSetId: string }> {
+  const { changeSetId: wanted, ...input } = tagInput.parse(raw);
   if (input.startsOn && input.endsOn && input.endsOn < input.startsOn) throw datesInvalid();
   return this.guarded(() => this.tx(actor, organisationId, async tx => {
+   const changeSet = await personChangeSet(tx, actor, 'tag.create', input, wanted);
+   if (changeSet.matched) {
+    const id = await createdRecord(tx, changeSet.id, 'tag');
+    const [tag] = id ? await tx<Tag[]>`select ${tx.unsafe(tagColumns)} from tags where id = ${id}` : [];
+    if (!tag) throw notFound();
+    return { ...tag, changeSetId: changeSet.id };
+   }
    if (input.ownerId) await this.requireOwner(tx, organisationId, input.ownerId);
    const [tag] = await tx<Tag[]>`insert into tags (organisation_id, name, owner_id, starts_on, ends_on, created_by)
     values (${organisationId}, ${input.name}, ${input.ownerId ?? null}, ${input.startsOn ?? null}::date, ${input.endsOn ?? null}::date, ${actor.userId})
     returning ${tx.unsafe(tagColumns)}`;
-   await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId,
-    action: 'tag.created', subjectType: 'tag', subjectId: tag!.id, detail: { name: tag!.name, ownerId: tag!.ownerId, startsOn: tag!.startsOn, endsOn: tag!.endsOn } });
-   return tag!;
+   return { ...tag!, changeSetId: changeSet.id };
   }));
  }
  /** Name, owner, dates and archive, with `expectedRevision`. Archiving keeps every attachment (§3). */
- update(actor: Actor, organisationId: string, tagId: string, raw: unknown): Promise<Tag> {
-  const input = tagPatch.parse(raw);
+ update(actor: Actor, organisationId: string, tagId: string, raw: unknown): Promise<Tag & { changeSetId: string }> {
+  const { changeSetId: wanted, ...input } = tagPatch.parse(raw);
   return this.guarded(() => this.tx(actor, organisationId, async tx => {
+   const changeSet = await personChangeSet(tx, actor, 'tag.update', { tagId, ...input }, wanted);
+   if (changeSet.matched) {
+    const [tag] = await tx<Tag[]>`select ${tx.unsafe(tagColumns)} from tags where id = ${tagId}`;
+    if (!tag) throw notFound();
+    return { ...tag, changeSetId: changeSet.id };
+   }
    const [before] = await tx<Tag[]>`select ${tx.unsafe(tagColumns)} from tags where id = ${tagId} for update`;
    if (!before) throw notFound();
    if (before.revision !== input.expectedRevision) throw stale();
@@ -101,12 +113,7 @@ export class TagsService {
    const archivedAt = input.archived === undefined ? before.archivedAt : input.archived ? before.archivedAt ?? new Date() : null;
    const [tag] = await tx<Tag[]>`update tags set name = ${after.name}, owner_id = ${after.ownerId}, starts_on = ${after.startsOn}::date, ends_on = ${after.endsOn}::date,
     archived_at = ${archivedAt}, updated_at = now() where id = ${tagId} returning ${tx.unsafe(tagColumns)}`;
-   const changed = (['name', 'ownerId', 'startsOn', 'endsOn', 'archivedAt'] as const).filter(key => String(before[key]) !== String(tag![key]));
-   const pick = (row: Tag) => Object.fromEntries(changed.map(key => [key, row[key]]));
-   await audit(tx, { organisationId, actor: { kind: 'person', id: actor.userId }, requestId: actor.requestId,
-    action: changed.length === 1 && changed[0] === 'name' ? 'tag.renamed' : 'tag.updated', subjectType: 'tag', subjectId: tagId,
-    detail: { name: tag!.name, before: pick(before), after: pick(tag!), revision: tag!.revision } });
-   return tag!;
+   return { ...tag!, changeSetId: changeSet.id };
   }));
  }
  work(actor: Actor, organisationId: string, raw: unknown) {

@@ -13,8 +13,8 @@ it('independent task waits do not block reminders ; owner routing, fresh status 
   assert.deepEqual(f.registry.missing(definitionByKey('chase-due')!), []);
   assert.deepEqual(requirementsOf(definitionByKey('chase-due')!).sort(), ['push']);
   await f.push.subscribe(f.member, f.org, { endpoint: 'https://push.example.test/member', keys: { p256dh: 'fixture', auth: 'fixture' } });
-  await f.tx(tx => tx`update tasks set owner_id = ${f.member.userId} where id = ${f.overdue.id}`);
-  const [future] = await f.tx(tx => tx`insert into tasks (organisation_id, title, status, due, source_kind, created_by)
+  await f.write(tx => tx`update tasks set owner_id = ${f.member.userId} where id = ${f.overdue.id}`);
+  const [future] = await f.write(tx => tx`insert into tasks (organisation_id, title, status, due, source_kind, created_by)
    select organisation_id, 'Future delivery', 'open', ${f.clock.today}::date + 5, 'person', ${f.userId} from tasks where id = ${f.due.id} returning id`);
   await f.enable(); const run = await f.start();
   // The run turns 'waiting' at the first parked item while later independent items still execute; wait for both parks.
@@ -25,10 +25,10 @@ it('independent task waits do not block reminders ; owner routing, fresh status 
   const pending = state.steps.find(s => s.key === 'time.beforeDue' && s.state === 'waiting')!;
   const [expected] = await f.tx(tx => tx`select ((${f.clock.today}::date + 3)::timestamp + interval '7 hours') at time zone ${f.clock.timezone} as at`);
   assert.equal((pending.output as { wakeAt: string }).wakeAt, expected!.at.toISOString());
-  await f.tx(tx => tx`update tasks set due = due + 1 where id = ${future!.id}`); await f.wake(run, String(future!.id));
+  await f.write(tx => tx`update tasks set due = due + 1 where id = ${future!.id}`); await f.wake(run, String(future!.id));
   const [rescheduled] = await f.tx(tx => tx`select ((${f.clock.today}::date + 4)::timestamp + interval '7 hours') at time zone ${f.clock.timezone} as at`);
   await until(() => f.workflows.run(f.actor, f.org, run), r => r.steps.some(s => s.key === 'time.beforeDue' && (s.output as any)?.wakeAt === rescheduled!.at.toISOString()));
-  await f.tx(tx => tx`update tasks set status = 'done' where id in (${future!.id}, ${f.due.id})`);
+  await f.write(tx => tx`update tasks set status = 'done' where id in (${future!.id}, ${f.due.id})`);
   await f.wake(run, String(future!.id)); await until(() => f.workflows.run(f.actor, f.org, run), r => r.state === 'succeeded');
   const after = await f.workflows.run(f.actor, f.org, run); assert.ok(after.steps.some(s => s.key === 'time.afterDue' && (s.output as any)?.status === 'done'));
   assert.equal(f.payloads.length, 3);
@@ -39,9 +39,9 @@ it('independent task waits do not block reminders ; owner routing, fresh status 
 });
 it('a real delayed queue wake survives a worker restart and rereads the task, without waiting for the timeout', async () => {
  const f = await chaseFixture(db); try {
-  await f.tx(tx => tx`update tasks set status = 'done'`);
+  await f.write(tx => tx`update tasks set status = 'done'`);
   const task = await new CommitmentsService(db.app).createTask(f.actor, f.org, { title: 'Timer task', due: '2099-01-01' });
-  await f.tx(tx => tx`update tasks set due = ${f.clock.today}::date + 5 where id = ${task.id}`);
+  await f.write(tx => tx`update tasks set due = ${f.clock.today}::date + 5 where id = ${task.id}`);
   const original = f.registry.handlers.get('time.beforeDue')!; assert.ok('transaction' in original);
   let reads = 0; f.registry.handlers.set('time.beforeDue', { kind: 'await', transaction: async (ctx, args) => {
    reads++; const value = await original.transaction(ctx, args) as any;
@@ -51,21 +51,21 @@ it('a real delayed queue wake survives a worker restart and rereads the task, wi
   await until(() => f.workflows.run(f.actor, f.org, run), r => r.state === 'waiting');
   const [step] = await f.tx(tx => tx`select deadline, output from workflow_run_steps where run_id = ${run} and key = 'time.beforeDue'`);
   assert.ok(step!.deadline.getTime() - new Date(step!.output.wakeAt).getTime() > 80 * 86400000);
-  await f.engine.close(); await f.tx(tx => tx`update tasks set status = 'cancelled' where id = ${task.id}`); await f.engine.open();
+  await f.engine.close(); await f.write(tx => tx`update tasks set status = 'cancelled' where id = ${task.id}`); await f.engine.open();
   await until(() => f.workflows.run(f.actor, f.org, run), r => r.state === 'succeeded'); assert.ok(reads >= 2); assert.equal(f.payloads.length, 0);
  } finally { await f.engine.close(); }
 });
 it('changed dates reschedule waits; completed/missing tasks are released; organisation time handles DST', async () => {
  const f = await chaseFixture(db); try {
   await f.tx(tx => tx`update organisations set timezone = 'Australia/Sydney' where id = ${f.org}`);
-  await f.tx(tx => tx`update tasks set due = '2026-10-06' where id = ${f.due.id}`);
+  await f.write(tx => tx`update tasks set due = '2026-10-06' where id = ${f.due.id}`);
   const before = await f.tx(tx => taskAtTime(tx, f.org, f.due.id, 'before', 2, new Date('2026-10-03T12:00:00Z')));
   assert.equal(before.today, '2026-10-03'); assert.equal(before.ready, false); assert.equal(before.wakeAt!.toISOString(), '2026-10-03T20:00:00.000Z');
   const dueDay = await f.tx(tx => taskAtTime(tx, f.org, f.due.id, 'after', 0, new Date('2026-10-06T12:00:00Z'))); assert.equal(dueDay.ready, false);
   const overdue = await f.tx(tx => taskAtTime(tx, f.org, f.due.id, 'after', 0, new Date('2026-10-06T14:00:00Z'))); assert.equal(overdue.today, '2026-10-07'); assert.equal(overdue.ready, true);
-  await f.tx(tx => tx`update tasks set due = '2026-10-10' where id = ${f.due.id}`);
+  await f.write(tx => tx`update tasks set due = '2026-10-10' where id = ${f.due.id}`);
   const moved = await f.tx(tx => taskAtTime(tx, f.org, f.due.id, 'before', 2, new Date('2026-10-03T12:00:00Z'))); assert.equal(moved.wakeAt!.toISOString(), '2026-10-07T20:00:00.000Z');
-  await f.tx(tx => tx`delete from tasks where id = ${f.due.id}`); const gone = await f.tx(tx => taskAtTime(tx, f.org, f.due.id, 'after', 0, new Date())); assert.equal(gone.ready, true); assert.equal(gone.active, false);
+  await f.write(tx => tx`delete from tasks where id = ${f.due.id}`); const gone = await f.tx(tx => taskAtTime(tx, f.org, f.due.id, 'after', 0, new Date())); assert.equal(gone.ready, true); assert.equal(gone.active, false);
  } finally { await f.engine.close(); }
 });
 
@@ -75,7 +75,7 @@ it('missing recipients pause and resume without Google, Xero or inference', asyn
   const run = await f.start(); const paused = await until(() => f.workflows.run(f.actor, f.org, run), r => r.state === 'paused');
   assert.match(paused.reason!, /Notifications/);
   await f.push.subscribe(f.actor, f.org, { endpoint: 'https://push.example.test/owner', keys: { p256dh: 'fixture', auth: 'fixture' } });
-  await f.tx(tx => tx`update tasks set status = 'done'`);
+  await f.write(tx => tx`update tasks set status = 'done'`);
   await f.workflows.control(f.actor, f.org, run, 'resume');
   await until(() => f.workflows.run(f.actor, f.org, run), r => r.state === 'succeeded');
   assert.equal((await f.tx(tx => tx`select * from connections`)).length, 0);

@@ -127,7 +127,14 @@ it('partial pages remain replayable, do not advance the resource cursor, and mar
  contactPages = [Array.from({ length: 100 }, (_, i) => contact(`partial-${i}`)), [contact('final')]]; failPage = 'Contacts:2';
  await assert.rejects(sync.run(org), { code: 'xero_sync_failed' }); const [after] = await db.owner`select cursor from sync_cursors where resource = 'xero.contacts'`; assert.equal(after!.cursor, prior!.cursor);
  assert.equal((await connections.status(actor(), org)).complete, false); assert.equal((await db.owner`select * from xero_contacts where provider_id like 'partial-%'`).length, 100);
+ const [failed] = await db.owner`select state, error from xero_sync_state`; assert.equal(failed!.state, 'failed'); assert.match(failed!.error, /did not finish/);
+ assert.match((await connections.status(actor(), org)).syncError!, /did not finish/);
  failPage = ''; await sync.run(org); assert.equal((await connections.status(actor(), org)).complete, true); assert.equal((await db.owner`select * from xero_contacts where provider_id like 'partial-%'`).length, 100);
+ // The state is xero_sync_state's (0047), not a reading of audit_events: removing those rows changes nothing a person sees.
+ const [synced] = await db.owner`select state, error, last_synced_at from xero_sync_state`; assert.deepEqual([synced!.state, synced!.error], ['synced', null]);
+ await db.owner`delete from audit_events where action like 'xero.%'`;
+ const status = await connections.status(actor(), org); assert.equal(status.complete, true); assert.equal(status.lastSyncedAt!.getTime(), synced!.lastSyncedAt.getTime());
+ assert.equal((await (await request('GET', `${root()}/summary`, member)).json() as { complete: boolean }).complete, true);
 });
 it('persisted 429 backoff survives a new runner; minute and daily call budgets gate requests', async () => {
  contactPages = [[]]; invoicePages = [[]]; paymentPages = [[]]; rate = true; await assert.rejects(sync.run(org), /rate limit/); rate = false;

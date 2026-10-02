@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import { withTenant } from '@captain/db';
-import { databaseUrl, freshDatabase, type Harness } from '@captain/db/test';
+import { databaseUrl, freshDatabase, withJournalledTenant, type Harness } from '@captain/db/test';
 import { createApp } from '../app.ts';
 import { AuthService } from '../auth/service.ts';
 import type { IdentityProvider } from '../auth/google.ts';
@@ -57,7 +57,12 @@ const cancel = (r: Pick<Reservation, 'id' | 'equipmentId'>, expectedRevision: nu
 	request('POST', `${reservations(r.equipmentId)}/${r.id}/cancel`, person, { expectedRevision });
 const range = (equipmentId: string, from: string, to: string, extra = '') =>
 	request('GET', `${reservations(equipmentId)}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${extra}`, member);
-const audits = (subjectId: string) => db.owner<{ action: string }[]>`select action from audit_events where subject_id = ${subjectId} order by created_at, id`;
+/** Each change set that touched a record, named as the audit rows it replaced (0047: a change set is a write's audit record). */
+const audits = (recordId: string) => db.owner<{ action: string }[]>`select case
+	when bool_or(c.operation = 'create' and c.item_id is null) then (case min(c.record_kind) when 'equipment' then 'equipment.created' else 'equipment.reservation_created' end)
+	when bool_or(c.field = 'status' and c.after = '"cancelled"'::jsonb) then 'equipment.reservation_cancelled'
+	else (case min(c.record_kind) when 'equipment' then 'equipment.updated' else 'equipment.reservation_updated' end) end as action
+	from record_changes c where c.record_id = ${recordId} group by c.change_set_id order by min(c.id::text)`;
 const stored = (id: string) => db.owner`select title, starts_at, ends_at, status, revision from equipment_reservations where id = ${id}`;
 const setMembership = (userId: string, status: 'active' | 'removed') =>
 	db.owner`update memberships set status = ${status} where organisation_id = ${org} and user_id = ${userId}`;
@@ -128,7 +133,8 @@ it('concurrent overlapping bookings: exactly one is confirmed and the refusal na
 	}
 	const rows = await db.owner`select count(*)::int as n from equipment_reservations where equipment_id = ${tank.id} and status = 'confirmed'`;
 	assert.equal(rows[0]!.n, 1);
-	assert.equal((await db.owner`select count(*)::int as n from audit_events where action = 'equipment.reservation_created' and subject_id in (select id::text from equipment_reservations where equipment_id = ${tank.id})`)[0]!.n, 1);
+	assert.equal((await db.owner`select count(*)::int as n from record_changes where record_kind = 'reservation' and operation = 'create' and item_id is null
+		and record_id in (select id from equipment_reservations where equipment_id = ${tank.id})`)[0]!.n, 1, 'one booking journalled');
 });
 
 it('setup, cleanup and maintenance occupy time; half-open ranges let back-to-back work touch', async () => {
@@ -153,7 +159,7 @@ it('the database refuses overlapping or inconsistent rows even when a caller byp
 	const tank = await makeEquipment('Bright tank');
 	const held = await json<Reservation>(book(tank.id, { startsAt: '2030-05-01T00:00:00Z', endsAt: '2030-05-01T04:00:00Z' }), 201);
 	const insert = (starts: string, ends: string, occupiedStarts: string, occupiedEnds: string, status = 'confirmed') =>
-		withTenant(db.app, { organisationId: org, userId: member.user.id }, tx => tx`insert into equipment_reservations
+		withJournalledTenant(db.app, { organisationId: org, userId: member.user.id }, tx => tx`insert into equipment_reservations
 			(id, organisation_id, equipment_id, title, kind, status, starts_at, ends_at, setup_minutes, cleanup_minutes, occupied_starts_at, occupied_ends_at, created_by)
 			values (${randomUUID()}, ${org}, ${tank.id}, 'Direct', 'booking', ${status}, ${starts}, ${ends}, 0, 0, ${occupiedStarts}, ${occupiedEnds}, ${member.user.id})`);
 	await assert.rejects(insert('2030-05-01T03:00:00Z', '2030-05-01T05:00:00Z', '2030-05-01T03:00:00Z', '2030-05-01T05:00:00Z'), (e: { code?: string }) => e.code === '23P01');
@@ -361,18 +367,18 @@ it('other tenants, unauthenticated people and removed members see and change not
 	// Their own tenant's path with our equipment id finds nothing either.
 	assert.equal((await request('GET', `${base(otherOrg)}/equipment/${tank.id}`, outsider)).status, 404);
 	assert.equal((await book(tank.id, { startsAt: '2031-05-03T00:00:00Z', endsAt: '2031-05-03T01:00:00Z' }, outsider, otherOrg)).status, 404);
-	const visible = await withTenant(db.app, { organisationId: org, userId: outsider.user.id }, tx => tx`select id from equipment_reservations union all select id from equipment`);
+	const visible = await withJournalledTenant(db.app, { organisationId: org, userId: outsider.user.id }, tx => tx`select id from equipment_reservations union all select id from equipment`);
 	assert.equal(visible.length, 0, 'row security hides another tenant from a non-member');
 	// A foreign-tenant link cannot be written directly: keys carry the tenant.
 	const theirs = await makeEquipment('Their tank', outsider, otherOrg);
-	await assert.rejects(withTenant(db.app, { organisationId: org, userId: member.user.id }, tx => tx`insert into equipment_reservations
+	await assert.rejects(withJournalledTenant(db.app, { organisationId: org, userId: member.user.id }, tx => tx`insert into equipment_reservations
 		(id, organisation_id, equipment_id, title, kind, status, starts_at, ends_at, setup_minutes, cleanup_minutes, occupied_starts_at, occupied_ends_at, created_by)
 		values (${randomUUID()}, ${org}, ${theirs.id}, 'Cross', 'booking', 'confirmed', '2031-06-01T00:00:00Z', '2031-06-01T01:00:00Z', 0, 0, '2031-06-01T00:00:00Z', '2031-06-01T01:00:00Z', ${member.user.id})`),
 		(e: { code?: string }) => e.code === '23503');
 	await setMembership(member.user.id, 'removed');
 	try {
 		assert.equal((await request('GET', `${base()}/equipment`, member)).status, 404);
-		const hidden = await withTenant(db.app, { organisationId: org, userId: member.user.id }, tx => tx`select id from equipment_reservations`);
+		const hidden = await withJournalledTenant(db.app, { organisationId: org, userId: member.user.id }, tx => tx`select id from equipment_reservations`);
 		assert.equal(hidden.length, 0, 'a removed member reads nothing directly');
 	} finally { await setMembership(member.user.id, 'active'); }
 	assert.equal((await stored(booking.id))[0]!.status, 'confirmed');
@@ -392,17 +398,18 @@ it('archiving and booking the same resource at once never leave a future booking
 	}
 });
 
-it('a booking and its audit event commit together or not at all', async () => {
+it('a booking and its journal (its audit record, 0047) commit together or not at all', async () => {
 	const tank = await makeEquipment('Fermenter 12');
 	await db.owner.unsafe(`create function fail_equipment_audit() returns trigger language plpgsql as $$ begin
-		if new.action like 'equipment.reservation_%' then raise exception 'audit refused'; end if; return new; end $$;
-		create trigger fail_equipment_audit before insert on audit_events for each row execute function fail_equipment_audit()`);
+		if new.record_kind = 'reservation' then raise exception 'journal refused'; end if; return new; end $$;
+		create trigger fail_equipment_audit before insert on record_changes for each row execute function fail_equipment_audit()`);
 	const id = randomUUID();
 	try {
 		const failed = await request('POST', reservations(tank.id), member, { id, title: 'Unaudited', startsAt: '2031-07-01T00:00:00Z', endsAt: '2031-07-01T01:00:00Z' });
 		assert.equal(failed.status, 500);
-		assert.equal((await stored(id)).length, 0, 'no booking without its audit');
-	} finally { await db.owner.unsafe('drop trigger fail_equipment_audit on audit_events; drop function fail_equipment_audit()'); }
+		assert.equal((await stored(id)).length, 0, 'no booking without its journal');
+		assert.equal((await db.owner`select 1 from threads where reservation_id = ${id}`).length, 0, 'nor its thread or change line');
+	} finally { await db.owner.unsafe('drop trigger fail_equipment_audit on record_changes; drop function fail_equipment_audit()'); }
 	assert.equal((await request('POST', reservations(tank.id), member, { id, title: 'Unaudited', startsAt: '2031-07-01T00:00:00Z', endsAt: '2031-07-01T01:00:00Z' })).status, 201, 'the slot and id are still free');
 });
 
@@ -414,7 +421,7 @@ const rlsDenied = (e: { code?: string }) => e.code === '42501';
 it('row security refuses direct writes by outsiders, removed members and forged creators on both tables', async () => {
 	const tank = await makeEquipment('Fermenter 13');
 	const booking = await json<Reservation>(book(tank.id, { startsAt: '2031-09-01T00:00:00Z', endsAt: '2031-09-01T01:00:00Z' }), 201);
-	const as = (userId: string) => <T>(work: (tx: Parameters<Parameters<typeof withTenant>[2]>[0]) => Promise<T>) => withTenant(db.app, { organisationId: org, userId }, work);
+	const as = (userId: string) => <T>(work: (tx: Parameters<Parameters<typeof withTenant>[2]>[0]) => Promise<T>) => withJournalledTenant(db.app, { organisationId: org, userId }, work);
 	await assert.rejects(as(outsider.user.id)(tx => tx`insert into equipment (organisation_id, name) values (${org}, 'Outsider tank')`), rlsDenied);
 	await assert.rejects(as(outsider.user.id)(tx => directInsert(tx, tank.id, outsider.user.id, '2031-09-02T00:00:00Z', '2031-09-02T01:00:00Z')), (e: { code?: string }) => ['42501', '23503'].includes(e.code!));
 	assert.equal((await as(outsider.user.id)(tx => tx`update equipment set name = 'Taken' where id = ${tank.id}`)).count, 0);
@@ -434,7 +441,7 @@ it('row security refuses direct writes by outsiders, removed members and forged 
 
 it('two direct transactions inserting overlapping occupancy at once: the constraint lets exactly one commit', async () => {
 	const tank = await makeEquipment('Fermenter 14');
-	const attempt = (starts: string, ends: string) => withTenant(db.app, { organisationId: org, userId: member.user.id }, async tx => {
+	const attempt = (starts: string, ends: string) => withJournalledTenant(db.app, { organisationId: org, userId: member.user.id }, async tx => {
 		await directInsert(tx, tank.id, member.user.id, starts, ends);
 		await tx`select pg_sleep(0.3)`; // hold the uncommitted row while the other transaction arrives
 	});
@@ -452,7 +459,7 @@ it('two direct transactions inserting overlapping occupancy at once: the constra
 	assert.equal((await db.owner`select count(*)::int as n from equipment_reservations where equipment_id = ${tank.id}`)[0]!.n, 1);
 });
 
-it('the same client id sent twice at once creates one booking and one audit event', async () => {
+it('the same client id sent twice at once creates one booking and one change set', async () => {
 	const tank = await makeEquipment('Fermenter 15');
 	const body = { id: randomUUID(), title: 'Double tap', startsAt: '2031-11-01T00:00:00Z', endsAt: '2031-11-01T01:00:00Z' };
 	const results = await Promise.all([request('POST', reservations(tank.id), member, body), request('POST', reservations(tank.id), member, body)]);
@@ -486,7 +493,9 @@ it('a single reservation reads back, cancelled or not, only through its own equi
 	const other = await makeEquipment('Fermenter 18');
 	const booking = await json<Reservation>(book(tank.id, { startsAt: '2032-02-01T00:00:00Z', endsAt: '2032-02-01T01:00:00Z' }), 201);
 	const path = `${reservations(tank.id)}/${booking.id}`;
-	assert.deepEqual(await json<Reservation>(request('GET', path, member)), booking);
+	const { changeSetId, ...stored } = booking as Reservation & { changeSetId?: string };
+	assert.ok(changeSetId, 'a write answers with its change set; a read has none');
+	assert.deepEqual(await json<Reservation>(request('GET', path, member)), stored);
 	const cancelled = await json<Reservation>(cancel(booking, 1));
 	const read = await json<Reservation>(request('GET', path, owner));
 	assert.equal(read.status, 'cancelled'); assert.equal(read.revision, cancelled.revision, 'a client can reconcile an uncertain cancel');
@@ -533,8 +542,8 @@ it("a tag's schedule lists only its confirmed occupancy across all equipment, in
 	const bySchedule = new Map(full.reservations.map(r => [r.id, r]));
 	assert.deepEqual([bySchedule.get(setupOnly.id)!.equipmentName, bySchedule.get(setupOnly.id)!.equipmentArchivedAt], ['Schedule tank', archivedTank.archivedAt]);
 	assert.deepEqual([bySchedule.get(cleanupOnly.id)!.equipmentName, bySchedule.get(cleanupOnly.id)!.equipmentArchivedAt], ['Schedule kettle', null]);
-	assert.deepEqual({ ...bySchedule.get(cleanupOnly.id)!, equipmentName: undefined, equipmentArchivedAt: undefined },
-		{ ...cleanupOnly, equipmentName: undefined, equipmentArchivedAt: undefined }, 'rows are the stored reservation plus its equipment');
+	assert.deepEqual({ ...bySchedule.get(cleanupOnly.id)!, changeSetId: undefined, equipmentName: undefined, equipmentArchivedAt: undefined },
+		{ ...cleanupOnly, changeSetId: undefined, equipmentName: undefined, equipmentArchivedAt: undefined }, 'rows are the stored reservation plus its equipment');
 	assert.deepEqual((await json<ProjectRange>(projectRange(elsewhere, span(at('10:00'), at('14:00'))))).reservations.map(r => r.id), [theirs.id]);
 
 	// Pages are bounded, deterministic and join back to the full list.

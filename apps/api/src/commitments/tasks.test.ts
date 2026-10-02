@@ -18,8 +18,8 @@ it("steps are a task's checklist: one level deep, part of its thread, and they f
 		assert.equal(step1.parentId, art.id); assert.equal(step2.parentId, art.id);
 		assert.equal((await f.tx(sql => sql`select 1 from threads where task_id in ${sql([step1.id, step2.id])}`)).length, 0, 'a step has no thread of its own');
 		await assert.rejects(c.createTask(f.actor, f.org, { title: 'Too deep', parentId: step1.id, expectedParentRevision: await rev('tasks', step1.id) }), { code: 'step_depth' });
-		await assert.rejects(f.tx(sql => sql`update tasks set parent_id = ${step1.id} where id = ${art.id}`), /step/, 'the trigger refuses a second level either way round');
-		await assert.rejects(f.tx(sql => sql`update tasks set series_id = gen_random_uuid(), period_start = current_date, period_end = current_date where id = ${step1.id}`), /tasks_step_has_no_series|violates/);
+		await assert.rejects(f.write(sql => sql`update tasks set parent_id = ${step1.id} where id = ${art.id}`), /step/, 'the trigger refuses a second level either way round');
+		await assert.rejects(f.write(sql => sql`update tasks set series_id = gen_random_uuid(), period_start = current_date, period_end = current_date where id = ${step1.id}`), /tasks_step_has_no_series|violates/);
 		// The morning brief's snapshot lists tasks, not their steps; accepting a suggested task accepts its steps.
 		const book = await c.createTask(f.actor, f.org, { title: 'Book the line', status: 'suggested' });
 		const call = await c.createTask(f.actor, f.org, { title: 'Call Sam', parentId: book.id, expectedParentRevision: await rev('tasks', book.id), status: 'suggested' });

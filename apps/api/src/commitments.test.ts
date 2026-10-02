@@ -62,8 +62,17 @@ it('a task stands alone with its own thread, is completed with who and when, and
 	assert.equal(done.status, 'done'); assert.equal(done.completedBy, owner.user.id); assert.ok(done.completedAt); assert.equal(done.ownerName, 'Olive Owner'); assert.equal(done.revision, 2);
 	const reopened = await body<Task>(await json('PATCH', `/v1/organisations/${orgId}/tasks/${task.id}`, owner.token, { expectedRevision: 2, status: 'open', due: null }), 200);
 	assert.equal(reopened.completedBy, null); assert.equal(reopened.completedAt, null); assert.equal(reopened.due, null);
-	const actions = (await db.owner`select action from audit_events where organisation_id = ${orgId} and subject_id = ${task.id} order by created_at`).map((row) => row.action);
-	assert.deepEqual(actions, ['task.created', 'task.completed', 'task.updated']);
+	// The journal is the audit record (0047): three change sets by the owner, their typed changes, three change lines.
+	const sets = await db.owner<{ actorId: string; actorKind: string; causeKind: string; changes: string[] }[]>`select s.actor_id, s.actor_kind, s.cause_kind,
+		array_agg(c.operation || coalesce(':' || c.field, '') order by c.field nulls first) as changes
+		from change_sets s join record_changes c on c.change_set_id = s.id where c.record_kind = 'task' and c.record_id = ${task.id} group by s.id order by s.id`;
+	assert.deepEqual(sets.map((x) => [x.actorId, x.actorKind, x.causeKind]), Array(3).fill([owner.user.id, 'person', 'request']));
+	assert.deepEqual(sets.map((x) => x.changes), [['create'], ['update:completed_at', 'update:completed_by', 'update:owner_id', 'update:status'], ['update:completed_at', 'update:completed_by', 'update:due', 'update:status']]);
+	const [due] = await db.owner<{ before: unknown; after: unknown }[]>`select before, after from record_changes where record_id = ${task.id} and field = 'due'`;
+	assert.deepEqual(due, { before: '2026-10-01', after: null }, 'typed before and after');
+	assert.deepEqual((await db.owner`select m.kind from thread_messages m join threads t on t.id = m.thread_id where t.task_id = ${task.id} order by m.seq`).map((m) => m.kind),
+		['change', 'change', 'change'], 'one change line per change set in the task’s thread');
+	assert.equal((await db.owner`select 1 from audit_events where subject_id = ${task.id}`).length, 0, 'no business audit row: the change set is the record');
 	assert.equal((await json('POST', `/v1/organisations/${orgId}/tasks`, owner.token, { title: '   ' })).status, 400);
 	assert.equal((await json('POST', `/v1/organisations/${orgId}/tasks`, owner.token, { title: 'x', due: 'next week' })).status, 400);
 	assert.equal((await json('PATCH', `/v1/organisations/${orgId}/tasks/${task.id}`, owner.token, { expectedRevision: 3, ownerId: '00000000-0000-7000-8000-000000000000' })).status, 400, 'owner must be a member');
@@ -135,13 +144,17 @@ it('a series carries tags, and each occurrence receives them on its thread in th
 	assert.deepEqual((await body<Detail>(await detail(occurrence!.id), 200)).tags.items.map((t) => t.id), [tag.id], 'the occurrence’s thread carries the series’ tags');
 	const thread = (await db.owner`select id from threads where task_id = ${occurrence!.id}`)[0]!.id;
 	assert.deepEqual((await db.owner`select action from chat_audit_events where thread_id = ${thread}`).map((r) => r.action), ['chat.tag_added'], 'a person’s thread write');
-	// The routine (no person) does the same and records the tag ids on the occurrence's own audit row.
+	// The routine (no person) does the same, under its own change set: the system, caused by the routine.
 	const routine = new SeriesRoutine(db.app, commitments);
 	assert.ok(await routine.run(orgId, '2099-04-15') >= 1);
 	const later = (await occurrencesOf(series.id)).find((t) => t.id !== occurrence!.id)!;
 	assert.deepEqual((await body<Detail>(await detail(later.id), 200)).tags.items.map((t) => t.id), [tag.id]);
-	const [materialised] = await db.owner`select detail from audit_events where subject_id = ${later.id} and action = 'task.materialised'`;
-	assert.deepEqual(materialised!.detail.tagIds, [tag.id]);
+	const [materialised] = await db.owner<{ actorId: string | null; actorKind: string; causeKind: string; causeId: string; changes: string[] }[]>`select s.actor_id, s.actor_kind,
+		s.cause_kind, s.cause_id, array_agg(c.operation || coalesce(':' || c.item_id, '') order by c.id) as changes
+		from change_sets s join record_changes c on c.change_set_id = s.id where c.record_id = ${later.id} group by s.id`;
+	assert.deepEqual(materialised, { actorId: null, actorKind: 'system', causeKind: 'routine', causeId: 'series.materialise', changes: ['create', `attach:${tag.id}`] });
+	assert.equal((await db.owner`select author_id from thread_messages m join threads t on t.id = m.thread_id where t.task_id = ${later.id} and m.kind = 'change'`)[0]!.authorId, null,
+		'the system’s change line has no author');
 	// Editing the series' tags changes future occurrences only.
 	const other = await body<{ id: string }>(await json('POST', `/v1/organisations/${orgId}/tags`, owner.token, { name: 'Tax' }), 201);
 	const edited = await body<Series>(await json('PATCH', `/v1/organisations/${orgId}/series/${series.id}`, owner.token, { expectedRevision: series.revision, tagIds: [other.id] }), 200);

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { z } from 'zod';
+import { changeSetId, personChangeSet } from '../changes.ts';
 import { HttpError, badRequest, forbidden, notFound } from '../errors.ts';
 import { canManage, roleOf, type Actor } from '../tenant.ts';
 import { lockMemberships, type LockedMembership, type MembershipLock } from './locks.ts';
@@ -39,6 +40,9 @@ export const renameThread = z.object({ expectedRevision: revision, title }).stri
 export const addParticipants = z.object({ expectedRevision: revision, userIds: z.array(uuid).min(1).max(20) }).strict();
 export const revisionBody = z.object({ expectedRevision: revision }).strict();
 export const revisionQuery = z.object({ expectedRevision: queryRevision }).strict();
+/** A tag write is journalled (0047), so it also takes an optional change set id (versions contract §5). */
+export const tagBody = z.object({ expectedRevision: revision, changeSetId: changeSetId.optional() }).strict();
+export const tagQuery = z.object({ expectedRevision: queryRevision, changeSetId: changeSetId.optional() }).strict();
 export const sendMessage = z.object({ id: uuid, body: z.string() }).strict();
 export const filters = ['all', 'needs_you', 'tasks', 'bookings', 'stock', 'records', 'files', 'people'] as const;
 export type Filter = typeof filters[number];
@@ -57,9 +61,21 @@ export type ThreadKind = 'record' | 'topic' | 'private';
 export type RecordRef = { kind: RecordKind; id: string };
 export type TagChip = { id: string; name: string };
 /** A message as the API returns it. A tombstone keeps its identity and order with `body: null`. `authorName` is null
- *  only when the author attribution was deleted ("Former member"). */
+ *  only when the author attribution was deleted ("Former member").
+ *
+ *  A change line (`kind: 'change'`, versions contract §3) has no body; its author is the change set's actor (null for
+ *  the system), and it carries `changeSetId` and `change`: who acted and why, and that change set's changes to this
+ *  thread's record, which a client words in code. A plain message carries neither field. */
 export type Message = { id: string; threadId: string; kind: 'message' | 'change' | 'approval'; seq: number; changeSeq: number; authorId: string | null; authorName: string | null;
- body: string | null; createdAt: Date; editedAt: Date | null; deletedAt: Date | null; deletedBy: string | null; revision: number };
+ body: string | null; createdAt: Date; editedAt: Date | null; deletedAt: Date | null; deletedBy: string | null; revision: number;
+ changeSetId?: string; change?: ChangeLine };
+/** One change of a change line, with field names and full-row keys in the API's camelCase. */
+export type LineChange = { id: string; recordKind: string; recordId: string; operation: 'create' | 'update' | 'remove' | 'attach' | 'detach'; field: string | null;
+ itemKind: 'step' | 'evidence' | 'tag' | null; itemId: string | null; before: unknown; after: unknown };
+export type ChangeLine = { actorKind: 'person' | 'workflow' | 'system'; actorId: string | null; actorName: string | null; causeKind: string; createdAt: Date;
+ changes: LineChange[]; truncated: boolean };
+/** A change line lists at most this many of its changes (a large cascade says `truncated`; History has them all). */
+export const changeLineLimit = 50;
 /** A pin references its message and never copies the text. `unpinnedAt` is null while it is live. */
 export type Pin = { id: string; threadId: string; messageId: string; changeSeq: number; pinnedBy: string | null; pinnedAt: Date; unpinnedBy: string | null; unpinnedAt: Date | null };
 export type Change = { changeSeq: number; kind: 'message'; message: Message } | { changeSeq: number; kind: 'pin'; pin: Pin };
@@ -76,7 +92,7 @@ export type ThreadDetail = {
  thread: { id: string; kind: ThreadKind; title: string; revision: number; lastSeq: number; lastChange: number; readPosition: number; unread: number; starred: boolean; createdAt: Date };
  card: Card; tags: TagChip[]; participants?: Participant[]; pin: { id: string; messageId: string; pinnedBy: string | null; pinnedAt: Date } | null;
 };
-type MessageRow = Message & { sentBodySha256?: Buffer | null };
+type MessageRow = Omit<Message, 'changeSetId' | 'change'> & { sentBodySha256?: Buffer | null; changeSetId: string | null };
 type Locked = { id: string; kind: ThreadKind; title: string | null; revision: number; lastSeq: number; lastChange: number };
 
 const conflict = (code: string, message: string) => new HttpError(409, code, message);
@@ -90,6 +106,7 @@ const invalidBody = () => badRequest('invalid_body', 'A message is 1 to 4,000 ch
 const pinExists = () => conflict('pin_exists', 'This thread already has a pinned message. Unpin it first.');
 const deletedMessage = () => conflict('message_deleted', 'That message was deleted, so it cannot be pinned.');
 const notPrivate = () => badRequest('thread_not_private', 'Only a private thread has a list of people.');
+const changeLineFixed = () => conflict('change_line_immutable', 'A change line records what changed. It cannot be edited, deleted or pinned.');
 
 /** Unique violations map to a 409 only by exact constraint name (linked-chat §9.4); anything else stays an error. */
 const messageIdConstraints = new Set(['thread_messages_pkey', 'thread_messages_organisation_id_id_key']);
@@ -118,7 +135,7 @@ class MessageIdTaken extends Error {}
 
 /** Message reads join the author's name. `users` is a platform table outside row security, so a person who left keeps
  *  their name; only a deleted attribution (null `author_id`) has none. */
-const messageColumns = 'm.id, m.thread_id, m.kind, m.seq, m.change_seq, m.author_id, u.name as author_name, m.body, m.created_at, m.edited_at, m.deleted_at, m.deleted_by, m.revision';
+const messageColumns = 'm.id, m.thread_id, m.kind, m.seq, m.change_seq, m.author_id, u.name as author_name, m.body, m.created_at, m.edited_at, m.deleted_at, m.deleted_by, m.revision, m.change_set_id';
 const messageSource = 'thread_messages m left join users u on u.id = m.author_id';
 const pinColumns = 'id, thread_id, message_id, change_seq, pinned_by, pinned_at, unpinned_by, unpinned_at';
 
@@ -139,9 +156,40 @@ const sha256 = (text: string) => createHash('sha256').update(text, 'utf8').diges
 export function createFingerprint(input: { title: string; participantIds: string[]; firstMessageId: string | null }): Buffer {
  return sha256(JSON.stringify({ title: input.title, participantIds: [...input.participantIds].sort(), firstMessageId: input.firstMessageId }));
 }
-function publicMessage(row: MessageRow): Message {
- return { id: row.id, threadId: row.threadId, kind: row.kind, seq: row.seq, changeSeq: row.changeSeq, authorId: row.authorId, authorName: row.authorName, body: row.body,
+function publicMessage(row: MessageRow, lines: Map<string, ChangeLine> = new Map()): Message {
+ const message: Message = { id: row.id, threadId: row.threadId, kind: row.kind, seq: row.seq, changeSeq: row.changeSeq, authorId: row.authorId, authorName: row.authorName, body: row.body,
   createdAt: row.createdAt, editedAt: row.editedAt, deletedAt: row.deletedAt, deletedBy: row.deletedBy, revision: row.revision };
+ if (row.kind === 'change' && row.changeSetId) {
+  message.changeSetId = row.changeSetId;
+  message.change = lines.get(row.changeSetId) ?? { actorKind: 'system', actorId: null, actorName: null, causeKind: 'request', createdAt: row.createdAt, changes: [], truncated: false };
+ }
+ return message;
+}
+const camel = (name: string) => name.replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase());
+
+/** The change lines' change sets and their changes to this thread's record, read as the caller (row security applies:
+ *  a line is in a thread the caller can see, and its changes are that thread's record's). */
+async function changeLines(tx: TransactionSql, threadId: string, rows: MessageRow[]): Promise<Map<string, ChangeLine>> {
+ const ids = [...new Set(rows.filter(row => row.kind === 'change' && row.changeSetId).map(row => row.changeSetId!))];
+ const lines = new Map<string, ChangeLine>();
+ if (!ids.length) return lines;
+ const [thread] = await tx<{ kind: ThreadKind; taskId: string | null; reservationId: string | null; stockItemId: string | null }[]>`select kind, task_id, reservation_id, stock_item_id
+  from threads where id = ${threadId}`;
+ if (!thread) return lines;
+ const record = thread.taskId ? ['task', thread.taskId] : thread.reservationId ? ['reservation', thread.reservationId]
+  : thread.stockItemId ? ['stock_item', thread.stockItemId] : ['thread', threadId];
+ const sets = await tx<{ id: string; actorKind: ChangeLine['actorKind']; actorId: string | null; actorName: string | null; causeKind: string; createdAt: Date }[]>`select c.id, c.actor_kind,
+   c.actor_id, u.name as actor_name, c.cause_kind, c.created_at from change_sets c left join users u on u.id = c.actor_id where c.id in ${tx(ids)}`;
+ const changes = await tx<(LineChange & { changeSetId: string; n: number })[]>`select * from (select id, change_set_id, record_kind, record_id, operation, field, item_kind, item_id,
+   before, after, row_number() over (partition by change_set_id order by id) as n from record_changes
+   where change_set_id in ${tx(ids)} and record_kind = ${record[0]!} and record_id = ${record[1]!}) c where n <= ${changeLineLimit + 1} order by change_set_id, id`;
+ for (const set of sets) {
+  const mine = changes.filter(change => change.changeSetId === set.id);
+  lines.set(set.id, { actorKind: set.actorKind, actorId: set.actorId, actorName: set.actorName, causeKind: set.causeKind, createdAt: set.createdAt,
+   changes: mine.slice(0, changeLineLimit).map(({ changeSetId: _, n: __, field, ...change }) => ({ ...change, field: field === null ? null : camel(field) })),
+   truncated: mine.length > changeLineLimit });
+ }
+ return lines;
 }
 
 /** The list cursor's activity key, exactly as the list query writes it: UTC, microseconds, one fixed shape. Anything
@@ -364,7 +412,7 @@ export class ThreadsService {
    const latest = ids.length ? await tx<{ threadId: string; authorName: string | null; excerpt: string }[]>`select distinct on (m.thread_id) m.thread_id, u.name as author_name,
      left(m.body, ${excerptLength}) as excerpt
     from thread_messages m left join users u on u.id = m.author_id
-    where m.thread_id in ${tx(ids)} and m.deleted_at is null order by m.thread_id, m.seq desc` : [];
+    where m.thread_id in ${tx(ids)} and m.kind = 'message' and m.deleted_at is null order by m.thread_id, m.seq desc` : [];
    const lastMessage = new Map(latest.map(({ threadId, ...message }) => [threadId, message]));
    const groups = await tx<(Omit<Group, 'owner'> & { ownerId: string | null; ownerName: string | null })[]>`with f as (${filtered(tx, organisationId, me, query.filter)})
     select * from (
@@ -498,15 +546,18 @@ export class ThreadsService {
 
  /** Adds or removes one tag on any thread (§5), with the thread's `expectedRevision`. Any member may tag a record or
   *  topic thread; any participant a private one. Archived tags stay attached but are not newly added. */
- setTag(actor: Actor, organisationId: string, threadId: string, tagId: string, attached: boolean, raw: unknown): Promise<ThreadDetail> {
-  const { expectedRevision } = (attached ? revisionBody : revisionQuery).parse(raw);
+ setTag(actor: Actor, organisationId: string, threadId: string, tagId: string, attached: boolean, raw: unknown): Promise<ThreadDetail & { changeSetId: string }> {
+  const { expectedRevision, changeSetId: wanted } = (attached ? tagBody : tagQuery).parse(raw);
   return this.write(actor, organisationId, async tx => {
    await this.lockPeople(tx, organisationId, actor);
+   // A tag on a thread is journalled as an item of the thread's record (or of the thread itself): 0047.
+   const changeSet = await personChangeSet(tx, actor, attached ? 'thread.tag_attach' : 'thread.tag_detach', { threadId, tagId, expectedRevision }, wanted);
+   if (changeSet.matched) return { ...await this.detailIn(tx, organisationId, threadId, actor.userId.toLowerCase()), changeSetId: changeSet.id };
    const thread = await this.lockThread(tx, organisationId, threadId);
    if (thread.revision !== expectedRevision) throw staleThread();
    await requireTags(tx, [tagId], !attached);
    await writeThreadTags(tx, organisationId, actor, threadId, [tagId], { mode: attached ? 'add' : 'remove', bump: true });
-   return this.detailIn(tx, organisationId, threadId, actor.userId.toLowerCase());
+   return { ...await this.detailIn(tx, organisationId, threadId, actor.userId.toLowerCase()), changeSetId: changeSet.id };
   });
  }
 
@@ -581,6 +632,7 @@ export class ThreadsService {
    await this.lockThread(tx, organisationId, threadId);
    const message = await this.readMessage(tx, organisationId, messageId, { threadId, lock: true });
    if (!message || message.deletedAt) throw notFound();
+   if (message.kind !== 'message') throw changeLineFixed();
    if (message.revision !== expectedRevision) throw staleMessage();
    if (message.authorId !== me && !canManage(membership.role)) throw forbidden('only the author, or an owner or admin, can delete a message');
    const tombstoned = await this.nextChange(tx, threadId);
@@ -611,6 +663,7 @@ export class ThreadsService {
    await this.lockThread(tx, organisationId, threadId);
    const message = await this.readMessage(tx, organisationId, messageId, { threadId, lock: true });
    if (!message || message.deletedAt) throw notFound();
+   if (message.kind !== 'message') throw changeLineFixed();
    if (message.authorId !== me) throw forbidden('only the author can edit a message');
    if (message.revision !== input.expectedRevision) throw staleMessage();
    if (message.body === body) return publicMessage(message);
@@ -631,9 +684,10 @@ export class ThreadsService {
    const { me } = await this.lockPeople(tx, organisationId, actor);
    await this.lockThread(tx, organisationId, threadId);
    if (!canManage(me.role)) throw forbidden('only an owner or admin can pin a message');
-   const [message] = await tx<{ deletedAt: Date | null }[]>`select deleted_at from thread_messages
+   const [message] = await tx<{ deletedAt: Date | null; kind: string }[]>`select deleted_at, kind from thread_messages
     where organisation_id = ${organisationId} and id = ${messageId} and thread_id = ${threadId} for share`;
    if (!message) throw notFound();
+   if (message.kind !== 'message') throw changeLineFixed();
    if (message.deletedAt) throw deletedMessage();
    const [live] = await tx`select 1 from thread_pins where thread_id = ${threadId} and unpinned_at is null`;
    if (live) throw pinExists();
@@ -725,7 +779,8 @@ export class ThreadsService {
     const found = await tx<MessageRow[]>`select ${columns} from ${source} where m.thread_id = ${threadId} and m.seq < ${query.before!} order by m.seq desc limit ${limit + 1}`;
     hasMore = found.length > limit; rows = found.slice(0, limit).reverse();
    }
-   return { thread, messages: rows.map(publicMessage), hasMore };
+   const lines = await changeLines(tx, threadId, rows);
+   return { thread, messages: rows.map(row => publicMessage(row, lines)), hasMore };
   });
  }
 
@@ -743,8 +798,9 @@ export class ThreadsService {
     and m.change_seq > ${query.after} and m.change_seq <= ${thread.lastChange} order by m.change_seq limit ${query.limit + 1}`;
    const pins = await tx<Pin[]>`select ${tx.unsafe(pinColumns)} from thread_pins where thread_id = ${threadId}
     and change_seq > ${query.after} and change_seq <= ${thread.lastChange} order by change_seq limit ${query.limit + 1}`;
+   const lines = await changeLines(tx, threadId, messages);
    const found: Change[] = [
-    ...messages.map(row => ({ changeSeq: row.changeSeq, kind: 'message' as const, message: publicMessage(row) })),
+    ...messages.map(row => ({ changeSeq: row.changeSeq, kind: 'message' as const, message: publicMessage(row, lines) })),
     ...pins.map(pin => ({ changeSeq: pin.changeSeq, kind: 'pin' as const, pin })),
    ].sort((a, b) => a.changeSeq - b.changeSeq).slice(0, query.limit + 1);
    const more = found.length > query.limit;

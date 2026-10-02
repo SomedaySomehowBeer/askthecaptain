@@ -12,6 +12,20 @@ export async function xeroRole(tx: TransactionSql, actor: Actor, org: string, ma
  const [row] = await tx`select role from memberships where organisation_id = ${org} and user_id = ${actor.userId} and status = 'active' for share`;
  if (!row) throw notFound(); if (manage && row.role === 'member') throw forbidden('Only owners and admins can manage Xero.');
 }
+export type SyncState = { state: 'started' | 'synced' | 'failed'; error: string | null; stateAt: Date; lastSyncedAt: Date | null };
+/** A connection's sync state (0047 moved it out of audit_events, which stays the connection's history). */
+export async function syncState(tx: TransactionSql, connectionId: string): Promise<SyncState | undefined> {
+ return (await tx<SyncState[]>`select state, error, state_at, last_synced_at from xero_sync_state where connection_id = ${connectionId}`)[0];
+}
+/** Records a sync event: `started` and `failed` carry what to tell the person; `synced` clears it and moves the last
+ *  completed sync; `connected` starts a fresh connection with no completed sync. */
+export async function recordSync(tx: TransactionSql, org: string, connectionId: string, event: 'connected' | 'started' | 'synced' | 'failed', error: string | null = null) {
+ const state = event === 'connected' ? 'started' : event;
+ await tx`insert into xero_sync_state (organisation_id, connection_id, state, error, state_at, last_synced_at)
+  values (${org}, ${connectionId}, ${state}, ${error}, now(), ${event === 'synced' ? tx`now()` : null})
+  on conflict (connection_id) do update set state = excluded.state, error = excluded.error, state_at = excluded.state_at,
+   last_synced_at = case when ${event} = 'synced' then excluded.state_at when ${event} = 'connected' then null else xero_sync_state.last_synced_at end`;
+}
 export class XeroConnections {
  readonly db: Sql; readonly client: XeroConnector | null; readonly master: Buffer | null; readonly appUrl: string;
  constructor(db: Sql, client: XeroConnector | null, master: Buffer | null, appUrl: string) { this.db = db; this.client = client; this.master = master; this.appUrl = appUrl; }
@@ -21,10 +35,9 @@ export class XeroConnections {
    await xeroRole(tx, actor, org);
    const [connection] = await tx`select id, provider_account_id, provider_account_name, status, error from connections where provider = 'xero' for share`;
    const [selection] = await tx`select id, payload from auth_requests where kind = 'xero_selection' and user_id = ${actor.userId} and payload->>'organisationId' = ${org} and consumed_at is null and expires_at > now() order by created_at desc limit 1`;
-   const [sync] = await tx`select action, detail, created_at from audit_events where subject_id = ${connection?.id ?? org} and action in ('xero.sync_started', 'xero.synced', 'xero.sync_failed') order by created_at desc, id desc limit 1`;
-   const [last] = await tx`select created_at from audit_events where subject_id = ${connection?.id ?? org} and action = 'xero.synced' and created_at >= coalesce((select max(created_at) from audit_events where subject_id = ${connection?.id ?? org} and action = 'xero.connected'), 'epoch'::timestamptz) order by created_at desc, id desc limit 1`;
+   const sync = connection ? await syncState(tx, connection.id) : undefined;
    return { available: this.available, connection: connection ?? null, selection: selection ? { id: selection.id as string, tenants: pending.parse(selection.payload).tenants } : null,
-    lastSyncedAt: last?.createdAt ?? null, complete: connection?.status === 'connected' && sync?.action === 'xero.synced', syncError: sync && sync.action !== 'xero.synced' ? String(sync.detail.error) : null };
+    lastSyncedAt: sync?.lastSyncedAt ?? null, complete: connection?.status === 'connected' && sync?.state === 'synced', syncError: sync && sync.state !== 'synced' ? String(sync.error) : null };
   });
  }
  async start(actor: Actor, org: string) {
@@ -79,6 +92,7 @@ export class XeroConnections {
    await tx`update auth_requests set consumed_at = now(), payload = '{}' where id = ${selectionId}`;
    await this.journal(tx, actor, org, 'xero.connected', row!.id);
    await this.journal(tx, undefined, org, 'xero.sync_started', row!.id, { error: 'Xero has not been synced yet. Choose Sync now.' });
+   await recordSync(tx, org, row!.id, 'connected', 'Xero has not been synced yet. Choose Sync now.');
   });
  }
  async accessToken(actor: Actor | undefined, org: string, id: string): Promise<string> {

@@ -44,13 +44,16 @@ it('null is unknown; exact counts compare strictly below reorder points, includi
  await service.count(actor(), org, item.id, { count: '999999999999999999.123456789' }); row = (await service.list(actor(), org)).items.find((r) => r.id === item.id)!; assert.equal(row.currentCount, '999999999999999999.123456789');
  const history = await db.owner`select * from stock_counts where item_id = ${item.id} order by counted_at desc, id desc`; assert.equal(history.length, 3); assert.equal(history[0]!.count, row.currentCount); assert.equal(history[0]!.countedAt.toISOString(), row.countedAt.toISOString());
  const [same] = await db.owner`select s.counted_at = c.counted_at as exact from stock_items s join stock_counts c on c.id = ${history[0]!.id} where s.id = ${item.id}`; assert.equal(same!.exact, true);
- const events = await db.owner`select * from audit_events where action = 'stock.counted' and subject_id = ${item.id}`; assert.equal(events.length, 3); assert.ok(events.every((e) => e.actorKind === 'person' && e.actorId === user));
+ const counts = await db.owner`select s.actor_kind, s.actor_id, c.after from record_changes c join change_sets s on s.id = c.change_set_id
+  where c.record_id = ${item.id} and c.field = 'current_count' order by c.id`;
+ assert.deepEqual(counts.map((c) => c.after), ['2.50', '0', '999999999999999999.123456789'], 'each count is journalled exactly, as a decimal string');
+ assert.ok(counts.every((c) => c.actorKind === 'person' && c.actorId === user));
 });
-it('a failed audit rolls back history and the current count together; concurrent counts serialize', async () => {
+it('a failed journal rolls back history and the current count together; concurrent counts serialize', async () => {
  const item = await add(); await service.count(actor(), org, item.id, { count: '1' });
- await db.owner`alter table audit_events add constraint stock_test_atomic check (action <> 'stock.counted') not valid`;
+ await db.owner`alter table record_changes add constraint stock_test_atomic check (after is distinct from '"99"'::jsonb) not valid`;
  try { await assert.rejects(service.count(actor(), org, item.id, { count: '99' }), { code: '23514' }); }
- finally { await db.owner`alter table audit_events drop constraint stock_test_atomic`; }
+ finally { await db.owner`alter table record_changes drop constraint stock_test_atomic`; }
  assert.equal((await db.owner`select * from stock_counts where item_id = ${item.id}`).length, 1);
  assert.equal((await db.owner`select current_count from stock_items where id = ${item.id}`)[0]!.currentCount, '1');
  await Promise.all([service.count(actor(), org, item.id, { count: '2' }), service.count(actor(), org, item.id, { count: '3' })]);
