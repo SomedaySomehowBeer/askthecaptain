@@ -6,7 +6,7 @@
     "scheme": "app.askthecaptain.dev",
     "platforms": ["ios", "android", "web"],
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "app.askthecaptain.dev",
       "supportsTablet": false

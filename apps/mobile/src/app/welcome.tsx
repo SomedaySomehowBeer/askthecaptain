@@ -1,9 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
-import { Platform, StyleSheet, Text } from 'react-native';
+import { Platform, Text } from 'react-native';
 import { useAccount, type Account } from '../account/AccountProvider.tsx';
 import { webCopy, webWelcomePage, welcomePage } from '../account/copy.ts';
 import { AccountPageFrame, Actions, Button, Lines, LinkButton, useWaitWake } from '../components/AccountPage.tsx';
-import { colors, type } from '../theme/tokens.ts';
+import { type } from '../theme/tokens.ts';
+import { themedStyles } from '../theme/theme.ts';
 
 /** Every state that is not signed in. On the web (docs/plans/expo-web-session-2026-09.md §B.2): one "Sign in with
  *  Google" link to the API's start, carrying the page the person first opened as `return_to`, and the sign-in error
@@ -18,6 +19,7 @@ export default function Welcome() {
 const firstPage = Platform.OS === 'web' && typeof window !== 'undefined' ? `${window.location.pathname}${window.location.search}` : null;
 
 function WebWelcome({ account }: { account: Account }) {
+	const styles = useStyles();
 	const params = useLocalSearchParams<{ error?: string | string[] }>();
 	const page = webWelcomePage(account.snapshot, { now: account.now(), error: params.error });
 	const web = account.web;
@@ -41,4 +43,4 @@ function NativeWelcome({ account }: { account: Account }) {
 	);
 }
 
-const styles = StyleSheet.create({ muted: { fontSize: type.rowDetail, lineHeight: 18, color: colors.muted, marginTop: 8 } });
+const useStyles = themedStyles((colors) => ({ muted: { fontSize: type.rowDetail, lineHeight: 18, color: colors.muted, marginTop: 8 } }));

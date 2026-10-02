@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import type { ConfigContext } from 'expo/config';
 import appJsonFile from '../app.json';
 import { harnessRouterRoot, nativeBuildSignal, selectConfig } from '../app.config.ts';
+import { dark, light } from './theme/tokens.ts';
 
 type Loaded = ConfigContext['config'];
 const appJson = appJsonFile as unknown as { expo: Loaded };
@@ -51,4 +52,27 @@ test('the harness refuses every native build signal it can see (best effort), an
 	for (const argv of [webHarnessExport, ['node', 'expo', 'export', '--platform=web'], ['node', 'expo', 'start', '--web'], ['node', 'expo', 'config', '--type', 'introspect']])
 		assert.equal(nativeBuildSignal({ easBuild: undefined, argv }), false, argv.join(' '));
 	assert.equal(nativeBuildSignal({ easBuild: '', argv: webHarnessExport }), false, 'an empty EAS_BUILD is not set');
+});
+
+test('appearance: the app follows the device scheme; the native splash and Android icon background stay the light brand page colour', () => {
+	const expo = appJson.expo;
+	assert.equal(expo.userInterfaceStyle, 'automatic');
+	// No dark splash or icon variant is configured (that needs the expo-splash-screen / expo-system-ui plugins, which the
+	// plan does not name); the brand surfaces are the light page token.
+	assert.equal((appJsonFile as { expo: { splash?: { backgroundColor?: string } } }).expo.splash?.backgroundColor, light.page);
+	assert.equal(expo.android?.adaptiveIcon?.backgroundColor, light.page);
+	assert.equal(expo.ios?.userInterfaceStyle, undefined, 'no per-platform override of the scheme');
+	assert.equal(expo.android?.userInterfaceStyle, undefined, 'no per-platform override of the scheme');
+});
+
+test('the web shell paints the scheme page colour before React: one theme-color per scheme and a dark media query; the manifest stays light', async () => {
+	const { readFile } = await import('node:fs/promises');
+	const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+	assert.match(html, /<meta name="color-scheme" content="light dark" \/>/);
+	assert.ok(html.includes(`<meta name="theme-color" media="(prefers-color-scheme: light)" content="${light.page}" />`));
+	assert.ok(html.includes(`<meta name="theme-color" media="(prefers-color-scheme: dark)" content="${dark.page}" />`));
+	assert.ok(html.includes(`html,body{height:100%;margin:0;background:${light.page}}`));
+	assert.ok(html.includes(`@media (prefers-color-scheme:dark){html,body{background:${dark.page}}}`));
+	const manifest = JSON.parse(await readFile(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8')) as Record<string, unknown>;
+	assert.equal(manifest.background_color, light.page); assert.equal(manifest.theme_color, light.page);
 });

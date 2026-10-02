@@ -1,13 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { useAccount } from '../../account/AccountProvider.tsx';
 import { invitationAcceptedText, invitationCopy, invitationRefusalText, isSignedIn, webCopy } from '../../account/copy.ts';
 import type { AcceptOutcome } from '../../account/web-calls.ts';
 import { AccountPageFrame, Button, LinkButton } from '../../components/AccountPage.tsx';
 import { Notice } from '../../components/Notice.tsx';
 import Welcome from '../welcome.tsx';
-import { colors, type } from '../../theme/tokens.ts';
+import { type } from '../../theme/tokens.ts';
+import { themedStyles } from '../../theme/theme.ts';
 
 /** Accepting an invitation link (docs/plans/expo-web-session-2026-09.md §B.2). The invitee arrives with a token; they
  *  sign in first (the API insists the signed-in address is the invited one; sign-in returns here), then accept with one
@@ -22,6 +23,7 @@ export default function InvitationPage() {
 }
 
 function AcceptInvitation() {
+	const styles = useStyles();
 	const params = useLocalSearchParams<{ token?: string | string[] }>();
 	const token = typeof params.token === 'string' && params.token.length > 0 ? params.token : null;
 	const account = useAccount();
@@ -68,8 +70,8 @@ function AcceptInvitation() {
 	return <AccountPageFrame heading={invitationCopy.heading}>{body}</AccountPageFrame>;
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((colors) => ({
 	stack: { gap: 12 },
 	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
 	muted: { fontSize: 14, lineHeight: 20, color: colors.muted }
-});
+}));

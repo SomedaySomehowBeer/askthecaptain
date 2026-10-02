@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useState, useSyncExternalStore } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { AccountProvider, useAccount } from '../../src/account/AccountProvider.tsx';
 import { RootStack } from '../../src/account/RootStack.tsx';
 import { createScriptedSource, revocationControls, scenarioFrom, transitions, type ScriptedSource } from '../scripted-source.ts';
@@ -31,7 +31,7 @@ export default function HarnessLayout() {
 	const [source] = useState<ScriptedSource>(harnessSource);
 	return (
 		<>
-			<StatusBar style="dark" />
+			<StatusBar style="auto" />
 			<AccountProvider source={source}>
 				<View style={styles.root}>
 					<View style={styles.app}><RootStack /></View>
@@ -43,6 +43,7 @@ export default function HarnessLayout() {
 }
 
 function HarnessPanel({ source }: { source: ScriptedSource }) {
+	const styles = useHarnessStyles();
 	// Subscribed to the account like any screen, so a render loop would show here as a climbing count.
 	useAccount();
 	renderCount += 1;
@@ -73,6 +74,7 @@ function HarnessPanel({ source }: { source: ScriptedSource }) {
  *  - `harness-revoke-{control}`: answers the pending request (see scripted-source.ts `revocationControls`). An answer
  *    after the person changed changes nothing, as in the runner. */
 function RevocationPanel({ source }: { source: ScriptedSource }) {
+	const styles = useHarnessStyles();
 	const sent = useSyncExternalStore(source.subscribeRevocations, source.revocations, source.revocations);
 	return (
 		<View style={styles.reads}>
@@ -97,6 +99,7 @@ function RevocationPanel({ source }: { source: ScriptedSource }) {
  *  - `harness-read-{control}`: resolves the **oldest** pending read (see read-controls.ts and equipment-fixtures.ts for each control's answer). A
  *    read whose scope changed before it is resolved answers `superseded`, as in the runner. */
 function ReadPanel({ source }: { source: ScriptedSource }) {
+	const styles = useHarnessStyles();
 	const reads = useSyncExternalStore(source.subscribeReads, source.reads, source.reads);
 	return (
 		<View style={styles.reads}>
@@ -123,3 +126,19 @@ const styles = StyleSheet.create({
 	control: { paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: '#999999' },
 	small: { fontSize: 10, color: '#333333' }
 });
+/** Test-only chrome, not app UI and not palette tokens: a neutral dark variant so a dark-scheme screenshot has no light band. */
+const darkStyles = StyleSheet.create({
+	panel: { backgroundColor: '#1c1c1c' },
+	control: { borderColor: '#666666' },
+	small: { color: '#cccccc' }
+});
+/** The harness styles for the device scheme (light: unchanged). */
+function useHarnessStyles() {
+	const dark = useColorScheme() === 'dark';
+	return {
+		...styles,
+		panel: [styles.panel, dark && darkStyles.panel],
+		control: [styles.control, dark && darkStyles.control],
+		small: [styles.small, dark && darkStyles.small]
+	};
+}

@@ -111,6 +111,8 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
      await require('./mobile-shell-passkeys-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-revocation-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
      await require('./mobile-shell-equipment-check.cjs')({ getPage: () => page, freshPage, scenario, shot, noOverflow, width });
+     // Dark and light colour schemes over the harness scenarios, at the reference frames' width.
+     if (width === 390) await require('./mobile-shell-dark-check.cjs')({ browser, base, shots, width });
     }
     expect(errors).toEqual([]); expect(outside).toEqual([]);
     console.log(`PASS ${width}px: cookie client, navigation, storage, outages, invitations, passkeys and sign-out; no overflow or page errors`);

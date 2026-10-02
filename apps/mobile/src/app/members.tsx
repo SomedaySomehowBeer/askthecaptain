@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Text, TextInput, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { isSignedIn, webCopy } from '../account/copy.ts';
 import { createMemberControls } from '../account/member-controls.ts';
@@ -8,10 +8,12 @@ import { managesMembers, memberChangeAllowed, type MemberScope, type MembersCall
 import type { Role } from '../account/me.ts';
 import { Button } from '../components/AccountPage.tsx';
 import { PlainScreen } from '../components/Screen.tsx';
-import { colors, space, type } from '../theme/tokens.ts';
+import { space, type } from '../theme/tokens.ts';
+import { themedStyles } from '../theme/theme.ts';
 import Welcome from './welcome.tsx';
 
 export default function Members() {
+ const styles = useStyles();
  const account = useAccount(), view = account.snapshot.account;
  const back = () => router.dismissTo('/settings');
  let content;
@@ -25,6 +27,7 @@ export default function Members() {
  return <PlainScreen title="Members" back={{ label: 'Settings', onPress: back }}>{content}</PlainScreen>;
 }
 function MembersPanel({ calls, scope, name, now }: { calls: MembersCalls; scope: MemberScope; name: string; now: () => number }) {
+ const styles = useStyles();
  const [controls] = useState(() => createMemberControls(calls, scope, now));
  const state = useSyncExternalStore(controls.subscribe, controls.snapshot, controls.snapshot);
  const [email, setEmail] = useState(''), [role, setRole] = useState<'admin' | 'member'>('member'), [copy, setCopy] = useState('');
@@ -76,9 +79,11 @@ function MembersPanel({ calls, scope, name, now }: { calls: MembersCalls; scope:
  </View>;
 }
 function RoleChoices({ label, roles, value, disabled, onChange }: { label: string; roles: readonly Role[]; value: Role; disabled: boolean; onChange(value: Role): void }) {
+ const styles = useStyles();
  return <View style={styles.stack} role="group" aria-label={label}><Text style={styles.body}>{label}: {value}</Text><View style={styles.row}>{roles.map(role => <Button key={role} label={role} disabled={disabled || role === value} onPress={() => onChange(role)} />)}</View></View>;
 }
 function MemberRow({ member, data, scope, disabled, change }: { member: Member; data: MembersData; scope: MemberScope; disabled: boolean; change: ReturnType<typeof createMemberControls>['change'] }) {
+ const styles = useStyles();
  const [role, setRole] = useState<Role>(member.role);
  const actor = data.members.find(row => row.userId === scope.userId);
  const canEdit = actor?.role === 'owner' || (actor?.role === 'admin' && member.role !== 'owner');
@@ -94,4 +99,4 @@ function MemberRow({ member, data, scope, disabled, change }: { member: Member; 
   </> : <Text style={styles.body}>Only an owner can change an owner.</Text>}
  </View>;
 }
-const styles = StyleSheet.create({ stack: { gap: 12 }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }, card: { gap: 10, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14 }, heading: { fontSize: 18, fontWeight: '600', color: colors.heading }, body: { fontSize: type.body, lineHeight: 21, color: colors.body }, input: { minHeight: space.minTarget, padding: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 8, fontSize: type.body, color: colors.body, backgroundColor: colors.card } });
+const useStyles = themedStyles((colors) => ({ stack: { gap: 12 }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }, card: { gap: 10, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14 }, heading: { fontSize: 18, fontWeight: '600', color: colors.heading }, body: { fontSize: type.body, lineHeight: 21, color: colors.body }, input: { minHeight: space.minTarget, padding: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 8, fontSize: type.body, color: colors.body, backgroundColor: colors.card } }));

@@ -1,7 +1,7 @@
 import { router, Stack, usePathname } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { linkableRoutes } from '../lib/links.ts';
-import { colors } from '../theme/tokens.ts';
+import { useTheme } from '../theme/theme.ts';
 import { useAccount } from './AccountProvider.tsx';
 import { isReady, isSignedIn } from './copy.ts';
 
@@ -17,6 +17,7 @@ import { isReady, isSignedIn } from './copy.ts';
  *    old scope survives.
  *  - A native sign-in destination (a verified `return_to`) is opened once, then reported used. */
 export function RootStack() {
+	const { colors } = useTheme();
 	const { snapshot, send } = useAccount();
 	const account = snapshot.account;
 	const pathname = usePathname();
