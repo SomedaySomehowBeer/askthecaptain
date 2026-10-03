@@ -360,6 +360,9 @@ module.exports = async ({ browser, production, base, shots, width, scheme = 'lig
   await expect(page.getByTestId(/^history-set-/).first()).toContainText('Changed the due date back from Tue 6 Oct to Thu 8 Oct');
   // The thread shows both undos as change lines through its feed.
   await page.getByRole('button', { name: 'Package summer lager', exact: true }).click(); await expect(id('thread-card')).toBeVisible();
+  // They follow the earlier line by Maya with no message between: one folded line until tapped (owner decision, 3 October 2026).
+  await expect(id(`change-run-${world.lines[taskThread].at(-3).id}`)).toContainText('Maya changed the due date back from Tue 6 Oct to Thu 8 Oct and 2 earlier changes');
+  await id(`change-run-${world.lines[taskThread].at(-3).id}`).click();
   await expect(id(`change-line-${world.lines[taskThread].at(-2).id}`)).toContainText('Maya changed the due date back from Thu 8 Oct to Tue 6 Oct and removed the tag Production');
   await expect(id(`change-line-${world.lines[taskThread].at(-1).id}`)).toContainText('Maya changed the due date back from Tue 6 Oct to Thu 8 Oct');
 

@@ -247,6 +247,94 @@ it('needs you: unread messages, or an open task or booking the caller owns; read
  assert.equal((await b.detail(b.other, theirsThread)).thread.readPosition, 0, 'a read position is personal');
 });
 
+it('unread counts a run of change lines as one, splits runs at messages, skips the caller’s own lines and the system’s creation lines, and agrees everywhere', async () => {
+ const b = await business('Change runs');
+ const revisionOf = async (task: string) => (await json<{ task: { revision: number } }>(request('GET', `${b.base}/tasks/${task}?limit=50`, b.owner))).task.revision;
+ const retitle = async (person: Person, task: string, title: string) =>
+  json(request('PATCH', `${b.base}/tasks/${task}`, person, { changeSetId: randomUUID(), expectedRevision: await revisionOf(task), title }));
+ const read = (person: Person, thread: string, seq: number) => json<{ readPosition: number; unread: number }>(request('POST', `${b.threads}/${thread}/read`, person, { seq }));
+ // Every surface answers the same number: the detail, the list row, and the read endpoint at the current position.
+ const counts = async (person: Person, thread: string) => {
+  const detail = (await b.detail(person, thread)).thread, row = (await b.list(person)).threads.find(t => t.id === thread)!;
+  const answered = await read(person, thread, Math.max(detail.readPosition, 1));
+  assert.deepEqual([row.unread, answered.unread], [detail.unread, detail.unread], 'the list row, the detail and the read answer agree');
+  return detail.unread;
+ };
+ const task = await b.task('Pack the lager'), thread = await b.threadOf('task_id', task);
+ assert.equal((await b.detail(b.member, thread)).thread.unread, 1, 'the owner’s creation line alone is one run');
+ await read(b.member, thread, 1);
+ // One message by another, then three consecutive change lines by others: 2.
+ await b.send(b.owner, thread, 'Pack it Friday');
+ await retitle(b.owner, task, 'Pack the summer lager');
+ await retitle(b.admin, task, 'Pack the summer lager, 24 cases');
+ await retitle(b.owner, task, 'Pack the summer lager, 30 cases');
+ assert.equal(await counts(b.member, thread), 2, 'a message and one run of three lines');
+ // A message by another splits the next lines into their own run: 2 + 1 message + 1 run = 4.
+ await b.send(b.admin, thread, 'Labels are in');
+ await retitle(b.owner, task, 'Pack 30 cases');
+ assert.equal(await counts(b.member, thread), 4, 'two runs split by a message, and two messages');
+ // The caller's own lines count 0, and their own message still ends a run.
+ await b.send(b.member, thread, 'On it');
+ await retitle(b.member, task, 'Pack 30 cases Friday');
+ await retitle(b.member, task, 'Pack 30 cases, Friday');
+ assert.equal(await counts(b.member, thread), 4, 'my own message and lines add nothing');
+ await retitle(b.owner, task, 'Pack 30 cases on Friday');
+ assert.equal(await counts(b.member, thread), 5, 'a run with one line by another is one, whoever else is in it');
+ const lines = (await json<{ messages: { seq: number; kind: string }[] }>(request('GET', `${b.threads}/${thread}/messages?latest=50`, b.member))).messages;
+ assert.deepEqual(lines.map(m => m.kind), ['change', 'message', 'change', 'change', 'change', 'message', 'change', 'message', 'change', 'change', 'change']);
+ // For the owner (never read): the run with the admin's line, the admin's message, the member's message and the member's run.
+ assert.equal((await b.detail(b.owner, thread)).thread.unread, 4);
+ // The read position starts a run: reading into the middle of one leaves its rest as one.
+ assert.deepEqual(await read(b.member, thread, 4), { readPosition: 4, unread: 4 }, 'the rest of the first run, a message, a run, and the last run');
+ assert.deepEqual(await read(b.member, thread, 11), { readPosition: 11, unread: 0 });
+
+ // The system's creation of a series occurrence, with its series' tags: quiet. A later message by another is 1.
+ const tag = await b.tag('Compliance');
+ const series = await json<{ id: string }>(request('POST', `${b.base}/series`, b.owner, { title: 'Excise return', recurrence: 'monthly', anchor: '2026-01-01', tagIds: [tag.id] }), 201);
+ assert.equal(await new CommitmentsService(db.app).materialise(b.org, '2099-03-15'), 1);
+ const [occurrence] = await db.owner<{ id: string }[]>`select th.id from tasks t join threads th on th.task_id = t.id where t.series_id = ${series.id} and t.period_start = '2099-03-01'`;
+ const quiet = occurrence!.id;
+ const quietLines = await db.owner<{ actorKind: string; operations: string[] }[]>`select c.actor_kind, array_agg(rc.operation order by rc.id) as operations from thread_messages m
+  join change_sets c on c.id = m.change_set_id join record_changes rc on rc.change_set_id = c.id where m.thread_id = ${quiet} group by c.actor_kind`;
+ assert.deepEqual([...quietLines], [{ actorKind: 'system', operations: ['create', 'attach'] }], 'the system created it with its tag, in one change set');
+ // The Expo client reads the same real lines: it folds the runs the server counts, and finds the creation line quiet.
+ const { parseMessages } = await import('../../../mobile/src/threads/parse.ts');
+ const { displayItems } = await import('../../../mobile/src/threads/runs.ts');
+ const { quietLine, firstUnread } = await import('../../../mobile/src/threads/derive.ts');
+ const parsed = parseMessages(await json(request('GET', `${b.threads}/${thread}/messages?latest=50`, b.member))).messages;
+ assert.deepEqual(displayItems(parsed).map(i => i.kind === 'foldedRun' ? `run:${i.lines.map(l => l.seq).join(',')}:${i.actors.join('+')}` : `${i.kind}:${i.message.seq}`),
+  ['changeLine:1', 'message:2', 'run:3,4,5:Olive+Ada', 'message:6', 'changeLine:7', 'message:8', 'run:9,10,11:Mia+Olive']);
+ const quietPage = parseMessages(await json(request('GET', `${b.threads}/${quiet}/messages?latest=50`, b.member))).messages;
+ assert.deepEqual([quietPage.length, quietLine(quietPage[0]!), firstUnread(quietPage, 0, b.member.user.id)], [1, true, null]);
+ assert.equal((await b.detail(b.member, quiet)).thread.unread, 0, 'a system creation line alone is not unread');
+ assert.equal((await b.list(b.member)).threads.find(t => t.id === quiet)!.unread, 0);
+ assert.equal((await b.list(b.member, 'filter=needs_you')).threads.some(t => t.id === quiet), false, 'nor does it need you');
+ assert.ok((await b.list(b.member)).threads.find(t => t.id === quiet)!.lastMessageAt, 'it still moves the thread’s activity time');
+ await b.send(b.owner, quiet, 'Filed early this time');
+ assert.equal(await counts(b.member, quiet), 1, 'with a later message by another: 1');
+ // A system change that is not a creation counts as a person's would: a tag the system attaches later.
+ const later = await b.tag('Later');
+ await fixture(db.owner, b.org)`insert into thread_tags (organisation_id, thread_id, tag_id) values (${b.org}, ${quiet}, ${later.id})`;
+ assert.equal(await counts(b.member, quiet), 2, 'the system’s tag line is unread activity');
+ // The system creating a task with no series and no tags is quiet too; a person's creation is not.
+ const [made] = await fixture(db.owner, b.org)<{ id: string }[]>`insert into tasks (organisation_id, title) values (${b.org}, 'Made by the system') returning id`;
+ assert.equal((await b.detail(b.member, await b.threadOf('task_id', made!.id))).thread.unread, 0);
+});
+
+it('unread runs stop at the cap of 51', async () => {
+ const b = await business('Run cap');
+ const task = await b.task('Busy'), thread = await b.threadOf('task_id', task);
+ // The creation line, then 26 times a message and a change line by another: 53 units, capped.
+ let revision = (await json<{ task: { revision: number } }>(request('GET', `${b.base}/tasks/${task}?limit=50`, b.owner))).task.revision;
+ for (let i = 0; i < 26; i++) {
+  await b.send(b.owner, thread, `Note ${i}`);
+  await json(request('PATCH', `${b.base}/tasks/${task}`, b.owner, { changeSetId: randomUUID(), expectedRevision: revision++, title: `Busy ${i}` }));
+ }
+ assert.equal((await b.detail(b.member, thread)).thread.unread, 51);
+ assert.equal((await b.list(b.member)).threads.find(t => t.id === thread)!.unread, 51);
+ assert.deepEqual(await json(request('POST', `${b.threads}/${thread}/read`, b.member, { seq: 3 })), { readPosition: 3, unread: 50 });
+});
+
 it('the latest live message is excerpted at 120 characters with its author; a tombstone is skipped', async () => {
  const b = await business('Excerpts');
  const thread = (await json<Detail>(b.topic(b.member, 'First words'), 201)).thread.id;

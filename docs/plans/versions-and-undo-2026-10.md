@@ -113,7 +113,25 @@ to that thread, in the same transaction: no body, a `change_set_id`, the next `s
 author (none for the system). The R2 guard is replaced to allow it from the journal trigger only. The client words the
 line from the changes (code, never a model): the message payload carries `changeSetId` and `change` (actor kind, id
 and name, cause kind, and that change set's changes to this thread's record, field names in camelCase). Change lines
-count as unread activity by others and move the thread's activity time; the list's excerpt stays the latest message.
+move the thread's activity time; the list's excerpt stays the latest message. Owner decision, 3 October 2026, so a
+burst of edits reads as one line and one unread:
+
+1. **Runs fold.** In the thread, consecutive change lines with no ordinary message between them (a tombstone counts as
+   one; a gap in loaded `seq` also ends a run) show as one folded line: the newest change worded in full, then "and N
+   earlier changes" ("and 1 earlier change"), then the actors when more than one acted ("by Maya and Tom"), and the
+   dates the run spans when it crosses days instead of the time. Tapping it unfolds the run in place, each line as
+   before with its link to History; a run of one shows as one line. Folding is presentation only: ordering, gaps, the
+   unread marker's message and the change feed are unchanged. When the first unread is a later line of a run, that run
+   shows unfolded so the marker sits on its line; when it is the run's first line, the folded line carries the marker.
+2. **Unread counts a run as one.** The server's `unread` (thread detail, list rows, the read answer) counts each unread
+   live ordinary message by someone else as 1 and each run of consecutive unread change lines holding a line by
+   someone else as 1. Any ordinary message splits a run (a deleted one too, though it counts 0); the read position
+   starts one. The caller's own lines count 0. The cap (51) still applies; `needsYou` keeps its rule.
+3. **System creation lines are quiet.** A line whose change set's actor kind is `system` and whose changes to the
+   thread's record are the record's `create` and only what was created or attached with it (a series occurrence's tags,
+   journalled in the same change set) counts 0 toward unread and is never the client's first unread. It still shows
+   in the thread and still moves the thread's activity time. A later system change that is not a creation (a tag the
+   system attaches afterwards) counts as any other line.
 A change set that touches three records adds one line to each thread. Editing, deleting or pinning a change line is
 refused (`409 change_line_immutable`).
 

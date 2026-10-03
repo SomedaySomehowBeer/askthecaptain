@@ -227,6 +227,29 @@ export function decodeCursor(cursor: string, filter: Filter): [string | null, st
  throw badRequest('invalid_request', 'That page cursor cannot be read.');
 }
 
+/** The caller's unread count for the thread `t` after `position` (contract §6, amended 3 October 2026), at most
+ *  `unreadCap`: each live ordinary message by someone else is 1, and each run of consecutive change lines that holds at
+ *  least one line by someone else is 1. Any ordinary message, a deleted one included, ends a run; the read position
+ *  starts one. The caller's own lines count 0, and so does a quiet line: the system's creation of the thread's record
+ *  (its change set's actor is the system, it creates the record, and its other changes to the record are only what was
+ *  created or attached with it, such as a series occurrence's tags). One windowed scan over the thread's unread rows. */
+function unreadOf(tx: TransactionSql, me: string, position: ReturnType<TransactionSql>) {
+ const recordKind = tx`case when t.task_id is not null then 'task' when t.reservation_id is not null then 'reservation'
+  when t.stock_item_id is not null then 'stock_item' else 'thread' end`;
+ const recordId = tx`coalesce(t.task_id, t.reservation_id, t.stock_item_id, t.id)`;
+ const quiet = tx`(um.author_id is null and exists (select 1 from change_sets qc where qc.id = um.change_set_id and qc.actor_kind = 'system')
+   and exists (select 1 from record_changes qr where qr.change_set_id = um.change_set_id and qr.record_kind = ${recordKind} and qr.record_id = ${recordId}
+    and qr.operation = 'create' and qr.item_kind is null)
+   and not exists (select 1 from record_changes qr where qr.change_set_id = um.change_set_id and qr.record_kind = ${recordKind} and qr.record_id = ${recordId}
+    and qr.operation not in ('create', 'attach')))`;
+ return tx`(select count(*)::int from (select 1 from (
+   select w.kind, w.counts, row_number() over (partition by w.kind, w.run, w.counts order by w.seq) as k from (
+    select um.kind, um.seq, count(*) filter (where um.kind <> 'change') over (order by um.seq) as run,
+     (um.author_id is distinct from ${me}::uuid and case when um.kind = 'change' then not ${quiet} else um.deleted_at is null end) as counts
+    from thread_messages um where um.thread_id = t.id and um.seq > ${position}) w) x
+  where x.counts and (x.kind <> 'change' or x.k = 1) limit ${unreadCap}) counted)`;
+}
+
 /** Every visible thread with what a list row, a card and the needs-you rule read (contract §6), for the caller `me`.
  *  Row security on `threads` decides visibility; the record joins read through each record's own policy. The read
  *  position of a private thread is `max(read_start_seq, last_read_seq or 0)` as before; of a record or topic thread with
@@ -247,8 +270,7 @@ function visible(tx: TransactionSql, organisationId: string, me: string) {
      (select count(*) from thread_participants pp where pp.thread_id = t.id and pp.state = 'active')::text || ' people']
     else array[coalesce(cu.name, 'Former member'), ''] end as facts,
    pos.read_position,
-   (select count(*)::int from (select 1 from thread_messages um where um.thread_id = t.id and um.seq > pos.read_position
-     and um.deleted_at is null and um.author_id is distinct from ${me}::uuid limit ${unreadCap}) counted) as unread,
+   ${unreadOf(tx, me, tx`pos.read_position`)} as unread,
    coalesce((tk.id is not null and tk.owner_id = ${me}::uuid and tk.status not in ('done', 'cancelled'))
     or (er.id is not null and er.owner_id = ${me}::uuid and er.status = 'confirmed' and er.ends_at > now()), false) as owns_open,
    exists (select 1 from thread_stars s where s.thread_id = t.id and s.user_id = ${me}::uuid) as starred
@@ -780,8 +802,8 @@ export class ThreadsService {
     await this.audit(tx, organisationId, actor, threadId, 'chat.read_advanced', { kind: 'read', id: threadId }, { threadId, lastReadSeq: target }, true);
     position = target;
    }
-   const [{ unread } = { unread: 0 }] = await tx<{ unread: number }[]>`select count(*)::int as unread from (select 1 from thread_messages
-    where thread_id = ${threadId} and seq > ${position} and deleted_at is null and author_id is distinct from ${actor.userId}::uuid limit ${unreadCap}) counted`;
+   const [{ unread } = { unread: 0 }] = await tx<{ unread: number }[]>`select ${unreadOf(tx, actor.userId, tx`${position}::int`)} as unread
+    from threads t where t.id = ${threadId}`;
    return { readPosition: position, unread };
   });
  }

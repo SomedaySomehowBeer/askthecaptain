@@ -395,3 +395,36 @@ export function wordChangeLine(line: ChangeLine, options: WordingOptions = {}): 
 	const segments: Segment[] = [strong(actorOf(line)), plain(' '), ...body].filter((s) => s.text !== '');
 	return { segments, text: segments.map((s) => s.text).join('') };
 }
+
+// ---- folded runs (owner decision, 3 October 2026) ------------------------------------------------------------------
+
+/** Names joined as people say them: "Maya", "Maya and Tom", "Maya, Tom and Ana", "Maya, Tom and 2 others". */
+export function wordNames(names: readonly string[]): string {
+	if (names.length <= 1) return names[0] ?? '';
+	if (names.length <= 3) return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+	const others = names.length - 2;
+	return `${names[0]}, ${names[1]} and ${others} others`;
+}
+
+/** The local calendar date of an instant, as `wordDate` reads it. */
+const localDate = (instant: string) => { const d = new Date(instant); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+/** The dates a run spans on the device's calendar ("Mon 5 Oct – Wed 7 Oct"), or null when it is all one day. */
+export function wordSpan(from: string, to: string, year?: number): string | null {
+	const a = localDate(from), b = localDate(to);
+	return a === b ? null : `${wordDate(a, year)} – ${wordDate(b, year)}`;
+}
+
+/** A run of consecutive change lines (oldest first) folded to one line: the newest worded in full, then "and N earlier
+ *  changes", then the actors when more than one acted ("by Maya and Tom"). A run of one is worded as its line. */
+export function wordFoldedRun(lines: readonly ChangeLine[], options: WordingOptions = {}): { segments: Segment[]; text: string; actors: string[] } {
+	const newest = lines.at(-1)!, earlier = lines.length - 1;
+	const actors = [...new Set(lines.map(actorOf))];
+	const segments = [...wordChangeLine(newest, options).segments];
+	if (earlier > 0) segments.push(plain(` and ${earlier} earlier change${earlier === 1 ? '' : 's'}`));
+	if (actors.length > 1) segments.push(plain(` by ${wordNames(actors)}`));
+	return { segments, text: segments.map((s) => s.text).join(''), actors };
+}
+
+/** The folded line's accessible action, naming how many lines it holds. */
+export function unfoldLabel(count: number): string { return `Show all ${count} changes`; }

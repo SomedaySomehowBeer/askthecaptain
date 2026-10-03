@@ -39,6 +39,29 @@ export function recordFixture(kind:'task'|'booking'|'stock',variant=''){
   return {messages:[said(1,tom,'Tom Reilly','Counted the back shelf too.','2026-10-01T04:14:00.000Z')],tags:[tags[0]!],
    detail:{thread:{...thread,title:'Cascade hops',lastSeq:1,lastChange:1,readPosition:1,unread:0},card:{record:{kind:'stock',id:itemId},title:'Cascade hops',status:archived?'archived':'counted',facts:['4.5 kg','2026-10-01T04:10:00Z'],fold:{location:'Cold store',unitLabel:'kg',currentCount:'4.5',countedAt:'2026-10-01T04:10:00.000Z',reorderPoint:'2',notes:'',archivedAt:archived?at:null,open:null}},tags:[tags[0]!],pin:null}};
  }
+ // Runs of change lines (owner decision, 3 October 2026): a run of three across two days by Maya and Tom, a message, a
+ // run of two, a message. `runs` has read everything; `unread` has read only the run's first line, so the first unread
+ // is inside the run. `created` is the system's creation of a series occurrence (quiet), then Tom's message.
+ if(variant==='runs'||variant==='unread'){
+  const run=[said(1,tom,'Tom Reilly','Labels are delayed. The printer says Wednesday now, not Monday.','2026-10-01T03:58:00.000Z'),
+   line(2,maya,'Maya Chen',[change(11,{field:'due',before:'2026-10-06',after:'2026-10-08'})],'2026-10-01T06:40:00.000Z'),
+   line(3,tom,'Tom Reilly',[change(12,{field:'ownerId',before:maya,after:tom})],'2026-10-01T23:12:00.000Z'),
+   line(4,maya,'Maya Chen',[change(13,{itemKind:'step',itemId:stepId,field:'status',before:'open',after:'done'})],'2026-10-01T23:20:00.000Z'),
+   said(5,maya,'Maya Chen','Thursday it is.','2026-10-01T23:30:00.000Z'),
+   line(6,tom,'Tom Reilly',[change(14,{field:'title',before:'Pack summer lager',after:'Package summer lager'})],'2026-10-01T23:40:00.000Z'),
+   line(7,tom,'Tom Reilly',[change(15,{field:'status',before:'open',after:'in_progress'})],'2026-10-01T23:41:00.000Z'),
+   said(8,tom,'Tom Reilly','Starting now.','2026-10-01T23:45:00.000Z')];
+  const readPosition=variant==='unread'?2:8;
+  return {messages:run,tags,detail:{thread:{...thread,lastSeq:8,lastChange:8,readPosition,unread:variant==='unread'?4:0},card:{record:{kind:'task',id:taskId},title:'Package summer lager',status:'in_progress',facts:['Tom Reilly','2026-10-08'],fold:{body:'',status:'in_progress',ownerId:tom,ownerName:'Tom Reilly',due:'2026-10-08',evidenceRequired:false,seriesId:null,open:null}},tags,pin:null},
+   task:{task:taskRow(),parent:null,series:null,checklist:{tasks:[taskRow({id:stepId,parentId:taskId,title:'Book the canning line',status:'done',ownerId:null,ownerName:null,due:null,revision:2})],nextOffset:null},evidenceNextOffset:null,tags:{items:[],nextOffset:null},today:'2026-10-02',timezone:'Australia/Sydney'}};
+ }
+ if(variant==='created'){
+  const made=line(1,maya,'',[change(16,{operation:'create',after:{id:taskId,title:'Excise return October',status:'open'}}),change(17,{operation:'attach',itemKind:'tag',itemId:productionTag,after:{threadId:tid,tagId:productionTag}})],'2026-10-01T00:00:00.000Z');
+  const created={...made,authorId:null,authorName:null,change:{...made.change,actorKind:'system',actorId:null,actorName:null,causeKind:'routine'}};
+  const messages=[created,said(2,tom,'Tom Reilly','I’ll file this one.','2026-10-01T04:00:00.000Z')];
+  return {messages,tags,detail:{thread:{...thread,title:'Excise return October',lastSeq:2,lastChange:2,readPosition:0,unread:1},card:{record:{kind:'task',id:taskId},title:'Excise return October',status:'open',facts:['No owner','2026-10-21'],fold:{body:'',status:'open',ownerId:null,ownerName:null,due:'2026-10-21',evidenceRequired:false,seriesId:null,open:null}},tags,pin:null},
+   task:{task:taskRow({title:'Excise return October',status:'open',ownerId:null,ownerName:null,due:'2026-10-21',revision:1}),parent:null,series:null,checklist:{tasks:[],nextOffset:null},evidenceNextOffset:null,tags:{items:[],nextOffset:null},today:'2026-10-02',timezone:'Australia/Sydney'}};
+ }
  return {messages,tags,detail:{thread,card:{record:{kind:'task',id:taskId},title:'Package summer lager',status:'in_progress',facts:['Tom Reilly','2026-10-08'],fold:{body:'',status:'in_progress',ownerId:tom,ownerName:'Tom Reilly',due:'2026-10-08',evidenceRequired:false,seriesId:null,open:null}},tags,pin:null},
   task:{task:taskRow(),parent:null,series:null,checklist:{tasks:[taskRow({id:stepId,parentId:taskId,title:'Book the canning line',status:'done',ownerId:null,ownerName:null,due:null,revision:2}),taskRow({id:'00000000-0000-4000-8000-000000000049',parentId:taskId,title:'Order pallet wrap',status:'open',ownerId:null,ownerName:null,due:null,revision:1}),taskRow({id:'00000000-0000-4000-8000-000000000050',parentId:taskId,title:'Check label stock',status:'open',ownerId:null,ownerName:null,due:null,revision:1})],nextOffset:null},evidenceNextOffset:null,tags:{items:[],nextOffset:null},today:'2026-10-02',timezone:'Australia/Sydney'}};
 }
@@ -46,7 +69,7 @@ export const recordMembers=[{userId:maya,name:'Maya Chen',email:'maya@example.te
 export function threadHarness(scenario:string,scope:()=>MemberScope|null){
  if(scenario.startsWith('threads-history'))return createWebCalls(historyClient(scenario,scope),'https://harness.invalid',{memberScope:scope,accountEpoch:()=>scope()?.epoch??null,accepted(){},sessionEnded(){}});
  const f=threadFixture();
- const kind=scenario.startsWith('threads-card-booking')?'booking':scenario.startsWith('threads-card-stock')?'stock':scenario.startsWith('threads-card-task')||scenario==='threads-lines'?'task':null;
+ const kind=scenario.startsWith('threads-card-booking')?'booking':scenario.startsWith('threads-card-stock')?'stock':scenario.startsWith('threads-card-task')||scenario==='threads-lines'||scenario.startsWith('threads-runs')||scenario==='threads-system-created'?'task':null;
  const r=kind?recordFixture(kind,scenario.split('-').at(-1)):null;
  const client:ApiClient={
   async get(path,_token,parse){
