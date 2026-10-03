@@ -144,7 +144,7 @@ it('every write path journals what it changed, under the person’s change set, 
 	assert.ok(sets.every((s) => s.actorKind === 'person' && s.causeKind === 'request' && s.requestId && [b.owner.user.id, b.member.user.id].includes(s.actorId)));
 });
 
-it('a record’s thread gets one change line per change set, worded from its changes, unread for others and fixed', async () => {
+it('a record’s thread gets one change line per change set, worded from its changes, unread for others as one run and fixed', async () => {
 	const b = await business('Change lines');
 	const task = await json<{ id: string; changeSetId: string }>(request('POST', `${b.base}/tasks`, b.owner, { title: 'Order cans', due: '2031-10-02' }), 201);
 	const thread = await b.threadOf('task_id', task.id);
@@ -163,8 +163,9 @@ it('a record’s thread gets one change line per change set, worded from its cha
 	// The change feed carries the same lines.
 	const feed = await json<{ changes: { kind: string; message?: Message }[] }>(request('GET', `${b.base}/threads/${thread}/changes?after=0`, b.member));
 	assert.deepEqual(feed.changes.filter((c) => c.message?.kind === 'change').map((c) => c.message!.changeSetId), [task.changeSetId, moved.changeSetId]);
-	// Unread for the member (both lines are the owner's), not for the owner.
-	assert.equal((await json<{ thread: { unread: number } }>(request('GET', `${b.base}/threads/${thread}`, b.member))).thread.unread, 2);
+	// Unread for the member, not for the owner: the owner's two consecutive lines are one run, so one unread (owner
+	// decision, 3 October 2026; the member's own message after them is not unread for the member).
+	assert.equal((await json<{ thread: { unread: number } }>(request('GET', `${b.base}/threads/${thread}`, b.member))).thread.unread, 1);
 	assert.equal((await json<{ thread: { unread: number } }>(request('GET', `${b.base}/threads/${thread}`, b.owner))).thread.unread, 1, 'only the member’s message');
 	// Fixed: no edit, delete or pin, by its author or an owner.
 	for (const [method, path, body] of [['PATCH', `${b.base}/threads/${thread}/messages/${line.id}`, { expectedRevision: 1, body: 'Rewritten' }],

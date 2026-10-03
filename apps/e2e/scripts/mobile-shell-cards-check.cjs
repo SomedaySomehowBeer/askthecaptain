@@ -163,6 +163,12 @@ module.exports = async ({ browser, production, base, shots, width, scheme = 'lig
   await id('task-retry').click(); await expect(id('task-save-status')).toContainText('Saved');
   const [uncertain, retried] = writesTo(`/tasks/${taskId}`).slice(-2); expect(retried.body).toEqual(uncertain.body);
   expect(threads[taskThread].messages.at(-1).changeSetId).toBe(uncertain.body.changeSetId);
+  // Sam's save, Maya's stale-time edit and Sam's retried save are consecutive lines: one folded line, the newest in full.
+  const run = id(`change-run-${savedLine.id}`);
+  await expect(run).toContainText('Sam changed the due date from Fri 9 Oct to Tue 13 Oct and 2 earlier changes by Sam and Maya');
+  await expect(run).toHaveAttribute('role', 'button'); expect(await run.getAttribute('aria-label')).toMatch(/Show all 3 changes$/);
+  await expect(page.getByTestId(`change-line-${savedLine.id}`)).toHaveCount(0); await overflow(); await shot('task-run');
+  await run.click(); await expect(id(`change-line-${savedLine.id}`)).toContainText('Sam changed the title from Package summer lager to Package summer lager cans');
   await expect(id(`change-line-${threads[taskThread].messages.at(-1).id}`)).toContainText('Sam changed the due date from Fri 9 Oct to Tue 13 Oct');
 
   // Ticking a step saves at once, as its own change set.
@@ -189,7 +195,10 @@ module.exports = async ({ browser, production, base, shots, width, scheme = 'lig
   await id('booking-cancel').click(); await expect(id('booking-cancel-confirm')).toContainText('Cancel this booking? The time on the Canning line becomes free for others.'); await overflow(); await shot('booking-cancel');
   await id('booking-cancel-yes').click(); await expect(id('booking-cancelled')).toContainText('This booking is cancelled');
   const cancels = writesTo(`/reservations/${bookingId}/cancel`); expect(cancels).toHaveLength(1); expect(cancels[0].body).toEqual({ changeSetId: expect.stringMatching(/^[0-9a-f-]{36}$/), expectedRevision: 3 });
-  await expect(id(`change-line-${threads[bookingThread].messages.at(-1).id}`)).toContainText('Sam cancelled the booking'); await expect(id('booking-save')).toHaveCount(0);
+  // The move and the cancellation are one run by one person: folded, without actors.
+  const moved = threads[bookingThread].messages.at(-2);
+  await expect(id(`change-run-${moved.id}`)).toContainText('Sam cancelled the booking and 1 earlier change · '); await expect(id(`change-run-${moved.id}`)).not.toContainText(' by ');
+  await id(`change-run-${moved.id}`).click(); await expect(id(`change-line-${threads[bookingThread].messages.at(-1).id}`)).toContainText('Sam cancelled the booking'); await expect(id('booking-save')).toHaveCount(0);
 
   // A stock count: count and note, one POST with its change set id, the line with the unit.
   await go(`/threads/${stockThread}`); await id('thread-card-fold').click(); await expect(id('stock-last')).toContainText('Last count: 4.5 kg');

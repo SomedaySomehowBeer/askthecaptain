@@ -1,6 +1,7 @@
 import { ComposerInput, ThreadAction, factLabels, initials, messageDay, dayLabel } from '../../threads/Presentation.tsx';
 import { RecordCard } from '../../threads/RecordCard.tsx';
-import { ChangeLine } from '../../threads/ChangeLine.tsx';
+import { ChangeLine, FoldedRun } from '../../threads/ChangeLine.tsx';
+import { displayItems, itemMessages } from '../../threads/runs.ts';
 import { createRecordStore, namesFor } from '../../threads/cards/store.ts';
 import type { CardHooks } from '../../threads/cards/useSaver.ts';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -56,6 +57,8 @@ function Thread({calls,scope,id,role,now,edit}:{calls:ThreadCalls;scope:ReadScop
  useEffect(()=>()=>record.dispose(),[record]);
  const confirmed=useMemo(()=>state.messages.flatMap(m=>m.kind==='change'&&m.changeSetId?[m.changeSetId]:[]),[state.messages]);
  const wording=useMemo(()=>({names:namesFor(state.detail,recordState,state.messages),zone:recordState.zone??undefined,year:new Date().getFullYear(),unit:typeof state.detail?.card.fold.unitLabel==='string'?state.detail.card.fold.unitLabel:null}),[state.detail,recordState,state.messages]);
+ const [unfolded,setUnfolded]=useState<ReadonlySet<string>>(()=>new Set());
+ const items=useMemo(()=>displayItems(state.messages,{unfolded,firstUnreadSeq:state.firstUnreadSeq}),[state.messages,unfolded,state.firstUnreadSeq]);
  const [fold,setFold]=useState(false),[menu,setMenu]=useState<string|null>(null),[editing,setEditing]=useState<string|null>(null),[editBody,setEditBody]=useState('');
  useEffect(()=>{if(edit)setFold(true);},[edit]);
  const scroll=useRef<ScrollView>(null),positions=useRef(new Map<number,{y:number;height:number}>()),offset=useRef(0),height=useRef(0),focused=useRef(false),positioned=useRef(false),jumped=useRef<number|null>(null);
@@ -80,10 +83,10 @@ function Thread({calls,scope,id,role,now,edit}:{calls:ThreadCalls;scope:ReadScop
   <ScrollView showsVerticalScrollIndicator={false} testID="thread-messages" ref={scroll} style={{flex:1}} onLayout={e=>{height.current=e.nativeEvent.layout.height;readVisible();}} onScroll={e=>{offset.current=e.nativeEvent.contentOffset.y;readVisible();}} scrollEventThrottle={100} onContentSizeChange={()=>{if(!positioned.current||current.current.jumpSeq!==jumped.current)jump();}}>
    {(state.messages[0]?.seq??0)>1?<ThreadAction dashed testID="thread-earlier" label={`Show ${state.messages[0]!.seq-1} earlier messages`} disabled={disabled} onPress={()=>{jumped.current=null;void controls.page('earlier');}}/>:null}
    {state.phase==='ready'&&state.messages.length===0?<Text style={styles.body}>{copy.emptyMessages}</Text>:null}
-   {state.messages.map((message,index)=>{const powers=messagePowers(message,scope.userId,role);return <Fragment key={message.id}>
-    {index===0||messageDay(message.createdAt)!==messageDay(state.messages[index-1]!.createdAt)?<View testID={`message-day-${message.id}`} style={styles.day}><View style={styles.dayLine}/><Text style={styles.small}>{dayLabel(message.createdAt)}</Text><View style={styles.dayLine}/></View>:null}
-    <View testID={`message-${message.id}`} onLayout={e=>{positions.current.set(message.seq,e.nativeEvent.layout);if(!positioned.current)jump();}} style={[styles.message,message.kind==='change'&&styles.changeWrap]}>{message.seq===state.firstUnreadSeq?<View testID="thread-unread-line" style={styles.unread}><Text style={styles.small}>Unread</Text></View>:null}
-    {message.kind==='change'?<ChangeLine message={message} options={wording} onOpen={route=>router.push(route as never)}/>:<><View style={styles.messageRow}><View aria-hidden style={styles.avatar}><Text style={styles.initials}>{initials(message.authorName)}</Text></View><View style={{flex:1,minWidth:0,gap:3}}>
+   {items.map((item,index)=>{const lines=itemMessages(item),message=lines[0]!,before=index>0?itemMessages(items[index-1]!).at(-1)!:null,powers=messagePowers(message,scope.userId,role);return <Fragment key={message.id}>
+    {before===null||messageDay(message.createdAt)!==messageDay(before.createdAt)?<View testID={`message-day-${message.id}`} style={styles.day}><View style={styles.dayLine}/><Text style={styles.small}>{dayLabel(message.createdAt)}</Text><View style={styles.dayLine}/></View>:null}
+    <View testID={item.kind==='foldedRun'?`run-${item.key}`:`message-${message.id}`} onLayout={e=>{for(const line of lines)positions.current.set(line.seq,e.nativeEvent.layout);if(!positioned.current)jump();}} style={[styles.message,message.kind==='change'&&styles.changeWrap]}>{lines.some(line=>line.seq===state.firstUnreadSeq)?<View testID="thread-unread-line" style={styles.unread}><Text style={styles.small}>Unread</Text></View>:null}
+    {item.kind==='foldedRun'?<FoldedRun lines={item.lines} options={wording} onUnfold={()=>setUnfolded(open=>new Set([...open,item.key]))}/>:message.kind==='change'?<ChangeLine message={message} options={wording} onOpen={route=>router.push(route as never)}/>:<><View style={styles.messageRow}><View aria-hidden style={styles.avatar}><Text style={styles.initials}>{initials(message.authorName)}</Text></View><View style={{flex:1,minWidth:0,gap:3}}>
     <View style={[styles.row,{minHeight:20,paddingRight:32}]}><Text numberOfLines={1} style={styles.author}>{message.authorName??'Former member'}</Text><Text style={styles.small}>{new Date(message.createdAt).toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}{message.editedAt?' · edited':''}</Text>{powers.edit||powers.delete||powers.pin?<Pressable testID={`message-menu-${message.id}`} role="button" aria-label={`Actions for message by ${message.authorName??'former member'}`} onPress={()=>setMenu(menu===message.id?null:message.id)} style={styles.menu}><Text style={{ color: colors.plain }}>•••</Text></Pressable>:null}</View>
     <MessageBody body={message.body}/>
     {menu===message.id?<View style={styles.actions}>

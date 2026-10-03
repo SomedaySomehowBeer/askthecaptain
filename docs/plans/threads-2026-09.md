@@ -246,6 +246,14 @@ differences:
 - `unread` is capped at 51, as before. A person's read position on a record or topic thread with
   no read row is 0: the whole thread is unread until they open it, which is the correct state for a
   thread they have never seen.
+- `unread` counts (owner decision, 3 October 2026; versions contract §3): each unread live ordinary
+  message by someone else as 1, and each run of consecutive unread change lines that holds a line by
+  someone else as 1. Any ordinary message, a deleted one included, splits a run; the read position
+  starts one. The caller's own messages and change lines count 0. A quiet line counts 0: the
+  system's creation of the thread's record, whose change set's actor kind is `system` and whose
+  changes to the record are its `create` and only what was created or attached with it (a series
+  occurrence's tags). The thread detail, the list row and `POST …/read` answer the same number,
+  computed by one windowed query over the thread's unread messages.
 
 **`GET …/threads/:threadId`** — `{ thread: { id, kind, title, revision, lastSeq, lastChange,
 readPosition, unread, starred, createdAt }, card, tags, participants, pin }`.
@@ -290,8 +298,9 @@ in place. The pinned message, when there is one, sits directly under the card as
 pin mark; tapping it scrolls to the message. Messages render oldest first. On open, the client fetches `latest=50`; if `unread > 50`
 it fetches `after=readPosition-1` instead, so the first unread is on screen, and shows one "Show
 n earlier messages" row above the first loaded message that loads 50 more each time. The list
-scrolls to the first unread message and marks it with a thin line; with nothing unread it opens
-at the newest. The composer sits at the bottom: multi-line, send on button, the send retry and
+scrolls to the first unread message (never a quiet system creation line) and marks it with a thin line; with nothing unread it opens
+at the newest. Consecutive change lines fold to one line that unfolds on tap (versions contract §3); a run whose
+later line is the first unread shows unfolded so the marker is on that line. The composer sits at the bottom: multi-line, send on button, the send retry and
 locked-draft rules as before. A message shows author, time, body with links, "edited" and
 "Message deleted". Long-press or a small menu offers edit, delete, pin and unpin within the
 powers above; the menu shows only what the person may do. Tombstones, gaps and revision changes behave as before.
