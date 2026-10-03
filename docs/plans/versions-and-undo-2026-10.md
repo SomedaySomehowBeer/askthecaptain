@@ -1,6 +1,6 @@
 # Versions and undo: the R3 contract
 
-Status: **adopted, 2 October 2026**: the owner accepted all five recommendations in §0. Increment R3 of the
+Status: **delivered to staging on 3 October 2026** ([release record](../validation/versions-2026-10-02/release.md)); adopted 2 October 2026: the owner accepted all five recommendations in §0. Increment R3 of the
 [chat-first rebuild](chat-first-rebuild-2026-09.md). Outcome: **manage shared work** — a person can
 see what changed on a record, who changed it and why, and reverse the changes they pick without losing
 anyone's later work. Implements D29 and the rules of the
