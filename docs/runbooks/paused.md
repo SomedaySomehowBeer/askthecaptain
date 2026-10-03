@@ -1,5 +1,31 @@
 # Staging resumed; production paused (2026-09-27)
 
+## Versions and undo release: migrations 0047 and 0048 (3 October 2026, 07:58–08:00 UTC)
+
+R3 of the chat-first rebuild is on staging: the change journal (#240), the history and selective-undo API with
+topic-to-task (#241), card editing and change lines (#242), the History and undo screens (#243) and folded change-line
+runs with the unread rule (#244). On the owner's instruction, `flyctl deploy -a askthecaptain-api-staging -c
+apps/api/fly.staging.toml` ran from `main` at `74e3244` on the droplet under the owner's Fly login; image
+`registry.fly.io/askthecaptain-api-staging:git-74e3244`. The release command applied `0047_versions.sql` at
+**07:59:51Z** and `0048_reversals.sql` at **07:59:51Z**, the queue installer completed, and the one machine
+`80e39ea6416e18` took the image and passed its check. Evidence: [validation folder](../validation/versions-2026-10-02/release.md).
+
+- **After (read-only, owner connection, 08:00:33Z):** one baseline change set for the one organisation; 41 baseline
+  versions, one per journalled record (14 top-level tasks, 2 series, 5 equipment, 7 bookings, 7 stock items, 6 tags;
+  steps are items of their task and record threads are versioned as their record); no changes and no change lines, as
+  the baseline invents none; `xero_sync_state` empty (no Xero connection on staging); row security forced on all four
+  new tables.
+- **Hosted, without a session:** `/readyz` and `/healthz` 200; the history route answers 401.
+
+**Not covered:** no signed-in hosted check yet. The owner's checks for R3: edit a task from its card and see the
+change line; tick a step; move a booking and cancel one; record a stock count; open History from the clock, the card
+and a change line; tick changes, preview, and undo; provoke a conflict and a stale preview; make a topic a task; a run
+of edits folding into one line and counting as one unread. HTTP was not stopped during the migration (one user on
+staging), and no Neon branch was taken: the rollback point is Neon history before 07:59:51Z. Production is unchanged.
+
+**Rollback:** an earlier API image cannot run against 0047 (its writes would be refused without a change set). Fix
+forward, or restore the database from Neon history to before 07:59:51Z and redeploy image `git-b165e12`.
+
 ## Dark colour scheme release (2 October 2026, 04:31–04:32 UTC)
 
 On the owner's instruction, `main` at `b165e12` was deployed to `askthecaptain-api-staging` from the droplet

@@ -1,0 +1,32 @@
+image: registry.fly.io/askthecaptain-api-staging:git-74e3244
+image size: 84 MB
+
+Watch your deployment at https://fly.io/apps/askthecaptain-api-staging/monitoring
+
+Running askthecaptain-api-staging release_command: sh -c 'node --import tsx /repo/packages/db/src/migrate.ts && node --import tsx /repo/packages/engine/src/install.ts'
+> Created release_command machine 8e25ddb7766e18
+> Waiting for 8e25ddb7766e18 to have state: stopped
+> Machine 8e25ddb7766e18 has state: stopped
+Starting machine
+> Waiting for 8e25ddb7766e18 to have state: started
+> Waiting for 8e25ddb7766e18 to have state: started
+> Machine 8e25ddb7766e18 has state: started
+> Waiting for 8e25ddb7766e18 to have state: destroyed
+> Machine 8e25ddb7766e18 has state: destroyed
+> Waiting for 8e25ddb7766e18 to get exit event
+✔ release_command 8e25ddb7766e18 completed successfully
+Updating existing machines in 'askthecaptain-api-staging' with rolling strategy
+> Acquiring lease for 80e39ea6416e18
+> Acquired lease for 80e39ea6416e18
+> Updating machine config for 80e39ea6416e18
+> Updating 80e39ea6416e18 [app]
+> Updated machine config for 80e39ea6416e18
+> Waiting for machine 80e39ea6416e18 to reach a good state
+> Machine 80e39ea6416e18 reached stopped state
+✔ Machine 80e39ea6416e18 is now in a good state
+> Clearing lease for 80e39ea6416e18
+✔ Cleared lease for 80e39ea6416e18
+Checking DNS configuration for askthecaptain-api-staging.fly.dev
+✓ DNS configuration verified
+
+Visit your newly deployed app at https://askthecaptain-api-staging.fly.dev/

@@ -1,0 +1,1 @@
+R3_POST {"at":"2026-10-03T08:00:33.443Z","applied":[{"name":"0047_versions.sql","applied_at":"2026-10-03T07:59:51.435Z"},{"name":"0048_reversals.sql","applied_at":"2026-10-03T07:59:51.914Z"}],"organisations":1,"baseline_change_sets":1,"change_sets":1,"record_versions":41,"record_changes":0,"journalled_records":81,"change_lines":0,"xero_sync_state":0,"rls_forced":4}
