@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Result } from '../api.ts';
 import { createSaver, saveCopy } from './saver.ts';
-import { bookingChanged, bookingForm, bookingPlan, instantIn, minuteChoices, occupancyWords, taskChanges, taskForm, validCount, validTaskForm } from './forms.ts';
+import { bookingChanged, bookingControls, bookingForm, bookingPlan, bookingStart, instantIn, refusedForGood, minuteChoices, occupancyWords, taskChanges, taskForm, validCount, validTaskForm } from './forms.ts';
 import { parseBooking, parseCount, parseTaskDetail, parseTaskWrite, writes, type Booking, type Task } from './records.ts';
 import { namesFor } from './store.ts';
 
@@ -82,6 +82,47 @@ test('a booking form is in the organisation zone; its plan keeps kind, task and 
 	assert.equal(occupancyWords('2026-10-07T20:30:00.000Z', '2026-10-08T01:30:00.000Z', zone, 2026), '7:30 am to 12:30 pm');
 	assert.deepEqual(minuteChoices(30).map((o) => o.label).slice(0, 4), ['None', '15 minutes', '30 minutes', '45 minutes']);
 	assert.equal(minuteChoices(25).some((o) => o.value === '25'), true, 'a current value outside the list stays choosable');
+});
+
+test('a booking that spans days opens with its end date and no warning, whenever its record loaded', () => {
+	const zone = 'Australia/Sydney', long = { ...booking, endsAt: '2026-10-10T01:00:00.000Z' };
+	const start = bookingStart(long, zone);
+	assert.equal(start.multiDay, true); assert.equal(start.form.endDate, '2026-10-10');
+	const plan = bookingPlan(long, start.form, zone, start.multiDay); assert.ok('time' in plan); assert.equal(bookingChanged(long, plan.time), false);
+	// Read as one day (the bug): an untouched card either says the end is before the start or offers to shorten it.
+	const oneDay = bookingPlan(long, start.form, zone, false); assert.ok('time' in oneDay); assert.equal(oneDay.time.endsAt, '2026-10-08T01:00:00.000Z'); assert.equal(bookingChanged(long, oneDay.time), true);
+	assert.deepEqual(bookingPlan(long, { ...start.form, end: '07:00' }, zone, false), { error: 'The end must be after the start on the same day.' });
+	assert.equal(bookingStart(booking, zone).multiDay, false);
+});
+
+test('a booking card offers an action only when it can succeed: a warning disables Save; cautions do not; cancel is offered on an untouched card', () => {
+	const zone = 'Australia/Sydney', form = bookingForm(booking, zone);
+	const idle = { busy: false, uncertain: false, refusal: null };
+	const moved = bookingPlan(booking, { ...form, end: '13:00' }, zone, false), same = bookingPlan(booking, form, zone, false);
+	const at = (over: Partial<Parameters<typeof bookingControls>[0]> = {}) => bookingControls({ locked: false, cancelled: false, waiting: false, changed: true, plan: moved, free: { kind: 'free' }, save: idle, cancel: idle, ...over });
+	assert.deepEqual(at({ changed: false, plan: same }), { editable: true, warning: null, save: false, discard: false, cancel: true, confirmCancel: true }, 'untouched: nothing to save, cancel offered');
+	assert.deepEqual(at(), { editable: true, warning: null, save: true, discard: true, cancel: true, confirmCancel: true });
+	const taken = at({ free: { kind: 'taken', holders: ['Bright tank clean (12:00 pm to 2:00 pm)'] } });
+	assert.equal(taken.warning, 'taken'); assert.equal(taken.save, false, 'the overlap note says the save will be refused'); assert.equal(taken.discard, true); assert.equal(taken.cancel, true);
+	const invalid = at({ plan: bookingPlan(booking, { ...form, end: '07:00' }, zone, false) });
+	assert.equal(invalid.warning, 'invalid'); assert.equal(invalid.save, false); assert.equal(invalid.discard, true);
+	for (const kind of ['checking', 'partial', 'unchecked', 'idle'] as const) assert.equal(at({ free: { kind } }).save, true, `${kind} is a caution, not a refusal`);
+	assert.equal(at({ waiting: true }).save, false); assert.equal(at({ waiting: true }).cancel, false);
+	assert.equal(at({ locked: true }).cancel, false); assert.equal(at({ save: { ...idle, busy: true } }).cancel, false);
+	assert.equal(at({ save: { ...idle, uncertain: true } }).confirmCancel, false);
+	assert.equal(at({ save: { ...idle, refusal: 'forbidden' } }).save, false, 'a refusal that holds keeps Save off until something changes');
+	assert.equal(at({ save: { ...idle, refusal: 'reservation_conflict' } }).save, true, 'an overlap refusal is said by the occupancy note, which re-checks');
+	assert.equal(at({ cancel: { ...idle, refusal: 'equipment_archived' } }).cancel, false);
+	assert.deepEqual(at({ cancelled: true }), { editable: false, warning: null, save: false, discard: true, cancel: false, confirmCancel: false });
+	assert.equal(refusedForGood(null), false); assert.equal(refusedForGood('stale_revision'), false); assert.equal(refusedForGood('stock_archived'), true);
+});
+
+test('a refusal saying the record changed reloads it; other refusals do not', async () => {
+	for (const [code, reloads] of [['reservation_cancelled', true], ['stock_archived', true], ['reservation_conflict', false], ['forbidden', false]] as const) {
+		const h = harness([{ kind: 'error', status: 409, code, retryAfter: 0, uncertain: false }]);
+		await h.save({ title: 'x' });
+		assert.equal(h.events.includes('reload'), reloads, code); assert.equal(h.saver.snapshot().refusal, code);
+	}
 });
 
 test('a count is a decimal of zero or more', () => {

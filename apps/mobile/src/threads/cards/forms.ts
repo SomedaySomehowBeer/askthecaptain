@@ -35,6 +35,12 @@ export function bookingForm(b: Booking, zone: string): BookingForm {
 }
 /** A booking that ends on a later day than it starts shows its end date as its own field. */
 export const spansDays = (form: BookingForm) => form.endDate !== form.date;
+/** The form a booking's card opens with, and whether it shows the end date: a booking that spans days is read as one,
+ *  whether the record was loaded before or after the card unfolded. */
+export function bookingStart(b: Booking, zone: string): { form: BookingForm; multiDay: boolean } {
+	const form = bookingForm(b, zone);
+	return { form, multiDay: spansDays(form) };
+}
 
 /** The instant of a civil date and time in the zone; the earlier one in a repeated hour; null in a clock-change gap. */
 export function instantIn(date: string, time: string, zone: string): string | null {
@@ -55,6 +61,36 @@ export function bookingPlan(b: Booking, form: BookingForm, zone: string, multiDa
 	const occupiedFrom = new Date(Date.parse(startsAt) - form.setup * 60_000).toISOString(), occupiedTo = new Date(Date.parse(endsAt) + form.cleanup * 60_000).toISOString();
 	return { time: { title, kind: b.kind, startsAt, endsAt, setupMinutes: form.setup, cleanupMinutes: form.cleanup, taskId: b.taskId, ownerId: b.ownerId }, occupiedFrom, occupiedTo };
 }
+/** What the equipment's schedule says about the time asked for. Only `taken` is a refusal: the others are cautions,
+ *  and the server checks the time again on save. */
+export type Availability = { kind: 'idle' | 'checking' | 'free' | 'partial' | 'unchecked' } | { kind: 'taken'; holders: string[] };
+export type BookingControls = {
+	/** The fields can be changed. */
+	editable: boolean;
+	/** The warning shown above the actions that says a save would be refused, if any. */
+	warning: 'invalid' | 'taken' | null;
+	save: boolean; discard: boolean; cancel: boolean; confirmCancel: boolean;
+};
+/** Which booking card actions can succeed now. A control is enabled only when its action can succeed: never while a
+ *  warning says the save will be refused, a write is in flight or uncertain, a wait stands, or the last refusal still
+ *  holds; never disabled for any other reason. */
+export function bookingControls(s: {
+	locked: boolean; cancelled: boolean; waiting: boolean; changed: boolean; plan: BookingPlan | null; free: Availability;
+	save: { busy: boolean; uncertain: boolean; refusal: string | null }; cancel: { busy: boolean; uncertain: boolean; refusal: string | null };
+}): BookingControls {
+	const busy = s.save.busy || s.cancel.busy, uncertain = s.save.uncertain || s.cancel.uncertain;
+	const editable = !s.locked && !busy && !uncertain && !s.cancelled;
+	const warning = s.cancelled ? null : s.plan && 'error' in s.plan ? 'invalid' : s.free.kind === 'taken' ? 'taken' : null;
+	return {
+		editable, warning,
+		save: editable && !s.waiting && s.changed && Boolean(s.plan && 'time' in s.plan) && warning === null && !refusedForGood(s.save.refusal),
+		discard: !busy && s.changed,
+		cancel: editable && !s.waiting && !refusedForGood(s.cancel.refusal),
+		confirmCancel: !s.locked && !busy && !s.save.uncertain && !s.cancelled && !s.waiting && !refusedForGood(s.cancel.refusal)
+	};
+}
+/** Refusals that hold until something changes: the same write would be refused again. */
+export const refusedForGood = (code: string | null) => code !== null && ['forbidden', 'reservation_cancelled', 'equipment_archived', 'stock_archived', 'thread_is_record', 'thread_not_topic'].includes(code);
 export const bookingChanged = (b: Booking, t: BookingTime) => t.title !== b.title || Date.parse(t.startsAt) !== Date.parse(b.startsAt) || Date.parse(t.endsAt) !== Date.parse(b.endsAt)
 	|| t.setupMinutes !== b.setupMinutes || t.cleanupMinutes !== b.cleanupMinutes;
 

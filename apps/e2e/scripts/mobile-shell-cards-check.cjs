@@ -154,7 +154,9 @@ module.exports = async ({ browser, production, base, shots, width, scheme = 'lig
   // A stale revision: nothing saved, the newer task is shown and said.
   mode.task = 'stale'; await id('task-due').fill('2026-10-12'); await id('task-save').click();
   await expect(id('task-save-status')).toContainText('Someone changed this since you opened it'); await expect(id('task-title')).toHaveValue('Package the summer lager');
-  await expect(id('task-due')).toHaveValue('2026-10-09'); expect(writesTo(`/tasks/${taskId}`)).toHaveLength(2); await shot('task-stale');
+  await expect(id('task-due')).toHaveValue('2026-10-09'); expect(writesTo(`/tasks/${taskId}`)).toHaveLength(2);
+  // Under the stale warning nothing the person asked for is left to save: Save is off, and comes back with a new edit.
+  await expect(id('task-save')).toHaveAttribute('aria-disabled', 'true'); await expect(id('task-cancel')).toHaveText('Discard edits'); await shot('task-stale');
 
   // An uncertain save: the form locks; an explicit retry sends the same id and body; nothing is retried by itself.
   mode.task = 'unknown'; await id('task-due').fill('2026-10-13'); await id('task-save').click();
@@ -182,9 +184,19 @@ module.exports = async ({ browser, production, base, shots, width, scheme = 'lig
   await go(`/threads/${bookingThread}`); await id('thread-card-fold').click(); await expect(id('booking-start')).toHaveValue('08:00');
   await expect(id('booking-occupancy')).toContainText('Holds the Canning line from 7:30 am to 12:30 pm, with setup and cleanup. That time is free.');
   await expect(id('booking-equipment')).toBeDisabled(); await targets('[data-testid="booking-editor"]'); await overflow(); await shot('booking-open');
+  // On an untouched card "Cancel this booking" is offered and is the only control that says Cancel; nothing to save or discard.
+  await expect(id('booking-cancel')).not.toHaveAttribute('aria-disabled', 'true'); await expect(id('booking-cancel')).toBeEnabled();
+  await expect(id('booking-save')).toHaveAttribute('aria-disabled', 'true'); await expect(id('booking-cancel-edit')).toHaveText('Discard edits');
+  expect(await page.locator('[data-testid="booking-editor"] [role="button"]').evaluateAll(b => b.filter(e => e.offsetParent && /cancel/i.test(e.textContent)).map(e => e.textContent))).toEqual(['Cancel this booking']);
+  // An invalid time: the warning says why and Save is off while it shows.
+  await id('booking-end').fill('07:00'); await expect(id('booking-invalid')).toContainText('The end must be after the start'); await expect(id('booking-save')).toHaveAttribute('aria-disabled', 'true');
+  await expect(id('booking-cancel-edit')).not.toHaveAttribute('aria-disabled', 'true'); await shot('booking-invalid'); await id('booking-end').fill('12:00');
   mode.booking = 'conflict'; await id('booking-end').fill('13:00'); await expect(id('booking-occupancy')).toContainText('to 1:30 pm');
   await id('booking-save').click(); await expect(id('booking-save-status')).toContainText('unavailable during this time');
-  await expect(id('booking-occupancy')).toContainText('That time overlaps Bright tank clean (12:00 pm to 2:00 pm).'); await overflow(); await shot('booking-overlap');
+  await expect(id('booking-occupancy')).toContainText('That time overlaps Bright tank clean (12:00 pm to 2:00 pm). Choose another time to save.'); await overflow();
+  // The overlap warning says a save will be refused: Save is off while it shows; discarding and cancelling the booking stay offered.
+  await expect(id('booking-save')).toHaveAttribute('aria-disabled', 'true'); await expect(id('booking-cancel-edit')).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(id('booking-cancel')).not.toHaveAttribute('aria-disabled', 'true'); await shot('booking-overlap');
   await id('booking-start').fill('06:00'); await id('booking-end').fill('10:00'); await id('booking-setup').selectOption('0');
   await expect(id('booking-occupancy')).toContainText('Holds the Canning line from 6:00 am to 10:30 am, with setup and cleanup. That time is free.');
   await id('booking-save').click(); await expect(id('booking-save-status')).toContainText('Saved');
@@ -217,6 +229,6 @@ module.exports = async ({ browser, production, base, shots, width, scheme = 'lig
    await expect(id(target).first()).toBeVisible(); await overflow();
   }
   expect(errors).toEqual([]); expect(outside).toEqual([]);
-  console.log(`PASS ${width}px: change lines worded and ordered with the unread marker; task save (one request, one change set, reconciled), stale revision, uncertain save and same-id retry, step tick; booking overlap refusal, save and cancel; stock count${base ? '; seven harness card states' : ''}`);
+  console.log(`PASS ${width}px: change lines worded and ordered with the unread marker; task save (one request, one change set, reconciled), stale revision with Save off, uncertain save and same-id retry, step tick; booking cancel offered on an untouched card, Save off under the invalid and overlap warnings, overlap refusal, save and cancel; stock count${base ? '; seven harness card states' : ''}`);
  } finally { await context.close(); }
 };

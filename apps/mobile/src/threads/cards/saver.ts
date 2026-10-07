@@ -86,6 +86,8 @@ export function createSaver<T>(hooks: {
 		if (result.code === 'stale_revision') { set({ busy: false, pending: null, uncertain: false, message: saveCopy.stale, tone: 'warn', refusal: result.code }); await hooks.reload(); return; }
 		set({ busy: false, pending: null, uncertain: false, tone: 'warn', refusal: result.code,
 			message: result.code === 'change_set_id_unavailable' ? saveCopy.idUnavailable : refusals[result.code] ?? saveCopy.refused });
+		// The record changed under the card (someone cancelled the booking or archived the item): show it as it is now.
+		if (result.code === 'reservation_cancelled' || result.code === 'stock_archived') await hooks.reload();
 	}
 	return {
 		snapshot: () => state,

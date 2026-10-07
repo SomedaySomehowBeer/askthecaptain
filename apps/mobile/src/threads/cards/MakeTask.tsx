@@ -13,6 +13,8 @@ import { CardButton, DateTimeField, Muted, SelectField, type Option } from './Fi
 import { cardCopy } from './copy.ts';
 import type { RecordState } from './store.ts';
 import { useSaver, type CardHooks } from './useSaver.ts';
+import { refusedForGood } from './forms.ts';
+import { useDeadline } from '../use-poll.ts';
 
 export function MakeTask({ calls, scope, detail, record, hooks, locked, confirmed, onMembers, onCancel }: {
 	calls: ThreadCalls; scope: ReadScope; detail: Detail; record: RecordState; hooks: CardHooks; locked: boolean; confirmed: readonly string[];
@@ -33,7 +35,7 @@ export function MakeTask({ calls, scope, detail, record, hooks, locked, confirme
 		return [{ value: me, label: `${mine?.name || 'You'}${mine?.name ? ' (you)' : ''}` },
 			...members.filter((m) => m.userId !== me).map((m) => ({ value: m.userId, label: m.name || m.email })), { value: '', label: 'No owner' }];
 	}, [record.members, me]);
-	const busy = state.busy, uncertain = state.uncertain, waiting = hooks.now() < state.waitUntil;
+	const busy = state.busy, uncertain = state.uncertain, waiting = useDeadline(state.waitUntil, hooks.now);
 	const editable = !locked && !busy && !uncertain;
 	const validDue = due === '' || /^\d{4}-\d{2}-\d{2}$/.test(due);
 	const save = () => {
@@ -56,7 +58,7 @@ export function MakeTask({ calls, scope, detail, record, hooks, locked, confirme
 			{uncertain
 				? <><CardButton testID="make-task-retry" label="Make this a task again with the same change ID" display="Make it again" primary grow disabled={busy || waiting} onPress={() => { void saver.retry(); }} />
 					<CardButton testID="make-task-discard" label="Discard making this a task" display="Discard" disabled={busy} onPress={() => saver.discard()} /></>
-				: <><CardButton testID="make-task-save" label="Make this a task" primary grow disabled={!editable || waiting || !validDue} onPress={save} />
+				: <><CardButton testID="make-task-save" label="Make this a task" primary grow disabled={!editable || waiting || !validDue || refusedForGood(state.refusal)} onPress={save} />
 					<CardButton testID="make-task-cancel" label="Cancel" disabled={busy} onPress={() => { setOwner(me); setDue(''); saver.clear(); onCancel(); }} /></>}
 		</View>
 		{state.message ? <Text testID="make-task-status" role="status" style={state.tone === 'warn' ? styles.warn : styles.ok}>{state.message}</Text> : null}

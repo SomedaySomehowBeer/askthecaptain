@@ -8,7 +8,8 @@ import type { Detail } from '../contracts.ts';
 import { themedStyles } from '../../theme/theme.ts';
 import { wordInstant } from '../wording.ts';
 import { CardButton, Muted, Note, TextField } from './Fields.tsx';
-import { validCount } from './forms.ts';
+import { refusedForGood, validCount } from './forms.ts';
+import { useDeadline } from '../use-poll.ts';
 import { send, writes, type Count } from './records.ts';
 import { useSaver, type CardHooks } from './useSaver.ts';
 import { cardCopy } from './copy.ts';
@@ -26,7 +27,7 @@ export function StockEditor({ calls, scope, detail, hooks, locked, confirmed, ye
 	const counted = typeof f.currentCount === 'string' ? `${f.currentCount}${unit ? ` ${unit}` : ''}` : null;
 	const when = typeof f.countedAt === 'string' ? wordInstant(f.countedAt, undefined, year) : null;
 	const invalid = count ? validCount(count) : null;
-	const waiting = hooks.now() < state.waitUntil;
+	const waiting = useDeadline(state.waitUntil, hooks.now);
 	const editable = !locked && !archived && !state.busy && !state.uncertain;
 	const save = () => {
 		if (validCount(count)) return;
@@ -45,8 +46,8 @@ export function StockEditor({ calls, scope, detail, hooks, locked, confirmed, ye
 				{state.uncertain
 					? <><CardButton testID="stock-retry" label="Save the count again with the same change ID" display="Save again" primary grow disabled={state.busy || waiting} onPress={() => { void saver.retry(); }} />
 						<CardButton testID="stock-discard" label="Discard this count" display="Discard" disabled={state.busy} onPress={() => { saver.discard(); setCount(''); setNote(''); }} /></>
-					: <><CardButton testID="stock-save" label="Save count" primary grow disabled={!editable || waiting || !count.trim() || Boolean(invalid)} onPress={save} />
-						<CardButton testID="stock-cancel" label="Cancel" disabled={state.busy || (!count && !note)} onPress={() => { setCount(''); setNote(''); saver.clear(); }} /></>}
+					: <><CardButton testID="stock-save" label="Save count" primary grow disabled={!editable || waiting || !count.trim() || Boolean(invalid) || refusedForGood(state.refusal)} onPress={save} />
+						<CardButton testID="stock-cancel" label="Clear the count and note" display="Clear" disabled={state.busy || (!count && !note)} onPress={() => { setCount(''); setNote(''); saver.clear(); }} /></>}
 			</View>
 			{state.message ? <Text testID="stock-save-status" role="status" style={state.tone === 'warn' ? styles.warn : styles.ok}>{state.message}</Text> : <Muted testID="stock-help">{cardCopy.countHelp}</Muted>}
 		</>}
