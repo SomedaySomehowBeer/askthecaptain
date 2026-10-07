@@ -55,6 +55,23 @@ CAPTAIN_MOBILE_HARNESS=1 pnpm --dir apps/mobile exec expo export --platform web 
 node apps/e2e/scripts/mobile-shell-ci.mjs
 ```
 
+### Mockup comparison
+
+Every client pull request that changes how a screen looks re-runs the side-by-side comparison against the reviewed
+mockups (D14) and attaches the images to its validation record. After the two web exports above:
+
+```sh
+flock /tmp/atc-build.lock node apps/e2e/scripts/mockup-compare.mjs <record> [name,name,...]
+```
+
+It serves both exports on loopback, drives the browser suite's own check modules at 390 pixels (their synthetic API
+answers and harness scenarios; the harness controls are hidden from the screenshots), renders the chat-first prototype's
+frames and the R3 history-and-undo screens with the vendored fonts, and writes one PNG per screen, app on the left and
+mockup on the right, to `docs/validation/<record>/compare/`. The screen names, their
+app states and their mockups are the `screens` table at the top of the script; add a row when a screen gains a mockup.
+Dark pairs use frames 15 to 17, or the R3 screens drawn in the dark tokens. The first record is
+[fidelity-2026-10-07](../../docs/validation/fidelity-2026-10-07/README.md).
+
 The harness is a separate, web-only export. Never deploy it. Production exports leave
 `CAPTAIN_MOBILE_HARNESS` unset. The source and bundle guard excludes server packages, secret
 variables and harness code from production. Only the native API URL variable `EXPO_PUBLIC_API_URL` is permitted; web API requests use
@@ -67,6 +84,28 @@ passkey listing, browser WebAuthn registration and an assertion with the new cre
 removal, failures and uncertain-write reconciliation. Members checks cover invitations, roles, removals, permissions and organisation changes. Registration and verify responses are mocked; API cookie,
 CSRF, revocation and step-up tests in `apps/api/src/web/session.test.ts` require real throwaway
 Postgres and provide separate server evidence.
+
+## Fonts
+
+The mockups' type: Fraunces SemiBold for screen headings, card, group and sheet titles, and Inter Regular, SemiBold and
+Bold for everything else. The files are in `assets/fonts/` with each family's `OFL.txt`: both are licensed under the
+SIL Open Font License 1.1, which permits bundling them in the app; neither declares a Reserved Font Name. They are
+static instances, made with fontTools, of the variable fonts in [google/fonts](https://github.com/google/fonts) at
+commit `7085eb8` (`ofl/fraunces/Fraunces[SOFT,WONK,opsz,wght].ttf` 1.000, `ofl/inter/Inter[opsz,wght].ttf` 4.001),
+pinned as Google Fonts serves them to the prototype (Fraunces SOFT 0, WONK 1; Inter opsz 14) and subset to Latin,
+Latin Extended and general punctuation:
+
+```sh
+python3 -m fontTools.varLib.instancer -o fr.ttf 'Fraunces[SOFT,WONK,opsz,wght].ttf' wght=600 opsz=20 SOFT=0 WONK=1   # then named "Fraunces SemiBold"
+python3 -m fontTools.varLib.instancer --update-name-table -o in-600.ttf 'Inter[opsz,wght].ttf' wght=600 opsz=14     # and 400, 700
+python3 -m fontTools.subset <file> --unicodes='U+0000-024F,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0300-0308,U+0329,U+1E00-1EFF,U+2000-206F,U+20AC,U+2122,U+2190-2199,U+2212,U+2215,U+2260,U+2264,U+2265,U+FEFF,U+FFFD' --layout-features='*' --name-IDs='*'
+```
+
+`src/theme/fonts.ts` loads them with `expo-font` at the root layout. On the web the page draws at once in the system
+fallback and each face swaps in when loaded (`font-display: swap`); `public/index.html` turns off synthesised bold so
+a semibold face is never thickened. On iOS and Android the root waits the few milliseconds the local files take.
+`themedStyles` gives every text style its face from its weight (`src/theme/tokens.ts` `faces`, `faceFor`); a style
+asks for Fraunces with `fontFamily: faces.display`. The type scale in `tokens.ts` is measured from the mockups.
 
 ## Colour scheme
 
