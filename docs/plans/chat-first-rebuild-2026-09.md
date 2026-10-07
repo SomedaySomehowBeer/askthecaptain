@@ -96,12 +96,21 @@ while the new one becomes usable; nothing deploys to production.
 | R1 | Web session and shell | API serves the web export and cookie sessions; Expo web signs in; an empty thread list; passkey step-up and push re-proved | `apps/web` and its CI, `packages/ui` (assets moved), `webPaths` |
 | R2 | Threads | [Contract](threads-2026-09.md). Projects become tags (D7); the thread model (decision 3); the thread list grouped by tag; a record thread with the small card, oldest-first, folded earlier messages, open at first unread; the composer | 0042/0043 after migration; `projects`, `task_tags` and `project_id`; item panels; three-tab navigation |
 | R3 | Versions and selective undo | [Contract](versions-and-undo-2026-10.md). Snapshots plus typed before/after changes, change sets and causes; selection/preview, dependency and conflict checks, atomic retry-safe inverse operations; see the privacy/undo contract | The audit log as a state store (stocktake idempotency, Xero sync state move to their own tables) |
+| H1 | Fidelity and fixes | Owner's hosted findings of 7 October: the booking cancel bug, Save disabled under a warning; the screens brought back to the reviewed mockups (vendored open fonts, typography scale, controls, avatars, pips), checked side by side | — |
+| H2 | Bookings and equipment by people | A new booking from the equipment schedule and from a topic ("make this a booking", as make-a-task); equipment added, renamed and archived; the Team pinned row opens Members | — |
+| H3 | Stock by people | New stock items; a stocktake screen that counts many items in one list, grouped by location, saved as one change set (one change line per item); archive; the Stock filter populated | — |
+| H4 | Tags, recurring work and search | Project tags with owner and dates managed from the list's group heading and a Tags screen; recurring series created and edited from a task's card; search over threads | — |
 | R4 | Captain reads | Agents as users with keys; the Captain agent; the classifier as an `infer` step for shared messages; private mentions expose only the calling message; tags and kind applied as plain changes; mention routing | `commitments` naming, the remaining legacy work fields, the six-job field |
 | R5 | Pending and approval | `pending` bookings holding the slot; approval cards; take-ownership privilege; the equipment schedule as a pinned view with buttons only | Saved views |
 | R6 | First agents | Scheduler and Stock keeper doing internal work; hand-off chains with loop stop and budget; agent approval limits | `chase-due` and `stocktake` definitions |
 | R7 | Files | Drive connector; marker files; change notices in the thread | — |
 | R8 | Worksheets | Templates, print codes, scan pipeline, photo storage | — |
 | R9 | Outside messages | Send as the owner; shared sending address; agent approvals within limits | — |
+
+**Order amended 7 October 2026 (owner).** After his first hosted test of R3 the owner decided: "let's get the rest
+of the app working, with a human, before we worry about getting an agent in the loop." The increments H1–H4 above
+come before R4; each gets a short contract like R2 and R3, and every client PR compares its screens side by side
+with the reviewed mockups and lists the differences before root merges it. R4–R9 are unchanged in content.
 
 ## 5. Gates that stay honest
 
