@@ -14,7 +14,7 @@ export function Notice({ title, children }: { title: string; children: string })
 }
 
 const useStyles = themedStyles((colors) => ({
-	box: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 16, gap: 6 },
+	box: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 14, paddingVertical: 12, gap: 4, marginBottom: 10 },
 	title: { fontSize: type.body, fontWeight: '600', color: colors.heading },
-	body: { fontSize: 14, lineHeight: 20, color: colors.body }
+	body: { fontSize: type.small, lineHeight: type.smallLine, color: colors.body }
 }));

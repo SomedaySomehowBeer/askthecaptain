@@ -3,7 +3,7 @@
  *  on every card: their chips, and the existing revision-checked controls. */
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import type { ReadScope } from '../account/contracts.ts';
 import { Button } from '../components/AccountPage.tsx';
 import type { ThreadCalls } from './api.ts';
@@ -21,6 +21,8 @@ import { MakeTask } from './cards/MakeTask.tsx';
 import type { RecordState } from './cards/store.ts';
 import type { CardHooks } from './cards/useSaver.ts';
 import { themedStyles, useTheme } from '../theme/theme.ts';
+import { faces, type } from '../theme/tokens.ts';
+import { ChevronDown } from '../components/Icons.tsx';
 
 const statusWords: Record<string, string> = { open: 'Open', in_progress: 'In progress', done: 'Done', cancelled: 'Cancelled', suggested: 'Suggested', confirmed: 'Confirmed',
 	maintenance: 'Maintenance', not_counted: 'Not counted', counted: 'Counted', below_reorder: 'Below reorder point', archived: 'Archived' };
@@ -31,7 +33,6 @@ export function RecordCard({ detail, calls, scope, now, fold, setFold, disabled,
 }) {
 	const styles = useStyles();
 	const { colors } = useTheme();
-	const { height } = useWindowDimensions();
 	const kind = detail.card.record?.kind;
 	const year = new Date().getFullYear(); // wall clock: `now` is monotonic
 	const status = detail.card.status ? statusWords[detail.card.status] ?? detail.card.status : null;
@@ -40,26 +41,28 @@ export function RecordCard({ detail, calls, scope, now, fold, setFold, disabled,
 	const [tagging, setTagging] = useState(false);
 	return <View testID="thread-card" style={styles.card}>
 		<Pressable testID="thread-card-fold" role="button" aria-expanded={fold} aria-label={fold ? 'Hide details' : 'Show details'} hitSlop={6} onPress={() => setFold(!fold)} style={styles.head}>
-			<Text role="heading" numberOfLines={fold ? 2 : 1} style={styles.title}>{detail.card.title}</Text>
+			<Text role="heading" numberOfLines={fold ? 3 : 2} style={styles.title}>{detail.card.title}</Text>
 			{status ? <Text style={styles.status}>{status}</Text> : null}
-			<Text aria-hidden style={[styles.chevron, { color: colors.plain }]}>{fold ? '⌃' : '⌄'}</Text>
+			<View style={styles.chevron}><ChevronDown color={colors.heading} up={fold} size={8} /></View>
 		</Pressable>
 		{!fold || !kind ? <View style={styles.facts}>{detail.card.facts.map((fact, i) => <View key={i} testID={`thread-fact-${i}`} style={styles.fact}>
-			<Text style={styles.small}>{factLabels(kind)[i]}</Text><Text style={styles.factText} numberOfLines={1}>{factWords(fact, year, record.zone ?? undefined)}</Text></View>)}</View> : null}
-		{fold ? <ScrollView style={{ maxHeight: Math.max(240, Math.round(height * 0.58)) }} contentContainerStyle={styles.fold} testID="thread-details">
+			<Text style={styles.label}>{factLabels(kind)[i]}</Text><Text style={styles.factText} numberOfLines={1}>{factWords(fact, year, record.zone ?? undefined)}</Text></View>)}</View> : null}
+		{/* The unfolded card grows to its content and scrolls with the thread (R3 boards 1 to 3): nothing in it is below
+		    a fold of its own. */}
+		{fold ? <View style={styles.fold} testID="thread-details">
 			{kind === 'task' ? <TaskEditor {...editorProps} />
 				: kind === 'booking' ? <BookingEditor {...editorProps} year={year} />
 					: kind === 'stock' ? <StockEditor calls={calls} scope={scope} detail={detail} hooks={hooks} locked={locked} confirmed={confirmed} year={year} />
 						: detail.thread.kind === 'topic' && !cardDetails(detail.card).length ? null : <Text style={styles.body}>{cardDetails(detail.card).join('\n') || 'No further details.'}</Text>}
-			<View style={styles.chips} testID="thread-tag-chips">{detail.tags.length ? detail.tags.map((t) => <Text key={t.id} style={styles.chip}>{t.name}</Text>) : <Text style={styles.small}>No tags</Text>}
+			<View style={styles.chips} testID="thread-tag-chips">{detail.tags.length ? detail.tags.map((t) => <Text key={t.id} style={styles.chip}>{t.name}</Text>) : <Text style={styles.label}>No tags</Text>}
 				<View style={{ flex: 1 }} /><CardButton testID="thread-tags-toggle" label={tagging ? 'Close tags' : 'Change tags'} quiet onPress={() => setTagging(!tagging)} />
-				<View style={{ marginLeft: 10 }}><CardButton testID="thread-history-link" label="History" quiet onPress={() => router.push(`/threads/${detail.thread.id}/history` as never)} /></View></View>
+				<View style={{ marginLeft: 10 }}><CardButton testID="thread-history-link" label="History" quiet link onPress={() => router.push(`/threads/${detail.thread.id}/history` as never)} /></View></View>
 			{tagging ? <TagControls calls={calls} scope={scope} detail={detail} now={now} disabled={disabled} change={onTag} /> : null}
 			{!kind && detail.thread.kind === 'topic' ? <MakeTask calls={calls} scope={scope} detail={detail} record={record} hooks={hooks} locked={locked} confirmed={confirmed}
 				onMembers={onMembers} onCancel={() => setFold(false)} /> : null}
 			{recordRoute(detail) ? <Button label="Open the record" onPress={() => router.push(recordRoute(detail)!)} /> : null}
 			{detail.thread.kind === 'private' ? <Text style={styles.body}>{copy.privacy}</Text> : null}
-		</ScrollView> : null}
+		</View> : null}
 	</View>;
 }
 
@@ -70,18 +73,19 @@ function factWords(fact: string, year: number, zone?: string): string {
 	return fact;
 }
 
+/** R3 captain.css `.card`, `.card-head`, `.card-title`, `.chip`, `.facts`, `.label`, `.value`. */
 const useStyles = themedStyles((colors) => ({
-	card: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, gap: 6 },
-	head: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
-	title: { flex: 1, minWidth: 0, fontSize: 17, fontWeight: '600', color: colors.heading },
-	status: { fontSize: 12, fontWeight: '600', color: colors.sageText, backgroundColor: colors.sage, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10, maxWidth: 140, overflow: 'hidden' },
-	chevron: { width: 24, textAlign: 'center', fontSize: 16 },
+	card: { paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card, gap: 8 },
+	head: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, marginVertical: -4 },
+	title: { flex: 1, minWidth: 0, fontFamily: faces.display, fontSize: type.cardTitle, lineHeight: type.cardTitleLine, color: colors.heading },
+	status: { fontSize: type.chip, lineHeight: 16, fontWeight: '600', color: colors.sageText, backgroundColor: colors.sage, paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10, maxWidth: 140, overflow: 'hidden' },
+	chevron: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
 	facts: { flexDirection: 'row', gap: 12 },
 	fact: { flex: 1, minWidth: 0 },
-	factText: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: colors.heading },
-	small: { fontSize: 11, color: colors.muted },
-	body: { fontSize: 14, lineHeight: 20, color: colors.body },
-	fold: { gap: 10, paddingTop: 4, paddingBottom: 4 },
+	factText: { fontSize: type.body, lineHeight: type.bodyLine, fontWeight: '600', color: colors.heading },
+	label: { fontSize: 11, lineHeight: 15, color: colors.muted },
+	body: { fontSize: type.body, lineHeight: type.bodyLine, color: colors.body },
+	fold: { gap: 10, paddingTop: 2 },
 	chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
-	chip: { fontSize: 12, fontWeight: '600', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10, backgroundColor: colors.page, borderWidth: 1, borderColor: colors.line, color: colors.body, overflow: 'hidden' }
+	chip: { fontSize: type.chip, lineHeight: 16, fontWeight: '600', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10, backgroundColor: colors.page, borderWidth: 1, borderColor: colors.line, color: colors.body, overflow: 'hidden' }
 }));

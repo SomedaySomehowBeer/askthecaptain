@@ -4,7 +4,8 @@ import { Pressable, ScrollView, Text, View, type StyleProp, type ViewStyle } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { isSignedIn, signedInNotices, threadsCopy } from '../account/copy.ts';
-import { space, type } from '../theme/tokens.ts';
+import { faces, space, type } from '../theme/tokens.ts';
+import { initials } from '../threads/Presentation.tsx';
 import { themedStyles, useTheme } from '../theme/theme.ts';
 import { Notice } from './Notice.tsx';
 import { Chevron, Magnifier } from './Icons.tsx';
@@ -21,37 +22,48 @@ type ScreenProps = { title?: string; back?: Back; headerAction?: ReactNode } & (
 	| { list: (frame: ScreenListFrame) => ReactNode; children?: undefined }
 );
 
-/** A workspace page (docs/proposals/2026-09-29-chat-first-captain.md): a compact header with, on the left, a way back
- *  or the organisation's name, and on the right search and the account avatar, which opens `/settings`; then an
- *  optional 26 pt heading and the page. Content keeps a 16 pt gutter and a readable column on wide screens.
- *  Accessibility uses React Native's `role` and `aria-*` props, which iOS, Android and React Native Web all map. */
-export function Screen({ title, back, children, list, headerAction }: ScreenProps) {
+/** A workspace page (docs/proposals/2026-09-29-chat-first-captain.md; drawn in the chat-first prototype and the R3
+ *  boards): a compact header with, on the left, a way back or, on the thread list, the heading itself, and on the right
+ *  search and the account avatar (the person's initials), which opens `/settings`; then an optional heading and the
+ *  page. `record` is a thread or its History (R3 boards: a 15 pt back link, a 36 pt avatar, no search, the 26 pt
+ *  History heading); otherwise the prototype's shell (a 12 pt crumb, a 30 pt avatar, search, 22 pt headings). Content
+ *  keeps a 16 pt gutter and a readable column on wide screens. Accessibility uses React Native's `role` and `aria-*`
+ *  props, which iOS, Android and React Native Web all map. */
+export function Screen({ title, back, children, list, headerAction, record = false }: ScreenProps & { record?: boolean }) {
 	const styles = useStyles();
 	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
 	const { snapshot } = useAccount();
 	const account = snapshot.account;
 	const organisation = isSignedIn(account) && account.org.kind === 'chosen' ? account.org.membership.organisationName : null;
+	const person = isSignedIn(account) ? account.user.name || account.user.email : null;
 	const contentContainerStyle = [styles.content, { paddingBottom: 32 + insets.bottom }];
-	const titleNode = title ? <Text role="heading" style={styles.heading}>{title}</Text> : null;
+	// The thread list's heading sits in the header row (prototype frame 1); a page with a way back has it below.
+	const inHeader = Boolean(title) && !back;
+	const titleNode = title && !inHeader ? <Text role="heading" style={record ? styles.pageHeading : styles.heading}>{title}</Text> : null;
 	const heading = <>{titleNode}{isSignedIn(account) ? signedInNotices(account).map(line => <Notice key={line.title} title={line.title}>{line.text}</Notice>) : null}</>;
 	return (
 		<View style={[styles.page, { paddingTop: insets.top }]}>
-			<View style={styles.header}>
+			<View style={[styles.header, record && styles.recordHeader]}>
 				{back ? (
 					<Pressable onPress={back.onPress} role="button" aria-label={back.label} hitSlop={6} style={styles.crumb}>
-						<Chevron color={colors.body} /><Text style={styles.crumbText} numberOfLines={1}>{back.label}</Text>
+						<Chevron color={record ? colors.heading : colors.muted} size={record ? 'large' : 'small'} /><Text style={record ? styles.backText : styles.crumbText} numberOfLines={1}>{back.label}</Text>
 					</Pressable>
 				) : (
-					<View style={styles.crumb}>{organisation === null ? null : <Text testID="shell-organisation" style={styles.crumbText} numberOfLines={1}>{organisation}</Text>}</View>
+					<View style={styles.titleBox}>
+						{inHeader ? <Text role="heading" style={styles.headerTitle} numberOfLines={1}>{title}</Text> : null}
+						{organisation === null ? null : <Text testID="shell-organisation" style={styles.organisation} numberOfLines={1}>{organisation}</Text>}
+					</View>
 				)}
 				<View style={styles.actions}>
 					{headerAction}
-					<Pressable disabled role="button" aria-label={threadsCopy.search} aria-disabled accessibilityHint={threadsCopy.searchHint} style={[styles.round, styles.dim]}>
-						<Magnifier color={colors.muted} />
-					</Pressable>
-					<Pressable onPress={() => router.push('/settings')} role="button" aria-label={threadsCopy.account} hitSlop={4} style={[styles.round, styles.avatar]}>
-						<View style={styles.head} /><View style={styles.shoulders} />
+					{record ? null : (
+						<Pressable disabled role="button" aria-label={threadsCopy.search} aria-disabled accessibilityHint={threadsCopy.searchHint} style={styles.round}>
+							<Magnifier color={colors.body} />
+						</Pressable>
+					)}
+					<Pressable onPress={() => router.push('/settings')} role="button" aria-label={threadsCopy.account} hitSlop={4} style={styles.round}>
+						<View aria-hidden style={[styles.avatar, record && styles.avatarLarge]}><Text style={[styles.avatarText, record && styles.avatarTextLarge]}>{person === null ? '' : initials(person)}</Text></View>
 					</Pressable>
 				</View>
 			</View>
@@ -65,7 +77,7 @@ export function Screen({ title, back, children, list, headerAction }: ScreenProp
 	);
 }
 
-/** A page outside the shell (the refusal page, a step-up): a plain way back and a heading. */
+/** A page outside the shell (the refusal page, a step-up, Account and its pages): a plain way back and a heading. */
 export function PlainScreen({ title, back, children }: { title: string; back: Back | null; children: ReactNode }) {
 	const styles = useStyles();
 	const { colors } = useTheme();
@@ -75,7 +87,7 @@ export function PlainScreen({ title, back, children }: { title: string; back: Ba
 			<View style={styles.header}>
 				{back === null ? <View style={styles.crumb} /> : (
 					<Pressable onPress={back.onPress} role="button" aria-label={back.label} hitSlop={6} style={styles.crumb}>
-						<Chevron color={colors.body} /><Text style={styles.crumbText} numberOfLines={1}>{back.label}</Text>
+						<Chevron color={colors.muted} size="small" /><Text style={styles.crumbText} numberOfLines={1}>{back.label}</Text>
 					</Pressable>
 				)}
 			</View>
@@ -87,21 +99,35 @@ export function PlainScreen({ title, back, children }: { title: string; back: Ba
 	);
 }
 
+/** Text with no designed style of its own (a loading or unavailable line on a page): the body face and colour. */
+export function PlainText({ children, testID, role }: { children: ReactNode; testID?: string; role?: 'status' }) {
+	const styles = useStyles();
+	return <Text testID={testID} role={role} style={styles.plain}>{children}</Text>;
+}
+
 const useStyles = themedStyles((colors) => ({
 	page: { flex: 1, backgroundColor: colors.page },
 	fill: { flex: 1 },
+	// Prototype frames 2 and 3 `.head` (6 px 12 px 0, the crumb 12/600 muted with a 16 pt chevron); R3 `.top`.
 	header: {
-		minHeight: 52, paddingHorizontal: space.page - 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+		minHeight: 50, paddingTop: 6, paddingLeft: 12, paddingRight: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
 		width: '100%', maxWidth: space.maxContentWidth, alignSelf: 'center'
 	},
+	recordHeader: { paddingTop: 12, paddingLeft: 14, paddingRight: 12, paddingBottom: 6, minHeight: 62 },
 	content: { paddingHorizontal: space.page, width: '100%', maxWidth: space.maxContentWidth, alignSelf: 'center' },
-	crumb: { minHeight: 44, minWidth: 44, flexDirection: 'row', alignItems: 'center', flexShrink: 1, paddingHorizontal: 4 },
-	crumbText: { fontSize: type.body, color: colors.body, fontWeight: '600' },
-	actions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-	round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-	dim: { opacity: 0.45 },
-	avatar: { backgroundColor: colors.sage, overflow: 'hidden' },
-	head: { width: 13, height: 13, borderRadius: 7, backgroundColor: colors.sageText, marginTop: 8 },
-	shoulders: { width: 26, height: 14, borderTopLeftRadius: 13, borderTopRightRadius: 13, backgroundColor: colors.sageText, marginTop: 3 },
-	heading: { fontSize: type.heading, lineHeight: 32, fontWeight: '600', color: colors.heading, marginTop: 4, marginBottom: 14 }
+	crumb: { minHeight: 44, minWidth: 44, flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, paddingRight: 4 },
+	crumbText: { fontSize: 12, color: colors.muted, fontWeight: '600' },
+	backText: { fontSize: type.body, color: colors.heading, fontWeight: '600' },
+	titleBox: { flexShrink: 1, minWidth: 0, paddingLeft: 2, justifyContent: 'center', minHeight: 44 },
+	headerTitle: { fontFamily: faces.display, fontSize: type.heading, lineHeight: type.headingLine, color: colors.heading },
+	organisation: { fontSize: type.tiny, lineHeight: 13, color: colors.muted },
+	actions: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+	round: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+	avatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.sage, alignItems: 'center', justifyContent: 'center' },
+	avatarLarge: { width: 36, height: 36, borderRadius: 18 },
+	avatarText: { fontSize: 10, fontWeight: '700', color: colors.sageText },
+	avatarTextLarge: { fontSize: 12, fontWeight: '700' },
+	heading: { fontFamily: faces.display, fontSize: type.heading, lineHeight: type.headingLine, color: colors.heading, marginTop: 2, marginBottom: 12 },
+	pageHeading: { fontFamily: faces.display, fontSize: type.pageHeading, lineHeight: type.pageHeadingLine, color: colors.heading, marginTop: 0, marginBottom: 2 },
+	plain: { fontSize: type.body, lineHeight: type.bodyLine, color: colors.plain }
 }));

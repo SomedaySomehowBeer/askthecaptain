@@ -6,7 +6,7 @@ import { createElement, useEffect, useRef, type ReactNode } from 'react';
 import { Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { Lock, Undone } from '../../components/Icons.tsx';
 import { themedStyles, useTheme } from '../../theme/theme.ts';
-import { space } from '../../theme/tokens.ts';
+import { familyFor, space, type } from '../../theme/tokens.ts';
 import { CardButton, Note } from '../cards/Fields.tsx';
 import type { Segment } from '../wording.ts';
 import type { ChangeSet, Entry } from './contracts.ts';
@@ -16,7 +16,8 @@ import { historyCopy, ticked } from './copy.ts';
 import { actorInitials, actorName, entrySentence, plainText, setTime, startWords, stateWords, versionLines, type HistoryWords } from './words.ts';
 
 const web = Platform.OS === 'web';
-const systemFont = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+/** The body face, so the browser's own label matches the text around it. */
+const textFont = familyFor('regular', true);
 
 export function HistoryList({ state, controller, words, focus, heading, contentStyle }: {
 	state: HistoryState; controller: HistoryController; words: HistoryWords; focus: string | null; heading: ReactNode; contentStyle: unknown;
@@ -77,7 +78,8 @@ function SetCard({ set, state, controller, words, focused }: { set: ChangeSet; s
 
 function Words({ segments }: { segments: readonly Segment[] }) {
 	const styles = useStyles();
-	return <>{segments.map((s, i) => s.strong ? <Text key={i} style={styles.value}>{s.text}</Text> : s.text)}</>;
+	// History words its values plainly (R3 History.dc.html); a change line in the thread sets them in bold.
+	return <>{segments.map((s) => s.text).join('')}</>;
 }
 
 function ChangeRow({ entry, set, state, controller, words, last }: { entry: Entry; set: ChangeSet; state: HistoryState; controller: HistoryController; words: HistoryWords; last: boolean }) {
@@ -97,7 +99,7 @@ function ChangeRow({ entry, set, state, controller, words, last }: { entry: Entr
 	const rowStyle = [styles.chg, last && styles.chgLast, checked && styles.picked];
 	if (!tickable) return <View testID={`history-entry-${entry.id}`} accessible focusable aria-label={label} style={rowStyle}>
 		<View style={styles.glyph}>{entry.state === 'reversed' ? <Undone color={colors.muted} /> : <Lock color={colors.muted} />}</View>{body}{badgeView}</View>;
-	if (web) return <View testID={`history-entry-${entry.id}`} style={[rowStyle, styles.chgWeb]}>{createElement('label', { style: { display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1, minWidth: 0, minHeight: 44, padding: '11px 12px', boxSizing: 'border-box', cursor: disabled ? 'default' : 'pointer', fontFamily: systemFont } },
+	if (web) return <View testID={`history-entry-${entry.id}`} style={[rowStyle, styles.chgWeb]}>{createElement('label', { style: { display: 'flex', alignItems: 'flex-start', gap: 10, flex: 1, minWidth: 0, minHeight: 44, padding: '11px 12px', boxSizing: 'border-box', cursor: disabled ? 'default' : 'pointer', fontFamily: textFont } },
 		createElement('input', { type: 'checkbox', 'data-testid': `history-tick-${entry.id}`, 'aria-label': label, checked, disabled, onChange: () => controller.toggle(entry),
 			style: { width: 20, height: 20, margin: 0, marginTop: 1, accentColor: colors.action, flex: 'none' } }), body, badgeView)}</View>;
 	return <Pressable testID={`history-tick-${entry.id}`} role="checkbox" aria-checked={checked} aria-label={label} aria-disabled={disabled} disabled={disabled} onPress={() => controller.toggle(entry)} style={rowStyle}>
@@ -135,7 +137,7 @@ function VersionPanel({ state, controller, words }: { state: HistoryState; contr
 }
 
 const useStyles = themedStyles((colors) => ({
-	sub: { fontSize: 13, color: colors.muted, marginTop: 2, marginBottom: 10 },
+	sub: { fontSize: type.small, color: colors.muted, marginTop: 2, marginBottom: 10, paddingHorizontal: 4 },
 	list: { gap: 10, width: '100%', maxWidth: space.maxContentWidth, alignSelf: 'center' },
 	row: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
 	muted: { fontSize: 13, lineHeight: 18, color: colors.muted },
@@ -160,7 +162,7 @@ const useStyles = themedStyles((colors) => ({
 	chgLast: { borderBottomWidth: 0 },
 	picked: { backgroundColor: colors.needsYou },
 	chgText: { flex: 1, minWidth: 0 },
-	chgWords: { fontSize: 15, lineHeight: 21, color: colors.heading },
+	chgWords: { fontSize: type.body, lineHeight: type.bodyLine, color: colors.heading },
 	chgNote: { fontSize: 12, lineHeight: 17, color: colors.muted, marginTop: 3 },
 	glyph: { width: 20, alignItems: 'center', paddingTop: 1 },
 	badge: { fontSize: 11, fontWeight: '700', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 9, overflow: 'hidden', marginTop: 1 },

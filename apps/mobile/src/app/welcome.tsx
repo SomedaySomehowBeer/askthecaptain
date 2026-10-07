@@ -43,4 +43,4 @@ function NativeWelcome({ account }: { account: Account }) {
 	);
 }
 
-const useStyles = themedStyles((colors) => ({ muted: { fontSize: type.rowDetail, lineHeight: 18, color: colors.muted, marginTop: 8 } }));
+const useStyles = themedStyles((colors) => ({ muted: { fontSize: type.small, lineHeight: type.smallLine, color: colors.muted, marginTop: 8 } }));

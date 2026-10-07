@@ -5,7 +5,7 @@
  *  it (react-native-web's Modal). */
 import { Modal, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { themedStyles } from '../../theme/theme.ts';
-import { space } from '../../theme/tokens.ts';
+import { faces, space, type } from '../../theme/tokens.ts';
 import { CardButton } from '../cards/Fields.tsx';
 import type { Entry, PreviewEntry } from './contracts.ts';
 import type { HistoryController, HistoryState } from './controller.ts';
@@ -126,14 +126,14 @@ const useStyles = themedStyles((colors) => ({
 	scrim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.shadow, opacity: 0.5 },
 	sheet: { position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: colors.page, borderTopLeftRadius: 18, borderTopRightRadius: 18, paddingHorizontal: 12, paddingTop: 16, paddingBottom: 16, gap: 10,
 		width: '100%', maxWidth: space.maxContentWidth, alignSelf: 'center', marginHorizontal: 'auto' },
-	title: { fontSize: 21, fontWeight: '600', color: colors.heading, paddingHorizontal: 4 },
+	title: { fontFamily: faces.display, fontSize: type.sheetTitle, lineHeight: type.sheetTitleLine, color: colors.heading, paddingHorizontal: 4 },
 	body: { gap: 10 },
 	pv: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 6 },
 	pvHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 	pvWhat: { fontWeight: '600', fontSize: 15, color: colors.heading },
 	vals: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 3 },
-	dt: { width: 52, fontSize: 14, color: colors.muted },
-	dd: { width: '75%', flexGrow: 1, fontSize: 14, color: colors.heading },
+	dt: { width: 52, fontSize: 14, lineHeight: 19, color: colors.muted },
+	dd: { width: '75%', flexGrow: 1, fontSize: 14, lineHeight: 19, color: colors.heading },
 	ddStrong: { fontWeight: '700' },
 	muted: { fontSize: 13, lineHeight: 18, color: colors.muted },
 	pad: { paddingHorizontal: 4 },
