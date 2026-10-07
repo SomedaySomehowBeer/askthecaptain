@@ -578,13 +578,18 @@ the header chevron. It has an accessible heading.
   11 pt; labels stay visible.
 - **Selected tab:** a darker grey-green pill at 50% opacity, with a green icon and label.
 - **Sizing:** targets are at least 44 pt, and content clears the floating bar.
-- **Header:** a compact breadcrumb, search and avatar, with no wordmark. Headings are 26 pt.
+- **Header:** a compact breadcrumb, search and avatar, with no wordmark. Headings are 26 pt. *(Amended 7 October 2026, H1
+  fidelity: the type scale is measured from the reviewed mockups, 22 pt screen headings and 26 pt History; see
+  `apps/mobile/src/theme/tokens.ts` and docs/validation/fidelity-2026-10-07.)*
 - **Colours and type:** forest, paper and mint, with Fraunces and Inter.
 - **Tokens** are authored in `apps/mobile/src/theme/tokens.ts`, outside `packages/ui/design`, with
   each value's source cited (D14).
 - **Theme:** light only until a dark palette is reviewed.
 - **Fonts:** bundled only if their licences and assets are confirmed; otherwise the system font, and
   the PR says so.
+  *(Amended 7 October 2026, H1 fidelity: confirmed and bundled. Fraunces and Inter are SIL Open Font License 1.1
+  with no Reserved Font Name; static instances of the google/fonts sources are vendored in
+  `apps/mobile/assets/fonts` with their `OFL.txt` and loaded with `expo-font`, §8.)*
 
 **States.** Loading, failed with retry, empty, unavailable, permission and disabled states are designed
 and use words. A failed read never renders as empty. There is no green plus where creation is not
@@ -616,6 +621,7 @@ tags nor the proof's versions are assumed.
 | `expo-web-browser` | `openAuthSessionAsync` |
 | `expo-secure-store` | Session and organisation choice: the **only** storage mechanism |
 | `expo-crypto` | Random bytes and SHA-256 (Q10) |
+| `expo-font` | Loads the vendored Fraunces and Inter faces (§6 Fonts; added 7 October 2026 for H1 fidelity) |
 
 **Development dependencies:** `typescript`, `@types/react`, `@types/react-dom` for SDK-matched web-export types, `@types/node` for Node-run pure tests, and `tsx` if it is not hoisted. Pure logic
 lives in React Native-free modules tested with the existing `node --import tsx --test`: return path,
