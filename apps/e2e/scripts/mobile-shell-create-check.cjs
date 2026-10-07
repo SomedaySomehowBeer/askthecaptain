@@ -38,7 +38,7 @@ module.exports=async({browser,production,base,shots,width})=>{
     if(url.pathname.endsWith('/read'))return json(200,{readPosition:1,unread:0});
     return json(200,details(t));
    }
-   const upstream=new URL(url);if(upstream.hostname==='localhost')upstream.hostname='127.0.0.1';return route.fulfill({response:await route.fetch({url:upstream.href,maxRedirects:0})});
+   const upstream=new URL(url);if(upstream.hostname==='localhost')upstream.hostname='127.0.0.1';return route.fetch({url:upstream.href,maxRedirects:0}).then(response => route.fulfill({ response })).catch(() => { /* the page closed with the file in flight (a font swapping in) */ });
   });
   page.on('pageerror',e=>errors.push(e.message));const id=n=>page.getByTestId(n).filter({visible:true}),go=p=>page.goto(new URL(p,production).href);
   const overflow=async()=>expect(await page.evaluate(()=>Math.max(document.documentElement.scrollWidth,document.body.scrollWidth)-innerWidth)).toBeLessThanOrEqual(1);

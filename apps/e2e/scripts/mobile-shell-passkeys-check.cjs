@@ -50,7 +50,7 @@ module.exports = async ({ browser, production, base, shots, width }) => {
     return json(503, {});
    }
    const upstream = new URL(url); if (upstream.hostname === 'localhost') upstream.hostname = '127.0.0.1';
-   return route.fulfill({ response: await route.fetch({ url: upstream.href, maxRedirects: 0 }) });
+   return route.fetch({ url: upstream.href, maxRedirects: 0 }).then(response => route.fulfill({ response })).catch(() => { /* the page closed with the file in flight (a font swapping in) */ });
   });
   const cdp = await context.newCDPSession(page); await cdp.send('WebAuthn.enable');
   const { authenticatorId } = await cdp.send('WebAuthn.addVirtualAuthenticator', { options: { protocol: 'ctap2', transport: 'internal', hasResidentKey: true, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true } });
