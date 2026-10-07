@@ -64,9 +64,9 @@ function WebPasskeys({ web, now }: { web: WebCalls; now: () => number }) {
  </View>;
 }
 const useStyles = themedStyles((colors) => ({
- stack: { gap: 10 }, heading: { fontSize: 18, fontWeight: '600', color: colors.heading },
+ stack: { gap: 10 }, heading: { fontSize: type.section, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', color: colors.muted, marginTop: 8 },
  card: { gap: 6, padding: 12, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
- name: { fontSize: type.body, fontWeight: '600', color: colors.heading },
- body: { fontSize: type.body, lineHeight: 21, color: colors.body }, muted: { fontSize: 14, lineHeight: 20, color: colors.muted },
- input: { minHeight: space.minTarget, padding: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 8, backgroundColor: colors.card, color: colors.body, fontSize: type.body }
+ name: { fontSize: type.rowTitle, lineHeight: type.rowTitleLine, fontWeight: '700', color: colors.heading },
+ body: { fontSize: type.small, lineHeight: type.smallLine, color: colors.body }, muted: { fontSize: type.small, lineHeight: type.smallLine, color: colors.muted },
+ input: { minHeight: space.minTarget, paddingHorizontal: 12, borderWidth: 1, borderColor: colors.fieldLine, borderRadius: 10, backgroundColor: colors.card, color: colors.heading, fontSize: type.body }
 }));

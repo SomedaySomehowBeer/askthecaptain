@@ -62,7 +62,7 @@ module.exports = async ({ browser, production, base, shots, width }) => {
     return json(200, { ok: true });
    }
    const upstream = new URL(url); if (upstream.hostname === 'localhost') upstream.hostname = '127.0.0.1';
-   return route.fulfill({ response: await route.fetch({ url: upstream.href, maxRedirects: 0 }) });
+   return route.fetch({ url: upstream.href, maxRedirects: 0 }).then(response => route.fulfill({ response })).catch(() => { /* the page closed with the file in flight (a font swapping in) */ });
   });
   // Entry from Settings and deliberate list loading, with no fabricated empty list.
   await go('/settings'); await id('account-members').click(); await expect(id(`member-${staffId}`)).toBeVisible();

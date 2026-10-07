@@ -170,7 +170,7 @@ module.exports = async ({ browser, production, base, shots, width, scheme = 'lig
    const req = route.request(), url = new URL(req.url());
    if (![production.origin, base?.origin].includes(url.origin)) { outside.push(url.origin); return route.abort(); }
    const json = (status, value, headers = {}) => route.fulfill({ status, contentType: 'application/json', headers, body: JSON.stringify(value) });
-   if (!url.pathname.startsWith('/v1/')) { const upstream = new URL(url); if (upstream.hostname === 'localhost') upstream.hostname = '127.0.0.1'; return route.fulfill({ response: await route.fetch({ url: upstream.href, maxRedirects: 0 }) }); }
+   if (!url.pathname.startsWith('/v1/')) { const upstream = new URL(url); if (upstream.hostname === 'localhost') upstream.hostname = '127.0.0.1'; return route.fetch({ url: upstream.href, maxRedirects: 0 }).then(response => route.fulfill({ response })).catch(() => { /* the page closed with the file in flight (a font swapping in) */ }); }
    expect(req.headers()['x-captain-client']).toBe('web'); expect(req.headers().authorization).toBeUndefined();
    const p = url.pathname.replace(`/v1/organisations/${org}`, ''), method = req.method(), body = req.postData() ? req.postDataJSON() : undefined;
    if (method !== 'GET') writes.push({ method, path: p, body }); else reads.push(p + url.search);

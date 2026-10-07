@@ -131,7 +131,7 @@ function ControlButton({ testID, label, control, onPress }: { testID: string; la
 const useStyles = themedStyles((colors) => ({
 	fill: { flex: 1 },
 	stack: { gap: 12 },
-	subtitle: { fontSize: type.body, color: colors.muted, marginTop: -8 },
-	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
-	detail: { fontSize: 13, lineHeight: 18, color: colors.muted }
+	subtitle: { fontSize: type.small, color: colors.muted, marginTop: -8 },
+	body: { fontSize: type.body, lineHeight: type.bodyLine, color: colors.body },
+	detail: { fontSize: type.label, lineHeight: 17, color: colors.muted }
 }));

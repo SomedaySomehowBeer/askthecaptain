@@ -55,7 +55,7 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
       return json(503, { error: { code: 'unavailable' } });
      }
      const upstream = new URL(url); if (upstream.hostname === 'localhost') upstream.hostname = '127.0.0.1';
-     await route.fulfill({ response: await route.fetch({ url: upstream.href, maxRedirects: 0 }) });
+     await route.fetch({ url: upstream.href, maxRedirects: 0 }).then(response => route.fulfill({ response })).catch(() => { /* the page closed with the file in flight (a font swapping in) */ });
     });
     const freshPage = async () => { if (page) await page.close(); page = await context.newPage(); page.setDefaultTimeout(15000); page.on('pageerror', error => errors.push(error.message)); };
     const id = name => page.getByTestId(name).filter({ visible: true });

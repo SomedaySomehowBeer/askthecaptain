@@ -19,6 +19,7 @@
     "expo-web-browser": "openAuthSessionAsync (§8)",
     "expo-secure-store": "session and organisation choice: the only storage mechanism (§8)",
     "expo-crypto": "random bytes and SHA-256 for PKCE and attempts (§8, Q10)",
+    "expo-font": "loads the vendored Fraunces and Inter files (SIL OFL 1.1, apps/mobile/assets/fonts) for the reviewed type (D14, H1 fidelity)",
     "@simplewebauthn/browser": "the passkey step-up on the web: startAuthentication over the API's assertion options (docs/plans/expo-web-session-2026-09.md §B.2)"
   },
   "devDependencies": {

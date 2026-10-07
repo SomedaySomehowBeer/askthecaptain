@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { dark, light, paletteFor, schemeOf, space, type, type Palette } from './tokens.ts';
+import { dark, faceFor, faces, familyFor, light, paletteFor, schemeOf, space, type, type Palette } from './tokens.ts';
 
 /** WCAG 2.x relative luminance and contrast ratio (https://www.w3.org/TR/WCAG21/#dfn-contrast-ratio). */
 type Rgba = { r: number; g: number; b: number; a: number };
@@ -35,7 +35,7 @@ export const textPairs = (p: Palette): readonly (readonly [string, string, strin
 	['plain on page', p.plain, p.page], ['action on page', p.action, p.page],
 	['heading on card', p.heading, p.card], ['body on card', p.body, p.card], ['muted on card', p.muted, p.card],
 	['plain on card', p.plain, p.card], ['action on card', p.action, p.card], ['sageText on card', p.sageText, p.card],
-	['actionText on action', p.actionText, p.action],
+	['actionText on action', p.actionText, p.action], ['page on body (the chosen filter chip)', p.page, p.body],
 	['sageText on sage', p.sageText, p.sage], ['heading on sage', p.heading, p.sage], ['muted on sage', p.muted, p.sage],
 	['heading on needsYou', p.heading, p.needsYou], ['body on needsYou', p.body, p.needsYou], ['muted on needsYou', p.muted, p.needsYou],
 	['sageText on needsYou', p.sageText, p.needsYou],
@@ -49,7 +49,7 @@ export const textPairs = (p: Palette): readonly (readonly [string, string, strin
 test('the light palette is the reviewed green-grey set, unchanged, plus the tokens for colours the screens used inline and the R3 warning and neutral pairs', () => {
 	assert.deepEqual(light, {
 		page: '#f1f5ee', card: '#ffffff', heading: '#142619', body: '#1f3a2c', muted: '#54655a', action: '#276744', actionText: '#ffffff',
-		line: '#d8e0d3', rowLine: '#e6ece2', needsYou: '#e9f2e4', needsYouLine: '#bfd4b8', pinned: '#e3ebdd', sage: '#dbe6d4', sageText: '#2d4c36',
+		line: '#d8e0d3', fieldLine: '#c6d2c1', rowLine: '#e6ece2', needsYou: '#e9f2e4', needsYouLine: '#bfd4b8', pinned: '#e3ebdd', sage: '#dbe6d4', sageText: '#2d4c36',
 		plain: '#000000', unknown: 'rgba(84, 101, 90, 0.10)', unknownStripe: 'rgba(84, 101, 90, 0.22)', shadow: '#142619',
 		warning: '#fbe8c4', warningText: '#6b4a0c', warningLine: '#b98a2b', neutral: '#e4e8e1', neutralText: '#434a44'
 	});
@@ -58,7 +58,7 @@ test('the light palette is the reviewed green-grey set, unchanged, plus the toke
 test('the dark palette is the owner-reviewed set', () => {
 	assert.deepEqual(dark, {
 		page: '#0f1a14', card: '#17231c', heading: '#f4f7f2', body: '#e6ede4', muted: '#a9b6ab', action: '#90e8a8', actionText: '#10261a',
-		line: '#2e3d34', rowLine: '#263229', needsYou: '#1a2c21', needsYouLine: '#2f5040', pinned: '#1f3126', sage: '#2c4335', sageText: '#cfe3d1',
+		line: '#2e3d34', fieldLine: '#3a4a40', rowLine: '#263229', needsYou: '#1a2c21', needsYouLine: '#2f5040', pinned: '#1f3126', sage: '#2c4335', sageText: '#cfe3d1',
 		plain: '#e6ede4', unknown: 'rgba(169, 182, 171, 0.10)', unknownStripe: 'rgba(169, 182, 171, 0.22)', shadow: '#000000',
 		warning: '#3a2c10', warningText: '#f3d08a', warningLine: '#8a6a2a', neutral: '#2a312c', neutralText: '#cfd6d0'
 	});
@@ -108,9 +108,20 @@ test('the contrast helper matches known WCAG values', () => {
 	assert.equal(over('rgba(0, 0, 0, 0.5)', '#ffffff'), '#808080');
 });
 
-test('headings are 26 pt, targets at least 44 pt, the gutter 16 pt, and wide screens keep a readable column', () => {
-	assert.equal(type.heading, 26);
+test('the type scale is the mockups\' (frames 1, 2, 5, 12; R3 captain.css), targets at least 44 pt, the gutter 16 pt, and wide screens keep a readable column', () => {
+	assert.deepEqual([type.heading, type.pageHeading, type.cardTitle, type.sheetTitle, type.groupTitle], [22, 26, 19, 21, 15]);
+	assert.deepEqual([type.body, type.rowTitle, type.rowDetail, type.rowLast, type.small, type.meta, type.tiny], [15, 13, 11, 12, 13, 12, 10]);
 	assert.ok(space.minTarget >= 44);
 	assert.equal(space.page, 16);
 	assert.ok(space.maxContentWidth >= 600 && space.maxContentWidth <= 900);
+});
+
+test('every text style draws with a vendored face: Fraunces by name, Inter by weight; the web adds a system fallback', () => {
+	assert.equal(faceFor(faces.display, '600'), 'display');
+	assert.equal(faceFor(undefined, undefined), 'regular'); assert.equal(faceFor(undefined, 'normal'), 'regular'); assert.equal(faceFor(undefined, '400'), 'regular');
+	assert.equal(faceFor(undefined, '500'), 'semibold'); assert.equal(faceFor(undefined, '600'), 'semibold');
+	assert.equal(faceFor(undefined, '700'), 'bold'); assert.equal(faceFor(undefined, 'bold'), 'bold'); assert.equal(faceFor(undefined, '800'), 'bold');
+	assert.equal(familyFor('semibold', false), 'Inter-SemiBold');
+	assert.match(familyFor('semibold', true), /^"Inter-SemiBold", system-ui/);
+	assert.match(familyFor('display', true), /^"Fraunces-SemiBold", Georgia/);
 });

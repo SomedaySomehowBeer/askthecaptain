@@ -28,10 +28,12 @@ export function ComposerInput(props: TextInputProps) {
  const styles = useStyles();
  const { colors } = useTheme();
  const [height, setHeight] = useState(44);
+ const [focused, setFocused] = useState(false);
  useEffect(() => { if (!props.value) setHeight(44); }, [props.value]);
  return <TextInput {...props} multiline placeholderTextColor={colors.muted}
+  onFocus={event => { setFocused(true); props.onFocus?.(event); }} onBlur={event => { setFocused(false); props.onBlur?.(event); }}
   onContentSizeChange={event => setHeight(Math.max(44, Math.min(120, event.nativeEvent.contentSize.height)))}
-  style={[styles.input, { height }, props.style]} />;
+  style={[styles.input, focused && styles.focused, { height }, props.style]} />;
 }
 
 /** Tag boundaries are calendar dates: do not shift them with the device's timezone. */
@@ -61,6 +63,10 @@ export function initials(name: string | null) {
  const words=name?.trim().split(/\s+/).filter(Boolean)??[];
  return words.length ? [words[0]!,...(words.length>1?[words.at(-1)!]:[])].map(word=>Array.from(word)[0]).join('').toLocaleUpperCase() : '–';
 }
+/** A clock time as the boards write it ("1:58 pm"): the device's own time format, with a lower-case am or pm. */
+export function clockTime(instant: string): string {
+ return new Date(instant).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/[\s\u202f]*([AaPp])\.?\s?[Mm]\.?$/, (_, x: string) => ` ${x.toLowerCase()}m`);
+}
 /** Message days follow the same device timezone as their displayed times. */
 export function messageDay(instant:string) {
  return new Date(instant).toDateString();
@@ -69,12 +75,15 @@ export function dayLabel(instant:string) {
  return new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(new Date(instant));
 }
 
+/** R3 `.btn-primary` (Send), a quiet text action, and the prototype's dashed "Show earlier messages" row. */
 const useStyles = themedStyles((colors) => ({
- action: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start', borderRadius: 10 },
+ action: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start', borderRadius: 12 },
  actionText: { fontSize: 13, fontWeight: '600', color: colors.action },
- primary: { backgroundColor: colors.action, paddingHorizontal: 12 },
- primaryText: { color: colors.actionText },
- dashed: { alignSelf: 'stretch', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.line },
+ primary: { backgroundColor: colors.action, paddingHorizontal: 16 },
+ primaryText: { fontSize: 15, fontWeight: '600', color: colors.actionText },
+ dashed: { alignSelf: 'stretch', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.fieldLine },
  disabledText: { color: colors.muted },
- input: { flex: 1, minWidth: 0, color: colors.body, fontSize: 15, lineHeight: 21, paddingHorizontal: 10, paddingVertical: 11, minHeight: 44, maxHeight: 120, textAlignVertical: 'top' }
+ input: { flex: 1, minWidth: 0, color: colors.body, fontSize: 15, lineHeight: 21, paddingHorizontal: 10, paddingVertical: 11, minHeight: 44, maxHeight: 120, textAlignVertical: 'top', borderRadius: 10, outlineWidth: 0 },
+ // R3 `.input-focus`'s ring, in place of the browser's black outline.
+ focused: { boxShadow: `0 0 0 2px ${colors.sage}` }
 }));

@@ -46,7 +46,7 @@ module.exports = async ({ browser, production, base, shots, width }) => {
     }
     return json(503,{});
    }
-   const upstream=new URL(url);if(upstream.hostname==='localhost')upstream.hostname='127.0.0.1';return route.fulfill({response:await route.fetch({url:upstream.href,maxRedirects:0})});
+   const upstream=new URL(url);if(upstream.hostname==='localhost')upstream.hostname='127.0.0.1';return route.fetch({url:upstream.href,maxRedirects:0}).then(response => route.fulfill({ response })).catch(() => { /* the page closed with the file in flight (a font swapping in) */ });
   });
   page.on('pageerror',e=>errors.push(e.message));const id=n=>page.getByTestId(n).filter({visible:true});const go=p=>page.goto(new URL(p,production).href);
   const shot=async name=>{if(shots)await page.screenshot({path:path.join(shots,`${width}-threads-${name}.png`),fullPage:true});};

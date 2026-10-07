@@ -39,7 +39,7 @@ module.exports = async ({ browser, production, base, shots, width }) => {
     expect(req.postDataJSON().endpoint).toBe(endpoint); devices = [device]; return json(201, device);
    }
    const upstream = new URL(url); if (upstream.hostname === 'localhost') upstream.hostname = '127.0.0.1';
-   return route.fulfill({ response: await route.fetch({ url: upstream.href, maxRedirects: 0 }) });
+   return route.fetch({ url: upstream.href, maxRedirects: 0 }).then(response => route.fulfill({ response })).catch(() => { /* the page closed with the file in flight (a font swapping in) */ });
   });
   const go = route => page.goto(new URL(route, production).href);
   const overflow = async () => expect(await page.evaluate(() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth)).toBeLessThanOrEqual(1);

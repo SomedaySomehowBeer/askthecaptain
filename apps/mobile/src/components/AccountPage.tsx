@@ -6,7 +6,7 @@ import { copy, isSignedIn, nextWake, revocationDisabled, revocationLines, revoke
 import { useRevocation, type Account } from '../account/AccountProvider.tsx';
 import type { Wait } from '../account/clock.ts';
 import type { PersonScope } from '../account/revocation.ts';
-import { space, type } from '../theme/tokens.ts';
+import { faces, space, type } from '../theme/tokens.ts';
 import { themedStyles } from '../theme/theme.ts';
 import { Notice } from './Notice.tsx';
 
@@ -154,18 +154,19 @@ export function RevokeOthers({ account }: { account: Account }) {
 
 const useStyles = themedStyles((colors) => ({
 	page: { flex: 1, backgroundColor: colors.page },
-	spacer: { minHeight: 52 },
+	spacer: { minHeight: 50 },
 	content: { paddingHorizontal: space.page, width: '100%', maxWidth: space.maxContentWidth, alignSelf: 'center' },
-	heading: { fontSize: type.heading, lineHeight: 32, fontWeight: '600', color: colors.heading, marginTop: 4, marginBottom: 14 },
+	heading: { fontFamily: faces.display, fontSize: type.heading, lineHeight: type.headingLine, color: colors.heading, marginTop: 2, marginBottom: 12 },
 	stack: { gap: 12, marginBottom: 12 },
-	body: { fontSize: type.body, lineHeight: 21, color: colors.body },
+	body: { fontSize: type.body, lineHeight: type.bodyLine, color: colors.body },
 	buttonWrap: { gap: 4 },
-	button: { minHeight: space.minTarget, borderRadius: 22, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center' },
-	primary: { backgroundColor: colors.action },
-	secondary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
+	// R3 `.btn` and `.btn-primary`: 12 pt corners, the field border, 15 pt semibold.
+	button: { minHeight: space.minTarget, borderRadius: 12, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' },
+	primary: { backgroundColor: colors.action, borderWidth: 1, borderColor: colors.action },
+	secondary: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.fieldLine },
 	disabled: { opacity: 0.45 },
-	buttonText: { fontSize: type.body, fontWeight: '600', color: colors.body },
+	buttonText: { fontSize: type.button, fontWeight: '600', color: colors.heading },
 	primaryText: { color: colors.actionText },
-	reason: { fontSize: 13, lineHeight: 18, color: colors.muted },
+	reason: { fontSize: type.small, lineHeight: type.smallLine, color: colors.muted },
 	confirm: { gap: 8, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card }
 }));

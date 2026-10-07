@@ -9,6 +9,7 @@ import type { Role } from '../account/me.ts';
 import { Button } from '../components/AccountPage.tsx';
 import { PlainScreen } from '../components/Screen.tsx';
 import { space, type } from '../theme/tokens.ts';
+import { initials } from '../threads/Presentation.tsx';
 import { themedStyles } from '../theme/theme.ts';
 import Welcome from './welcome.tsx';
 
@@ -59,7 +60,7 @@ function MembersPanel({ calls, scope, name, now }: { calls: MembersCalls; scope:
    {copy ? <Text role="status" testID="invitation-copy-status" style={styles.body}>{copy}</Text> : null}
   </View> : null}
   {state.data ? <>
-   <Text role="heading" style={styles.heading}>Members</Text>
+   <Text role="heading" style={styles.section}>Members</Text>
    {state.data.members.length === 0 ? <Text testID="members-empty" style={styles.body}>No members were returned. Refresh before making changes.</Text> : null}
    {state.data.members.map(member => <MemberRow key={`${member.userId}:${member.role}`} member={member} data={state.data!} scope={scope} disabled={disabled} change={controls.change} />)}
    {actor && managesMembers(actor.role) ? <View style={styles.card}>
@@ -69,7 +70,7 @@ function MembersPanel({ calls, scope, name, now }: { calls: MembersCalls; scope:
     <RoleChoices label="Invitation role" roles={['member', 'admin']} value={role} disabled={disabled} onChange={value => setRole(value as 'admin' | 'member')} />
     <Button testID="invite-create" label="Create invitation" primary disabled={disabled} onPress={() => { void controls.change({ kind: 'invite', email, role }); }} />
    </View> : null}
-   <Text role="heading" style={styles.heading}>Pending invitations</Text>
+   <Text role="heading" style={styles.section}>Pending invitations</Text>
    {state.data.invitations.length === 0 ? <Text testID="invitations-empty" style={styles.body}>No pending invitations.</Text> : null}
    {state.data.invitations.map(invitation => <View style={styles.card} key={invitation.id} testID={`invitation-${invitation.id}`}>
     <Text style={styles.body}>{invitation.email}</Text><Text style={styles.body}>{invitation.role} · Expires {new Date(invitation.expiresAt).toLocaleDateString()}</Text>
@@ -89,8 +90,9 @@ function MemberRow({ member, data, scope, disabled, change }: { member: Member; 
  const canEdit = actor?.role === 'owner' || (actor?.role === 'admin' && member.role !== 'owner');
  const lastOwner = member.role === 'owner' && data.members.filter(row => row.role === 'owner').length === 1;
  return <View style={styles.card} testID={`member-${member.userId}`}>
-  <Text style={styles.heading}>{member.name || member.email}{member.userId === scope.userId ? ' (you)' : ''}</Text>
-  <Text style={styles.body}>{member.email}</Text><Text style={styles.body}>Role: {member.role}</Text>
+  <View style={styles.person}><View aria-hidden style={styles.avatar}><Text style={styles.initials}>{initials(member.name || member.email)}</Text></View>
+   <View style={styles.who}><Text style={styles.name}>{member.name || member.email}{member.userId === scope.userId ? ' (you)' : ''}</Text><Text style={styles.detail}>{member.email}</Text></View></View>
+  <Text style={styles.body}>Role: {member.role}</Text>
   {lastOwner ? <Text style={styles.body}>The last owner must stay until another owner is appointed.</Text> : null}
   {canEdit ? <>
    <RoleChoices label={`Role for ${member.email}`} roles={actor?.role === 'owner' ? ['owner', 'admin', 'member'] : ['admin', 'member']} value={role} disabled={disabled || lastOwner} onChange={setRole} />
@@ -99,4 +101,17 @@ function MemberRow({ member, data, scope, disabled, change }: { member: Member; 
   </> : <Text style={styles.body}>Only an owner can change an owner.</Text>}
  </View>;
 }
-const useStyles = themedStyles((colors) => ({ stack: { gap: 12 }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 }, card: { gap: 10, padding: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14 }, heading: { fontSize: 18, fontWeight: '600', color: colors.heading }, body: { fontSize: type.body, lineHeight: 21, color: colors.body }, input: { minHeight: space.minTarget, padding: 10, borderWidth: 1, borderColor: colors.line, borderRadius: 8, fontSize: type.body, color: colors.body, backgroundColor: colors.card } }));
+/** Prototype frame 12 (Team): spaced-capital section labels, white cards, a 32 pt initials avatar, 13 pt bold names over
+ *  11 pt details. The controls are the app's own, in the R3 button style. */
+const useStyles = themedStyles((colors) => ({ stack: { gap: 10 }, row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+ card: { gap: 10, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14 },
+ heading: { fontSize: type.body, fontWeight: '700', color: colors.heading },
+ section: { fontSize: type.section, fontWeight: '700', letterSpacing: 1.1, textTransform: 'uppercase', color: colors.muted, marginTop: 8 },
+ person: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+ avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.sage, alignItems: 'center', justifyContent: 'center' },
+ initials: { fontSize: 11, fontWeight: '700', color: colors.sageText },
+ who: { flex: 1, minWidth: 0 },
+ name: { fontSize: type.rowTitle, lineHeight: type.rowTitleLine, fontWeight: '700', color: colors.heading },
+ detail: { fontSize: type.rowDetail, lineHeight: type.rowDetailLine, color: colors.muted },
+ body: { fontSize: type.small, lineHeight: type.smallLine, color: colors.body },
+ input: { minHeight: space.minTarget, padding: 10, borderWidth: 1, borderColor: colors.fieldLine, borderRadius: 8, fontSize: type.body, color: colors.body, backgroundColor: colors.card } }));

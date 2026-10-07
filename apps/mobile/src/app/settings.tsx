@@ -7,6 +7,7 @@ import { Actions, Button, Lines, RevokeOthers, useWaitWake } from '../components
 import { PlainScreen } from '../components/Screen.tsx';
 import Welcome from './welcome.tsx';
 import { type } from '../theme/tokens.ts';
+import { initials } from '../threads/Presentation.tsx';
 import { themedStyles } from '../theme/theme.ts';
 
 /** Account, opened from the avatar (docs/plans/expo-web-session-2026-09.md §B.2): who you are, Switch organisation,
@@ -31,10 +32,15 @@ export default function Settings() {
 			<View style={styles.stack}>
 				{view.refreshing ? <Text style={styles.muted}>{accountCopy.checking}</Text> : null}
 				<View accessible style={styles.card}>
-					<Text style={styles.name}>{view.user.name || view.user.email}</Text>
-					{view.user.name ? <Text style={styles.muted}>{view.user.email}</Text> : null}
-					<Text testID="account-organisation" style={styles.org}>{membership?.organisationName ?? 'No organisation selected'}</Text>
-					<Text style={styles.muted}>{membership === null ? '' : roleLabel(membership)}</Text>
+					<View style={styles.row}>
+						<View aria-hidden style={styles.avatar}><Text style={styles.initials}>{initials(view.user.name || view.user.email)}</Text></View>
+						<View style={styles.who}><Text style={styles.name}>{view.user.name || view.user.email}</Text>
+							{view.user.name ? <Text style={styles.detail}>{view.user.email}</Text> : null}</View>
+					</View>
+					<View style={[styles.row, styles.orgRow]}>
+						<Text testID="account-organisation" style={[styles.org, styles.who]}>{membership?.organisationName ?? 'No organisation selected'}</Text>
+						<Text style={styles.role}>{membership === null ? '' : roleLabel(membership)}</Text>
+					</View>
 				</View>
 				<Lines body={[]} notices={notices} />
 				<Button testID="account-action-switch" label={accountCopy.switch} onPress={() => router.push('/organisation')} />
@@ -48,10 +54,19 @@ export default function Settings() {
 	);
 }
 
+/** Prototype frames 12 and 13: the person as a Team row (a 32 pt initials avatar, 13 pt bold name, 11 pt detail) and the
+ *  organisation with the role on the right; the actions in the R3 button style. */
 const useStyles = themedStyles((colors) => ({
-	stack: { gap: 12 },
-	card: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 16, gap: 4 },
-	name: { fontSize: type.body, fontWeight: '600', color: colors.heading },
-	org: { fontSize: type.body, fontWeight: '600', color: colors.body, marginTop: 8 },
-	muted: { fontSize: 14, lineHeight: 20, color: colors.muted }
+	stack: { gap: 10 },
+	card: { backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.line },
+	row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, minHeight: 58 },
+	orgRow: { borderTopWidth: 1, borderColor: colors.rowLine },
+	avatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.sage, alignItems: 'center', justifyContent: 'center' },
+	initials: { fontSize: 11, fontWeight: '700', color: colors.sageText },
+	who: { flex: 1, minWidth: 0 },
+	name: { fontSize: type.rowTitle, lineHeight: type.rowTitleLine, fontWeight: '700', color: colors.heading },
+	detail: { fontSize: type.rowDetail, lineHeight: type.rowDetailLine, color: colors.muted },
+	org: { fontSize: type.rowTitle, lineHeight: type.rowTitleLine, fontWeight: '700', color: colors.heading },
+	role: { fontSize: type.rowDetail, fontWeight: '700', color: colors.muted },
+	muted: { fontSize: type.small, lineHeight: type.smallLine, color: colors.muted }
 }));

@@ -34,7 +34,7 @@ module.exports = async ({ browser, base, shots, width }) => {
 
    // Thread list: page behind the heading, a white/dark card for an unselected filter, the heading's own colour.
    await open('/', 'threads-loaded'); await expect(id(`thread-row-${tid}`)).toBeVisible();
-   expect(await behind(heading('Threads'))).toBe(want.page); expect(await behind(id('threads-filter-1'))).toBe(want.card);
+   expect(await behind(heading('Threads'))).toBe(want.page); expect(await behind(id('threads-filter-1').locator(':scope > *'))).toBe(want.card);
    expect(await heading('Threads').evaluate(el => getComputedStyle(el).color)).toBe(want.heading);
    await overflow(); await shot('list');
 

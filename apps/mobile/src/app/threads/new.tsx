@@ -11,18 +11,17 @@ import { browserCreates, createNewThread, validCreate } from '../../threads/crea
 import { createOptions } from '../../threads/options.ts';
 import { useDeadline } from '../../threads/use-poll.ts';
 import { copy } from '../../threads/copy.ts';
-import { Screen } from '../../components/Screen.tsx';
-import { space } from '../../theme/tokens.ts';
+import { PlainText, Screen } from '../../components/Screen.tsx';
+import { space, type } from '../../theme/tokens.ts';
 import { themedStyles, useTheme } from '../../theme/theme.ts';
 import Welcome from '../welcome.tsx';
 const back={label:'Threads',onPress:()=>router.dismissTo('/')};
 export default function NewThread(){
- const { colors } = useTheme();
  const account=useAccount(),view=account.snapshot.account;
- if(view.kind==='checking'||view.kind==='starting')return <Screen back={back}><Text style={{ color: colors.plain }}>{webCopy.checking}</Text></Screen>;
+ if(view.kind==='checking'||view.kind==='starting')return <Screen back={back}><PlainText>{webCopy.checking}</PlainText></Screen>;
  if(view.kind==='unverified')return <Welcome/>;
  if(!isSignedIn(view))return null;
- if(!account.web||!view.scope||view.org.kind!=='chosen')return <Screen back={back}><Text style={{ color: colors.plain }}>{copy.unavailable}</Text></Screen>;
+ if(!account.web||!view.scope||view.org.kind!=='chosen')return <Screen back={back}><PlainText>{copy.unavailable}</PlainText></Screen>;
  return <Composer key={view.scope.epoch} calls={account.web.threads} scope={view.scope} now={account.now}/>;
 }
 function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>number}){
@@ -38,7 +37,7 @@ function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>n
  return <Screen title="New thread" back={back} list={({heading})=> <View style={styles.frame}>{heading}
   <ScrollView style={{flex:1}} contentContainerStyle={{flexGrow:1,gap:12,paddingBottom:12}} keyboardShouldPersistTaps="handled">
 
-   <Pressable testID="new-thread-private" role="switch" aria-checked={d.private} disabled={locked} onPress={()=>controls.edit({private:!d.private})} style={styles.toggle}><Text style={styles.label}>Private</Text><Text style={styles.label}>{d.private?'On':'Off'}</Text></Pressable>
+   <Pressable testID="new-thread-private" role="switch" aria-checked={d.private} disabled={locked} onPress={()=>controls.edit({private:!d.private})} style={styles.toggle}><Text style={styles.label}>Private</Text><View style={styles.switchRow}><Text style={styles.value}>{d.private?'On':'Off'}</Text><View aria-hidden style={[styles.track,d.private&&styles.trackOn]}><View style={[styles.knob,d.private&&styles.knobOn]}/></View></View></Pressable>
    {d.private?<View testID="new-thread-private-fields" style={{gap:10}}>
     <Text style={styles.hint}>{copy.privacy}</Text>
     <TextInput testID="new-thread-title" accessibilityLabel="Private thread title" placeholder="Private thread title" placeholderTextColor={colors.muted} value={d.title} onChangeText={title=>controls.edit({title})} editable={!locked} maxLength={80} style={styles.input}/>
@@ -46,7 +45,7 @@ function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>n
     {choices.busy?<Text testID="new-members-loading" style={styles.hint}>Loading members…</Text>:null}
     {choices.message?<Text testID="new-members-status" role="status" style={styles.hint}>{choices.message}</Text>:null}
     {choices.loaded&&choices.rows.length===0?<Text testID="new-members-empty" style={styles.hint}>No other members are available. Only you will see this thread.</Text>:null}
-    {choices.rows.map(m=><Pressable key={m.userId} testID={`new-member-${m.userId}`} role="checkbox" aria-checked={d.participantIds.includes(m.userId)} disabled={locked||(!d.participantIds.includes(m.userId)&&d.participantIds.length>=49)} onPress={()=>toggle(m.userId)} style={styles.member}><Text style={styles.label}>{m.name||m.email}</Text><Text style={{ color: colors.plain }}>{d.participantIds.includes(m.userId)?'✓':'○'}</Text></Pressable>)}
+    {choices.rows.map(m=><Pressable key={m.userId} testID={`new-member-${m.userId}`} role="checkbox" aria-checked={d.participantIds.includes(m.userId)} disabled={locked||(!d.participantIds.includes(m.userId)&&d.participantIds.length>=49)} onPress={()=>toggle(m.userId)} style={styles.member}><Text style={styles.label}>{m.name||m.email}</Text><Text style={styles.mark}>{d.participantIds.includes(m.userId)?'✓':'○'}</Text></Pressable>)}
     {d.participantIds.some(id=>!choices.rows.some(m=>m.userId===id))?<Text style={styles.hint}>Some saved selections are not in this member list. {d.locked?'Retry the exact saved request to confirm its outcome.':'Refresh members or clear these selections before sending.'}</Text>:null}
     {!d.locked&&d.participantIds.length?<ThreadAction label="Clear selected people" disabled={state.busy} onPress={()=>controls.edit({participantIds:[]})}/>:null}
     <ThreadAction testID="new-members-refresh" label="Refresh members" disabled={locked||choices.busy||memberWaiting} onPress={()=>{void members.load();}}/>
@@ -62,4 +61,6 @@ function Composer({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>n
   </View>:null}
  </View>}/>;
 }
-const useStyles = themedStyles((colors) => ({frame:{flex:1,maxWidth:space.maxContentWidth,width:'100%',alignSelf:'center',paddingHorizontal:16,paddingBottom:12,gap:12},startHint:{flex:1,minHeight:100,justifyContent:'center',paddingHorizontal:20},composerRow:{flexDirection:'row',alignItems:'flex-end',gap:4,padding:6,backgroundColor:colors.card,borderWidth:1,borderColor:colors.line,borderRadius:14},input:{fontSize:16,minHeight:48,color:colors.body,padding:12,borderWidth:1,borderColor:colors.line,borderRadius:10,backgroundColor:colors.card},toggle:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderBottomWidth:1,borderColor:colors.line},label:{fontSize:15,color:colors.heading},hint:{fontSize:13,lineHeight:19,color:colors.muted},member:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:10,borderWidth:1,borderColor:colors.line,borderRadius:10},actions:{flexDirection:'row',flexWrap:'wrap',gap:8}}));
+/** Prototype frame 2: the heading, the hint centred in the free space, and the composer card at the foot (12 pt from the
+ *  edges, `.compose`). Private is the app's own row, drawn as a switch. */
+const useStyles = themedStyles((colors) => ({frame:{flex:1,maxWidth:space.maxContentWidth,width:'100%',alignSelf:'center',paddingHorizontal:12,paddingBottom:14,gap:10},startHint:{flex:1,minHeight:100,justifyContent:'center',paddingHorizontal:24},composerRow:{flexDirection:'row',alignItems:'flex-end',gap:8,padding:8,paddingLeft:4,backgroundColor:colors.card,borderWidth:1,borderColor:colors.fieldLine,borderRadius:14},input:{fontSize:type.body,minHeight:44,color:colors.body,paddingHorizontal:12,borderWidth:1,borderColor:colors.fieldLine,borderRadius:10,backgroundColor:colors.card},toggle:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',borderBottomWidth:1,borderColor:colors.line},switchRow:{flexDirection:'row',alignItems:'center',gap:8},value:{fontSize:type.small,color:colors.muted},track:{width:36,height:22,borderRadius:11,backgroundColor:colors.neutral,borderWidth:1,borderColor:colors.fieldLine,justifyContent:'center',paddingHorizontal:2},trackOn:{backgroundColor:colors.action,borderColor:colors.action},knob:{width:16,height:16,borderRadius:8,backgroundColor:colors.card},knobOn:{alignSelf:'flex-end'},label:{fontSize:type.body,color:colors.heading},mark:{fontSize:type.body,color:colors.body},hint:{fontSize:type.small,lineHeight:20,color:colors.muted},member:{minHeight:48,flexDirection:'row',justifyContent:'space-between',alignItems:'center',padding:10,borderWidth:1,borderColor:colors.line,borderRadius:10,backgroundColor:colors.card},actions:{flexDirection:'row',flexWrap:'wrap',gap:8}}));

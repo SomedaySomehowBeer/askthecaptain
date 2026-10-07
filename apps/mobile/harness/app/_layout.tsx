@@ -5,6 +5,7 @@ import { AccountProvider, useAccount } from '../../src/account/AccountProvider.t
 import { RootStack } from '../../src/account/RootStack.tsx';
 import { createScriptedSource, revocationControls, scenarioFrom, transitions, type ScriptedSource } from '../scripted-source.ts';
 import { readControls } from '../read-controls.ts';
+import { useCaptainFonts } from '../../src/theme/fonts.ts';
 
 /** The test-only harness root (docs/plans/expo-mobile-auth-composition-2026-09.md §7.1), bundled only when
  *  CAPTAIN_MOBILE_HARNESS=1 sets the router root to harness/app (web export only). It renders the production
@@ -29,6 +30,8 @@ let renderCount = 0;
 
 export default function HarnessLayout() {
 	const [source] = useState<ScriptedSource>(harnessSource);
+	// The production root's type faces (src/theme/fonts.ts); the harness is web-only, so it never waits for them.
+	useCaptainFonts();
 	return (
 		<>
 			<StatusBar style="auto" />
