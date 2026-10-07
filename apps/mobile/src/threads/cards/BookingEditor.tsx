@@ -4,19 +4,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import type { ReadScope } from '../../account/contracts.ts';
-import { organisationPath } from '../../api/paths.ts';
-import { occupancyParser } from '../../resources/equipment/data.ts';
-import { queryPath, type ThreadCalls } from '../api.ts';
+import type { ThreadCalls } from '../api.ts';
 import type { Detail } from '../contracts.ts';
 import { themedStyles } from '../../theme/theme.ts';
 import { CardButton, DateTimeField, Muted, Note, SelectField, TextField } from './Fields.tsx';
-import { bookingChanged, bookingForm, bookingPlan, minuteChoices, occupancyWords, spansDays, type BookingForm } from './forms.ts';
-import { send, writes, type Booking } from './records.ts';
+import { bookingChanged, bookingControls, bookingForm, bookingPlan, bookingStart, minuteChoices, occupancyWords, spansDays, type Availability, type BookingForm } from './forms.ts';
+import { reads, send, writes, type Booking } from './records.ts';
 import type { RecordState } from './store.ts';
 import { useSaver, type CardHooks } from './useSaver.ts';
 import { cardCopy } from './copy.ts';
-
-type Availability = { kind: 'idle' | 'checking' | 'free' | 'partial' | 'unchecked' } | { kind: 'taken'; holders: string[] };
+import { useDeadline } from '../use-poll.ts';
 
 export function BookingEditor({ calls, scope, detail, record, hooks, locked, confirmed, year }: {
 	calls: ThreadCalls; scope: ReadScope; detail: Detail; record: RecordState; hooks: CardHooks; locked: boolean; confirmed: readonly string[]; year: number;
@@ -28,9 +25,11 @@ export function BookingEditor({ calls, scope, detail, record, hooks, locked, con
 	const [own] = useState<CardHooks>(() => ({ ...hooks, reload: () => { resync.current = true; hooks.reload(); } }));
 	const [saver, saveState] = useSaver<Booking>(own, cardCopy.booking, () => { resync.current = true; });
 	const [canceller, cancelState] = useSaver<Booking>(own, cardCopy.cancel);
-	const [form, setForm] = useState<BookingForm | null>(booking && zone ? bookingForm(booking, zone) : null);
+	// A record already loaded when the card unfolds opens as it is: a booking that spans days shows its end date.
+	const [start] = useState(() => booking && zone ? bookingStart(booking, zone) : null);
+	const [form, setForm] = useState<BookingForm | null>(start?.form ?? null);
 	const [base, setBase] = useState<Booking | null>(booking);
-	const [multiDay, setMultiDay] = useState(false);
+	const [multiDay, setMultiDay] = useState(start?.multiDay ?? false);
 	const [asking, setAsking] = useState(false);
 	const [free, setFree] = useState<Availability>({ kind: 'idle' });
 	const check = useRef(0);
@@ -46,21 +45,15 @@ export function BookingEditor({ calls, scope, detail, record, hooks, locked, con
 	useEffect(() => { saver.confirm(confirmed); canceller.confirm(confirmed); }, [confirmed]);
 
 	const plan = form && base && zone ? bookingPlan(base, form, zone, multiDay) : null;
+	// Re-render when a server wait ends, so an action it held is offered again.
+	const waiting = useDeadline(Math.max(saveState.waitUntil, cancelState.waitUntil), hooks.now);
 	const slot = plan && 'time' in plan ? `${plan.occupiedFrom}|${plan.occupiedTo}` : null;
 	// What the time would hold, checked against the equipment's schedule after the person stops typing.
 	useEffect(() => {
 		if (!slot || !base || !zone || base.status === 'cancelled') { setFree({ kind: 'idle' }); return; }
 		const [from, to] = slot.split('|') as [string, string];
-		if (Date.parse(to) - Date.parse(from) > 93 * 86_400_000) { setFree({ kind: 'unchecked' }); return; }
 		const n = ++check.current; setFree({ kind: 'checking' });
-		const timer = setTimeout(() => { void (async () => {
-			const request = { equipmentId: base.equipmentId, zone, from, to };
-			const r = await calls.request(scope, 'GET', queryPath(organisationPath(scope.organisationId, 'equipment', base.equipmentId, 'reservations'), { from, to, limit: 200 }), undefined, occupancyParser(request));
-			if (n !== check.current) return;
-			if (r.kind !== 'ok' || r.value.kind !== 'read') { setFree({ kind: 'unchecked' }); return; }
-			const others = r.value.reservations.filter((x) => x.id !== base.id);
-			setFree(others.length ? { kind: 'taken', holders: others.slice(0, 3).map((x) => `${x.title} (${occupancyWords(x.occupiedStartsAt, x.occupiedEndsAt, zone, year)})`) } : r.value.coverage === 'partial' ? { kind: 'partial' } : { kind: 'free' });
-		})(); }, 500);
+		const timer = setTimeout(() => { void reads.occupancy(calls, scope, base, zone, from, to, year).then((found) => { if (found && n === check.current) setFree(found); }); }, 500);
 		return () => clearTimeout(timer);
 	}, [slot, base?.id, base?.revision, saveState.refusal]);
 
@@ -69,19 +62,19 @@ export function BookingEditor({ calls, scope, detail, record, hooks, locked, con
 	}
 	const cancelled = base.status === 'cancelled';
 	const uncertain = saveState.uncertain || cancelState.uncertain, busy = saveState.busy || cancelState.busy;
-	const waiting = hooks.now() < Math.max(saveState.waitUntil, cancelState.waitUntil);
-	const editable = !locked && !busy && !uncertain && !cancelled;
 	const changed = plan && 'time' in plan ? bookingChanged(base, plan.time) : true;
+	const can = bookingControls({ locked, cancelled, waiting, changed, plan, free, save: saveState, cancel: cancelState });
+	const editable = can.editable;
 	const set = (next: Partial<BookingForm>) => { setForm({ ...form, ...next }); if (!busy && !uncertain) { saver.clear(); canceller.clear(); } };
 	const save = () => {
-		if (!plan || !('time' in plan) || !changed) return;
+		if (!can.save || !plan || !('time' in plan)) return;
 		const time = plan.time;
 		void saver.save((id) => { const w = writes.booking(scope, base.equipmentId, base.id, id, base.revision, time); return { body: w.body, send: () => send(calls, scope, w) }; });
 	};
 	const note = plan && 'time' in plan
 		? `Holds the ${equipmentName} from ${occupancyWords(plan.occupiedFrom, plan.occupiedTo, zone, year)}${form.setup || form.cleanup ? ', with setup and cleanup' : ''}.`
 		: null;
-	const freeWords = free.kind === 'taken' ? `That time overlaps ${free.holders.join(', ')}.` : free.kind === 'free' ? cardCopy.free : free.kind === 'checking' ? cardCopy.checking
+	const freeWords = free.kind === 'taken' ? cardCopy.taken(free.holders) : free.kind === 'free' ? cardCopy.free : free.kind === 'checking' ? cardCopy.checking
 		: free.kind === 'partial' ? cardCopy.partial : free.kind === 'unchecked' ? cardCopy.unchecked : '';
 	const status = cancelState.message || saveState.message;
 	const tone = cancelState.message ? cancelState.tone : saveState.tone;
@@ -99,27 +92,28 @@ export function BookingEditor({ calls, scope, detail, record, hooks, locked, con
 		</View>
 		<Muted>{cardCopy.equipmentFixed}</Muted>
 		{!cancelled && plan && 'error' in plan ? <Note tone="warn" testID="booking-invalid">{plan.error}</Note> : null}
-		{!cancelled && note ? <Note tone={free.kind === 'taken' ? 'warn' : 'ok'} testID="booking-occupancy">{`${note}${freeWords ? ` ${freeWords}` : ''}`}</Note> : null}
+		{!cancelled && note ? <Note tone={free.kind === 'taken' ? 'warn' : free.kind === 'free' ? 'ok' : 'neutral'} testID="booking-occupancy">{`${note}${freeWords ? ` ${freeWords}` : ''}`}</Note> : null}
 		{cancelled ? null : <View style={styles.row}>
 			{saveState.uncertain
 				? <><CardButton testID="booking-retry" label="Save again with the same change ID" display="Save again" primary grow disabled={busy || waiting} onPress={() => { void saver.retry(); }} />
 					<CardButton testID="booking-discard" label="Discard these changes" display="Discard" disabled={busy} onPress={() => { saver.discard(); }} /></>
-				: <><CardButton testID="booking-save" label="Save changes" primary grow disabled={!editable || waiting || !changed || !plan || 'error' in plan} onPress={save} />
-					<CardButton testID="booking-cancel-edit" label="Cancel" disabled={busy || !changed} onPress={() => { const f = bookingForm(base, zone); setForm(f); setMultiDay(spansDays(f)); saver.clear(); }} /></>}
+				: <><CardButton testID="booking-save" label="Save changes" primary grow disabled={!can.save} onPress={save} />
+					{/* Not "Cancel": beside "Cancel this booking" that reads as cancelling the booking (owner, 7 October). */}
+					<CardButton testID="booking-cancel-edit" label="Discard your edits" display="Discard edits" disabled={!can.discard} onPress={() => { const f = bookingForm(base, zone); setForm(f); setMultiDay(spansDays(f)); saver.clear(); }} /></>}
 		</View>}
 		{status ? <Text testID="booking-save-status" role="status" style={tone === 'warn' ? styles.warn : styles.ok}>{status}</Text> : cancelled ? null : <Muted testID="booking-help">{cardCopy.bookingTogether}</Muted>}
 		{cancelled ? null : asking
 			? <View style={styles.confirm} testID="booking-cancel-confirm">
 				<Note tone="warn">{cardCopy.cancelConfirm(equipmentName)}</Note>
 				<View style={styles.row}>
-					<CardButton testID="booking-cancel-yes" label="Cancel the booking" primary grow disabled={locked || busy || saveState.uncertain || waiting} onPress={() => {
+					<CardButton testID="booking-cancel-yes" label="Cancel the booking" primary grow disabled={!can.confirmCancel} onPress={() => {
 						void canceller.save((id) => { const w = writes.cancelBooking(scope, base.equipmentId, base.id, id, base.revision); return { body: w.body, send: () => send(calls, scope, w) }; }).then(() => { if (!canceller.snapshot().uncertain) setAsking(false); });
 					}} />
 					{cancelState.uncertain ? <CardButton testID="booking-cancel-retry" label="Cancel again with the same change ID" display="Try again" disabled={busy || waiting} onPress={() => { void canceller.retry().then(() => { if (!canceller.snapshot().uncertain) setAsking(false); }); }} />
 						: <CardButton testID="booking-cancel-keep" label="Keep the booking" display="Keep it" disabled={busy} onPress={() => setAsking(false)} />}
 				</View>
 			</View>
-			: <CardButton testID="booking-cancel" label="Cancel this booking" quiet warn disabled={!editable || waiting} onPress={() => setAsking(true)} />}
+			: <CardButton testID="booking-cancel" label="Cancel this booking" quiet warn disabled={!can.cancel} onPress={() => { canceller.clear(); setAsking(true); }} />}
 	</View>;
 }
 

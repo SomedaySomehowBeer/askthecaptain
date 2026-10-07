@@ -6,6 +6,8 @@ import type { ReadScope } from '../../account/contracts.ts';
 import type { Result, ThreadCalls } from '../api.ts';
 import { queryPath } from '../api.ts';
 import { array, integer, keys, object, text, uuid } from '../parse.ts';
+import { occupancyParser } from '../../resources/equipment/data.ts';
+import { occupancyWords, type Availability } from './forms.ts';
 
 const bad = (): never => { throw new TypeError('record: unexpected response'); };
 const nullable = <T>(x: unknown, parse: (x: unknown) => T): T | null => x === null ? null : parse(x);
@@ -104,7 +106,19 @@ export const send = <T>(calls: ThreadCalls, scope: ReadScope, write: Write<T>): 
 export const reads = {
 	task: (calls: ThreadCalls, scope: ReadScope, taskId: string) => calls.request(scope, 'GET', queryPath(organisationPath(scope.organisationId, 'tasks', uuid(taskId)), { limit: 50 }), undefined, (v) => parseTaskDetail(v, taskId)),
 	booking: (calls: ThreadCalls, scope: ReadScope, equipmentId: string, bookingId: string) => calls.request(scope, 'GET', organisationPath(scope.organisationId, 'equipment', uuid(equipmentId), 'reservations', uuid(bookingId)), undefined, (v) => parseBooking(v, { id: bookingId, equipmentId })),
-	zone: (calls: ThreadCalls, scope: ReadScope) => calls.request(scope, 'GET', organisationPath(scope.organisationId), undefined, (v) => parseZone(v, scope.organisationId))
+	zone: (calls: ThreadCalls, scope: ReadScope) => calls.request(scope, 'GET', organisationPath(scope.organisationId), undefined, (v) => parseZone(v, scope.organisationId)),
+	/** What else holds the equipment in a booking's occupied time, from the equipment's schedule: `taken` names up to three
+	 *  holders; a partial or failed read is a caution, never shown as free (the server checks again on save). */
+	async occupancy(calls: ThreadCalls, scope: ReadScope, booking: Pick<Booking, 'id' | 'equipmentId'>, zone: string, from: string, to: string, year?: number): Promise<Availability | null> {
+		if (Date.parse(to) - Date.parse(from) > 93 * 86_400_000) return { kind: 'unchecked' };
+		const request = { equipmentId: booking.equipmentId, zone, from, to };
+		const r = await calls.request(scope, 'GET', queryPath(organisationPath(scope.organisationId, 'equipment', uuid(booking.equipmentId), 'reservations'), { from, to, limit: 200 }), undefined, occupancyParser(request));
+		if (r.kind === 'stale') return null;
+		if (r.kind !== 'ok' || r.value.kind !== 'read') return { kind: 'unchecked' };
+		const others = r.value.reservations.filter((x) => x.id !== booking.id);
+		return others.length ? { kind: 'taken', holders: others.slice(0, 3).map((x) => `${x.title} (${occupancyWords(x.occupiedStartsAt, x.occupiedEndsAt, zone, year)})`) }
+			: r.value.coverage === 'partial' ? { kind: 'partial' } : { kind: 'free' };
+	}
 };
 
 export const isUuid = isCanonicalUuid;
