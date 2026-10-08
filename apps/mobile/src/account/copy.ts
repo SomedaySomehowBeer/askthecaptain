@@ -412,7 +412,9 @@ export const equipmentCopy = {
 	booking: 'Booking',
 	maintenance: 'Maintenance',
 	panelNote: 'As of the last read. Availability can change before a reservation is saved.',
-	close: 'Close'
+	close: 'Close',
+	newBooking: 'New booking',
+	manage: 'Manage equipment'
 } as const;
 
 /** "Times in {zone}", the zone exactly as the organisation stores it. */
@@ -598,7 +600,7 @@ export const threadsCopy = {
 	pinnedEquipment: 'Equipment schedule',
 	pinnedEquipmentDetail: 'Bookings for shared equipment',
 	pinnedTeam: 'Team',
-	pinnedTeamDetail: 'Not in this version yet',
+	pinnedTeamDetail: 'Members and invitations',
 	emptyTitle: 'No threads to show yet',
 	emptyBody: "Threads are not available yet. You can open the equipment schedule above.",
 	search: 'Search',

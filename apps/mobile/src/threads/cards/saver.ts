@@ -20,7 +20,8 @@ export type SaveState = {
 	/** The last refusal's code, for a screen that explains one (a booking overlap). */
 	readonly refusal: string | null;
 };
-export type SaveCopy = { saving: string; saved: string; confirmed: string };
+/** `refusals`: words for a screen's own refusal codes, taking precedence over the shared ones below. */
+export type SaveCopy = { saving: string; saved: string; confirmed: string; refusals?: Readonly<Record<string, string>> };
 export const saveCopy = {
 	unknown: 'This change may have been saved. Your changes and their change ID are kept; save again with the same ID to confirm, or discard them.',
 	rate: 'Too many requests. Your changes are still here; wait before saving again.',
@@ -85,7 +86,7 @@ export function createSaver<T>(hooks: {
 		again = null;
 		if (result.code === 'stale_revision') { set({ busy: false, pending: null, uncertain: false, message: saveCopy.stale, tone: 'warn', refusal: result.code }); await hooks.reload(); return; }
 		set({ busy: false, pending: null, uncertain: false, tone: 'warn', refusal: result.code,
-			message: result.code === 'change_set_id_unavailable' ? saveCopy.idUnavailable : refusals[result.code] ?? saveCopy.refused });
+			message: result.code === 'change_set_id_unavailable' ? saveCopy.idUnavailable : hooks.copy.refusals?.[result.code] ?? refusals[result.code] ?? saveCopy.refused });
 		// The record changed under the card (someone cancelled the booking or archived the item): show it as it is now.
 		if (result.code === 'reservation_cancelled' || result.code === 'stock_archived') await hooks.reload();
 	}

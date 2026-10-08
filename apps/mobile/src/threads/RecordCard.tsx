@@ -18,6 +18,8 @@ import { StockEditor } from './cards/StockEditor.tsx';
 import { TaskEditor } from './cards/TaskEditor.tsx';
 import { CardButton } from './cards/Fields.tsx';
 import { MakeTask } from './cards/MakeTask.tsx';
+import { MakeBooking } from './cards/MakeBooking.tsx';
+import { cardCopy } from './cards/copy.ts';
 import type { RecordState } from './cards/store.ts';
 import type { CardHooks } from './cards/useSaver.ts';
 import { themedStyles, useTheme } from '../theme/theme.ts';
@@ -39,6 +41,8 @@ export function RecordCard({ detail, calls, scope, now, fold, setFold, disabled,
 	const editorProps = { calls, scope, detail, record, hooks, locked, confirmed };
 	// The tag chips are the card's (design boards 1 and 2); the controls that change them open on request.
 	const [tagging, setTagging] = useState(false);
+	const [making, setMaking] = useState<'task' | 'booking'>('task');
+	const [bookingOpened, setBookingOpened] = useState(false);
 	return <View testID="thread-card" style={styles.card}>
 		<Pressable testID="thread-card-fold" role="button" aria-expanded={fold} aria-label={fold ? 'Hide details' : 'Show details'} hitSlop={6} onPress={() => setFold(!fold)} style={styles.head}>
 			<Text role="heading" numberOfLines={fold ? 3 : 2} style={styles.title}>{detail.card.title}</Text>
@@ -58,8 +62,18 @@ export function RecordCard({ detail, calls, scope, now, fold, setFold, disabled,
 				<View style={{ flex: 1 }} /><CardButton testID="thread-tags-toggle" label={tagging ? 'Close tags' : 'Change tags'} quiet onPress={() => setTagging(!tagging)} />
 				<View style={{ marginLeft: 10 }}><CardButton testID="thread-history-link" label="History" quiet link onPress={() => router.push(`/threads/${detail.thread.id}/history` as never)} /></View></View>
 			{tagging ? <TagControls calls={calls} scope={scope} detail={detail} now={now} disabled={disabled} change={onTag} /> : null}
-			{!kind && detail.thread.kind === 'topic' ? <MakeTask calls={calls} scope={scope} detail={detail} record={record} hooks={hooks} locked={locked} confirmed={confirmed}
-				onMembers={onMembers} onCancel={() => setFold(false)} /> : null}
+			{/* A topic becomes a task (board 3) or a booking (bookings contract §3): one form shown at a time, the task's first.
+			    Both stay mounted once opened, so an uncertain write in either keeps its id and body until retried or discarded. */}
+			{!kind && detail.thread.kind === 'topic' ? <>
+				<View style={[styles.making, making === 'task' ? null : styles.hidden]}>
+					<MakeTask calls={calls} scope={scope} detail={detail} record={record} hooks={hooks} locked={locked} confirmed={confirmed}
+						onMembers={onMembers} onCancel={() => setFold(false)} />
+					<CardButton testID="make-booking-open" label={cardCopy.makeBookingOpen} quiet disabled={locked} onPress={() => { setMaking('booking'); setBookingOpened(true); }} />
+				</View>
+				{bookingOpened ? <View style={[styles.making, making === 'booking' ? null : styles.hidden]}>
+					<MakeBooking calls={calls} scope={scope} detail={detail} hooks={hooks} locked={locked} confirmed={confirmed} onCancel={() => setMaking('task')} />
+				</View> : null}
+			</> : null}
 			{recordRoute(detail) ? <Button label="Open the record" onPress={() => router.push(recordRoute(detail)!)} /> : null}
 			{detail.thread.kind === 'private' ? <Text style={styles.body}>{copy.privacy}</Text> : null}
 		</View> : null}
@@ -86,6 +100,8 @@ const useStyles = themedStyles((colors) => ({
 	label: { fontSize: 11, lineHeight: 15, color: colors.muted },
 	body: { fontSize: type.body, lineHeight: type.bodyLine, color: colors.body },
 	fold: { gap: 10, paddingTop: 2 },
+	making: { gap: 10 },
+	hidden: { display: 'none' },
 	chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' },
 	chip: { fontSize: type.chip, lineHeight: 16, fontWeight: '600', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10, backgroundColor: colors.page, borderWidth: 1, borderColor: colors.line, color: colors.body, overflow: 'hidden' }
 }));

@@ -49,7 +49,7 @@ export function instantIn(date: string, time: string, zone: string): string | nu
 }
 export type BookingPlan = { time: BookingTime; occupiedFrom: string; occupiedTo: string } | { error: string };
 /** The write a booking form asks for, or what is wrong with it. Kind, task and owner are kept as they are. */
-export function bookingPlan(b: Booking, form: BookingForm, zone: string, multiDay: boolean): BookingPlan {
+export function bookingPlan(b: Pick<Booking, 'kind' | 'taskId' | 'ownerId'>, form: BookingForm, zone: string, multiDay: boolean): BookingPlan {
 	const title = form.title.trim();
 	if (!title) return { error: 'A booking needs a title.' };
 	if ([...title].length > 200) return { error: 'A title is at most 200 characters.' };

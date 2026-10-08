@@ -30,7 +30,7 @@ export default function Home() {
 	if (account.kind === 'unverified') return <Welcome />;
 	if (!isSignedIn(account)) return <Redirect href="/welcome" />;
 	if (account.org.kind !== 'chosen') return <Redirect href="/organisation" />;
-	if(!web||!account.scope)return <Screen title={threadsCopy.heading}><View style={styles.pinned}><PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/><PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>}/></View><Text testID="threads-empty" style={styles.body}>{copy.unavailable}</Text></Screen>;
+	if(!web||!account.scope)return <Screen title={threadsCopy.heading}><View style={styles.pinned}><PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/><PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.sageText}/>} onPress={()=>router.push('/members?from=threads' as never)}/></View><Text testID="threads-empty" style={styles.body}>{copy.unavailable}</Text></Screen>;
  return <ThreadList key={account.scope.epoch} calls={web.threads} scope={account.scope} now={now} />;
 }
 function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=>number}){
@@ -50,7 +50,7 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
   </View></ScrollView>{state.filter==='files'||state.filter==='people'?<Text style={styles.detail}>{copy.files}</Text>:null}
   <View style={styles.pinned}>
    <PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/>
-   <PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.muted}/>}/>
+   <PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.sageText}/>} onPress={()=>router.push('/members?from=threads' as never)}/>
   </View>
   {busy?<Text testID="threads-loading" style={styles.body}>{copy.loading}</Text>:null}
   {state.message?<View style={styles.statusRow}><Text testID="threads-status" role="status" style={[styles.body,{flex:1}]}>{state.message}</Text>{state.phase==='failed'?<ThreadAction testID="threads-refresh" label="Try again" disabled={busy||waiting} onPress={()=>{void controls.load();}}/>:null}</View>:null}

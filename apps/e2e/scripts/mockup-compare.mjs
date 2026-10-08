@@ -55,7 +55,18 @@ const screens = [
 	{ name: 'equipment', app: 'light-equipment', run: 'dark', proto: 5, caption: 'Equipment schedule / frame 5 Equipment' },
 	{ name: 'equipment-dark', app: 'dark-equipment', run: 'dark', proto: 5, protoDark: true, caption: 'Equipment schedule (dark) / frame 5 in the prototype dark tokens' },
 	{ name: 'settings', app: 'light-settings', run: 'dark', proto: 13, caption: 'Settings / frame 13 Agent profile (profile layout)' },
-	{ name: 'members', app: 'members-owner', run: 'members', proto: 12, caption: 'Members / frame 12 Team' }
+	{ name: 'members', app: 'members-owner', run: 'members', proto: 12, caption: 'Members / frame 12 Team' },
+	// H2 (bookings contract §3). New booking and the Equipment screen have no mockup of their own: each is compared with its
+	// nearest board, as the contract says (board 2 for the booking fields, frame 12 for the list style).
+	{ name: 'schedule-new-booking', app: 'bookings-schedule', run: 'bookings', proto: 5, caption: 'Schedule with New booking / frame 5 Equipment' },
+	{ name: 'new-booking', app: 'bookings-new-booking', run: 'bookings', r3: 'Booking', caption: 'New booking (no mockup) / nearest: R3 Booking (board 2)' },
+	{ name: 'new-booking-dark', app: 'dark-bookings-new-booking', run: 'bookings-dark', r3: 'Booking', dark: true, caption: 'New booking (dark, no mockup) / R3 Booking in the dark tokens' },
+	{ name: 'new-booking-overlap', app: 'bookings-new-booking-overlap', run: 'bookings', r3: 'Booking', caption: 'New booking refused for an overlap (no mockup) / nearest: R3 Booking' },
+	{ name: 'make-booking', app: 'bookings-make-booking', run: 'bookings', r3: 'Topic', caption: 'Topic: make this a booking / R3 Topic (board 3 pattern)' },
+	{ name: 'make-booking-dark', app: 'dark-bookings-make-booking', run: 'bookings-dark', r3: 'Topic', dark: true, caption: 'Topic: make this a booking (dark) / R3 Topic in the dark tokens' },
+	{ name: 'equipment-manage', app: 'bookings-manage', run: 'bookings', proto: 12, caption: 'Equipment screen (no mockup) / nearest: frame 12 Team' },
+	{ name: 'equipment-manage-confirm', app: 'bookings-manage-confirm', run: 'bookings', proto: 12, caption: 'Equipment screen, archive confirm (no mockup) / nearest: frame 12 Team' },
+	{ name: 'equipment-manage-dark', app: 'dark-bookings-manage', run: 'bookings-dark', proto: 12, protoDark: true, caption: 'Equipment screen (dark, no mockup) / frame 12 in the prototype dark tokens' }
 ];
 
 /** The check modules that produce the app screenshots, each run once at 390 px. */
@@ -68,7 +79,9 @@ const runs = {
 	history: c => require(path.join(scripts, 'mobile-shell-history-check.cjs'))(c),
 	'history-dark': c => require(path.join(scripts, 'mobile-shell-history-check.cjs'))({ ...c, scheme: 'dark' }),
 	members: c => require(path.join(scripts, 'mobile-shell-members-check.cjs'))(c),
-	runs: c => require(path.join(scripts, 'mobile-shell-runs-check.cjs'))(c)
+	runs: c => require(path.join(scripts, 'mobile-shell-runs-check.cjs'))(c),
+	bookings: c => require(path.join(scripts, 'mobile-shell-bookings-check.cjs'))(c),
+	'bookings-dark': c => require(path.join(scripts, 'mobile-shell-bookings-check.cjs'))({ ...c, scheme: 'dark' })
 };
 
 /** The harness's test controls (harness/app/_layout.tsx) are not app UI: hidden in every screenshot the check modules
