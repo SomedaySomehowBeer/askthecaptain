@@ -15,7 +15,10 @@ import { Chevron, Magnifier } from './Icons.tsx';
 export type ScreenListFrame = { readonly heading: ReactNode; readonly contentContainerStyle: StyleProp<ViewStyle> };
 
 type Back = { readonly label: string; readonly onPress: () => void };
-type ScreenProps = { title?: string; back?: Back; headerAction?: ReactNode } & (
+/** The thread list's search (H4): the header's magnifier opens and closes its field. Without it the magnifier is shown
+ *  and disabled, as before. */
+type HeaderSearch = { readonly open: boolean; readonly onPress: () => void };
+type ScreenProps = { title?: string; back?: Back; headerAction?: ReactNode; search?: HeaderSearch } & (
 	| { children: ReactNode; list?: undefined }
 	/** A page whose content is one virtualised or self-scrolling view (the equipment timeline): `Screen` renders the
 	 *  header, then a bounded, non-scrolling container holding what `list` returns. */
@@ -29,7 +32,7 @@ type ScreenProps = { title?: string; back?: Back; headerAction?: ReactNode } & (
  *  History heading); otherwise the prototype's shell (a 12 pt crumb, a 30 pt avatar, search, 22 pt headings). Content
  *  keeps a 16 pt gutter and a readable column on wide screens. Accessibility uses React Native's `role` and `aria-*`
  *  props, which iOS, Android and React Native Web all map. */
-export function Screen({ title, back, children, list, headerAction, record = false }: ScreenProps & { record?: boolean }) {
+export function Screen({ title, back, children, list, headerAction, search, record = false }: ScreenProps & { record?: boolean }) {
 	const styles = useStyles();
 	const { colors } = useTheme();
 	const insets = useSafeAreaInsets();
@@ -57,7 +60,12 @@ export function Screen({ title, back, children, list, headerAction, record = fal
 				)}
 				<View style={styles.actions}>
 					{headerAction}
-					{record ? null : (
+					{record ? null : search ? (
+						<Pressable testID="threads-search-toggle" onPress={search.onPress} role="button" aria-label={search.open ? threadsCopy.searchClose : threadsCopy.search}
+							aria-expanded={search.open} hitSlop={4} style={[styles.round, search.open && { backgroundColor: colors.sage, borderRadius: 22 }]}>
+							<Magnifier color={colors.body} />
+						</Pressable>
+					) : (
 						<Pressable disabled role="button" aria-label={threadsCopy.search} aria-disabled accessibilityHint={threadsCopy.searchHint} style={styles.round}>
 							<Magnifier color={colors.body} />
 						</Pressable>

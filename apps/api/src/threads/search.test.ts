@@ -316,3 +316,43 @@ it('repeat this task when the series starts later: the task is its first period,
  assert.equal(await commitments.materialise(b.org, '2031-02-01'), 0);
  assert.equal(await commitments.materialise(b.org, '2031-04-02'), 1);
 });
+
+it('the Expo client parses real search, tag, series and task answers through its H4 parsers (T-B)', async () => {
+ const { parseSearch } = await import('../../../mobile/src/threads/search.ts');
+ const { parseTagCatalogue, parseOneTag, tagWrites } = await import('../../../mobile/src/resources/tags/tags.ts');
+ const { parseSeries, seriesWrites, repeatForm, repeatRule } = await import('../../../mobile/src/resources/series/series.ts');
+ const { parseTaskDetail } = await import('../../../mobile/src/threads/cards/records.ts');
+ const b = await business('Expo H4 wire');
+ const scope = { epoch: 'one', userId: b.member.user.id, organisationId: b.org };
+ // Tags: add with an owner and dates, the list with counts, one tag, an update and an archive, each through the client's write.
+ const send = async <T>(w: { method: string; path: string; body: unknown; parse: (v: unknown) => T }, person = b.member, status = 200) =>
+  w.parse(await json(request(w.method, w.path, person, w.body), status));
+ const added = await send(tagWrites.add(scope, randomUUID(), { name: 'Summer lager launch', ownerId: b.member.user.id, startsOn: '2031-06-01', endsOn: '2031-08-31' }), b.member, 201);
+ const topic = await b.topic(b.member, 'Label artwork for the canning run');
+ await b.addTag(topic, added.id);
+ const catalogue = parseTagCatalogue(await json(request('GET', `${b.base}/tags?counts=true&offset=0&limit=100`, b.member)));
+ assert.equal(catalogue.tags.find(t => t.id === added.id)?.threads, 1);
+ const one = parseOneTag(await json(request('GET', `${b.base}/tags/${added.id}`, b.member)), added.id);
+ const renamed = await send(tagWrites.update(scope, one, randomUUID(), { name: 'Summer lager', endsOn: null }));
+ const archived = await send(tagWrites.update(scope, { ...one, revision: renamed.revision }, randomUUID(), { archived: true }));
+ assert.ok(archived.archivedAt);
+ // Search: a title match and a message match, for the filter and words asked.
+ await b.send(b.owner, topic, 'The canning line is booked for Thursday');
+ for (const [q, filter] of [['label', 'all'], ['canning thursday', 'all'], ['label', 'tasks'], ['ab', 'files']] as const) {
+  const r = parseSearch(await json(request('GET', `${b.threads}?q=${encodeURIComponent(q)}&filter=${filter}&limit=50`, b.member)), { filter, q });
+  if (filter === 'all') assert.deepEqual(r.threads.map(t => [t.id, t.match.kind]), [[topic, q === 'label' ? 'title' : 'message']]);
+  else assert.deepEqual(r.threads, []);
+ }
+ // Repeat a task through the client's write, then read the task and the series as the card and the series screen do.
+ const task = await b.task('Excise return', { body: 'File by the 21st', ownerId: b.member.user.id, due: '2031-05-21' });
+ const before = parseTaskDetail(await json(request('GET', `${b.base}/tasks/${task.id}?limit=50`, b.member)), task.id);
+ assert.equal(before.series, null);
+ const rule = repeatRule(repeatForm(before.task, before.today));
+ assert.ok(!('error' in rule));
+ const series = await send(seriesWrites.repeat(scope, before.task, [], rule as never, randomUUID()), b.member, 201);
+ const after = parseTaskDetail(await json(request('GET', `${b.base}/tasks/${task.id}?limit=50`, b.member)), task.id);
+ assert.deepEqual([after.task.seriesId, after.series], [series.id, { id: series.id, title: 'Excise return' }]);
+ const read = parseSeries(await json(request('GET', `${b.base}/series/${series.id}`, b.member)), { id: series.id });
+ const paused = await send(seriesWrites.update(scope, read, randomUUID(), { paused: true }));
+ assert.ok(paused.pausedAt); assert.equal(paused.nextDue, null);
+});

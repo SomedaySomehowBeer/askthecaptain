@@ -57,6 +57,9 @@ export function RootStack() {
 				<Stack.Screen name="threads/new" />
 				<Stack.Screen name="equipment" />
 				<Stack.Screen name="stock/stocktake" />
+				<Stack.Screen name="tags/index" />
+				<Stack.Screen name="tags/[id]" />
+				<Stack.Screen name="series/[id]" />
 			</Stack.Protected>
 			<Stack.Screen name="auth/passkey" />
 			<Stack.Screen name="invitations/accept" />

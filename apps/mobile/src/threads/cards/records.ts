@@ -19,8 +19,9 @@ const decimal = (x: unknown): string => { const s = text(x, 100); return /^\d+(?
 export type TaskStatus = 'suggested' | 'open' | 'in_progress' | 'done' | 'cancelled';
 export const taskStatuses = ['suggested', 'open', 'in_progress', 'done', 'cancelled'] as const;
 export type Task = { id: string; parentId: string | null; title: string; body: string; status: TaskStatus; ownerId: string | null; ownerName: string | null; due: string | null;
-	evidenceRequired: boolean; evidenceCount: number; revision: number };
-export type TaskDetail = { task: Task; steps: Task[]; stepsNext: number | null; today: string; timezone: string };
+	evidenceRequired: boolean; evidenceCount: number; revision: number; seriesId: string | null };
+/** `series` names the recurring work a task is an occurrence of (H4: the card's "Part of …"). */
+export type TaskDetail = { task: Task; steps: Task[]; stepsNext: number | null; today: string; timezone: string; series: { id: string; title: string } | null };
 const taskKeys = ['id', 'parentId', 'title', 'body', 'status', 'ownerId', 'ownerName', 'due', 'sourceKind', 'sourceId', 'seriesId', 'periodStart', 'periodEnd', 'evidenceRequired',
 	'completedBy', 'completedAt', 'revision', 'createdAt', 'updatedAt', 'evidenceCount', 'evidence'];
 const evidenceKeys = ['id', 'taskId', 'kind', 'reference', 'label', 'attachedBy', 'attachedAt'];
@@ -30,12 +31,12 @@ export function parseTask(raw: unknown, extra: string[] = []): Task {
 	const t = (v: unknown) => text(v, 16000);
 	array(x.evidence, (e) => { const r = object(e); keys(r, evidenceKeys); uuid(r.id); return null; }, 50);
 	for (const k of ['sourceId']) if (x[k] !== null) text(x[k], 200);
-	for (const k of ['seriesId', 'completedBy']) nullable(x[k], uuid);
+	const seriesId = nullable(x.seriesId, uuid); nullable(x.completedBy, uuid);
 	for (const k of ['periodStart', 'periodEnd']) nullable(x[k], date);
 	nullable(x.completedAt, instant); instant(x.createdAt); instant(x.updatedAt); text(x.sourceKind, 20);
 	const status = typeof x.status === 'string' && (taskStatuses as readonly string[]).includes(x.status) ? x.status as TaskStatus : bad();
 	return { id: uuid(x.id), parentId: nullable(x.parentId, uuid), title: text(x.title, 500), body: t(x.body), status, ownerId: nullable(x.ownerId, uuid),
-		ownerName: nullable(x.ownerName, (v) => text(v, 500)), due: nullable(x.due, date), evidenceRequired: bool(x.evidenceRequired), evidenceCount: integer(x.evidenceCount), revision: integer(x.revision, 1) };
+		ownerName: nullable(x.ownerName, (v) => text(v, 500)), due: nullable(x.due, date), evidenceRequired: bool(x.evidenceRequired), evidenceCount: integer(x.evidenceCount), revision: integer(x.revision, 1), seriesId };
 }
 /** `GET …/tasks/:id?limit=50`: the task, its first page of steps, the organisation's today and zone. */
 export function parseTaskDetail(raw: unknown, taskId: string): TaskDetail {
@@ -44,7 +45,9 @@ export function parseTaskDetail(raw: unknown, taskId: string): TaskDetail {
 	const c = object(x.checklist); keys(c, ['tasks', 'nextOffset']);
 	const steps = array(c.tasks, (s) => parseTask(s), 50);
 	if (steps.some((s) => s.parentId !== taskId) || new Set(steps.map((s) => s.id)).size !== steps.length) bad();
-	return { task, steps, stepsNext: nullable(c.nextOffset, (v) => integer(v, 1)), today: date(x.today), timezone: text(x.timezone, 64) };
+	const series = nullable(x.series, (v) => { const r = object(v); keys(r, ['id', 'title']); return { id: uuid(r.id), title: text(r.title, 200) }; });
+	if ((series === null) !== (task.seriesId === null) || (series && series.id !== task.seriesId)) bad();
+	return { task, steps, stepsNext: nullable(c.nextOffset, (v) => integer(v, 1)), today: date(x.today), timezone: text(x.timezone, 64), series };
 }
 /** A task write's answer: the task (or step) asked about, with the change set that was sent. */
 export function parseTaskWrite(raw: unknown, expected: { id?: string; parentId?: string; changeSetId: string }): Task & { changeSetId: string } {

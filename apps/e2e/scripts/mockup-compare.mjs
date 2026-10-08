@@ -78,7 +78,27 @@ const screens = [
 	{ name: 'stock-card-dark', app: 'dark-stock-card', run: 'stock-dark', r3: 'Main', dark: true, caption: 'Stock card (dark) / R3 Main in the dark tokens' },
 	{ name: 'stock-archive-confirm', app: 'stock-archive-confirm', run: 'stock', r3: 'Main', caption: 'Stock card, archive confirm (not drawn) / nearest: R3 Main' },
 	{ name: 'stock-filter', app: 'stock-filter', run: 'stock', proto: 1, caption: 'Stock filter with the Stocktake row / frame 1 Threads (pinned rows)' },
-	{ name: 'stock-saved', app: 'stock-saved', run: 'stock', proto: 1, caption: 'Thread list after a stocktake (not drawn) / frame 1 Threads' }
+	{ name: 'stock-saved', app: 'stock-saved', run: 'stock', proto: 1, caption: 'Thread list after a stocktake (not drawn) / frame 1 Threads' },
+	// H4 (tags, recurring work and search contract §3): search results and the tag heading are frame 1's; Tags follows the
+	// Equipment screen (frame 12's list style); the tag, repeat and series forms are board 1's fields; the schedule is frame 5.
+	{ name: 'search', app: 'h4-search', run: 'h4', proto: 1, caption: 'Search results (not drawn) / frame 1 Threads (header search, rows)' },
+	{ name: 'search-none', app: 'h4-search-none', run: 'h4', proto: 1, caption: 'Search, no match (not drawn) / frame 1 Threads' },
+	{ name: 'search-dark', app: 'dark-h4-search', run: 'h4-dark', proto: 15, caption: 'Search results (dark) / frame 15 Threads home, dark' },
+	{ name: 'group-menu', app: 'h4-group-menu', run: 'h4', proto: 1, caption: 'Tag heading menu (not drawn) / frame 1 Threads (group headings)' },
+	{ name: 'tags', app: 'h4-tags', run: 'h4', proto: 12, caption: 'Tags (no mockup) / nearest: frame 12 Team, as the Equipment screen' },
+	{ name: 'tags-dark', app: 'dark-h4-tags', run: 'h4-dark', proto: 12, protoDark: true, caption: 'Tags (dark, no mockup) / frame 12 in the prototype dark tokens' },
+	{ name: 'tags-add', app: 'h4-tags-add', run: 'h4', r3: 'Main', caption: 'Add a tag (no mockup) / nearest: R3 Main (board 1 fields)' },
+	{ name: 'tag', app: 'h4-tag', run: 'h4', r3: 'Main', caption: 'Tag details (no mockup) / nearest: R3 Main (board 1 fields)' },
+	{ name: 'tag-dark', app: 'dark-h4-tag', run: 'h4-dark', r3: 'Main', dark: true, caption: 'Tag details (dark, no mockup) / R3 Main in the dark tokens' },
+	{ name: 'tag-archive', app: 'h4-tag-archive', run: 'h4', r3: 'Main', caption: 'Tag archive confirm (no mockup) / nearest: R3 Main' },
+	{ name: 'repeat', app: 'h4-repeat', run: 'h4', r3: 'Main', caption: 'Repeat this task (no mockup) / nearest: R3 Main (the task card)' },
+	{ name: 'repeat-dark', app: 'dark-h4-repeat', run: 'h4-dark', r3: 'Main', dark: true, caption: 'Repeat this task (dark) / R3 Main in the dark tokens' },
+	{ name: 'repeats', app: 'h4-repeats', run: 'h4', r3: 'Main', caption: 'Task card after Repeat: Repeats and Part of (no mockup) / nearest: R3 Main' },
+	{ name: 'series', app: 'h4-series', run: 'h4', r3: 'Main', caption: 'Series (no mockup) / nearest: R3 Main (board 1 fields)' },
+	{ name: 'series-paused', app: 'h4-series-paused', run: 'h4', r3: 'Main', caption: 'Series, paused (no mockup) / nearest: R3 Main' },
+	{ name: 'schedule-header', app: 'schedule-hours', run: 'schedule', proto: 5, caption: 'Schedule header, Hours / frame 5 Equipment' },
+	{ name: 'schedule-header-days', app: 'schedule-days', run: 'schedule', proto: 5, caption: 'Schedule header, Days / frame 5 Equipment (drawn at Hours)' },
+	{ name: 'schedule-header-dark', app: 'dark-schedule-hours', run: 'schedule-dark', proto: 5, protoDark: true, caption: 'Schedule header, Hours (dark) / frame 5 in the prototype dark tokens' }
 ];
 
 /** The check modules that produce the app screenshots, each run once at 390 px. */
@@ -95,7 +115,11 @@ const runs = {
 	bookings: c => require(path.join(scripts, 'mobile-shell-bookings-check.cjs'))(c),
 	'bookings-dark': c => require(path.join(scripts, 'mobile-shell-bookings-check.cjs'))({ ...c, scheme: 'dark' }),
 	stock: c => require(path.join(scripts, 'mobile-shell-stock-check.cjs'))(c),
-	'stock-dark': c => require(path.join(scripts, 'mobile-shell-stock-check.cjs'))({ ...c, scheme: 'dark' })
+	'stock-dark': c => require(path.join(scripts, 'mobile-shell-stock-check.cjs'))({ ...c, scheme: 'dark' }),
+	h4: c => require(path.join(scripts, 'mobile-shell-h4-check.cjs'))(c),
+	'h4-dark': c => require(path.join(scripts, 'mobile-shell-h4-check.cjs'))({ ...c, scheme: 'dark' }),
+	schedule: c => require(path.join(scripts, 'mobile-shell-schedule-check.cjs'))(c),
+	'schedule-dark': c => require(path.join(scripts, 'mobile-shell-schedule-check.cjs'))({ ...c, scheme: 'dark' })
 };
 
 /** The harness's test controls (harness/app/_layout.tsx) are not app UI: hidden in every screenshot the check modules

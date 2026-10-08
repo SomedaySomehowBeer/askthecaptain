@@ -366,7 +366,7 @@ export function signedInNotices(account: SignedInView): readonly Line[] {
  *  here. Nothing says a time is free or available. No fixed wording contains a digit: numbers come only from the data
  *  (times, setup and cleanup minutes). */
 export const equipmentCopy = {
-	heading: 'Equipment schedule',
+	heading: 'Equipment',
 	subtitle: 'Bookings for shared equipment',
 	loading: 'Loading the schedule…',
 	zoneUnsupported: "Times can't be shown in the business time zone on this device.",
@@ -414,7 +414,13 @@ export const equipmentCopy = {
 	panelNote: 'As of the last read. Availability can change before a reservation is saved.',
 	close: 'Close',
 	newBooking: 'New booking',
-	manage: 'Manage equipment'
+	manage: 'Manage equipment',
+	// H4 header (prototype frame 5): the date stepper and the key.
+	setup: 'Setup', cleaning: 'Cleaning', confirmed: 'Confirmed',
+	previousDay: 'Previous day', previousWeek: 'Previous week', nextDay: 'Next day', nextWeek: 'Next week',
+	stepOutside: 'Outside the dates loaded. Use Earlier dates or Later dates in the schedule.',
+	goToday: 'Go to today',
+	key: 'Key', keyConfirmed: 'Confirmed booking', keyMaintenance: 'Maintenance', keyCleaning: 'Setup and cleaning time'
 } as const;
 
 /** "Times in {zone}", the zone exactly as the organisation stores it. */
@@ -606,7 +612,12 @@ export const threadsCopy = {
 	emptyTitle: 'No threads to show yet',
 	emptyBody: "Threads are not available yet. You can open the equipment schedule above.",
 	search: 'Search',
-	searchHint: 'Not available yet',
+	searchHint: 'Search is on the thread list',
+	searchClose: 'Close search',
+	more: 'More list actions',
+	manageTags: 'Manage tags',
+	groupMenu: (label: string) => `${label}: tag actions`,
+	tagDetails: 'Tag details',
 	account: 'Account and settings'
 } as const;
 

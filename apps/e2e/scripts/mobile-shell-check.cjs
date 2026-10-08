@@ -91,7 +91,7 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
     signOut = 'fail'; await id('account-action-sign-out').click(); await id('account-action-sign-out-confirm').click(); await expect(heading("Couldn't confirm you're signed out")).toBeVisible(); await expect(id('web-try-again')).toBeDisabled(); signOut = 'ok';
     identity = 'unavailable'; await freshPage(); await page.clock.install(); await go('/equipment'); await expect(heading("Couldn't check your sign-in")).toBeVisible(); expect(new URL(page.url()).pathname).toBe('/equipment');
     await expect(id('web-try-again')).toBeDisabled(); await noOverflow('unavailable'); await shot('unavailable');
-    identity = 'signed-in'; await page.clock.fastForward(31_000); await expect(heading('Equipment schedule')).toBeVisible(); expect(new URL(page.url()).pathname).toBe('/equipment');
+    identity = 'signed-in'; await page.clock.fastForward(31_000); await expect(heading('Equipment')).toBeVisible(); expect(new URL(page.url()).pathname).toBe('/equipment');
     await freshPage(); await go('/invitations/accept?token=synthetic'); await id('invitation-accept').click(); await expect(heading('Threads')).toBeVisible(); await expect(id('shell-organisation')).toHaveText(b.organisationName);
     invite = 'refused'; await go('/invitations/accept?token=refused'); await id('invitation-accept').click(); await expect(id('invitation-refused')).toBeVisible();
     invite = 'unknown'; await go('/invitations/accept?token=unknown'); await id('invitation-accept').click(); await expect(id('invitation-unknown')).toBeVisible(); await expect(id('invitation-accept')).toHaveCount(0); await noOverflow('invitation');
@@ -112,6 +112,10 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
      if (width === 390) await require('./mobile-shell-bookings-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
      await require('./mobile-shell-stock-check.cjs')({ browser, production, shots, width });
      if (width === 390) await require('./mobile-shell-stock-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
+     await require('./mobile-shell-h4-check.cjs')({ browser, production, shots, width });
+     if (width === 390) await require('./mobile-shell-h4-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
+     await require('./mobile-shell-schedule-check.cjs')({ browser, production, shots, width });
+     if (width === 390) await require('./mobile-shell-schedule-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
      if (width === 390) await require('./mobile-shell-cards-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
      await require('./mobile-shell-history-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-runs-check.cjs')({ browser, base, shots, width });

@@ -11,10 +11,11 @@ import type { ReadScope } from '../account/contracts.ts';
 import { Redirect, router, useFocusEffect } from 'expo-router';
 import { parseStockList, stockListPath } from '../resources/stock/stock.ts';
 import { stocktakeFlash } from '../resources/stock/stocktake.ts';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { isSignedIn, threadsCopy, webCopy } from '../account/copy.ts';
-import { Calendar, ChevronDown, People, Plus, ThreadKindIcon } from '../components/Icons.tsx';
+import { Calendar, ChevronDown, Magnifier, People, Plus, ThreadKindIcon } from '../components/Icons.tsx';
+import { createSearch, excerptParts, resultsWords, searchCopy, type Match, type SearchState } from '../threads/search.ts';
 import { PlainScreen, Screen } from '../components/Screen.tsx';
 import Welcome from './welcome.tsx';
 import { faces, space, type } from '../theme/tokens.ts';
@@ -40,9 +41,16 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
  const { colors } = useTheme();
  const [controls]=useState(()=>createListControls(calls,scope,now));
  const state=useSyncExternalStore(controls.subscribe,controls.snapshot,controls.snapshot);
+ // Search (H4): the header's magnifier opens the field; results replace the grouped list, and polling pauses meanwhile.
+ const [search]=useState(()=>createSearch(calls,scope,{now,set:(fn,ms)=>setTimeout(fn,ms),clear:h=>clearTimeout(h as ReturnType<typeof setTimeout>)}));
+ const found=useSyncExternalStore(search.subscribe,search.snapshot,search.snapshot);
+ useEffect(()=>()=>search.dispose(),[search]);
+ useEffect(()=>{search.filter(state.filter);},[state.filter]);
+ const searching=search.active();
  const [folds,setFolds]=useState(foldedGroups);
+ const [menu,setMenu]=useState<string|null>(null);
  useEffect(()=>{void controls.load();return()=>controls.dispose();},[controls]);
- const paused=useThreadPoll(()=>controls.load(),now),waiting=useDeadline(state.waitUntil,now);
+ const paused=useThreadPoll(()=>search.active()?Promise.resolve():controls.load(),now),waiting=useDeadline(state.waitUntil,now),searchWaiting=useDeadline(found.waitUntil,now);
  const busy=state.phase==='loading';
  // The Stock filter's pinned Stocktake row says how many active items there are (stock contract §3): read when the filter turns on.
  const [stockItems,setStockItems]=useState<number|null>(null);
@@ -51,11 +59,17 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
  const [saved,setSaved]=useState<string|null>(null);
  useFocusEffect(useCallback(()=>{const line=stocktakeFlash.take(scope);if(line){setSaved(line);void controls.load();}},[controls,scope]));
  const toggle=(key:string)=>{const next=new Set(folds);if(next.has(key))next.delete(key);else next.add(key);setFolds(next);saveFolds(next);};
- return <Screen title={threadsCopy.heading} list={({heading,contentContainerStyle})=><View style={{flex:1}}><ScrollView testID="threads-list" contentContainerStyle={[contentContainerStyle,styles.listContent]}>
+ const openTags=(href:string)=>{setMenu(null);router.push(href as never);};
+ return <Screen title={threadsCopy.heading} search={{open:found.open,onPress:()=>{if(found.open)search.close();else search.open();}}} list={({heading,contentContainerStyle})=><View style={{flex:1}}><ScrollView testID="threads-list" contentContainerStyle={[contentContainerStyle,styles.listContent]}>
   {heading}
-  <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="threads-filters" style={styles.filterScroll} contentContainerStyle={styles.filters}><View role="radiogroup" aria-label={threadsCopy.filterGroup} style={styles.filters}>
+  {found.open?<SearchField text={found.text} onChange={t=>search.type(t)} onClear={()=>search.close()}/>:null}
+  <View style={styles.filterRow}><ScrollView horizontal showsHorizontalScrollIndicator={false} testID="threads-filters" style={styles.filterScroll} contentContainerStyle={styles.filters}><View role="radiogroup" aria-label={threadsCopy.filterGroup} style={styles.filters}>
    {threadsCopy.filters.map((filter,index)=><Pressable key={filter} testID={`threads-filter-${index}`} disabled={index>5||busy||waiting} aria-disabled={index>5||busy||waiting} role="radio" aria-checked={state.filter===filters[index]} aria-label={filter} accessibilityHint={index>5?copy.files:undefined} onPress={()=>{void controls.filter(filters[index]!);}} style={styles.filter}><View style={[styles.filterChip,state.filter===filters[index]&&styles.filterOn]}><Text style={[styles.filterText,state.filter===filters[index]&&styles.filterTextOn]}>{filter}</Text></View></Pressable>)}
-  </View></ScrollView>{state.filter==='files'||state.filter==='people'?<Text style={styles.detail}>{copy.files}</Text>:null}
+  </View></ScrollView>
+   <Pressable testID="threads-more-actions" role="button" aria-label={threadsCopy.more} aria-expanded={menu==='list'} onPress={()=>setMenu(menu==='list'?null:'list')} style={styles.moreButton}><MoreDots color={colors.body}/></Pressable></View>
+  {menu==='list'?<View testID="threads-list-menu" role="menu" style={styles.menu}><Pressable testID="threads-manage-tags" role="menuitem" onPress={()=>openTags('/tags')} style={styles.menuItem}><Text style={styles.menuText}>{threadsCopy.manageTags}</Text></Pressable></View>:null}
+  {state.filter==='files'||state.filter==='people'?<Text style={styles.detail}>{copy.files}</Text>:null}
+  {searching?<SearchResults state={found} waiting={searchWaiting} onRetry={()=>search.retry()}/>:<>
   <View style={styles.pinned}>
    <PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/>
    <PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.sageText}/>} onPress={()=>router.push('/members?from=threads' as never)}/>
@@ -67,25 +81,65 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
   {paused?<Text style={styles.body}>{copy.paused}</Text>:null}
   {state.data?.available&&state.data.threads.length===0?<Text testID="threads-empty" style={styles.body}>{copy.empty}</Text>:null}
   {state.data?groupedRows(state.data).map(({group,rows})=><View key={group.key} style={styles.groupBox}>
-   <Pressable testID={`thread-group-${group.key}`} role="button" aria-expanded={!folds.has(group.key)} onPress={()=>toggle(group.key)} style={styles.group}>
+   <View style={styles.groupLine}>
+   <Pressable testID={`thread-group-${group.key}`} role="button" aria-expanded={!folds.has(group.key)} onPress={()=>toggle(group.key)} onLongPress={group.key==='none'?undefined:()=>setMenu(group.key)} style={styles.group}>
     <View style={folds.has(group.key)?styles.shut:null}><ChevronDown color={colors.muted} size={7}/></View><Text style={styles.groupLabel} numberOfLines={1}>{group.label}</Text><Text style={styles.groupMeta} numberOfLines={1}>{[group.owner?.name,groupDates(group.startsOn,group.endsOn),`${group.threads} ${group.threads===1?'thread':'threads'}`].filter(Boolean).join(' · ')}</Text>{group.needsYou>0?<Text style={styles.pip} accessibilityLabel={`${group.needsYou} need you`}>{group.needsYou}</Text>:null}
    </Pressable>
+   {group.key==='none'?null:<Pressable testID={`thread-group-menu-${group.key}`} role="button" aria-label={threadsCopy.groupMenu(group.label)} aria-expanded={menu===group.key} onPress={()=>setMenu(menu===group.key?null:group.key)} style={styles.groupMenu}><MoreDots color={colors.muted}/></Pressable>}
+   </View>
+   {menu===group.key?<View testID={`thread-group-actions-${group.key}`} role="menu" style={styles.menu}>
+    <Pressable testID={`thread-group-details-${group.key}`} role="menuitem" onPress={()=>openTags(`/tags/${group.key}`)} style={styles.menuItem}><Text style={styles.menuText}>{threadsCopy.tagDetails}</Text></Pressable>
+    <Pressable testID={`thread-group-manage-${group.key}`} role="menuitem" onPress={()=>openTags('/tags')} style={[styles.menuItem,styles.menuDivided]}><Text style={styles.menuText}>{threadsCopy.manageTags}</Text></Pressable>
+   </View>:null}
    {!folds.has(group.key)&&rows.length?<View style={styles.rows}>{rows.map(row=><ThreadRow key={row.id} row={row}/>)}</View>:null}
    {!folds.has(group.key)&&rows.length===0?<Text style={styles.detail}>Load more threads to see this group.</Text>:null}
   </View>):null}
   {state.data?.nextCursor?<ThreadAction testID="threads-more" label="Show more" disabled={busy||waiting} onPress={()=>{void controls.load(true);}}/>:null}
+  </>}
  </ScrollView><View style={styles.newWrap}><Pressable testID="threads-new" role="button" aria-label="New thread" aria-disabled={state.phase==='lost'} disabled={state.phase==='lost'} onPress={state.phase==='lost'?undefined:()=>router.push('/threads/new')} style={[styles.new,state.phase==='lost'&&styles.newOff]}><Plus color={colors.actionText}/><Text style={styles.newText}>New thread</Text></Pressable></View></View>}/>;
 }
-function ThreadRow({row}:{row:Row}){
+/** A list row; a search result (H4) also has its match: a title match marks the title's words, a message match puts
+ *  that message's excerpt, with its words marked, in the preview line. */
+function ThreadRow({row,match}:{row:Row;match?:Match}){
  const styles = useStyles();
  const { colors } = useTheme();
+ const marked=(text:string)=>excerptParts(text).map((p,i)=>p.mark?<Text key={i} style={styles.mark}>{p.text}</Text>:p.text);
+ const preview=match?.kind==='message'?<>{`${firstName(match.authorName)}: `}{marked(match.excerpt)}</>:row.lastMessage?`${firstName(row.lastMessage.authorName)}: ${row.lastMessage.excerpt}`:'No messages yet';
  return <Pressable testID={`thread-row-${row.id}`} onPress={()=>router.push(`/threads/${row.id}`)} role="link" style={[styles.threadRow,row.needsYou&&{backgroundColor:colors.needsYou,borderColor:colors.needsYouLine}]}>
   <View style={styles.icon}><ThreadKindIcon kind={row.record?.kind??row.kind} color={colors.sageText}/></View><View style={styles.text}>
-  <View style={styles.line}><Text style={styles.threadTitle} numberOfLines={1}>{row.title}</Text><Text style={styles.time}>{row.lastMessageAt?clockTime(row.lastMessageAt):'No messages'}</Text></View>
+  <View style={styles.line}><Text style={styles.threadTitle} numberOfLines={1}>{match?.kind==='title'?marked(match.excerpt):row.title}</Text><Text style={styles.time}>{row.lastMessageAt?clockTime(row.lastMessageAt):'No messages'}</Text></View>
   <Text style={[styles.facts,row.status==='Pending'&&styles.pending]} numberOfLines={1}>{[row.status,...row.facts].filter(Boolean).join(' · ')}</Text>
-  <View style={styles.line}><Text style={styles.preview} numberOfLines={1}>{row.lastMessage?`${firstName(row.lastMessage.authorName)}: ${row.lastMessage.excerpt}`:'No messages yet'}</Text>{row.needsYou?<Text testID={`thread-unread-${row.id}`} accessibilityLabel={row.unread?`${unreadLabel(row.unread)} unread`:'Needs you'} style={styles.pip}>{row.unread?unreadLabel(row.unread):'•'}</Text>:null}</View></View>
+  <View style={styles.line}><Text testID={match?`thread-match-${row.id}`:undefined} style={styles.preview} numberOfLines={1}>{preview}</Text>{row.needsYou?<Text testID={`thread-unread-${row.id}`} accessibilityLabel={row.unread?`${unreadLabel(row.unread)} unread`:'Needs you'} style={styles.pip}>{row.unread?unreadLabel(row.unread):'•'}</Text>:null}</View></View>
  </Pressable>;
 }
+
+/** The search field under the header (frame 1's magnifier, opened): a labelled input and Clear. */
+function SearchField({text,onChange,onClear}:{text:string;onChange:(t:string)=>void;onClear:()=>void}){
+ const styles = useStyles();
+ const { colors } = useTheme();
+ const [focused,setFocused]=useState(false);
+ return <View style={styles.searchRow}><View style={[styles.searchBox,focused&&{borderColor:colors.action}]}><Magnifier color={colors.muted}/>
+  <TextInput testID="threads-search" autoFocus value={text} onChangeText={onChange} onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)} placeholder={searchCopy.label} placeholderTextColor={colors.muted}
+   aria-label={searchCopy.label} accessibilityHint={searchCopy.hint} maxLength={240} returnKeyType="search" autoCorrect={false} style={styles.searchInput} onKeyPress={e=>{if(e.nativeEvent.key==='Escape')onClear();}}/></View>
+  <Pressable testID="threads-search-clear" role="button" aria-label={searchCopy.clear} onPress={onClear} style={styles.searchClear}><Text style={styles.searchClearText}>Clear</Text></Pressable></View>;
+}
+
+/** Results in place of the grouped list: "n results" or "No threads match", and the honest states between. */
+function SearchResults({state,waiting,onRetry}:{state:SearchState;waiting:boolean;onRetry:()=>void}){
+ const styles = useStyles();
+ const result=state.phase==='ready'?state.result:null;
+ return <View testID="threads-search-results" style={styles.results}>
+  {state.phase==='waiting'||state.phase==='loading'?<Text testID="threads-search-status" role="status" style={styles.resultCount}>{searchCopy.searching}</Text>:null}
+  {state.phase==='failed'?<View style={styles.statusRow}><Text testID="threads-search-status" role="status" style={[styles.body,{flex:1}]}>{state.message}</Text><ThreadAction testID="threads-search-retry" label="Try again" disabled={waiting} onPress={onRetry}/></View>:null}
+  {result&&result.available?<Text testID="threads-search-count" role="status" style={styles.resultCount}>{result.threads.length?resultsWords(result.threads.length):searchCopy.none}</Text>:null}
+  {result&&!result.available?<Text testID="threads-search-status" role="status" style={styles.body}>{state.message}</Text>:null}
+  {result?.threads.length?<View style={styles.rows}>{result.threads.map(row=><ThreadRow key={row.id} row={row} match={row.match}/>)}</View>:null}
+  {result&&result.threads.length===50?<Text style={styles.detail}>{searchCopy.firstFifty}</Text>:null}
+ </View>;
+}
+
+/** Three dots: a menu of actions. */
+function MoreDots({color}:{color:string}){return <View aria-hidden style={{flexDirection:'row',gap:3}}>{[0,1,2].map(i=><View key={i} style={{width:4,height:4,borderRadius:2,backgroundColor:color}}/>)}</View>;}
 
 /** A pinned row opens a view that is not a list of threads. One without `onPress` is listed but not available. */
 function PinnedRow({ testID, label, detail, icon, onPress }: { testID: string; label: string; detail: string; icon: React.ReactNode; onPress?: () => void }) {
@@ -102,9 +156,26 @@ function PinnedRow({ testID, label, detail, icon, onPress }: { testID: string; l
  *  pill "New thread" button with its plus. */
 const useStyles = themedStyles((colors) => ({
  listContent:{paddingHorizontal:10,paddingBottom:84},
+ // H4: the search field (an R3 `.input` with the magnifier), the filter row's overflow and the group heading's menu.
+ searchRow:{flexDirection:'row',alignItems:'center',gap:6,marginBottom:4},
+ searchBox:{flex:1,flexDirection:'row',alignItems:'center',gap:8,paddingLeft:12,borderWidth:1,borderColor:colors.fieldLine,borderRadius:12,backgroundColor:colors.card},
+ searchInput:{flex:1,minWidth:0,minHeight:44,fontSize:type.body,color:colors.heading,outlineWidth:0},
+ searchClear:{minHeight:44,minWidth:44,paddingHorizontal:8,alignItems:'center',justifyContent:'center'},
+ searchClearText:{fontSize:type.label,fontWeight:'700',color:colors.action},
+ results:{gap:6,marginTop:2},
+ resultCount:{fontFamily:faces.display,fontSize:type.groupTitle,lineHeight:type.groupTitleLine,color:colors.heading,paddingLeft:2,minHeight:24},
+ mark:{fontWeight:'700',color:colors.heading,backgroundColor:colors.sage},
+ filterRow:{flexDirection:'row',alignItems:'center'},
+ moreButton:{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center',marginRight:-6},
+ groupLine:{flexDirection:'row',alignItems:'center'},
+ groupMenu:{minWidth:44,minHeight:44,alignItems:'center',justifyContent:'center',marginRight:-6},
+ menu:{alignSelf:'flex-end',minWidth:180,marginBottom:6,borderWidth:1,borderColor:colors.line,borderRadius:12,backgroundColor:colors.card,overflow:'hidden'},
+ menuItem:{minHeight:44,paddingHorizontal:14,justifyContent:'center'},
+ menuDivided:{borderTopWidth:1,borderColor:colors.rowLine},
+ menuText:{fontSize:type.rowTitle,fontWeight:'600',color:colors.heading},
  statusRow:{flexDirection:'row',alignItems:'center',gap:8},
  groupBox:{marginTop:6},
- group:{minHeight:44,flexDirection:'row',alignItems:'center',gap:6,paddingLeft:2,paddingRight:6},
+ group:{flex:1,minWidth:0,minHeight:44,flexDirection:'row',alignItems:'center',gap:6,paddingLeft:2,paddingRight:6},
  shut:{transform:[{rotate:'-90deg'}]},
  groupLabel:{maxWidth:'44%',flexShrink:1,fontFamily:faces.display,fontSize:type.groupTitle,lineHeight:type.groupTitleLine,color:colors.heading},
  groupMeta:{flex:1,minWidth:0,fontSize:type.tiny,color:colors.muted},
@@ -118,7 +189,7 @@ const useStyles = themedStyles((colors) => ({
  preview:{flex:1,minWidth:0,fontSize:type.rowLast,lineHeight:type.rowLastLine,color:colors.muted,marginTop:1},
  pip:{fontSize:type.tiny,lineHeight:17,fontWeight:'700',minWidth:17,height:17,textAlign:'center',borderRadius:9,paddingHorizontal:5,backgroundColor:colors.action,color:colors.actionText,overflow:'hidden'},
 	body: { fontSize: type.body, lineHeight: type.bodyLine, color: colors.body },
-	filterScroll: { flexGrow: 0, marginHorizontal: -10 },
+	filterScroll: { flexGrow: 1, flexShrink: 1, marginLeft: -10 },
 	filters: { flexDirection: 'row', gap: 2, paddingHorizontal: 5 },
 	filter: { minHeight: space.minTarget, paddingHorizontal: 3, alignItems: 'center', justifyContent: 'center' },
 	filterChip: { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 15, borderWidth: 1, borderColor: colors.fieldLine, backgroundColor: colors.card },

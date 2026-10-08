@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
 	Pressable, ScrollView, Text, View, type LayoutChangeEvent, type NativeScrollEvent, type NativeSyntheticEvent
 } from 'react-native';
@@ -11,6 +11,7 @@ import type { Equipment, Reservation } from './data.ts';
 import { clampScroll, pixelsAt, scales, zoomScroll, type Scale } from './geometry.ts';
 import { chunksBetween, renderWindow, ticks, type ScheduleRange, type TimeWindow } from './range.ts';
 import { zoneTime } from './ReservationPanel.tsx';
+import { wordInstant } from '../../threads/wording.ts';
 import {
 	columnWidthFor, focusMissed, focusReady, layoutMeasured, offsetFor, settledFrom, type Control, type Intent, type Measured, type ScheduleScreen,
 	type ScheduleState, type SettledView
@@ -31,8 +32,13 @@ const centreNow: Focus = () => ({ at: Date.now(), where: 'centre' });
  *  Occupancy is planned only at a settle: the idle timer after scrolling stops, the native end events, and an explicit
  *  settle after every programmatic scroll (arrows, Today, zoom, re-anchor, the first scroll to now, and the clamp after
  *  a list replacement). The geometry sent holds no equipment IDs. */
-export function Timeline({ state, screen, zone, frame, header, footer, onSettle, onScale, onEdge, onToday, onPress, onOpen }: {
+/** What the fixed header above the timeline (H4, prototype frame 5) drives: the scale, Today, and a jump to an instant. */
+export type TimelineControls = { readonly scale: Scale; zoom(next: Scale): void; today(): void; focusAt(at: number): void };
+
+export function Timeline({ state, screen, zone, frame, top, header, footer, onSettle, onScale, onEdge, onToday, onPress, onOpen }: {
 	state: ScheduleState; screen: ScheduleScreen; zone: string; frame: ScreenListFrame; header: ReactNode; footer: ReactNode;
+	/** The header that stays put above the scrolling timeline: the heading, the scales, the date stepper and the key. */
+	top: (controls: TimelineControls) => ReactNode;
 	onSettle: (view: SettledView) => void; onScale: (scale: Scale) => void;
 	onEdge: (direction: 'earlier' | 'later') => ScheduleRange | null; onToday: () => boolean;
 	onPress: (intent: Intent) => void; onOpen: (equipment: Equipment, reservation: Reservation) => void;
@@ -193,6 +199,11 @@ export function Timeline({ state, screen, zone, frame, header, footer, onSettle,
 		pendingFocus.current = centreNow;
 		applyFocus();
 	};
+	/** The date stepper: the middle of the view moves to `at` (a day's midday), then settles. */
+	const focusAt = (at: number) => {
+		pendingFocus.current = () => ({ at, where: 'centre' });
+		applyFocus();
+	};
 	const step = (direction: -1 | 1) => {
 		scrollX(clampScroll(layout.current.x + direction * columnWidth, contentWidth, columnsWidth));
 		updateWindows();
@@ -213,6 +224,8 @@ export function Timeline({ state, screen, zone, frame, header, footer, onSettle,
 	try { axis = ticks(scale, range, zone, shownWindow.low, shownWindow.high); } catch { axis = []; }
 
 	return (
+		<View style={styles.fill}>
+		{top({ scale, zoom, today, focusAt })}
 		<ScrollView
 			ref={vertical} stickyHeaderIndices={[1]} contentContainerStyle={frame.contentContainerStyle}
 			onScroll={onVerticalScroll} scrollEventThrottle={32} onMomentumScrollEnd={settleNow} onLayout={measure('viewportHeight')}
@@ -221,20 +234,10 @@ export function Timeline({ state, screen, zone, frame, header, footer, onSettle,
 			<View style={styles.header}>
 				{frame.heading}
 				{header}
-				<View role="radiogroup" aria-label={equipmentCopy.scale} style={styles.scales}>
-					{(['hours', 'days', 'weeks'] as const).map((s) => (
-						<Pressable key={s} testID={`equipment-scale-${s}`} role="radio" aria-checked={s === scale} onPress={() => zoom(s)}
-							style={[styles.scale, s === scale && styles.scaleOn]}>
-							<Text style={[styles.scaleText, s === scale && styles.scaleTextOn]}>{equipmentCopy[s]}</Text>
-						</Pressable>
-					))}
-					<Pressable testID="equipment-today" role="button" onPress={today} style={styles.scale}>
-						<Text style={styles.scaleText}>{equipmentCopy.today}</Text>
-					</Pressable>
-				</View>
 			</View>
 
-			<View style={styles.sticky} onLayout={measure('stickyHeight')}>
+			{/* The page colour behind the names row's rounded corners, so nothing scrolling under it shows through them. */}
+			<View style={styles.stickyBack} onLayout={measure('stickyHeight')}><View style={styles.sticky}>
 				<View style={styles.corner}>
 					<Pressable testID="equipment-previous" role="button" aria-label={equipmentCopy.previousColumn} aria-disabled={atStart} disabled={atStart}
 						onPress={() => step(-1)} hitSlop={6} style={[styles.arrow, atStart && styles.dim]}><Text style={styles.arrowText}>‹</Text></Pressable>
@@ -252,7 +255,7 @@ export function Timeline({ state, screen, zone, frame, header, footer, onSettle,
 						<View style={[styles.name, { width: columnWidth }]}><MoreSlot more={screen.more} onPress={onPress} /></View>
 					</View>
 				</ScrollView>
-			</View>
+			</View></View>
 
 			<View style={styles.edge}>
 				{screen.earlier ? <EdgeButton testID="equipment-earlier" label={equipmentCopy.earlier} control={screen.earlier} onPress={() => edge('earlier')} /> : null}
@@ -271,7 +274,7 @@ export function Timeline({ state, screen, zone, frame, header, footer, onSettle,
 							<View key={equipment.id} style={[styles.column, { left: index * columnWidth, width: columnWidth, height: bodyHeight }]}>
 								{index < columnSpan[0] || index > columnSpan[1] ? null : (
 									<Column state={state} equipment={equipment} chunkIndexes={chunkIndexes} window={shownWindow} start={start} ppd={ppd}
-										width={columnWidth} bodyHeight={bodyHeight} time={time} onOpen={onOpen} />
+										width={columnWidth} bodyHeight={bodyHeight} time={time} zone={zone} onOpen={onOpen} />
 								)}
 							</View>
 						))}
@@ -284,6 +287,7 @@ export function Timeline({ state, screen, zone, frame, header, footer, onSettle,
 				{footer}
 			</View>
 		</ScrollView>
+		</View>
 	);
 }
 
@@ -291,13 +295,14 @@ export function Timeline({ state, screen, zone, frame, header, footer, onSettle,
  *  not rendered yet (render lag, a fast fling, a column outside the rendered span) can only look hatched. A fully read
  *  chunk is painted over with an opaque page-colour block, the only place blank time appears; every other chunk gets
  *  stripes and its words. Bars are drawn last, over both. */
-function Column({ state, equipment, chunkIndexes, window, start, ppd, width, bodyHeight, time, onOpen }: {
-	state: ScheduleState; equipment: Equipment; chunkIndexes: readonly number[]; window: TimeWindow; start: number; ppd: number;
+function Column({ state, equipment, chunkIndexes, window, start, ppd, width, bodyHeight, time, zone, onOpen }: {
+	state: ScheduleState; zone: string; equipment: Equipment; chunkIndexes: readonly number[]; window: TimeWindow; start: number; ppd: number;
 	width: number; bodyHeight: number; time: (instant: string) => string; onOpen: (equipment: Equipment, reservation: Reservation) => void;
 }) {
 	const styles = useStyles();
 	const range = state.range!;
 	const bars = reservationsBetween(state.occupancy, equipment.id, window.low, window.high);
+	const clock = (at: string) => wordInstant(at, zone)?.time ?? '';
 	return (
 		<>
 			{chunkIndexes.map((i) => {
@@ -310,16 +315,25 @@ function Column({ state, equipment, chunkIndexes, window, start, ppd, width, bod
 				return <Hatch key={chunk.from} top={top} height={height} width={width} text={text} marker={cell?.state === 'marker'} />;
 			})}
 			{bars.map((r) => {
-				const top = Math.max(0, pixelsAt(Date.parse(r.occupiedStartsAt), start, ppd));
-				const bottom = Math.min(bodyHeight, pixelsAt(Date.parse(r.occupiedEndsAt), start, ppd));
-				const height = Math.max(3, bottom - top);
+				// Frame 5: the booking's own time is the bar; setup before it and cleaning after it are their own hatched blocks.
+				const y = (at: string) => Math.min(bodyHeight, Math.max(0, pixelsAt(Date.parse(at), start, ppd)));
+				const top = y(r.startsAt), height = Math.max(3, y(r.endsAt) - top);
+				const setup = y(r.startsAt) - y(r.occupiedStartsAt), cleanup = y(r.occupiedEndsAt) - y(r.endsAt);
 				const maintenance = r.kind === 'maintenance';
+				const lines = Math.max(1, Math.floor((height - 6) / 15));
 				return (
-					<Pressable key={r.id} testID={`equipment-bar-${r.id}`} role="button" aria-label={reservationLabel(equipment.name, r, time)}
-						onPress={() => onOpen(equipment, r)}
-						style={[styles.bar, maintenance ? styles.maintenance : styles.booking, { top, height }]}>
-						{height >= barMinLabel ? <Text numberOfLines={Math.max(1, Math.floor(height / 16))} style={styles.barText}>{r.title}</Text> : null}
-					</Pressable>
+					<Fragment key={r.id}>
+						{setup >= 1 ? <View testID="equipment-setup" pointerEvents="none" style={[styles.extra, { top: y(r.occupiedStartsAt), height: setup }]}>
+							{setup >= barMinLabel ? <Text numberOfLines={Math.max(1, Math.floor((setup - 4) / 14))} style={styles.extraText}>{equipmentCopy.setup}<Text style={styles.extraTime}>{setup >= 34 ? `\nfrom ${clock(r.occupiedStartsAt)}` : ''}</Text></Text> : null}</View> : null}
+						<Pressable testID={`equipment-bar-${r.id}`} role="button" aria-label={reservationLabel(equipment.name, r, time)}
+							onPress={() => onOpen(equipment, r)}
+							style={[styles.bar, maintenance ? styles.maintenance : styles.booking, { top, height }]}>
+							{height >= barMinLabel ? <Text numberOfLines={Math.min(lines, 3)} style={styles.barText}>{r.title}</Text> : null}
+							{lines >= 2 ? <Text numberOfLines={lines - 1} style={styles.barTime}>{`${clock(r.startsAt)} to ${clock(r.endsAt)}`}</Text> : null}
+						</Pressable>
+						{cleanup >= 1 ? <View testID="equipment-cleanup" pointerEvents="none" style={[styles.extra, { top: y(r.endsAt), height: cleanup }]}>
+							{cleanup >= barMinLabel ? <Text numberOfLines={Math.max(1, Math.floor((cleanup - 4) / 14))} style={styles.extraText}>{equipmentCopy.cleaning}<Text style={styles.extraTime}>{cleanup >= 34 ? `\nto ${clock(r.occupiedEndsAt)}` : ''}</Text></Text> : null}</View> : null}
+					</Fragment>
 				);
 			})}
 		</>
@@ -372,6 +386,7 @@ const useStyles = themedStyles((colors) => ({
 	scaleOn: { backgroundColor: colors.sage },
 	scaleText: { fontSize: 12, fontWeight: '700', color: colors.muted },
 	scaleTextOn: { color: colors.sageText },
+	stickyBack: { backgroundColor: colors.page },
 	sticky: { flexDirection: 'row', backgroundColor: colors.pinned, borderBottomWidth: 1, borderColor: colors.line, borderTopLeftRadius: 14, borderTopRightRadius: 14 },
 	corner: { width: axisWidth, flexDirection: 'row', alignItems: 'center' },
 	arrow: { width: 28, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
@@ -393,7 +408,12 @@ const useStyles = themedStyles((colors) => ({
 	bar: { position: 'absolute', left: 3, right: 3, borderRadius: 8, borderWidth: 1, borderLeftWidth: 3, paddingHorizontal: 6, overflow: 'hidden' },
 	booking: { backgroundColor: colors.sage, borderColor: colors.sage, borderLeftColor: colors.action },
 	maintenance: { backgroundColor: colors.card, borderColor: colors.body, borderWidth: 1, borderLeftWidth: 1, borderStyle: 'dashed' },
-	barText: { fontSize: 11, lineHeight: 15, fontWeight: '600', color: colors.heading },
+	barText: { fontSize: 11, lineHeight: 15, fontWeight: '700', color: colors.heading, paddingTop: 3 },
+	barTime: { fontSize: 10, lineHeight: 14, color: colors.body },
+	// Frame 5's "Cleaning": a pale, hatched-looking block under the booking (a dashed outline; no image or gesture library).
+	extra: { position: 'absolute', left: 3, right: 3, borderRadius: 8, borderWidth: 1, borderColor: colors.fieldLine, backgroundColor: colors.neutral, paddingHorizontal: 6, overflow: 'hidden' },
+	extraText: { fontSize: 10, lineHeight: 14, fontWeight: '700', color: colors.neutralText, paddingTop: 3 },
+	extraTime: { fontWeight: '400' },
 	more: { minHeight: 44, justifyContent: 'center' },
 	moreText: { fontSize: 12, fontWeight: '700', color: colors.action },
 	reason: { fontSize: 12, lineHeight: 16, color: colors.muted }
