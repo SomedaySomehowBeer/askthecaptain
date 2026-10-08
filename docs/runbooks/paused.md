@@ -1,5 +1,15 @@
 # Staging resumed; production paused (2026-09-27)
 
+## H1 release: card fixes and the fidelity pass (8 October 2026, 00:38–00:40 UTC)
+
+On the owner's instruction, `main` at `394dba3` was deployed to `askthecaptain-api-staging` from the droplet (image
+`registry.fly.io/askthecaptain-api-staging:git-394dba3`). It carries the booking-card fixes (#247: the edit-discard
+button renamed "Discard edits", Save disabled under a warning, multi-day bookings read correctly, buttons re-enable
+after a wait), the Expo patch bump (#248), the H1 fidelity pass (#249: vendored Fraunces and Inter under the SIL OFL,
+the mockups' type scale and controls, cards that scroll with the page, the mockup-compare script) and the plan's
+people-first order (#246). No migration ran; schema stays at 0048. `/readyz` and `/healthz` answered 200 afterwards.
+Not covered: no signed-in hosted check in either scheme; no native device. Rollback: redeploy image `git-74e3244`.
+
 ## Versions and undo release: migrations 0047 and 0048 (3 October 2026, 07:58–08:00 UTC)
 
 R3 of the chat-first rebuild is on staging: the change journal (#240), the history and selective-undo API with
