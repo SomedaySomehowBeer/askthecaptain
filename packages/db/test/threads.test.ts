@@ -139,7 +139,7 @@ it('thread tables force row security, grant no deletes but stars and tags, and e
 		select p.proname as name, p.prosecdef as definer, has_function_privilege('captain_runtime', p.oid, 'EXECUTE') as callable,
 			has_function_privilege('app', p.oid, 'EXECUTE') as legacy_callable, p.proconfig as config
 		from pg_proc p where p.proname like 'thread\\_%' order by p.proname`;
-	assert.deepEqual(functions.filter((f) => f.callable).map((f) => f.name), ['thread_create', 'thread_end_membership', 'thread_make_task', 'thread_visible']);
+	assert.deepEqual(functions.filter((f) => f.callable).map((f) => f.name), ['thread_create', 'thread_end_membership', 'thread_make_booking', 'thread_make_task', 'thread_visible']);
 	assert.equal((await db.owner`select 1 from pg_proc where proname like 'chat\\_%'`).length, 0, 'no 0042/0043 chat function survives');
 	assert.deepEqual(functions.map((f) => f.legacyCallable), functions.map((f) => f.callable), 'app can call exactly what captain_runtime can');
 	assert.ok(functions.filter((f) => f.callable).every((f) => f.definer), 'the callable functions are the only elevated paths');

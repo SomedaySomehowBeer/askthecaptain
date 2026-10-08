@@ -48,6 +48,8 @@ export function threadsRoutes(service: ThreadsService) {
  routes.delete(`${one}/tags/:tagId`, async c => c.json(tagged(c, await service.setTag(actor(c), org(c), thread(c), uuid.parse(c.req.param('tagId')), false, singleQuery(c.req.queries())))));
  // Topic to task (versions contract §6): the thread detail, with the task's change set in the header.
  routes.post(`${one}/task`, async c => c.json(tagged(c, await service.makeTask(actor(c), org(c), thread(c), await readJson(c.req)))));
+ // Topic to booking (bookings contract §2): the same, with the booking's change set in the header.
+ routes.post(`${one}/booking`, async c => c.json(tagged(c, await service.makeBooking(actor(c), org(c), thread(c), await readJson(c.req)))));
  routes.get(`${one}/messages`, async c => c.json(await service.messages(actor(c), org(c), thread(c), singleQuery(c.req.queries()))));
  routes.post(`${one}/messages`, async c => {
   const result = await service.send(actor(c), org(c), thread(c), await readJson(c.req));
