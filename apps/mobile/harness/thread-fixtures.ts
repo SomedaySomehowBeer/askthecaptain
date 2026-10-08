@@ -79,6 +79,8 @@ export function threadHarness(scenario:string,scope:()=>MemberScope|null){
     if(u.pathname.endsWith('/members'))value={members:recordMembers};
     else if(u.pathname.endsWith('/tags'))value={tags:r.tags.map(t=>({...t,createdAt:at,updatedAt:at,ownerId:null,startsOn:null,endsOn:null,createdBy:null,revision:1,archivedAt:null})),nextOffset:null};
     else if(u.pathname.includes('/tasks/'))value=(r as {task:unknown}).task;
+    else if(u.pathname.includes('/stock/')){const archived=scenario.endsWith('archived');value={item:{id:itemId,organisationId:scope()?.organisationId,name:'Cascade hops',location:'Cold store',unitLabel:'kg',currentCount:'4.5',countedAt:'2026-10-01T04:10:00.000Z',countedBy:tom,reorderPoint:'2',preferredSupplierId:null,notes:'',archivedAt:archived?at:null,createdAt:at,updatedAt:at,revision:3,countedByName:'Tom Reilly',supplierName:null,belowReorder:false},
+     counts:[{id:'00000000-0000-4000-8000-000000000081',itemId,count:'4.5',note:'Back shelf too',countedAt:'2026-10-01T04:10:00.000Z',countedBy:tom,countedByName:'Tom Reilly'},{id:'00000000-0000-4000-8000-000000000080',itemId,count:'6',note:'',countedAt:'2026-09-24T04:00:00.000Z',countedBy:maya,countedByName:'Maya Chen'}],locations:['Cold store','Packaging store'],timezone:'Australia/Sydney'};}
     else if(u.pathname.endsWith('/reservations'))value={reservations:[],nextOffset:null,coverage:'complete',from:u.searchParams.get('from'),to:u.searchParams.get('to'),timezone:'Australia/Sydney'};
     else if(u.pathname.includes('/reservations/'))value=(r as {booking:unknown}).booking;
     else if(/\/organisations\/[^/]+$/.test(u.pathname))value={id:scope()?.organisationId,name:'Harbour Brewing',timezone:'Australia/Sydney',locale:'en-AU',createdAt:at,role:'owner'};

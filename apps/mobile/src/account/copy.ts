@@ -601,6 +601,8 @@ export const threadsCopy = {
 	pinnedEquipmentDetail: 'Bookings for shared equipment',
 	pinnedTeam: 'Team',
 	pinnedTeamDetail: 'Members and invitations',
+	pinnedStocktake: (items: number | null) => items === null ? 'Stocktake' : `Stocktake · ${items} ${items === 1 ? 'item' : 'items'}`,
+	pinnedStocktakeDetail: 'Count every item in one go',
 	emptyTitle: 'No threads to show yet',
 	emptyBody: "Threads are not available yet. You can open the equipment schedule above.",
 	search: 'Search',

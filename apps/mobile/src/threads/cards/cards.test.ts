@@ -151,6 +151,6 @@ test('record parsers check identity and the change set; extra or missing fields 
 test('change-line names come from what the screen loaded, never guessed', () => {
 	const detail = { thread: { id: id(11), kind: 'record' as const, title: 't', revision: 1, lastSeq: 1, lastChange: 1, readPosition: 0, unread: 0, starred: false, createdAt: '2026-10-01T00:00:00.000Z' },
 		card: { record: { kind: 'task' as const, id: task.id }, title: 't', status: null, facts: ['', ''] as [string, string], fold: { ownerId: id(4), ownerName: 'Maya Chen' } }, tags: [{ id: id(3), name: 'Production' }], pin: null };
-	const names = namesFor(detail, { task: { task, steps: [{ ...task, id: id(2), parentId: task.id, title: 'Book the canning line' }], stepsNext: null, today: '2026-10-02', timezone: 'UTC' }, booking: null, zone: null, members: null, tags: null, busy: false, message: '', waitUntil: 0 }, []);
+	const names = namesFor(detail, { task: { task, steps: [{ ...task, id: id(2), parentId: task.id, title: 'Book the canning line' }], stepsNext: null, today: '2026-10-02', timezone: 'UTC' }, booking: null, stock: null, zone: null, members: null, tags: null, busy: false, message: '', waitUntil: 0 }, []);
 	assert.deepEqual([names.person!(id(4)), names.tag!(id(3)), names.step!(id(2)), names.person!(id(5))], ['Maya Chen', 'Production', 'Book the canning line', undefined]);
 });

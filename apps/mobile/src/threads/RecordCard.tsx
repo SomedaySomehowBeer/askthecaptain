@@ -56,7 +56,7 @@ export function RecordCard({ detail, calls, scope, now, fold, setFold, disabled,
 		{fold ? <View style={styles.fold} testID="thread-details">
 			{kind === 'task' ? <TaskEditor {...editorProps} />
 				: kind === 'booking' ? <BookingEditor {...editorProps} year={year} />
-					: kind === 'stock' ? <StockEditor calls={calls} scope={scope} detail={detail} hooks={hooks} locked={locked} confirmed={confirmed} year={year} />
+					: kind === 'stock' ? <StockEditor {...editorProps} year={year} />
 						: detail.thread.kind === 'topic' && !cardDetails(detail.card).length ? null : <Text style={styles.body}>{cardDetails(detail.card).join('\n') || 'No further details.'}</Text>}
 			<View style={styles.chips} testID="thread-tag-chips">{detail.tags.length ? detail.tags.map((t) => <Text key={t.id} style={styles.chip}>{t.name}</Text>) : <Text style={styles.label}>No tags</Text>}
 				<View style={{ flex: 1 }} /><CardButton testID="thread-tags-toggle" label={tagging ? 'Close tags' : 'Change tags'} quiet onPress={() => setTagging(!tagging)} />

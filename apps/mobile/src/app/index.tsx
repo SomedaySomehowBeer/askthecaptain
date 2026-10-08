@@ -1,5 +1,5 @@
 import { clockTime, groupDates, ThreadAction } from '../threads/Presentation.tsx';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { createListControls } from '../threads/list-controls.ts';
 import { filters, type Row } from '../threads/contracts.ts';
 import { groupedRows, firstName, unreadLabel } from '../threads/derive.ts';
@@ -8,7 +8,9 @@ import { useThreadPoll, useDeadline } from '../threads/use-poll.ts';
 import { copy } from '../threads/copy.ts';
 import type { ThreadCalls } from '../threads/api.ts';
 import type { ReadScope } from '../account/contracts.ts';
-import { Redirect, router } from 'expo-router';
+import { Redirect, router, useFocusEffect } from 'expo-router';
+import { parseStockList, stockListPath } from '../resources/stock/stock.ts';
+import { stocktakeFlash } from '../resources/stock/stocktake.ts';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
 import { isSignedIn, threadsCopy, webCopy } from '../account/copy.ts';
@@ -42,6 +44,12 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
  useEffect(()=>{void controls.load();return()=>controls.dispose();},[controls]);
  const paused=useThreadPoll(()=>controls.load(),now),waiting=useDeadline(state.waitUntil,now);
  const busy=state.phase==='loading';
+ // The Stock filter's pinned Stocktake row says how many active items there are (stock contract §3): read when the filter turns on.
+ const [stockItems,setStockItems]=useState<number|null>(null);
+ useEffect(()=>{if(state.filter!=='stock')return;let live=true;setStockItems(null);void calls.request(scope,'GET',stockListPath(scope),undefined,v=>parseStockList(v,false)).then(r=>{if(live&&r.kind==='ok')setStockItems(r.value.items.length);});return()=>{live=false;};},[state.filter]);
+ // A saved stocktake says so here, once, and the rows reload with the new counts.
+ const [saved,setSaved]=useState<string|null>(null);
+ useFocusEffect(useCallback(()=>{const line=stocktakeFlash.take(scope);if(line){setSaved(line);void controls.load();}},[controls,scope]));
  const toggle=(key:string)=>{const next=new Set(folds);if(next.has(key))next.delete(key);else next.add(key);setFolds(next);saveFolds(next);};
  return <Screen title={threadsCopy.heading} list={({heading,contentContainerStyle})=><View style={{flex:1}}><ScrollView testID="threads-list" contentContainerStyle={[contentContainerStyle,styles.listContent]}>
   {heading}
@@ -52,6 +60,8 @@ function ThreadList({calls,scope,now}:{calls:ThreadCalls;scope:ReadScope;now:()=
    <PinnedRow testID="threads-pinned-equipment" label={threadsCopy.pinnedEquipment} detail={threadsCopy.pinnedEquipmentDetail} icon={<Calendar color={colors.sageText}/>} onPress={()=>router.push('/equipment')}/>
    <PinnedRow testID="threads-pinned-team" label={threadsCopy.pinnedTeam} detail={threadsCopy.pinnedTeamDetail} icon={<People color={colors.sageText}/>} onPress={()=>router.push('/members?from=threads' as never)}/>
   </View>
+  {state.filter==='stock'?<View style={styles.pinned}><PinnedRow testID="threads-pinned-stocktake" label={threadsCopy.pinnedStocktake(stockItems)} detail={threadsCopy.pinnedStocktakeDetail} icon={<ThreadKindIcon kind="stock" color={colors.sageText}/>} onPress={()=>router.push('/stock/stocktake' as never)}/></View>:null}
+  {saved?<Text testID="threads-stocktake-saved" role="status" style={styles.body}>{saved}</Text>:null}
   {busy?<Text testID="threads-loading" style={styles.body}>{copy.loading}</Text>:null}
   {state.message?<View style={styles.statusRow}><Text testID="threads-status" role="status" style={[styles.body,{flex:1}]}>{state.message}</Text>{state.phase==='failed'?<ThreadAction testID="threads-refresh" label="Try again" disabled={busy||waiting} onPress={()=>{void controls.load();}}/>:null}</View>:null}
   {paused?<Text style={styles.body}>{copy.paused}</Text>:null}

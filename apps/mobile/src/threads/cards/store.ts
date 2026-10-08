@@ -10,10 +10,13 @@ import type { Detail, Message, Tag } from '../contracts.ts';
 import { parseTagPage } from '../options.ts';
 import type { Names } from '../wording.ts';
 import { reads, type Booking, type TaskDetail } from './records.ts';
+import { parseStockCard, stockCardPath, type StockCard } from '../../resources/stock/stock.ts';
 
 export type RecordState = {
 	readonly task: TaskDetail | null;
 	readonly booking: Booking | null;
+	/** A stock item with its last three counts and the active locations (stock contract §3). */
+	readonly stock: StockCard | null;
 	readonly zone: string | null;
 	readonly members: readonly Member[] | null;
 	readonly tags: readonly Tag[] | null;
@@ -29,7 +32,7 @@ export const recordCopy = {
 
 export function createRecordStore(calls: ThreadCalls, scope: ReadScope, now: () => number, lost: () => void) {
 	let live = true, detail: Detail | null = null, tagsAsked = false, membersAsked = false, flight: Promise<void> | null = null, queued = false;
-	let state: RecordState = { task: null, booking: null, zone: null, members: null, tags: null, busy: false, message: '', waitUntil: 0 };
+	let state: RecordState = { task: null, booking: null, stock: null, zone: null, members: null, tags: null, busy: false, message: '', waitUntil: 0 };
 	const listeners = new Set<() => void>();
 	const set = (next: Partial<RecordState>) => { if (live && calls.current(scope)) { state = { ...state, ...next }; listeners.forEach((fn) => fn()); } };
 	const failed = (result: { status: number; retryAfter: number }) => {
@@ -55,6 +58,10 @@ export function createRecordStore(calls: ThreadCalls, scope: ReadScope, now: () 
 			const r = await reads.booking(calls, scope, equipmentId, record.id);
 			if (!live || r.kind === 'stale') return; if (r.kind === 'error') { failed(r); return; }
 			set({ booking: r.value });
+		} else if (record.kind === 'stock') {
+			const r = await calls.request(scope, 'GET', stockCardPath(scope, record.id), undefined, (v) => parseStockCard(v, record.id));
+			if (!live || r.kind === 'stale') return; if (r.kind === 'error') { failed(r); return; }
+			set({ stock: r.value, zone: r.value.timezone });
 		}
 		set({ busy: false, message: '', waitUntil: 0 });
 	}
