@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { withTenant, type Sql, type TransactionSql } from '@captain/db';
 import { z } from 'zod';
 import { changeSetId, personChangeSet } from '../changes.ts';
+import { instant, validBooking } from '../equipment/service.ts';
 import { HttpError, badRequest, forbidden, notFound } from '../errors.ts';
 import { canManage, roleOf, type Actor } from '../tenant.ts';
 import { lockMemberships, type LockedMembership, type MembershipLock } from './locks.ts';
@@ -47,6 +48,11 @@ export const tagQuery = z.object({ expectedRevision: queryRevision, changeSetId:
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').refine(value => !Number.isNaN(Date.parse(`${value}T00:00:00Z`))
  && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value), 'A real calendar date.');
 export const makeTask = z.object({ expectedRevision: revision, ownerId: uuid.nullable().optional(), due: day.nullable().optional(), changeSetId: changeSetId.optional() }).strict();
+/** Topic to booking (bookings contract §2): the topic's thread becomes a new booking's thread, with the same time fields
+ *  and bounds as creating a booking (`…/equipment/:id/reservations`). The booking's title is the thread's. */
+export const makeBooking = z.object({ expectedRevision: revision, changeSetId: changeSetId.optional(), equipmentId: uuid, startsAt: instant, endsAt: instant,
+ setupMinutes: z.number().int().min(0).max(10080).default(0), cleanupMinutes: z.number().int().min(0).max(10080).default(0),
+ ownerId: uuid.nullable().optional() }).strict().refine(validBooking, 'The end must follow the start within 366 days.');
 export const sendMessage = z.object({ id: uuid, body: z.string() }).strict();
 export const filters = ['all', 'needs_you', 'tasks', 'bookings', 'stock', 'records', 'files', 'people'] as const;
 export type Filter = typeof filters[number];
@@ -110,7 +116,8 @@ const invalidBody = () => badRequest('invalid_body', 'A message is 1 to 4,000 ch
 const pinExists = () => conflict('pin_exists', 'This thread already has a pinned message. Unpin it first.');
 const deletedMessage = () => conflict('message_deleted', 'That message was deleted, so it cannot be pinned.');
 const notPrivate = () => badRequest('thread_not_private', 'Only a private thread has a list of people.');
-const notTopic = () => badRequest('thread_not_topic', 'Only a topic becomes a task. A private thread stays private.');
+const notTopic = (record = 'a task') => badRequest('thread_not_topic', `Only a topic becomes ${record}. A private thread stays private.`);
+const reservationConflict = () => conflict('reservation_conflict', 'That equipment is unavailable during this time, including setup and cleanup. Choose another time.');
 const alreadyRecord = () => conflict('thread_is_record', 'This thread already belongs to a record.');
 const changeLineFixed = () => conflict('change_line_immutable', 'A change line records what changed. It cannot be edited, deleted or pinned.');
 
@@ -316,6 +323,8 @@ export class ThreadsService {
    if (name === 'thread_pins_live') throw pinExists();
    if (name && threadIdConstraints.has(name)) throw threadIdUnavailable();
    if (name && messageIdConstraints.has(name)) throw messageIdUnavailable();
+   // Topic to booking: the overlap constraint (0036) is the authority, answered as creating a booking answers it.
+   if (error instanceof Error && 'code' in error && error.code === '23P01') throw reservationConflict();
    throw redacted(error);
   }
  }
@@ -607,6 +616,36 @@ export class ThreadsService {
    if (thread.revision !== input.expectedRevision) throw staleThread();
    if (owner && people.get(owner)?.status !== 'active') throw badRequest('owner_invalid', 'The owner must be an active member of the organisation.');
    await tx`select thread_make_task(${threadId}::uuid, ${owner}::uuid, ${input.due ?? null}::date, ${input.expectedRevision}::integer)`;
+   return { ...await this.detailIn(tx, organisationId, threadId, me), changeSetId: changeSet.id };
+  });
+ }
+
+ /** Makes a topic thread a new booking's thread (bookings contract §2), as `makeTask` does for a task: one confirmed
+  *  booking titled as the thread on the named equipment; the thread keeps its id, messages and tags and becomes kind
+  *  `record`, and no second thread is made (0049's `thread_make_booking`). Journalled as the booking's creation under the
+  *  person's change set, its change line in this thread; a retry with the same change set id and body answers with the
+  *  thread as it is now. Locks follow the global order: memberships, the equipment, then the thread. Refusals, in order:
+  *  unknown equipment or thread 404, a private thread `thread_not_topic`, a record's `thread_is_record`, a stale revision,
+  *  an inactive owner `owner_invalid`, archived equipment `equipment_archived`, an overlap `reservation_conflict`. */
+ makeBooking(actor: Actor, organisationId: string, threadId: string, raw: unknown): Promise<ThreadDetail & { changeSetId: string }> {
+  const { changeSetId: wanted, ...input } = makeBooking.parse(raw);
+  const me = actor.userId.toLowerCase();
+  const owner = input.ownerId ?? null;
+  return this.write(actor, organisationId, async tx => {
+   const { people } = await this.lockPeople(tx, organisationId, actor, owner && owner !== me ? new Map([[owner, 'share' as const]]) : new Map());
+   const changeSet = await personChangeSet(tx, actor, 'thread.make_booking', { threadId, equipmentId: input.equipmentId, startsAt: input.startsAt.toISOString(),
+    endsAt: input.endsAt.toISOString(), setupMinutes: input.setupMinutes, cleanupMinutes: input.cleanupMinutes, ownerId: owner, expectedRevision: input.expectedRevision }, wanted);
+   if (changeSet.matched) return { ...await this.detailIn(tx, organisationId, threadId, me), changeSetId: changeSet.id };
+   const [equipment] = await tx<{ archivedAt: Date | null }[]>`select archived_at from equipment where organisation_id = ${organisationId} and id = ${input.equipmentId} for update`;
+   if (!equipment) throw notFound();
+   const thread = await this.lockThread(tx, organisationId, threadId);
+   if (thread.kind === 'private') throw notTopic('a booking');
+   if (thread.kind === 'record') throw alreadyRecord();
+   if (thread.revision !== input.expectedRevision) throw staleThread();
+   if (owner && people.get(owner)?.status !== 'active') throw badRequest('owner_invalid', 'The owner must be an active member of the organisation.');
+   if (equipment.archivedAt) throw conflict('equipment_archived', 'This equipment is archived. Restore it before making a reservation.');
+   await tx`select thread_make_booking(${threadId}::uuid, ${input.equipmentId}::uuid, ${input.startsAt}::timestamptz, ${input.endsAt}::timestamptz,
+    ${input.setupMinutes}::integer, ${input.cleanupMinutes}::integer, ${owner}::uuid, ${input.expectedRevision}::integer)`;
    return { ...await this.detailIn(tx, organisationId, threadId, me), changeSetId: changeSet.id };
   });
  }

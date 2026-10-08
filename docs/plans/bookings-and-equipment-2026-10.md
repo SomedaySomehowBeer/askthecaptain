@@ -25,6 +25,23 @@ the booking's insert trigger makes no thread for it). Refusals as for make-a-tas
 `thread_is_record`, `stale_revision`, `owner_invalid`) plus the booking's own (`equipment_archived`, overlap 409
 with the holder). Journalled as the booking's creation. Returns the thread detail with the `Change-Set-Id` header.
 
+As built in B-A (migration 0049, `thread_make_booking`, a sibling of `thread_make_task`; details this contract left open):
+
+- The answer is `200` with the thread detail (kind `record`, the card on the new booking, its tags), as make-a-task.
+- The booking's id is the server's (uuidv7); the retry identity is `changeSetId`. Its kind is `booking`, its status
+  `confirmed`, its creator the caller, its task none, its tags the thread's own; `ownerId` absent or null is no owner.
+  The time fields and their bounds are those of creating a booking (explicit instants, an end after the start within
+  366 days, setup and cleanup 0–10080 minutes); any other key is `400 invalid_request`.
+- Locks follow the global order: the caller's and owner's memberships, the equipment, then the thread. Refusals, in that
+  order: unknown equipment or thread (or another tenant's) `404`; a private thread `400 thread_not_topic`; a record's
+  thread `409 thread_is_record`; `409 stale_revision`; `400 owner_invalid`; `409 equipment_archived`; an overlap
+  (setup and cleanup included, the 0036 constraint deciding) `409 reservation_conflict`.
+- "With the holder": the overlap `409` is creating a booking's, which names no booking. The client names the holder from
+  the equipment's schedule, as the booking card already does (board 2); the refusal leaves nothing written (no booking,
+  no change set, no change line, the thread's revision unmoved), so the same `changeSetId` stays free for the next try.
+- A retry with the same `changeSetId`, person and body answers with the thread as it is now; the same id with anything
+  else is `409 change_set_id_unavailable`.
+
 ## 3. Client
 
 - **New booking** (`/equipment/new?equipment=<id>&day=<date>` from the schedule's "New booking" button, prefilled

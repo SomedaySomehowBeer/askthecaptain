@@ -6,7 +6,7 @@ import { roleOf, type Actor } from '../tenant.ts';
 import { recordThread, requireTags, tagsOfRecords, writeThreadTags } from '../threads/tags.ts';
 
 const day = 86_400_000;
-const instant = z.string().datetime({ offset: true }).refine(value => {
+export const instant = z.string().datetime({ offset: true }).refine(value => {
  const time = Date.parse(value);
  return Number.isFinite(time) && time >= Date.parse('1900-01-01T00:00:00Z') && time < Date.parse('2200-01-01T00:00:00Z');
 }, 'Use an explicit UTC or offset timestamp between 1900 and 2200.').transform(value => new Date(value));
@@ -21,7 +21,7 @@ const rangeFields = {
  startsAt: instant, endsAt: instant, setupMinutes: z.number().int().min(0).max(10080).default(0),
  cleanupMinutes: z.number().int().min(0).max(10080).default(0), taskId: link, ownerId: link,
 };
-const validBooking = (value: { startsAt: Date; endsAt: Date }) => {
+export const validBooking = (value: { startsAt: Date; endsAt: Date }) => {
  // A failed field refinement can leave its raw input here. Preserve Zod's field error, not a TypeError.
  if (!(value.startsAt instanceof Date) || !(value.endsAt instanceof Date)) return true;
  return value.endsAt.getTime() > value.startsAt.getTime() && value.endsAt.getTime() - value.startsAt.getTime() <= 366 * day;
