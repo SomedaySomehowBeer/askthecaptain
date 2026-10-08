@@ -1,5 +1,22 @@
 # Staging resumed; production paused (2026-09-27)
 
+## H2–H4 release: bookings, equipment, stock and tags by people (8 October 2026, 05:06–05:08 UTC)
+
+On the owner's instruction, `main` at `f73761a` was deployed to `askthecaptain-api-staging` from the droplet (image
+`registry.fly.io/askthecaptain-api-staging:git-f73761a`). It carries H2 (#252 migration 0049, a topic becomes a
+booking; #253 new booking from the schedule, "Make this a booking", the Equipment screen, the Team row), H3 (#255 the
+stocktake route; #256 the Stocktake screen, adding items, the stock card, the Stock filter row) and H4 (#258 search in
+the thread list, tag counts, `fromTask` on series; #259 Tags screens, Repeat this task and series editing, live search,
+the schedule header per frame 5). The release command applied `0049_topic_booking.sql` at **05:08:06Z** and the one
+machine `80e39ea6416e18` took the image and passed its check. A read-only check afterwards found 0049 applied and both
+`thread_make_task` and `thread_make_booking` present. `/readyz` and `/healthz` answered 200; the search route answers
+401 without a session.
+
+**Not covered:** no signed-in hosted check. The owner's checks: a new booking from the schedule and from a topic;
+equipment added and archived; a stocktake across several items and its change lines; a tag with an owner and dates
+and its group heading; repeating a task and pausing the series; search; the schedule header. No native device.
+**Rollback:** redeploy image `git-394dba3`; 0049 adds functions only and can stay.
+
 ## H1 release: card fixes and the fidelity pass (8 October 2026, 00:38–00:40 UTC)
 
 On the owner's instruction, `main` at `394dba3` was deployed to `askthecaptain-api-staging` from the droplet (image
