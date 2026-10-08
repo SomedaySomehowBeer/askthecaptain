@@ -140,7 +140,8 @@ function labelFormat(zone: string, hours: boolean): Intl.DateTimeFormat {
 	let value = labelFormats.get(key);
 	if (!value) {
 		value = new Intl.DateTimeFormat('en-AU', hours
-			? { timeZone: zone, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+			// Frame 5's axis: "6 am", "2 pm". A day's first tick names the day instead (below).
+			? { timeZone: zone, hour: 'numeric', hourCycle: 'h12' }
 			: { timeZone: zone, weekday: 'short', day: 'numeric', month: 'short' });
 		if (labelFormats.size >= 64) labelFormats.clear();
 		labelFormats.set(key, value);
@@ -166,8 +167,9 @@ export function ticks(scale: Scale, range: Pick<ScheduleRange, 'anchor' | 'ancho
 	high = Math.min(high, end);
 	if (high <= low) return result;
 	if (scale === 'hours') {
-		const format = labelFormat(zone, true);
-		for (let at = start + Math.ceil((low - start) / 3_600_000) * 3_600_000; at < high; at += 3_600_000) result.push({ at, label: format.format(at) });
+		const format = labelFormat(zone, true), days = labelFormat(zone, false);
+		for (let at = start + Math.ceil((low - start) / 3_600_000) * 3_600_000; at < high; at += 3_600_000)
+			result.push({ at, label: dateAt(at, zone) !== dateAt(at - 3_600_000, zone) ? days.format(at).replace(',', '') : format.format(at) });
 		return result;
 	}
 	const step = scale === 'weeks' ? 7 : 1, format = labelFormat(zone, false), anchorAt = Date.parse(range.anchorAt);
@@ -176,7 +178,7 @@ export function ticks(scale: Scale, range: Pick<ScheduleRange, 'anchor' | 'ancho
 		const date = shifted(range.anchor, k * step), instant = date ? dayStart(date, zone) : null;
 		if (!instant) continue;
 		const at = Date.parse(instant);
-		if (at >= low && at < high) result.push({ at, label: format.format(at) });
+		if (at >= low && at < high) result.push({ at, label: format.format(at).replace(',', '') });
 	}
 	return result;
 }

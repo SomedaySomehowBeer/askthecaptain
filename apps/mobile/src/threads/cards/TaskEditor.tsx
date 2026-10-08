@@ -13,6 +13,7 @@ import { useSaver, type CardHooks } from './useSaver.ts';
 import { refusedForGood, taskForm, taskChanges, validTaskForm, type TaskForm } from './forms.ts';
 import { useDeadline } from '../use-poll.ts';
 import { cardCopy } from './copy.ts';
+import { RepeatTask } from './RepeatTask.tsx';
 
 const statusOptions: readonly Option[] = [{ value: 'open', label: 'Open' }, { value: 'in_progress', label: 'In progress' }, { value: 'done', label: 'Done' }];
 
@@ -113,6 +114,7 @@ export function TaskEditor({ calls, scope, detail, record, hooks, locked, confir
 			</View> : null}
 		</View>
 		<Details detail={detail} />
+		<RepeatTask calls={calls} scope={scope} detail={detail} record={record} hooks={hooks} locked={locked} confirmed={confirmed} ownerOptions={ownerOptions} />
 	</View>;
 }
 

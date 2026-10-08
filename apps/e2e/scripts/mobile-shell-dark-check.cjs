@@ -54,13 +54,13 @@ module.exports = async ({ browser, base, shots, width }) => {
    await overflow(); await shot('settings');
 
    // Equipment schedule: organisation, page 0 and one occupancy answer; unknown time keeps its tint, unlike read (free) time.
-   await open('/equipment', 'ready'); await expect(heading('Equipment schedule')).toBeVisible();
+   await open('/equipment', 'ready'); await expect(heading('Equipment')).toBeVisible();
    const reads = async () => JSON.parse(await page.getByTestId('work-read-log').textContent());
    const answer = async (n, control) => { await expect.poll(async () => (await reads()).length).toBeGreaterThanOrEqual(n); await page.getByTestId(`harness-read-${control}`).click(); };
    await answer(1, 'equipment-ok'); await answer(2, 'equipment-ok'); await expect(id('equipment-hatch').first()).toBeVisible();
    await answer(3, 'equipment-ok'); await expect(page.locator('[data-testid^="equipment-bar-"]:visible').first()).toBeVisible();
    await expect(id('equipment-read').first()).toBeAttached();
-   expect(await behind(heading('Equipment schedule'))).toBe(want.page); expect(await behind(id('equipment-scale-hours'))).toBe(want.card);
+   expect(await behind(heading('Equipment'))).toBe(want.page); expect(await behind(id('equipment-scale-hours'))).toBe(want.card);
    expect(await behind(id('equipment-read'))).toBe(want.page);
    expect(await id('equipment-hatch').first().evaluate(el => getComputedStyle(el.parentElement).backgroundColor)).toBe(want.unknown);
    await overflow(); await shot('equipment');

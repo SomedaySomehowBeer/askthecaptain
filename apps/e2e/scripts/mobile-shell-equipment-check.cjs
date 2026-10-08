@@ -21,7 +21,7 @@ module.exports = async ({ getPage, freshPage, scenario, shot, noOverflow, width 
   try { await page().clock.install(); } catch { /* already installed by an earlier suite */ }
   if (freeze) await page().clock.pauseAt(Date.now() + 1_000); else await page().clock.resume();
   await scenario('ready', '/equipment');
-  await expect(page().getByRole('heading', { name: 'Equipment schedule', exact: true })).toBeVisible();
+  await expect(page().getByRole('heading', { name: 'Equipment', exact: true })).toBeVisible();
   await expect(eq('loading')).toHaveText('Loading the schedule…'); await count(1);
   const url = await last(); expect(url.pathname).toMatch(orgPath); expect(url.search).toBe('');
  };

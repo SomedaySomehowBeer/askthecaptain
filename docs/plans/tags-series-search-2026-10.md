@@ -89,6 +89,39 @@ As built in T-A (8 October 2026):
   for Tags; board 1 for forms. Compare every changed screen with `apps/e2e/scripts/mockup-compare.mjs` and record
   the differences. Both colour schemes; 360/390/430; honest states; real controls with labels.
 
+As built in T-B (8 October 2026):
+
+- **Search.** The header's magnifier (frame 1) opens a labelled field under the header; it searches after 300 ms
+  without typing once there are 2 characters (at most 200), for the filter chosen (changing the filter searches
+  again). Results replace the pinned rows and the groups: "n results" in the group-heading face, or "No threads
+  match"; at most 50, with "Showing the best 50" when full. A title match marks the words in the title and keeps the
+  latest message as the preview; a message match puts that message's excerpt, "Name: …", in the preview line. Marked
+  words are bold on a sage tint. Clear (or the magnifier again) closes the field and the list returns as it was; the
+  list's 15-second polling does not run while results are shown. Failures say so with Try again; a 429 waits.
+- **Tags.** "Manage tags" is in a ⋯ menu at the end of the filter row; a tag heading has its own ⋯ menu (and a
+  long-press) with "Tag details" and "Manage tags". `/tags` lists active tags (owner, dates, "n threads" from
+  `GET …/tags?counts=true`, the threads the person can see) with "Show archived", and "Add a tag" opens a form in
+  place (name, owner, starts, ends). `/tags/[id]` saves name, owner and dates as one change; Archive and Restore each
+  need a confirm step and are offered only with no unsaved edits.
+- **Repeat this task.** On a top-level task's unfolded card (steps have no card; a task already in a series shows
+  "Part of <series> · Edit the series" instead). The form opens monthly, from the first day of the month the task is
+  due in (or today's month), due as many days before that month's end as the task is due, with the task's owner and
+  evidence rule; it says which period the task becomes and that it keeps the task's tags. The write is
+  `POST …/series` with `fromTask` (T-A), so the task itself is that period's occurrence; afterwards the card says
+  "Repeats monthly from 1 Oct 2026, due 10 days before the period ends." and "Part of … · Edit the series", which
+  stays after a reload. `/series/[id]` edits the title and the same rule fields (one change), and Pause / Resume (its
+  own change, offered with no unsaved edits); "changes apply to occurrences made from now on".
+- **Schedule header.** The heading, the scale control, the stepper and the key are fixed above the timeline, so the
+  heading is in view when the screen opens and the timeline under it opens on now (time runs down the timeline and
+  equipment runs across, so "today in view" is the vertical position). The heading is "Equipment" (was "Equipment
+  schedule"). "Today is …" under the day is the Today control (`equipment-today`). ‹ and › move the middle of the view
+  to the next day's midday (a week on Weeks) and are disabled outside the loaded dates (Earlier or Later dates move
+  them). The key is Confirmed, Maintenance (drawn differently, so named) and Cleaning; a booking's setup and cleaning
+  time are drawn as their own pale blocks ("Cleaning to 3:30 pm"), the booking's bar holds its own time and its
+  "6:00 am to 2:00 pm". Hours label the axis "6 am", a day's first hour names the day. "Manage equipment", Refresh,
+  the zone, notices and what hatching means are above the names row in the scrolling part; "New booking" floats as
+  before.
+
 ## 4. Tests
 
 Real Postgres: search matches title and visible message text only (a non-participant never matches a private
