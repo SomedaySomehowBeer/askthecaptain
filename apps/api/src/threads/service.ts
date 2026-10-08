@@ -264,7 +264,7 @@ function unreadOf(tx: TransactionSql, me: string, position: ReturnType<Transacti
 function visible(tx: TransactionSql, organisationId: string, me: string) {
  return tx`select t.id, t.kind, t.last_message_at, t.created_at, t.created_by, t.revision, t.last_seq, t.last_change,
    case when t.task_id is not null then 'task' when t.reservation_id is not null then 'booking' when t.stock_item_id is not null then 'stock' end as record_kind,
-   coalesce(t.task_id, t.reservation_id, t.stock_item_id) as record_id,
+   coalesce(t.task_id, t.reservation_id, t.stock_item_id) as record_id, si.archived_at is not null as stock_archived,
    coalesce(t.title, tk.title, er.title, si.name) as title,
    case when tk.id is not null then tk.status
     when er.id is not null then (case when er.status = 'cancelled' then 'cancelled' when er.kind = 'maintenance' then 'maintenance' else er.status end)
@@ -304,7 +304,8 @@ function filtered(tx: TransactionSql, organisationId: string, me: string, filter
  const where = filter === 'needs_you' ? tx`where v.unread > 0 or v.owns_open`
   : filter === 'tasks' ? tx`where v.record_kind = 'task'`
    : filter === 'bookings' ? tx`where v.record_kind = 'booking'`
-    : filter === 'stock' ? tx`where v.record_kind = 'stock'`
+    // Archived items leave the Stock filter (stock contract §1); their threads stay in All and Records.
+    : filter === 'stock' ? tx`where v.record_kind = 'stock' and not v.stock_archived`
      : filter === 'records' ? tx`where v.kind = 'record'`
       : tx``;
  return tx`select v.*, (v.unread > 0 or v.owns_open) as needs_you from (${visible(tx, organisationId, me)}) v ${where}`;
