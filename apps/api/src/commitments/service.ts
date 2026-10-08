@@ -214,7 +214,7 @@ export class CommitmentsService {
 	}
 
 	async createSeries(actor: Actor, organisationId: string, raw: { changeSetId?: string; tagIds?: string[]; title: string; body?: string; ownerId?: string | null; evidenceRequired?: boolean;
-		recurrence: Recurrence; everyMonths?: number | null; anchor: string; dueOffsetDays?: number }): Promise<Changed<Series>> {
+		recurrence: Recurrence; everyMonths?: number | null; anchor: string; dueOffsetDays?: number; fromTask?: { id: string; expectedRevision: number } }): Promise<Changed<Series>> {
 		await roleOf(this.#db, actor.userId, organisationId);
 		const { changeSetId, ...input } = raw;
 		const title = input.title.trim(); if (!title) throw badRequest('title_required', 'the series needs a title');
@@ -237,6 +237,21 @@ export class CommitmentsService {
 				returning id`;
 			for (const tagId of tagIds) await tx`insert into task_series_tags (organisation_id, series_id, tag_id) values (${organisationId}, ${row!.id}, ${tagId})`;
 			const today = await this.#today(tx, organisationId);
+			// "Repeat this task" (H4 contract §3): the task becomes the series' occurrence for the period it falls in (today's
+			// period, or the first one when the series starts later), so the series never makes a second copy of it. The task
+			// keeps its own title, due date and tags; linking it is a journalled change to the task in this change set.
+			if (input.fromTask) {
+				const [task] = await tx<{ parentId: string | null; seriesId: string | null; status: TaskStatus; revision: number }[]>`select parent_id, series_id, status, revision
+					from tasks where organisation_id = ${organisationId} and id = ${input.fromTask.id} for update`;
+				if (!task) throw notFound('That task is not available.');
+				if (task.revision !== input.fromTask.expectedRevision) throw stale();
+				if (task.parentId) throw badRequest('task_is_step', 'A step repeats with its task. Repeat the task instead.');
+				if (task.seriesId) throw new HttpError(409, 'task_in_series', 'This task is already part of recurring work. Edit the series instead.');
+				if (task.status === 'cancelled') throw new HttpError(409, 'task_cancelled', 'A cancelled task cannot repeat. Reopen it first.');
+				const period = periodContaining(rule, today) ?? nextPeriod(rule, today);
+				await tx`update tasks set series_id = ${row!.id}, period_start = ${period.start}::date, period_end = ${period.end}::date, updated_at = now()
+					where organisation_id = ${organisationId} and id = ${input.fromTask.id}`;
+			}
 			await this.#materialise(tx, organisationId, today, actor, row!.id);
 			return { ...(await this.#series(tx, organisationId, today, row!.id))[0]!, changeSetId: changeSet.id };
 		});

@@ -58,7 +58,8 @@ export function commitmentsRoutes(commitments: CommitmentsService, db: Sql) {
 
 	routes.post('/v1/organisations/:id/series', async (c) => {
 		const input = z.object({ changeSetId: changeSetId.optional(), tagIds: tagIds.optional(), title: text(200).min(1), body: text(5000).optional(), ownerId: uuid.nullable().optional(), evidenceRequired: z.boolean().optional(),
-			recurrence, everyMonths: z.number().int().min(1).max(120).nullable().optional(), anchor: date, dueOffsetDays: z.number().int().min(-366).max(366).optional() }).strict().parse(await c.req.json());
+			recurrence, everyMonths: z.number().int().min(1).max(120).nullable().optional(), anchor: date, dueOffsetDays: z.number().int().min(-366).max(366).optional(),
+			fromTask: z.object({ id: uuid, expectedRevision: revision }).strict().optional() }).strict().parse(await c.req.json());
 		return c.json(changed(c, await commitments.createSeries(actor(c), org(c), input)), 201);
 	});
 	routes.patch('/v1/organisations/:id/series/:seriesId', async (c) => {

@@ -58,7 +58,20 @@ export const filters = ['all', 'needs_you', 'tasks', 'bookings', 'stock', 'recor
 export type Filter = typeof filters[number];
 /** Files and People are listed and disabled until R7 (§2): accepted, with an empty page and `available: false`. */
 const unavailableFilters = new Set<Filter>(['files', 'people']);
-export const listQuery = z.object({ filter: z.enum(filters).default('all'), after: z.string().min(1).max(300).optional(), limit: upTo(50).default(50) }).strict();
+export const listQuery = z.object({ filter: z.enum(filters).default('all'), after: z.string().min(1).max(300).optional(), limit: upTo(50).default(50),
+ q: z.string().max(200).optional() }).strict();
+/** Search (H4 contract §2): at least 2 characters after trimming, at most 200. */
+export const searchFloor = 2;
+/** The excerpt's highlight marks around each matching term (`ts_headline`'s StartSel and StopSel). */
+export const highlight = { start: '«', stop: '»' } as const;
+/** The words of a search as a prefix `tsquery` for `to_tsquery('english', …)`: each run of letters or digits becomes
+ *  `word:*`, joined by `&`, so "ferm tank" finds "Fermenter tank 3" while it is being typed. Only letters and digits
+ *  reach the query text, so nothing a person types is read as tsquery syntax. At most 8 words. Null when no word is
+ *  left (the search then matches nothing). */
+export function searchTerms(text: string): string | null {
+ const words = (text.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).slice(0, 8);
+ return words.length ? words.map(word => `${word}:*`).join(' & ') : null;
+}
 export const messagesQuery = z.object({ latest: upTo(100).optional(), after: counter.optional(), before: counter.optional(), limit: upTo(100).optional() }).strict()
  .refine(q => [q.latest, q.after, q.before].filter(v => v !== undefined).length === 1, 'Supply exactly one of latest, after or before.')
  .refine(q => q.latest === undefined || q.limit === undefined, 'latest is its own limit.');
@@ -96,6 +109,11 @@ export type ThreadRow = { id: string; kind: ThreadKind; title: string; record: R
  tags: TagChip[] };
 export type Group = { key: string; label: string; threads: number; needsYou: number; owner: { id: string; name: string | null } | null; startsOn: string | null; endsOn: string | null };
 export type ThreadList = { filter: Filter; available: boolean; threads: ThreadRow[]; nextCursor: string | null; groups: Group[] };
+/** A search result (H4 contract §2): a list row and where it matched. `excerpt` is the title, or the best matching live
+ *  message, with each matching term between `«` and `»`; `authorName` is that message's author (null for a title). */
+export type SearchMatch = { kind: 'title' | 'message'; excerpt: string; authorName: string | null };
+export type SearchRow = ThreadRow & { match: SearchMatch };
+export type ThreadSearch = { filter: Filter; q: string; available: boolean; threads: SearchRow[] };
 /** The card on top of a thread (§6): small, computed by code from the record row, with the rest behind a fold-out. */
 export type Card = { record: RecordRef | null; title: string; status: string | null; facts: [string, string]; fold: Record<string, unknown> };
 export type ThreadDetail = {
@@ -311,6 +329,13 @@ function filtered(tx: TransactionSql, organisationId: string, me: string, filter
  return tx`select v.*, (v.unread > 0 or v.owns_open) as needs_you from (${visible(tx, organisationId, me)}) v ${where}`;
 }
 
+/** A list row from a visible thread (§6). */
+function listRow(row: Visible & { needsYou: boolean }, lastMessage: Map<string, { authorName: string | null; excerpt: string }>, tags: Map<string, TagChip[]>): ThreadRow {
+ return { id: row.id, kind: row.kind, title: row.title, record: row.recordKind ? { kind: row.recordKind, id: row.recordId! } : null,
+  facts: row.facts, status: row.status, lastMessageAt: row.lastMessageAt, lastMessage: lastMessage.get(row.id) ?? null, unread: row.unread,
+  needsYou: row.needsYou, starred: row.starred, tags: tags.get(row.id) ?? [] };
+}
+
 export class ThreadsService {
  readonly #db: Sql;
  constructor(db: Sql) { this.#db = db; }
@@ -380,14 +405,70 @@ export class ThreadsService {
   return row.revision;
  }
 
- private async tagsOf(tx: TransactionSql, threadIds: string[]): Promise<Map<string, TagChip[]>> {
+ /** The tags on each thread, in name order. A list row carries only live tags (`live`): it is grouped by them, and an
+  *  archived tag has no heading (H4 contract §4), so a thread whose tags are all archived is under Other. The detail and
+  *  the card list every attached tag, archived ones included. */
+ private async tagsOf(tx: TransactionSql, threadIds: string[], live = false): Promise<Map<string, TagChip[]>> {
   const byThread = new Map<string, TagChip[]>();
   if (!threadIds.length) return byThread;
   const rows = await tx<{ threadId: string; id: string; name: string }[]>`select tt.thread_id, tag.id, tag.name from thread_tags tt
    join tags tag on tag.organisation_id = tt.organisation_id and tag.id = tt.tag_id
-   where tt.thread_id in ${tx(threadIds)} order by lower(tag.name), tag.id`;
+   where tt.thread_id in ${tx(threadIds)} ${live ? tx`and tag.archived_at is null` : tx``} order by lower(tag.name), tag.id`;
   for (const row of rows) byThread.set(row.threadId, [...(byThread.get(row.threadId) ?? []), { id: row.id, name: row.name }]);
   return byThread;
+ }
+
+ /** Each thread's latest live ordinary message, excerpted, with its author (§6). */
+ private async latestMessages(tx: TransactionSql, ids: string[]): Promise<Map<string, { authorName: string | null; excerpt: string }>> {
+  const latest = ids.length ? await tx<{ threadId: string; authorName: string | null; excerpt: string }[]>`select distinct on (m.thread_id) m.thread_id, u.name as author_name,
+    left(m.body, ${excerptLength}) as excerpt
+   from thread_messages m left join users u on u.id = m.author_id
+   where m.thread_id in ${tx(ids)} and m.kind = 'message' and m.deleted_at is null order by m.thread_id, m.seq desc` : [];
+  return new Map(latest.map(({ threadId, ...message }) => [threadId, message]));
+ }
+
+ /** Search (H4 contract §2), in one read-only snapshot. A thread matches when its title, or a live ordinary message in
+  *  it, matches the words (English full-text search, each word as a prefix). The candidates are the filter's visible
+  *  threads, through the same `filtered` the list uses, and messages are read through `thread_messages`' own policy, so
+  *  a private thread neither matches nor shows for anyone outside it: the answer is exactly what it would be if the
+  *  thread did not exist. Ordered by rank (a title match weighs A, a message D, so title matches lead), then activity. */
+ private search(actor: Actor, organisationId: string, filter: Filter, q: string, limit: number): Promise<ThreadSearch> {
+  const me = actor.userId.toLowerCase();
+  const terms = searchTerms(q);
+  return this.snapshot(actor, organisationId, async tx => {
+   if (unavailableFilters.has(filter) || terms === null) return { filter, q, available: !unavailableFilters.has(filter), threads: [] };
+   const query = tx`to_tsquery('english', ${terms})`;
+   const rows = await tx<(Visible & { needsYou: boolean; titleHit: boolean; rank: number })[]>`with f as (${filtered(tx, organisationId, me, filter)}),
+    hits as (select m.thread_id, max(ts_rank(to_tsvector('english', m.body), ${query})) as rank from thread_messages m
+     where m.organisation_id = ${organisationId} and m.kind = 'message' and m.deleted_at is null and to_tsvector('english', m.body) @@ ${query}
+     group by m.thread_id)
+    select f.*, s.title_hit, greatest(case when s.title_hit then ts_rank(setweight(to_tsvector('english', f.title), 'A'), ${query}) else 0 end, coalesce(h.rank, 0)) as rank
+    from f left join hits h on h.thread_id = f.id
+    cross join lateral (select to_tsvector('english', f.title) @@ ${query} as title_hit) s
+    where s.title_hit or h.thread_id is not null
+    order by rank desc, f.last_message_at desc nulls last, f.id desc limit ${limit}`;
+   const ids = rows.map(row => row.id);
+   const tags = await this.tagsOf(tx, ids, true);
+   const lastMessage = await this.latestMessages(tx, ids);
+   const options = `StartSel=${highlight.start}, StopSel=${highlight.stop}, MaxWords=18, MinWords=6, ShortWord=2, MaxFragments=1`;
+   // A body or title's own « and » become plain quotes first, so every mark in an excerpt is the search's.
+   const plain = (text: ReturnType<TransactionSql>) => tx`translate(${text}, ${highlight.start + highlight.stop}, '""')`;
+   const titled = rows.filter(row => row.titleHit);
+   const titles = titled.length ? await tx<{ id: string; excerpt: string }[]>`select r.id, ts_headline('english', ${plain(tx`r.title`)}, ${query}, ${`${options}, HighlightAll=true`}) as excerpt
+    from unnest(${titled.map(row => row.id)}::uuid[], ${titled.map(row => row.title)}::text[]) as r(id, title)` : [];
+   const said = rows.filter(row => !row.titleHit).map(row => row.id);
+   const bodies = said.length ? await tx<{ threadId: string; authorName: string | null; excerpt: string }[]>`select b.thread_id, u.name as author_name,
+     ts_headline('english', ${plain(tx`b.body`)}, ${query}, ${options}) as excerpt
+    from (select distinct on (m.thread_id) m.thread_id, m.author_id, m.body from thread_messages m
+     where m.thread_id in ${tx(said)} and m.kind = 'message' and m.deleted_at is null and to_tsvector('english', m.body) @@ ${query}
+     order by m.thread_id, ts_rank(to_tsvector('english', m.body), ${query}) desc, m.seq desc) b
+    left join users u on u.id = b.author_id` : [];
+   const match = new Map<string, SearchMatch>([
+    ...titles.map(t => [t.id, { kind: 'title', excerpt: t.excerpt, authorName: null }] as const),
+    ...bodies.map(b => [b.threadId, { kind: 'message', excerpt: b.excerpt, authorName: b.authorName }] as const),
+   ]);
+   return { filter, q, available: true, threads: rows.filter(row => match.has(row.id)).map(row => ({ ...listRow(row, lastMessage, tags), match: match.get(row.id)! })) };
+  });
  }
 
  private async detailIn(tx: TransactionSql, organisationId: string, threadId: string, me: string): Promise<ThreadDetail> {
@@ -430,9 +511,16 @@ export class ThreadsService {
   return { createdBy: row.createdBy, open: null };
  }
 
- /** The list (§6): one read-only snapshot gives the page, its cursor and the headings over the whole filtered set. */
- list(actor: Actor, organisationId: string, raw: unknown): Promise<ThreadList> {
+ /** The list (§6): one read-only snapshot gives the page, its cursor and the headings over the whole filtered set. With
+  *  `q` it is a search instead (H4 contract §2): no cursor and no headings. */
+ list(actor: Actor, organisationId: string, raw: unknown): Promise<ThreadList | ThreadSearch> {
   const query = listQuery.parse(raw);
+  if (query.q !== undefined) {
+   const q = query.q.trim();
+   if ([...q].length < searchFloor) throw badRequest('query_too_short', 'Type at least 2 characters to search.');
+   if (query.after) throw badRequest('invalid_request', 'A search has no further pages. Search again with more words instead.');
+   return this.search(actor, organisationId, query.filter, q, query.limit);
+  }
   const after = query.after ? decodeCursor(query.after, query.filter) : null;
   const me = actor.userId.toLowerCase();
   return this.snapshot(actor, organisationId, async tx => {
@@ -446,29 +534,24 @@ export class ThreadsService {
     order by f.last_message_at desc nulls last, f.id desc limit ${query.limit + 1}`;
    const shown = rows.slice(0, query.limit);
    const ids = shown.map(row => row.id);
-   const tags = await this.tagsOf(tx, ids);
-   const latest = ids.length ? await tx<{ threadId: string; authorName: string | null; excerpt: string }[]>`select distinct on (m.thread_id) m.thread_id, u.name as author_name,
-     left(m.body, ${excerptLength}) as excerpt
-    from thread_messages m left join users u on u.id = m.author_id
-    where m.thread_id in ${tx(ids)} and m.kind = 'message' and m.deleted_at is null order by m.thread_id, m.seq desc` : [];
-   const lastMessage = new Map(latest.map(({ threadId, ...message }) => [threadId, message]));
+   const tags = await this.tagsOf(tx, ids, true);
+   const lastMessage = await this.latestMessages(tx, ids);
    const groups = await tx<(Omit<Group, 'owner'> & { ownerId: string | null; ownerName: string | null })[]>`with f as (${filtered(tx, organisationId, me, query.filter)})
     select * from (
      select tag.id::text as key, tag.name as label, count(*)::int as threads, (count(*) filter (where f.needs_you))::int as needs_you,
       tag.owner_id, ou.name as owner_name, tag.starts_on::text as starts_on, tag.ends_on::text as ends_on
-     from f join thread_tags tt on tt.thread_id = f.id join tags tag on tag.organisation_id = tt.organisation_id and tag.id = tt.tag_id
+     from f join thread_tags tt on tt.thread_id = f.id join tags tag on tag.organisation_id = tt.organisation_id and tag.id = tt.tag_id and tag.archived_at is null
      left join users ou on ou.id = tag.owner_id
      group by tag.id, tag.name, tag.owner_id, ou.name, tag.starts_on, tag.ends_on
      union all
      select 'none', 'Other', count(*)::int, (count(*) filter (where f.needs_you))::int, null, null, null, null
-     from f where not exists (select 1 from thread_tags tt where tt.thread_id = f.id) having count(*) > 0
+     from f where not exists (select 1 from thread_tags tt join tags tag on tag.organisation_id = tt.organisation_id and tag.id = tt.tag_id
+      where tt.thread_id = f.id and tag.archived_at is null) having count(*) > 0
     ) g order by threads desc, lower(label), key limit ${groupLimit}`;
    const last = shown.at(-1);
    return {
     filter: query.filter, available: true,
-    threads: shown.map(row => ({ id: row.id, kind: row.kind, title: row.title, record: row.recordKind ? { kind: row.recordKind, id: row.recordId! } : null,
-     facts: row.facts, status: row.status, lastMessageAt: row.lastMessageAt, lastMessage: lastMessage.get(row.id) ?? null, unread: row.unread,
-     needsYou: row.needsYou, starred: row.starred, tags: tags.get(row.id) ?? [] })),
+    threads: shown.map(row => listRow(row, lastMessage, tags)),
     nextCursor: rows.length > query.limit && last ? encodeCursor(last.activityKey, last.id, query.filter) : null,
     groups: groups.map(({ ownerId, ownerName, ...group }) => ({ ...group, owner: ownerId ? { id: ownerId, name: ownerName } : null })),
    };

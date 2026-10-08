@@ -32,6 +32,42 @@ results" is not offered). A query shorter than 2 characters is a 400. No new tab
 `to_tsvector('english', body)` for `thread_messages` and on the title for `threads` if the planner needs them
 (migration 0050, additive).
 
+As built in T-A (8 October 2026):
+
+- **Search.** `q` is trimmed; fewer than 2 characters is `400 query_too_short`, more than 200 or with `after` is
+  `400 invalid_request`. The words are the runs of letters and digits in `q` (at most 8), each a prefix
+  (`word:*`, joined by `&`), so a word being typed matches (`ferm` finds "Fermenter" and "Fermentation") and nothing a
+  person types is read as `tsquery` syntax; a `q` with no word left, or only stop words, matches nothing. The
+  candidates are the filter's visible threads (the list's own `filtered` query, through the threads policy); messages
+  are live ordinary ones (`kind = 'message'`, not deleted; change lines never match) read through `thread_messages`'
+  policy. A non-participant's answer for a private thread's words is exactly the answer for words nobody wrote. The
+  answer is `{ filter, q, available, threads: [row & { match }] }` with no `groups` and no `nextCursor`;
+  `files`/`people` answer `available: false` and no rows. `match` is `{ kind, excerpt, authorName }`: a title match
+  shows the whole title (`kind: 'title'`, `authorName: null`), otherwise the best-ranked matching message's
+  `ts_headline` (one fragment, 6 to 18 words) with its author. Every matching term is between `«` and `»`; a title or
+  body's own `«` and `»` become `"` first, so every mark is the search's. Rank: a title match is weighed `A`, a
+  message `D` (`ts_rank`), the greater wins, then activity, then id.
+- **Migration 0050 is not added.** Measured on 8 October with 200 threads and 3,000 messages: search answers in about
+  190–450 ms, the plain list in about 500–600 ms (both dominated by the per-thread unread and card computation).
+  `EXPLAIN ANALYZE` as the runtime role shows a sequential scan of `thread_messages` even with a GIN index on
+  `to_tsvector('english', body)` and a word that matches no row: row security's policy (`thread_visible(thread_id)`)
+  must run before a non-leakproof operator, and `@@` (`ts_match_vq`) is not leakproof, so the index cannot be used
+  under forced row security. As the table owner (no row security) the same query uses a bitmap index scan. An index
+  would cost writes and help nothing, so none is added; a later increment that needs faster search revisits this
+  (a stored `tsvector` column, or a security-definer search over ids the caller can see).
+- **Archived tags have no heading.** A list row's `tags` are its live tags (the ones it is grouped by), and Other holds
+  the threads with no live tag; the thread detail and card still list every attached tag. Restoring the tag brings
+  the heading back.
+- **Tag counts.** `GET …/tags?counts=true` adds `threads` to each tag: the threads the caller can see that carry it
+  (counted through `thread_tags`' policy, so a private thread counts only for its participants). Without `counts` the
+  page is unchanged. `GET …/tags/:tagId` reads one tag with its `threads` count (404 when unknown or another tenant's).
+- **Repeat this task.** `POST …/series` takes an optional `fromTask: { id, expectedRevision }`: in the same change
+  set the task becomes the series' occurrence for the period it falls in (today's period, or the series' first when
+  it starts later), keeping its own title, due date and tags, so the routine never makes a second copy of it, and its
+  card's `seriesId` names the series. A stale revision is `409 stale_revision`, a step `400 task_is_step`, a task
+  already in a series `409 task_in_series`, a cancelled task `409 task_cancelled`. Later occurrences are created by
+  the routine as before, with the series' owner and tags.
+
 ## 3. Client
 
 - **Tags** `/tags` from "Manage tags" in the list's filter row overflow and from a tag group heading's long-press

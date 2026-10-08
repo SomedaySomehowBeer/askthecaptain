@@ -44,10 +44,25 @@ export class TagsService {
    return work(tx);
   });
  }
- list(actor: Actor, organisationId: string, offset: number, limit: number) {
+ /** A page of tags in name order. With `counts`, each tag also carries `threads`: how many threads the caller can see
+  *  carry it (H4 contract §3), counted through `thread_tags`' own policy, so a private thread counts only for its
+  *  participants and the number says nothing of anyone else's threads. */
+ list(actor: Actor, organisationId: string, offset: number, limit: number, counts = false): Promise<{ tags: (Tag & { threads?: number })[]; nextOffset: number | null }> {
   return this.tx(actor, organisationId, async tx => {
-   const rows = await tx<Tag[]>`select ${tx.unsafe(tagColumns)} from tags order by lower(name), id limit ${limit + 1} offset ${offset}`;
+   const rows = await tx<(Tag & { threads?: number })[]>`select ${tx.unsafe(tagColumns)}
+    ${counts ? tx`, (select count(*) from thread_tags tt where tt.organisation_id = tags.organisation_id and tt.tag_id = tags.id)::int as threads` : tx``}
+    from tags order by lower(name), id limit ${limit + 1} offset ${offset}`;
    return { tags: rows.slice(0, limit), nextOffset: rows.length > limit ? offset + limit : null };
+  });
+ }
+ /** One tag with its count of the caller's visible threads (the Tags details screen, H4 contract §3). */
+ one(actor: Actor, organisationId: string, tagId: string): Promise<Tag & { threads: number }> {
+  return this.tx(actor, organisationId, async tx => {
+   const [tag] = await tx<(Tag & { threads: number })[]>`select ${tx.unsafe(tagColumns)},
+    (select count(*) from thread_tags tt where tt.organisation_id = tags.organisation_id and tt.tag_id = tags.id)::int as threads
+    from tags where id = ${tagId}`;
+   if (!tag) throw notFound('That tag is not available.');
+   return tag;
   });
  }
  /** A bounded catalogue for one task's thread; never infer its assignments from a filtered Work page. */
