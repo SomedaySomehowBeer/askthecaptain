@@ -55,6 +55,24 @@ As built in B-A (migration 0049, `thread_make_booking`, a sibling of `thread_mak
   "Add equipment" (name), rename in place, archive and unarchive with a confirm step, "Show archived". Each write
   is journalled and revision-checked; archived equipment leaves the schedule and the pickers.
 - **Team** pinned row opens `/members`; the row's "Not in this version yet" copy goes.
+- As built in B-B (details this section left open):
+  - "New booking" is a floating pill at the schedule's bottom right, as the thread list's "New thread": a control in the
+    timeline's scrolling header could not read the view, since reaching it scrolls the timeline to its top. It prefills
+    the equipment column at the view's left edge and the first day mostly in view (half a day below the top; the middle
+    at the Hours scale); with nothing settled, the first equipment and today. "Manage equipment" sits in the header.
+  - The form reads `equipment` and `day` strictly: an id not in the active list or an unreal date falls back to the
+    first equipment or today, and a note says so. It opens at 9 to 10 am with no setup or cleanup; "Ends on another day"
+    adds the end date. The booking's own client id is kept with its change set id, so the explicit retry ("Make again
+    with the same ID") sends both and the exact body again. Success finds the booking's thread on the first page of the
+    Bookings filter (its creation line is its latest activity); if it is not there, the screen says the booking is made
+    and where to find it.
+  - "Make this a booking" is a quiet action under the "Make this a task" form; it replaces that form with its own
+    (equipment, date, start, end, setup, cleanup, the occupancy note), and Cancel returns to the task form. Both stay
+    mounted once opened, so an uncertain write in either is never dropped by switching.
+  - The Equipment screen lists the first 100 (and says so when there are more); rename is one row at a time; archive
+    and unarchive each ask first ("Archive it" / "Keep it"); a write is one change at a time for the screen.
+  - The Team row reads "Team · Members and invitations" and opens `/members?from=threads`, whose way back is Threads.
+    Members management remains for owners and admins, in the browser; a member sees that said.
 - Design: the schedule frame (prototype frame 5) and boards 2 and 3; the Equipment screen follows the Members
   screen's list style. Every screen is compared side by side with its reference with
   `apps/e2e/scripts/mockup-compare.mjs`; where no mockup exists (Equipment manage, New booking) the comparison is

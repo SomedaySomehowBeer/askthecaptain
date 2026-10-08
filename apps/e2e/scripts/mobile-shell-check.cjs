@@ -73,7 +73,7 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
     await expect(page.getByRole('tab')).toHaveCount(0); await expect(page.getByRole('radio')).toHaveCount(8);
     await expect(id('threads-empty')).toBeVisible();
     for (let n=0;n<8;n++) { if(n<6) await expect(id(`threads-filter-${n}`)).toBeEnabled(); else await expect(id(`threads-filter-${n}`)).toBeDisabled(); }
-    await expect(id('threads-pinned-team')).toHaveAttribute('aria-disabled', 'true');
+    await expect(id('threads-pinned-team')).toHaveAttribute('role', 'link');
     await expect(id('threads-empty')).toContainText('No threads match'); await noOverflow('home'); await shot('home');
     await page.getByRole('button', { name: 'Account and settings', exact: true }).click(); await expect(heading('Account')).toBeVisible();
     await expect(id('account-passkeys-none')).toBeVisible(); await id('account-action-switch').click();
@@ -108,6 +108,8 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
      await require('./mobile-shell-threads-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-create-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-cards-check.cjs')({ browser, production, base, shots, width });
+     await require('./mobile-shell-bookings-check.cjs')({ browser, production, base, shots, width });
+     if (width === 390) await require('./mobile-shell-bookings-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
      if (width === 390) await require('./mobile-shell-cards-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
      await require('./mobile-shell-history-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-runs-check.cjs')({ browser, base, shots, width });

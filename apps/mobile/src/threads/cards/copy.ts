@@ -28,5 +28,23 @@ export const cardCopy = {
 	makeTaskHeading: 'Make this a task',
 	makeTaskHelp: 'Gives this thread an owner, a due date and steps. The messages stay here.',
 	makeTaskRecord: 'This thread already belongs to a record, so it can’t become a task. It is shown as it is now.',
-	makeTaskPrivate: 'Only a topic can become a task. A private thread stays private.'
+	makeTaskPrivate: 'Only a topic can become a task. A private thread stays private.',
+	makeBooking: { saving: 'Making this a booking…', saved: 'This thread is now a booking.', confirmed: 'Confirmed: this thread is now a booking.',
+		refusals: {
+			thread_is_record: 'This thread already belongs to a record, so it can’t become a booking. It is shown as it is now.',
+			thread_not_topic: 'Only a topic can become a booking. A private thread stays private.',
+			equipment_archived: 'That equipment is archived, so it takes no new bookings. Choose other equipment.',
+			reservation_conflict: 'That equipment is booked during this time, including setup and cleanup. Nothing was made; choose another time.'
+		} },
+	makeBookingOpen: 'Make this a booking',
+	makeBookingHeading: 'Make this a booking',
+	makeBookingHelp: 'Books equipment for this thread. The booking takes the thread’s title; the messages stay here.',
+	newBooking: { saving: 'Making the booking…', saved: 'Booking made. Opening its thread…', confirmed: 'Confirmed: the booking is made. Opening its thread…',
+		refusals: {
+			equipment_archived: 'That equipment is archived, so it takes no new bookings. Choose other equipment.',
+			reservation_conflict: 'That equipment is booked during this time, including setup and cleanup. Nothing was made; choose another time.',
+			reservation_id_exists: 'That booking request was already used with different details. Nothing was made; make the booking again to use a new one.'
+		} },
+	noEquipment: 'No equipment is listed yet. Add equipment from the schedule’s Manage equipment, then book it.',
+	moreEquipment: 'Only the first 100 pieces of equipment are offered here.'
 } as const;

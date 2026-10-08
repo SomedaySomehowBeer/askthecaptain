@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Platform, Text, TextInput, View } from 'react-native';
 import { useAccount } from '../account/AccountProvider.tsx';
@@ -16,7 +16,9 @@ import Welcome from './welcome.tsx';
 export default function Members() {
  const styles = useStyles();
  const account = useAccount(), view = account.snapshot.account;
- const back = () => router.dismissTo('/settings');
+ // From the thread list's Team row (bookings contract §3) the way back is to Threads; from Settings, to Settings.
+ const fromThreads = useLocalSearchParams<{ from?: string }>().from === 'threads';
+ const back = () => router.dismissTo(fromThreads ? '/' : '/settings');
  let content;
  if (view.kind === 'checking' || view.kind === 'starting') content = <Text style={styles.body}>{webCopy.checking}</Text>;
  else if (view.kind === 'unverified') return <Welcome />;
@@ -25,7 +27,7 @@ export default function Members() {
  else if (!managesMembers(view.org.membership.role)) content = <Text testID="members-denied" style={styles.body}>Only owners and admins can manage members and invitations.</Text>;
  else if (Platform.OS !== 'web' || account.web === null) content = <Text style={styles.body}>Member management is available in the browser in this version.</Text>;
  else content = <MembersPanel key={`${view.scope.epoch}:${view.org.membership.role}`} calls={account.web.members} scope={{ ...view.scope, role: view.org.membership.role }} name={view.org.membership.organisationName} now={account.now} />;
- return <PlainScreen title="Members" back={{ label: 'Settings', onPress: back }}>{content}</PlainScreen>;
+ return <PlainScreen title="Members" back={{ label: fromThreads ? 'Threads' : 'Settings', onPress: back }}>{content}</PlainScreen>;
 }
 function MembersPanel({ calls, scope, name, now }: { calls: MembersCalls; scope: MemberScope; name: string; now: () => number }) {
  const styles = useStyles();

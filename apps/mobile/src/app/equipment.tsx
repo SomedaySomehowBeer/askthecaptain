@@ -2,7 +2,8 @@ import { useAccount } from '../account/AccountProvider.tsx';
 import Welcome from './welcome.tsx';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
+import { Plus } from '../components/Icons.tsx';
 import { equipmentCopy, equipmentTimesIn, threadsCopy, webCopy } from '../account/copy.ts';
 import { Button } from '../components/AccountPage.tsx';
 import { Notice } from '../components/Notice.tsx';
@@ -12,13 +13,17 @@ import { ReservationPanel } from '../resources/equipment/ReservationPanel.tsx';
 import { panelRow, scheduleScreen, type Control, type Intent, type ScheduleScreen } from '../resources/equipment/schedule.ts';
 import { Timeline } from '../resources/equipment/Timeline.tsx';
 import { useEquipmentSchedule } from '../resources/equipment/useEquipmentSchedule.ts';
+import { catalogueView } from '../resources/equipment/catalogue.ts';
+import { newBookingHref, schedulePrefill } from '../resources/equipment/new-booking.ts';
+import { CardButton } from '../threads/cards/Fields.tsx';
 import { type } from '../theme/tokens.ts';
-import { themedStyles } from '../theme/theme.ts';
+import { themedStyles, useTheme } from '../theme/theme.ts';
 
 /** The equipment schedule, read-only, opened from its pinned row (docs/plans/expo-mobile-equipment-read-2026-09.md §5;
  *  D38: buttons only). Bookings for shared equipment across equipment and days. Only a fully read period may leave
  *  time blank, and only as "no confirmed reservations when it was read"; unread, loading, failed, partial, conflicting
- *  and stale time is hatched with its words. There is no reserve, edit or cancel control yet. */
+ *  and stale time is hatched with its words. "New booking" (prefilled from the view) and "Manage equipment" open their
+ *  own screens (bookings contract §3); a booking is changed or cancelled from its thread's card. */
 export default function EquipmentPage() {
 	const { snapshot } = useAccount();
 	if (snapshot.account.kind === 'unverified') return <Welcome />;
@@ -27,6 +32,7 @@ export default function EquipmentPage() {
 
 function EquipmentSchedule() {
 	const styles = useStyles();
+	const { colors } = useTheme();
 	const schedule = useEquipmentSchedule();
 	const [open, setOpen] = useState<{ equipment: Equipment; reservationId: string } | null>(null);
 	const state = schedule.state;
@@ -48,6 +54,8 @@ function EquipmentSchedule() {
 	}
 
 	const screen = scheduleScreen(state, schedule.now(), schedule.membershipChecked);
+	// "New booking" opens with what is on screen: the equipment column in view and the day in view (bookings contract §3).
+	const onNew = () => router.push(newBookingHref(schedulePrefill({ columns: catalogueView(state.catalogue).columns, settled: state.settled, zone: screen.zone, now: Date.now() })) as never);
 	const header = <Header screen={screen} onRefresh={schedule.refresh} onPress={schedule.press} />;
 
 	if (screen.body !== 'timeline' || state.range === null || screen.zone === null) {
@@ -70,6 +78,13 @@ function EquipmentSchedule() {
 					onSettle={schedule.settle} onScale={schedule.scale} onEdge={schedule.edge} onToday={schedule.today} onPress={schedule.press}
 					onOpen={(equipment, reservation) => setOpen({ equipment, reservationId: reservation.id })}
 				/>
+				{/* Floating, as the thread list's "New thread": it reads the view the person is looking at when they press it,
+				    which a control in the scrolling header could not (reaching it scrolls the timeline to its top). */}
+				{open === null ? <View style={styles.newWrap}>
+					<Pressable testID="equipment-new-booking" role="button" aria-label={equipmentCopy.newBooking} onPress={onNew} style={styles.new}>
+						<Plus color={colors.actionText} /><Text style={styles.newText}>{equipmentCopy.newBooking}</Text>
+					</Pressable>
+				</View> : null}
 				{open === null || row === null ? null : (
 					<ReservationPanel equipmentName={open.equipment.name} reservation={row} zone={zone} onClose={() => setOpen(null)} />
 				)}
@@ -88,6 +103,9 @@ function Header({ screen, onRefresh, onPress }: { screen: ScheduleScreen; onRefr
 		<View style={styles.stack}>
 			<Text testID="equipment-subtitle" style={styles.subtitle}>{equipmentCopy.subtitle}</Text>
 			{screen.zone === null || screen.body === 'zone-unsupported' ? null : <Text testID="equipment-zone" style={styles.detail}>{equipmentTimesIn(screen.zone)}</Text>}
+			{screen.body === 'timeline' || screen.body === 'empty' ? <View style={styles.actions}>
+				<CardButton testID="equipment-manage-open" label={equipmentCopy.manage} onPress={() => router.push('/equipment/manage' as never)} />
+			</View> : null}
 			{screen.refresh ? <ControlButton testID="equipment-refresh" label={equipmentCopy.refresh} control={screen.refresh} onPress={() => { onRefresh(); }} /> : null}
 			{screen.problem === null ? null : (
 				<View testID="equipment-problem"><Notice title={equipmentCopy.heading}>{screen.problem}</Notice></View>
@@ -131,6 +149,11 @@ function ControlButton({ testID, label, control, onPress }: { testID: string; la
 const useStyles = themedStyles((colors) => ({
 	fill: { flex: 1 },
 	stack: { gap: 12 },
+	actions: { flexDirection: 'row', gap: 8 },
+	// The thread list's "New thread" pill (prototype frame 1).
+	newWrap: { position: 'absolute', right: 14, bottom: 18 },
+	new: { minHeight: 48, paddingLeft: 14, paddingRight: 18, borderRadius: 24, backgroundColor: colors.action, flexDirection: 'row', alignItems: 'center', gap: 7, shadowColor: colors.shadow, shadowOpacity: 0.25, shadowRadius: 18, shadowOffset: { width: 0, height: 6 }, elevation: 6 },
+	newText: { fontSize: type.rowTitle, fontWeight: '700', color: colors.actionText },
 	subtitle: { fontSize: type.small, color: colors.muted, marginTop: -8 },
 	body: { fontSize: type.body, lineHeight: type.bodyLine, color: colors.body },
 	detail: { fontSize: type.label, lineHeight: 17, color: colors.muted }

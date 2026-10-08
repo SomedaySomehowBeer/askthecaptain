@@ -699,3 +699,79 @@ it('real history pages, a version, previews (a conflict, a blocked booking), a s
  const refusal = await answer(b.member, 'POST', `${b.threads}/${secret}/task`, makeTaskBody(randomUUID(), 1, null, ''), () => null);
  assert.deepEqual(refusal, { ok: false, kind: 'refused', status: 400, code: 'thread_not_topic' });
 });
+
+it('real equipment writes, a new booking, its thread in the list, the occupancy check and topic to booking parse in the Expo client (H2)', async () => {
+ const { equipmentWrites, parseEquipmentList, equipmentListPath } = await import('../../../mobile/src/resources/equipment/manage.ts');
+ const { newBookingForm, newBookingPlan, newBookingWrite, bookingThread } = await import('../../../mobile/src/resources/equipment/new-booking.ts');
+ const { makeBookingBody, parseMadeBooking } = await import('../../../mobile/src/threads/cards/make-booking.ts');
+ const { parseList } = await import('../../../mobile/src/threads/parse.ts');
+ const { reads } = await import('../../../mobile/src/threads/cards/records.ts');
+ const { apiOutcome } = await import('../../../mobile/src/api/failure.ts');
+ const { createThreadCalls } = await import('../../../mobile/src/threads/api.ts');
+ type Outcome<T> = import('../../../mobile/src/auth/contracts.ts').ApiOutcome<T>;
+ const b = await business('Expo bookings');
+ const scope = { epoch: 'e', userId: b.member.user.id, organisationId: b.org };
+ const answer = async <T>(person: Person, method: string, path: string, body: unknown, parse: (v: unknown) => T): Promise<Outcome<T>> => {
+  const response = await request(method, path, person, body);
+  return apiOutcome({ kind: 'answered', status: response.status, body: { readable: true, value: await response.json() } }, parse);
+ };
+ const write = async <T>(person: Person, w: { method: string; path: string; body: unknown; parse: (v: unknown) => T }) => {
+  const outcome = await answer(person, w.method, w.path, w.body, w.parse); assert.ok(outcome.ok, JSON.stringify(outcome)); return outcome.value;
+ };
+ const zone = (await json<{ timezone: string }>(request('GET', b.base, b.member))).timezone;
+ const list = async (archived: boolean) => parseEquipmentList(await json(request('GET', equipmentListPath(scope, archived), b.member)), archived);
+
+ // The Equipment screen: add, rename, archive and unarchive, each answer parsed against what was asked.
+ const added = await write(b.member, equipmentWrites.add(scope, randomUUID(), ' Canning line '));
+ const tank = await write(b.member, equipmentWrites.add(scope, randomUUID(), 'Fermenter 2'));
+ const renamed = await write(b.owner, equipmentWrites.rename(scope, tank, randomUUID(), 'Fermenter 2B'));
+ assert.deepEqual([added.name, renamed.name, renamed.revision], ['Canning line', 'Fermenter 2B', 2]);
+ const stale = await answer(b.member, ...((w) => [w.method, w.path, w.body, w.parse] as const)(equipmentWrites.rename(scope, tank, randomUUID(), 'Stale')));
+ assert.deepEqual(stale, { ok: false, kind: 'refused', status: 409, code: 'stale_revision' });
+ const shelved = await write(b.member, equipmentWrites.archive(scope, renamed, randomUUID(), true));
+ assert.ok(shelved.archivedAt);
+ assert.deepEqual([(await list(false)).equipment.map(e => e.name), (await list(true)).equipment.map(e => e.name)], [['Canning line'], ['Fermenter 2B']]);
+ const restored = await write(b.member, equipmentWrites.archive(scope, shelved, randomUUID(), false));
+ assert.equal(restored.archivedAt, null);
+ const taken = await answer(b.member, ...((w) => [w.method, w.path, w.body, w.parse] as const)(equipmentWrites.add(scope, randomUUID(), 'canning LINE')));
+ assert.deepEqual(taken, { ok: false, kind: 'refused', status: 409, code: 'equipment_name_exists' });
+
+ // New booking: the form's plan, one write with the booking id and change set id, a same-id retry, its thread found.
+ const form = { ...newBookingForm('2031-10-08'), title: 'Can the summer lager', start: '08:00', end: '12:00', setup: 30, cleanup: 30 };
+ const plan = newBookingPlan(form, zone, false);
+ assert.ok('time' in plan);
+ const bookingId = randomUUID(), changeSetId = randomUUID();
+ const made = await write(b.member, newBookingWrite(scope, added.id, bookingId, changeSetId, plan.time));
+ assert.deepEqual([made.id, made.changeSetId, made.status, made.setupMinutes], [bookingId, changeSetId, 'confirmed', 30]);
+ assert.equal((await write(b.member, newBookingWrite(scope, added.id, bookingId, changeSetId, plan.time))).id, bookingId, 'the retry answers with the same booking');
+ const rows = await b.list(b.member, 'filter=bookings');
+ const thread = bookingThread(parseList(rows), bookingId);
+ assert.equal(thread, await b.threadOf('reservation_id', bookingId));
+ // An overlap is refused as the client maps it, and the occupancy check names what holds the slot.
+ const clash = newBookingPlan({ ...form, title: 'Keg wash', start: '12:15', end: '13:00' }, zone, false);
+ assert.ok('time' in clash);
+ const refused = await answer(b.member, ...((w) => [w.method, w.path, w.body, w.parse] as const)(newBookingWrite(scope, added.id, randomUUID(), randomUUID(), clash.time)));
+ assert.deepEqual(refused, { ok: false, kind: 'refused', status: 409, code: 'reservation_conflict' });
+ const client: import('../../../mobile/src/auth/contracts.ts').ApiClient = {
+  get: (path, _t, parse) => answer(b.member, 'GET', path, undefined, parse), post: (path, _t, body, parse) => answer(b.member, 'POST', path, body, parse),
+  patch: (path, _t, body, parse) => answer(b.member, 'PATCH', path, body, parse), delete: (path, _t, parse) => answer(b.member, 'DELETE', path, undefined, parse),
+ };
+ const calls = createThreadCalls(client, { scope: () => scope, sessionEnded() {}, reconcile() {} });
+ const holder = await reads.occupancy(calls, scope, { id: '', equipmentId: added.id }, zone, clash.occupiedFrom, clash.occupiedTo, 2031);
+ assert.equal(holder?.kind, 'taken');
+ assert.match((holder as { holders: string[] }).holders[0]!, /^Can the summer lager \(/);
+
+ // Topic to booking: the body the card sends, the answer parsed as this thread on a booking; a private thread refused.
+ const topic = await json<Detail>(b.topic(b.member, 'Brew the autumn lager'), 201);
+ const later = newBookingPlan({ ...form, start: '14:00', end: '16:00' }, zone, false);
+ assert.ok('time' in later);
+ const booked = parseMadeBooking(await json(request('POST', `${b.threads}/${topic.thread.id}/booking`, b.member, makeBookingBody(randomUUID(), topic.thread.revision, added.id, later.time))), topic.thread.id);
+ assert.deepEqual([booked.thread.kind, booked.card.record?.kind, booked.card.fold.equipmentName, booked.card.title], ['record', 'booking', 'Canning line', 'Brew the autumn lager']);
+ const secret = (await json<Detail>(request('POST', b.threads, b.member, { id: randomUUID(), kind: 'private', title: 'Margins', participantIds: [] }), 201)).thread.id;
+ assert.deepEqual(await answer(b.member, 'POST', `${b.threads}/${secret}/booking`, makeBookingBody(randomUUID(), 1, added.id, later.time), () => null),
+  { ok: false, kind: 'refused', status: 400, code: 'thread_not_topic' });
+ const other = await json<Detail>(b.topic(b.member, 'Clean the bright tank'), 201);
+ await write(b.member, equipmentWrites.archive(scope, restored, randomUUID(), true));
+ assert.deepEqual(await answer(b.member, 'POST', `${b.threads}/${other.thread.id}/booking`, makeBookingBody(randomUUID(), other.thread.revision, restored.id, later.time), () => null),
+  { ok: false, kind: 'refused', status: 409, code: 'equipment_archived' });
+});
