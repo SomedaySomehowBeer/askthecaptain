@@ -110,6 +110,8 @@ const b = { ...a, organisationId: '00000000-0000-4000-8000-000000000003', organi
      await require('./mobile-shell-cards-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-bookings-check.cjs')({ browser, production, base, shots, width });
      if (width === 390) await require('./mobile-shell-bookings-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
+     await require('./mobile-shell-stock-check.cjs')({ browser, production, shots, width });
+     if (width === 390) await require('./mobile-shell-stock-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
      if (width === 390) await require('./mobile-shell-cards-check.cjs')({ browser, production, shots, width, scheme: 'dark' });
      await require('./mobile-shell-history-check.cjs')({ browser, production, base, shots, width });
      await require('./mobile-shell-runs-check.cjs')({ browser, base, shots, width });

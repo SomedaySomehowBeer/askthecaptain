@@ -66,7 +66,19 @@ const screens = [
 	{ name: 'make-booking-dark', app: 'dark-bookings-make-booking', run: 'bookings-dark', r3: 'Topic', dark: true, caption: 'Topic: make this a booking (dark) / R3 Topic in the dark tokens' },
 	{ name: 'equipment-manage', app: 'bookings-manage', run: 'bookings', proto: 12, caption: 'Equipment screen (no mockup) / nearest: frame 12 Team' },
 	{ name: 'equipment-manage-confirm', app: 'bookings-manage-confirm', run: 'bookings', proto: 12, caption: 'Equipment screen, archive confirm (no mockup) / nearest: frame 12 Team' },
-	{ name: 'equipment-manage-dark', app: 'dark-bookings-manage', run: 'bookings-dark', proto: 12, protoDark: true, caption: 'Equipment screen (dark, no mockup) / frame 12 in the prototype dark tokens' }
+	{ name: 'equipment-manage-dark', app: 'dark-bookings-manage', run: 'bookings-dark', proto: 12, protoDark: true, caption: 'Equipment screen (dark, no mockup) / frame 12 in the prototype dark tokens' },
+	// H3 (stock contract §3): Stocktake is board 12; the stock card follows board 1 (the task card); the Stock filter's row is
+	// frame 1's pinned rows. States the boards do not draw are compared with the nearest board.
+	{ name: 'stocktake', app: 'stock-stocktake', run: 'stock', r3: 'Stocktake', caption: 'Stocktake, two counted / R3 Stocktake (board 12)' },
+	{ name: 'stocktake-dark', app: 'dark-stock-stocktake', run: 'stock-dark', r3: 'Stocktake', dark: true, caption: 'Stocktake (dark) / R3 Stocktake in the dark tokens' },
+	{ name: 'stocktake-stale', app: 'stock-stale', run: 'stock', r3: 'Stocktake', caption: 'Stocktake, a stale item marked (not drawn) / nearest: R3 Stocktake' },
+	{ name: 'stocktake-uncertain', app: 'stock-uncertain', run: 'stock', r3: 'Stocktake', caption: 'Stocktake, an uncertain save (not drawn) / nearest: R3 Stocktake' },
+	{ name: 'stocktake-add', app: 'stock-add', run: 'stock', r3: 'Stocktake', caption: 'Stocktake, Add an item (not drawn) / nearest: R3 Stocktake' },
+	{ name: 'stock-card', app: 'stock-card', run: 'stock', r3: 'Main', caption: 'Stock card, editing / R3 Main (the task card pattern)' },
+	{ name: 'stock-card-dark', app: 'dark-stock-card', run: 'stock-dark', r3: 'Main', dark: true, caption: 'Stock card (dark) / R3 Main in the dark tokens' },
+	{ name: 'stock-archive-confirm', app: 'stock-archive-confirm', run: 'stock', r3: 'Main', caption: 'Stock card, archive confirm (not drawn) / nearest: R3 Main' },
+	{ name: 'stock-filter', app: 'stock-filter', run: 'stock', proto: 1, caption: 'Stock filter with the Stocktake row / frame 1 Threads (pinned rows)' },
+	{ name: 'stock-saved', app: 'stock-saved', run: 'stock', proto: 1, caption: 'Thread list after a stocktake (not drawn) / frame 1 Threads' }
 ];
 
 /** The check modules that produce the app screenshots, each run once at 390 px. */
@@ -81,7 +93,9 @@ const runs = {
 	members: c => require(path.join(scripts, 'mobile-shell-members-check.cjs'))(c),
 	runs: c => require(path.join(scripts, 'mobile-shell-runs-check.cjs'))(c),
 	bookings: c => require(path.join(scripts, 'mobile-shell-bookings-check.cjs'))(c),
-	'bookings-dark': c => require(path.join(scripts, 'mobile-shell-bookings-check.cjs'))({ ...c, scheme: 'dark' })
+	'bookings-dark': c => require(path.join(scripts, 'mobile-shell-bookings-check.cjs'))({ ...c, scheme: 'dark' }),
+	stock: c => require(path.join(scripts, 'mobile-shell-stock-check.cjs'))(c),
+	'stock-dark': c => require(path.join(scripts, 'mobile-shell-stock-check.cjs'))({ ...c, scheme: 'dark' })
 };
 
 /** The harness's test controls (harness/app/_layout.tsx) are not app UI: hidden in every screenshot the check modules
@@ -181,8 +195,10 @@ async function main() {
 					await page.evaluate(([text, map]) => {
 						for (const link of document.querySelectorAll('link[href="./captain.css"]')) link.remove();
 						const style = document.createElement('style'); style.textContent = text; document.head.append(style);
-						const swap = value => value.replace(/#[0-9a-fA-F]{6}\b/g, hex => map[hex.toLowerCase()] ?? hex);
+						const swap = value => value.replace(/#[0-9a-fA-F]{6}\b|#fff\b/g, hex => map[hex.toLowerCase()] ?? hex);
 						for (const el of document.querySelectorAll('[style]')) el.setAttribute('style', swap(el.getAttribute('style')));
+						// A board's own rules (board 12 keeps its row and field styles in the page) take the same swap.
+						for (const own of document.querySelectorAll('style')) if (own !== style) own.textContent = swap(own.textContent);
 					}, [css, Object.fromEntries(dark)]);
 				}
 				await page.evaluate(() => document.fonts.ready);

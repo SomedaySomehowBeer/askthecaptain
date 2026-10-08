@@ -104,6 +104,9 @@ module.exports = async ({ browser, production, base, shots, width, scheme = 'lig
     booking = { ...booking, status: 'cancelled', revision: booking.revision + 1 }; append(bookingThread, [change('reservation', bookingId, { field: 'status', before: 'confirmed', after: 'cancelled' })], body.changeSetId);
     return json(200, { ...booking, changeSetId: body.changeSetId });
    }
+   if (p === `/stock/${itemId}` && method === 'GET') return json(200, { item: { id: itemId, organisationId: org, name: 'Cascade hops', location: stock.location, unitLabel: 'kg', currentCount: stock.currentCount, countedAt: stock.countedAt, countedBy: tom,
+    reorderPoint: stock.reorderPoint, preferredSupplierId: null, notes: stock.notes, archivedAt: stock.archivedAt, createdAt: at, updatedAt: at, revision: 3, countedByName: 'Tom Reilly', supplierName: null, belowReorder: false },
+    counts: [{ id: uuid(4001), itemId, count: stock.currentCount, note: '', countedAt: stock.countedAt, countedBy: tom, countedByName: 'Tom Reilly' }], locations: ['Cold store'], timezone: zone });
    if (p === `/stock/${itemId}/count`) {
     const before = stock.currentCount; stock = { ...stock, currentCount: body.count, countedAt: '2026-10-02T01:00:00.000Z' };
     append(stockThread, [change('stock_item', itemId, { field: 'currentCount', before, after: body.count }), change('stock_item', itemId, { field: 'countedAt', before: at, after: stock.countedAt }), change('stock_item', itemId, { field: 'countedBy', before: tom, after: user })], body.changeSetId);

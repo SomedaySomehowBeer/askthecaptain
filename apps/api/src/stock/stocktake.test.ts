@@ -231,3 +231,65 @@ it('the stock card read and revision-checked edits; archived items leave the Sto
 	assert.equal((await b.list(b.owner, '?includeArchived=1')).items.length, 1);
 	assert.ok((await json<{ item: Item }>(request('GET', `${b.base}/stock/${item.id}`, b.owner))).item.archivedAt);
 });
+
+it('the Expo client parses the real stock answers and drives Stocktake against the real API: a lost answer retried with the same id, a stale item marked', async () => {
+	const stock = await import('../../../mobile/src/resources/stock/stock.ts');
+	const { createStocktake, createStocktakeStorage } = await import('../../../mobile/src/resources/stock/stocktake.ts');
+	const { createThreadCalls } = await import('../../../mobile/src/threads/api.ts');
+	const { apiOutcome } = await import('../../../mobile/src/api/failure.ts');
+	const { parseDetail, parseMessages } = await import('../../../mobile/src/threads/parse.ts');
+	const { wordChangeLine } = await import('../../../mobile/src/threads/wording.ts');
+	const b = await business('Expo stocktake');
+	const scope = { userId: b.member.user.id, organisationId: b.org, epoch: 'test' };
+	// Writes through the parsers: add, edit with the revision, archive and restore.
+	const addId = randomUUID();
+	const made = stock.parseStockWrite(await json(request('POST', `${b.base}/stock`, b.member, stock.stockWrites.add(scope, addId, { name: 'Pale malt', location: 'Cool room', unitLabel: 'bags', reorderPoint: '5', notes: '' }).body), 201), { changeSetId: addId, archived: false });
+	const wheatId = randomUUID();
+	const wheat = stock.parseStockWrite(await json(request('POST', `${b.base}/stock`, b.member, { changeSetId: wheatId, name: 'Wheat malt', location: 'Cool room', unitLabel: 'bags' }), 201), { changeSetId: wheatId });
+	const edit = stock.stockWrites.edit(scope, made, randomUUID(), { notes: 'Keep dry' });
+	const edited = stock.parseStockWrite(await json(request('PATCH', `${b.base}/stock/${made.id}`, b.member, edit.body)), { id: made.id, changeSetId: edit.body.changeSetId });
+	assert.deepEqual([edited.notes, edited.revision], ['Keep dry', 2]);
+	const archive = stock.stockWrites.archive(scope, edited, randomUUID(), true);
+	const archived = stock.parseStockWrite(await json(request('PATCH', `${b.base}/stock/${made.id}`, b.member, archive.body)), { id: made.id, changeSetId: archive.body.changeSetId, archived: true });
+	assert.equal(stock.parseStockList(await json(request('GET', `${b.base}/stock?includeArchived=1`, b.member)), true).items.length, 2);
+	const restore = stock.stockWrites.archive(scope, archived, randomUUID(), false);
+	stock.parseStockWrite(await json(request('PATCH', `${b.base}/stock/${made.id}`, b.member, restore.body)), { id: made.id, changeSetId: restore.body.changeSetId, archived: false });
+	// Stocktake against the real API: the first answer is lost, then a retry with the same id; a stale item on the next.
+	let lose = true;
+	const answer = async (method: string, path: string, body?: unknown) => { const r = await request(method, path, b.member, body); return { kind: 'answered' as const, status: r.status, body: { readable: true as const, value: await r.json() } }; };
+	const client: import('../../../mobile/src/auth/contracts.ts').ApiClient = {
+		async get(path, _token, parse) { return apiOutcome(await answer('GET', path), parse); },
+		async post(path, _token, body, parse) { const a = await answer('POST', path, body); if (lose && path.endsWith('/stocktake')) { lose = false; return { ok: false, kind: 'unavailable', status: 503 }; } return apiOutcome(a, parse); },
+		async patch() { throw new Error('unexpected patch'); }, async delete() { throw new Error('unexpected delete'); },
+	};
+	const calls = createThreadCalls(client, { scope: () => scope, sessionEnded() {}, reconcile() {} });
+	const values = new Map<string, string>();
+	const storage = createStocktakeStorage(() => ({ getItem: key => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value); },
+		removeItem: key => { values.delete(key); }, key: index => [...values.keys()][index] ?? null, get length() { return values.size; } }));
+	const first = createStocktake({ calls, scope, now: Date.now, randomId: randomUUID, storage });
+	await first.load(); assert.equal(first.snapshot().list!.items.length, 2);
+	first.type(made.id, '12'); first.type(wheat.id, '4'); await first.save();
+	assert.equal(first.snapshot().uncertain, true); const pending = first.snapshot().pending!; first.dispose();
+	const again = createStocktake({ calls, scope, now: Date.now, randomId: randomUUID, storage });
+	assert.deepEqual(again.snapshot().pending, pending, 'restored from storage');
+	await again.load(); await again.retry();
+	assert.equal(again.snapshot().saved, 2); assert.equal(values.size, 0);
+	assert.equal(await n(db.owner`select count(*)::int as n from stock_counts where organisation_id = ${b.org}`), 2, 'written once');
+	// Its change line in the item's thread parses and is worded; the thread's card parses with the new count.
+	const thread = await b.threadOf(made.id);
+	const lines = parseMessages(await json(request('GET', `${b.base}/threads/${thread}/messages?latest=50`, b.member))).messages.filter(m => m.changeSetId === pending.changeSetId);
+	assert.equal(lines.length, 1);
+	assert.match(wordChangeLine(lines[0]!.change!, { year: 2031, zone: 'UTC', unit: 'bags' }).text, /12 bags/);
+	assert.equal(parseDetail(await json(request('GET', `${b.base}/threads/${thread}`, b.member))).card.fold.currentCount, '12');
+	const card = stock.parseStockCard(await json(request('GET', `${b.base}/stock/${made.id}`, b.member)), made.id);
+	assert.deepEqual([card.item.currentCount, card.counts.length, card.locations], ['12', 1, ['Cool room']]);
+	// Someone counts wheat; the next stocktake is refused for it alone, and the controller marks it.
+	await json(request('POST', `${b.base}/stock/${wheat.id}/count`, b.owner, { count: '9' }), 201);
+	const next = createStocktake({ calls, scope, now: Date.now, randomId: randomUUID, storage });
+	await next.load(); next.type(made.id, '13'); next.type(wheat.id, '5');
+	await json(request('POST', `${b.base}/stock/${wheat.id}/count`, b.owner, { count: '10' }), 201);
+	await next.save();
+	assert.deepEqual([next.snapshot().stale, next.snapshot().values], [[wheat.id], { [made.id]: '13' }]);
+	assert.equal(next.snapshot().list!.items.find(i => i.id === wheat.id)!.currentCount, '10');
+	await next.save(); assert.equal(next.snapshot().saved, 1);
+});
