@@ -25,6 +25,7 @@ and Inter appear in the drawings; the app keeps its system fonts.
 | 9 | Blocked.dc.html | Preview, booking slot taken |
 | 10 | Stale.dc.html | Preview that went out of date |
 | 11 | Applied.dc.html | History after an undo |
+| 12 | Stocktake.dc.html | Stocktake: every item grouped by location, counted in one go (added 8 October 2026 for H3; drawn by root, for the owner's review) |
 
 ## Behaviour the drawings imply
 
