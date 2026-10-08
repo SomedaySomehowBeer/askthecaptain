@@ -17,9 +17,10 @@ export function tagsRoutes(service: TagsService) {
  const routes = new Hono<Vars>();
  const actor = (c: { get(key: 'session'): Session; get(key: 'requestId'): string }) => ({ userId: c.get('session').userId, requestId: c.get('requestId') });
  routes.get('/v1/organisations/:id/tags', async c => {
-  const { offset, limit } = pagination.parse(c.req.query());
-  return c.json(await service.list(actor(c), uuid.parse(c.req.param('id')), offset, limit));
+  const { offset, limit, counts } = pagination.extend({ counts: z.enum(['true', 'false']).optional() }).parse(c.req.query());
+  return c.json(await service.list(actor(c), uuid.parse(c.req.param('id')), offset, limit, counts === 'true'));
  });
+ routes.get('/v1/organisations/:id/tags/:tagId', async c => c.json(await service.one(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('tagId')))));
  const changed = <T extends { changeSetId: string }>(c: { header(name: string, value: string): void }, result: T) => { c.header(changeSetHeader, result.changeSetId); return result; };
  routes.post('/v1/organisations/:id/tags', async c => c.json(changed(c, await service.create(actor(c), uuid.parse(c.req.param('id')), await readJson(c.req))), 201));
  routes.patch('/v1/organisations/:id/tags/:tagId', async c => c.json(changed(c, await service.update(actor(c), uuid.parse(c.req.param('id')), uuid.parse(c.req.param('tagId')), await readJson(c.req)))));
