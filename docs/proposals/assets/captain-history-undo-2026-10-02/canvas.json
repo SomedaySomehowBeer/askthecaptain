@@ -1,20 +1,135 @@
-{"v":3,"createdOnFiles":{"v":1,"at":"2026-10-02T05:00:00Z"},"title":"Captain history and undo","launch":{"view":"canvas"},"pages":[],
-"boards":{
-"Main.dc.html":{"x":0,"y":0,"w":390,"h":844,"title":"1 Task card, editing","is_interactive":true},
-"Booking.dc.html":{"x":470,"y":0,"w":390,"h":844,"title":"2 Booking card, editing"},
-"Topic.dc.html":{"x":940,"y":0,"w":390,"h":844,"title":"3 Topic: make this a task"},
-"Lines.dc.html":{"x":1410,"y":0,"w":390,"h":844,"title":"4 Thread with change lines","is_interactive":true},
-"History.dc.html":{"x":0,"y":1264,"w":390,"h":844,"title":"5 History","is_interactive":true},
-"Selected.dc.html":{"x":470,"y":1264,"w":390,"h":844,"title":"6 Two changes ticked","is_interactive":true},
-"Preview.dc.html":{"x":940,"y":1264,"w":390,"h":844,"title":"7 Preview","is_interactive":true},
-"Conflict.dc.html":{"x":1410,"y":1264,"w":390,"h":844,"title":"8 Preview with a conflict"},
-"Blocked.dc.html":{"x":1880,"y":1264,"w":390,"h":844,"title":"9 Preview, booking slot taken"},
-"Stale.dc.html":{"x":2350,"y":1264,"w":390,"h":844,"title":"10 Something changed"},
-"Applied.dc.html":{"x":2820,"y":1264,"w":390,"h":844,"title":"11 After undo","is_interactive":true}
+{
+"v": 3,
+"createdOnFiles": {
+"v": 1,
+"at": "2026-10-02T05:00:00Z"
 },
-"order":["Main.dc.html","Booking.dc.html","Topic.dc.html","Lines.dc.html","History.dc.html","Selected.dc.html","Preview.dc.html","Conflict.dc.html","Blocked.dc.html","Stale.dc.html","Applied.dc.html"],
-"notes":{
-"row1":{"x":0,"y":-300,"text":"Editing from the card","kind":"title1","maxW":1800},
-"row2":{"x":0,"y":964,"text":"History and undo","kind":"title1","maxW":3210}
+"title": "Captain history and undo",
+"launch": {
+"view": "canvas"
 },
-"designSystems":[]}
+"pages": [],
+"boards": {
+"Main.dc.html": {
+"x": 0,
+"y": 0,
+"w": 390,
+"h": 844,
+"title": "1 Task card, editing",
+"is_interactive": true
+},
+"Booking.dc.html": {
+"x": 470,
+"y": 0,
+"w": 390,
+"h": 844,
+"title": "2 Booking card, editing"
+},
+"Topic.dc.html": {
+"x": 940,
+"y": 0,
+"w": 390,
+"h": 844,
+"title": "3 Topic: make this a task"
+},
+"Lines.dc.html": {
+"x": 1410,
+"y": 0,
+"w": 390,
+"h": 844,
+"title": "4 Thread with change lines",
+"is_interactive": true
+},
+"History.dc.html": {
+"x": 0,
+"y": 1264,
+"w": 390,
+"h": 844,
+"title": "5 History",
+"is_interactive": true
+},
+"Selected.dc.html": {
+"x": 470,
+"y": 1264,
+"w": 390,
+"h": 844,
+"title": "6 Two changes ticked",
+"is_interactive": true
+},
+"Preview.dc.html": {
+"x": 940,
+"y": 1264,
+"w": 390,
+"h": 844,
+"title": "7 Preview",
+"is_interactive": true
+},
+"Conflict.dc.html": {
+"x": 1410,
+"y": 1264,
+"w": 390,
+"h": 844,
+"title": "8 Preview with a conflict"
+},
+"Blocked.dc.html": {
+"x": 1880,
+"y": 1264,
+"w": 390,
+"h": 844,
+"title": "9 Preview, booking slot taken"
+},
+"Stale.dc.html": {
+"x": 2350,
+"y": 1264,
+"w": 390,
+"h": 844,
+"title": "10 Something changed"
+},
+"Applied.dc.html": {
+"x": 2820,
+"y": 1264,
+"w": 390,
+"h": 844,
+"title": "11 After undo",
+"is_interactive": true
+},
+"Stocktake.dc.html": {
+"x": 1880,
+"y": 0,
+"w": 390,
+"h": 844,
+"title": "12 Stocktake"
+}
+},
+"order": [
+"Main.dc.html",
+"Booking.dc.html",
+"Topic.dc.html",
+"Lines.dc.html",
+"History.dc.html",
+"Selected.dc.html",
+"Preview.dc.html",
+"Conflict.dc.html",
+"Blocked.dc.html",
+"Stale.dc.html",
+"Applied.dc.html",
+"Stocktake.dc.html"
+],
+"notes": {
+"row1": {
+"x": 0,
+"y": -300,
+"text": "Editing from the card",
+"kind": "title1",
+"maxW": 2270
+},
+"row2": {
+"x": 0,
+"y": 964,
+"text": "History and undo",
+"kind": "title1",
+"maxW": 3210
+}
+},
+"designSystems": []
+}
